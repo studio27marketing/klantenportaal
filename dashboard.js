@@ -847,7 +847,8 @@ function renderMeetingsTab(){
       '<div style="text-align:center;margin-top:18px"><a class="s27-btn" href="mailto:ilke@studio27.be?subject=Meeting%20aanvraag" style="display:inline-flex;width:auto;padding:14px 26px;text-decoration:none;gap:8px">📅 Plan een meeting in</a></div>';
     return;
   }
-  body.innerHTML = '<div class="s27-meetings">' + meetings.map(renderMeeting).join('') + '</div>' +
+  // gebruik bestaande renderMeetings() die de volledige <div class="s27-meetings"> wrapper bevat
+  body.innerHTML = renderMeetings(meetings) +
     '<div style="text-align:center;margin-top:22px"><a class="s27-btn" href="mailto:ilke@studio27.be?subject=Meeting%20aanvraag" style="display:inline-flex;width:auto;padding:12px 22px;text-decoration:none;gap:8px;background:var(--s27-paper);color:var(--s27-blue-ink);border:1.5px solid var(--s27-blue)">📅 Nieuwe meeting inplannen</a></div>';
 }
 
