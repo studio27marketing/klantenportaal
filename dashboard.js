@@ -974,6 +974,53 @@ function renderPlaceholderTab(bodyId, title, body){
     '<p class="s27-empty-sub">' + body + '</p>' +
   '</div>';
 }
+/* =================================================================
+   GESTRUCTUREERDE HUISSTIJL-DATA (v2.2 #52)
+   Voorkeuren-string format:
+     <vrije tekst>
+     ---STRUCTURED---
+     {"kleuren":{"primary":"#FF0066","secondary":"#000000",...},"fontGebruik":"Inter voor headings"}
+   ================================================================= */
+const STRUCT_SEPARATOR = '---STRUCTURED---';
+
+function parseBedrijfVoorkeuren(raw){
+  if(!raw) return { tekst:'', kleuren:{}, fontGebruik:'' };
+  const idx = raw.indexOf(STRUCT_SEPARATOR);
+  if(idx < 0) return { tekst:raw.trim(), kleuren:{}, fontGebruik:'' };
+  const tekst = raw.slice(0, idx).trim();
+  const jsonStr = raw.slice(idx + STRUCT_SEPARATOR.length).trim();
+  try {
+    const parsed = JSON.parse(jsonStr);
+    return {
+      tekst,
+      kleuren: parsed.kleuren || {},
+      fontGebruik: parsed.fontGebruik || ''
+    };
+  } catch(e){
+    return { tekst, kleuren:{}, fontGebruik:'' };
+  }
+}
+
+function serializeBedrijfVoorkeuren(tekst, kleuren, fontGebruik){
+  const blob = { kleuren: kleuren || {}, fontGebruik: fontGebruik || '' };
+  return (tekst || '').trim() + '\n\n' + STRUCT_SEPARATOR + '\n' + JSON.stringify(blob);
+}
+
+function renderKleurInput(id, label, hint, value){
+  const safeValue = (value || '').match(/^#[0-9a-fA-F]{6}$/) ? value : '';
+  return `<div class="s27-kleur-field">
+    <div class="s27-kleur-preview" style="background:${safeValue || '#fff'}; ${safeValue ? '' : 'background-image:repeating-linear-gradient(45deg,#eee 0,#eee 6px,#fff 6px,#fff 12px)'}"></div>
+    <div class="s27-kleur-meta">
+      <span class="s27-kleur-label">${esc(label)}</span>
+      <span class="s27-kleur-hint">${esc(hint)}</span>
+      <div class="s27-kleur-inputs">
+        <input type="color" data-kleur-id="${esc(id)}" value="${esc(safeValue || '#3083DC')}" aria-label="${esc(label)} kleurpicker"/>
+        <input type="text" data-kleur-hex="${esc(id)}" value="${esc(safeValue)}" placeholder="#000000" maxlength="7" pattern="^#[0-9a-fA-F]{6}$"/>
+      </div>
+    </div>
+  </div>`;
+}
+
 async function renderBedrijfTab(){
   const body = $('s27-bedrijf-body');
   if(!body) return;
@@ -1000,7 +1047,12 @@ async function renderBedrijfTab(){
   cats = cats || { logos:[], fonts:[], kleuren:[], brand_pdfs:[], fotos:[], overig:[] };
 
   // v2.2 #45 fix: Make scenario double-encodes \n + \" — decode terug naar echte chars
-  const voorkeuren = decodeMakeString(data.algemene_voorkeuren || '').replace(/<[^>]+>/g,'').trim();
+  const fullVoorkeuren = decodeMakeString(data.algemene_voorkeuren || '').replace(/<[^>]+>/g,'').trim();
+  // v2.2 #52: parse vrije tekst + gestructureerde data (JSON na separator)
+  const parsed = parseBedrijfVoorkeuren(fullVoorkeuren);
+  const voorkeurenTekst = parsed.tekst;
+  const merkkleuren = parsed.kleuren || { primary:'', secondary:'', accent:'', tekst:'' };
+  const fontGebruik = parsed.fontGebruik || '';
 
   body.innerHTML = `
     <div class="s27-section">
@@ -1011,7 +1063,7 @@ async function renderBedrijfTab(){
         </div>
       </div>
       <div class="s27-voorkeuren">
-        <textarea id="s27-voorkeuren-input" placeholder="Bv. We houden van minimalistische typografie. Geen stockfoto's. Onze kleur is altijd warm. Vermijd: gradients, drop shadows…">${esc(voorkeuren)}</textarea>
+        <textarea id="s27-voorkeuren-input" placeholder="Bv. We houden van minimalistische typografie. Geen stockfoto's. Onze kleur is altijd warm. Vermijd: gradients, drop shadows…">${esc(voorkeurenTekst)}</textarea>
         <div class="s27-voorkeuren-foot">
           <span class="s27-voorkeuren-state" id="s27-voorkeuren-state"></span>
           <button class="s27-btn s27-btn-sm" id="s27-voorkeuren-save" disabled>Opslaan</button>
@@ -1022,9 +1074,30 @@ async function renderBedrijfTab(){
     <div class="s27-section">
       <div class="s27-section-head">
         <div>
+          <h2 class="s27-section-title">Merk-kleuren <small style="font-weight:400;color:var(--s27-ink-3);font-size:13px">— hex codes voor AI-assets</small></h2>
+          <p class="s27-section-sub">Vul de hex-codes in. Onze designers én onze AI gebruiken deze automatisch voor templates, social media en presentaties.</p>
+        </div>
+      </div>
+      <div class="s27-kleuren-grid" id="s27-kleuren-grid">
+        ${renderKleurInput('primary', 'Primaire kleur', 'De hoofdkleur van je merk', merkkleuren.primary || '')}
+        ${renderKleurInput('secondary', 'Secundair', 'Steunkleur', merkkleuren.secondary || '')}
+        ${renderKleurInput('accent', 'Accent', 'Opvallend, voor CTAs of highlights', merkkleuren.accent || '')}
+        ${renderKleurInput('tekst', 'Tekst-kleur', 'Voor body-tekst', merkkleuren.tekst || '')}
+      </div>
+    </div>
+
+    <div class="s27-section">
+      <div class="s27-section-head">
+        <div>
           <h2 class="s27-section-title">Huisstijl-bibliotheek</h2>
           <p class="s27-section-sub">Logo's, fonts, brand-PDFs en foto's — gestructureerd op één plek. Jij en wij kunnen hier bestanden toevoegen. Alles wordt automatisch opgeslagen in ClickUp.</p>
         </div>
+      </div>
+      <div class="s27-fontuse">
+        <label>
+          <span><strong>Welke fonts gebruik je voor wat?</strong> Bv. "Inter voor headings, Open Sans voor body, Caveat voor accenten."</span>
+          <input type="text" id="s27-fontuse-input" value="${esc(fontGebruik)}" placeholder="Inter voor headings, Open Sans voor body…"/>
+        </label>
       </div>
       <div class="s27-catgrid">
         ${BRAND_CATEGORIES.map(c => renderCategoryCard(c, cats[c.id] || [])).join('')}
@@ -1089,27 +1162,63 @@ function renderUploadZone(scope, category){
 }
 
 function attachBedrijfHandlers(){
-  // Voorkeuren editor
+  // Voorkeuren editor + gestructureerde data (kleuren + fontGebruik)
   const ta = $('s27-voorkeuren-input');
   const btn = $('s27-voorkeuren-save');
   const stateLabel = $('s27-voorkeuren-state');
-  if(ta && btn){
-    const original = ta.value;
-    ta.addEventListener('input', () => {
-      btn.disabled = (ta.value.trim() === original.trim());
-      stateLabel.textContent = btn.disabled ? '' : 'Niet opgeslagen';
+  const fontInput = $('s27-fontuse-input');
+
+  const enableSave = () => { btn.disabled = false; if(stateLabel) stateLabel.textContent = 'Niet opgeslagen'; };
+
+  if(ta){
+    ta.addEventListener('input', enableSave);
+  }
+  if(fontInput){
+    fontInput.addEventListener('input', enableSave);
+  }
+  // Kleur inputs sync — color picker ↔ hex text
+  document.querySelectorAll('[data-kleur-id]').forEach(picker => {
+    picker.addEventListener('input', () => {
+      const id = picker.dataset.kleurId;
+      const hex = document.querySelector(`[data-kleur-hex="${id}"]`);
+      if(hex) hex.value = picker.value.toUpperCase();
+      const preview = picker.closest('.s27-kleur-field').querySelector('.s27-kleur-preview');
+      if(preview){ preview.style.background = picker.value; preview.style.backgroundImage = ''; }
+      enableSave();
     });
+  });
+  document.querySelectorAll('[data-kleur-hex]').forEach(hex => {
+    hex.addEventListener('input', () => {
+      const id = hex.dataset.kleurHex;
+      const picker = document.querySelector(`[data-kleur-id="${id}"]`);
+      if(/^#[0-9a-fA-F]{6}$/.test(hex.value)){
+        if(picker) picker.value = hex.value;
+        const preview = hex.closest('.s27-kleur-field').querySelector('.s27-kleur-preview');
+        if(preview){ preview.style.background = hex.value; preview.style.backgroundImage = ''; }
+      }
+      enableSave();
+    });
+  });
+
+  if(btn){
     btn.addEventListener('click', async () => {
       btn.disabled = true; btn.textContent = 'Bezig…';
-      stateLabel.textContent = 'Bezig met opslaan…';
+      if(stateLabel) stateLabel.textContent = 'Bezig met opslaan…';
+      // Verzamel gestructureerde data
+      const kleuren = {};
+      document.querySelectorAll('[data-kleur-hex]').forEach(hex => {
+        kleuren[hex.dataset.kleurHex] = hex.value || '';
+      });
+      const fontGebruik = fontInput ? fontInput.value : '';
+      const combined = serializeBedrijfVoorkeuren(ta ? ta.value : '', kleuren, fontGebruik);
       if(ENDPOINTS.bedrijfVoorkeuren && !state.demoMode){
-        await api(ENDPOINTS.bedrijfVoorkeuren, { bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token, voorkeuren: ta.value });
+        await api(ENDPOINTS.bedrijfVoorkeuren, { bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token, voorkeuren: combined });
       } else {
         await new Promise(r => setTimeout(r, 500));
       }
       btn.textContent = 'Opslaan';
-      stateLabel.textContent = '✓ Opgeslagen';
-      setTimeout(() => { stateLabel.textContent = ''; }, 2500);
+      if(stateLabel) stateLabel.textContent = '✓ Opgeslagen (voorkeuren + kleuren + fonts)';
+      setTimeout(() => { if(stateLabel) stateLabel.textContent = ''; }, 3000);
     });
   }
 

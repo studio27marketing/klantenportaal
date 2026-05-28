@@ -233,6 +233,26 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-dm-actions .s27-btn { min-width:120px; }
 @media (max-width:560px){ .s27-dm-dialog { padding:26px 22px 22px; } .s27-dm-title { font-size:18px; } .s27-dm-actions { flex-direction:column-reverse; } .s27-dm-actions .s27-btn { width:100%; } }
 
+/* ============ MIJN BEDRIJF — KLEUREN & FONT GESTRUCTUREERD (v2.2 #52) ============ */
+.s27-kleuren-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; }
+.s27-kleur-field { display:flex; gap:14px; align-items:center; background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:var(--r-md); padding:12px 14px; transition:border-color .15s; }
+.s27-kleur-field:hover { border-color:var(--s27-blue); }
+.s27-kleur-preview { width:54px; height:54px; border-radius:var(--r-sm); border:1.5px solid var(--s27-line); flex-shrink:0; transition:background .15s; }
+.s27-kleur-meta { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
+.s27-kleur-label { font-family:var(--font-display); font-size:13px; font-weight:800; color:var(--s27-ink); }
+.s27-kleur-hint { font-family:var(--font-body); font-size:11.5px; color:var(--s27-ink-3); line-height:1.3; }
+.s27-kleur-inputs { display:flex; gap:6px; margin-top:5px; align-items:center; }
+.s27-kleur-inputs input[type="color"] { width:28px; height:28px; border:1px solid var(--s27-line); border-radius:var(--r-sm); cursor:pointer; padding:1px; background:transparent; }
+.s27-kleur-inputs input[type="text"] { flex:1; padding:6px 9px; font-family:var(--font-mono, ui-monospace, monospace); font-size:12px; font-weight:600; border:1px solid var(--s27-line); border-radius:var(--r-sm); background:var(--s27-paper); text-transform:uppercase; letter-spacing:0.02em; }
+.s27-kleur-inputs input[type="text"]:focus { outline:none; border-color:var(--s27-blue); }
+
+.s27-fontuse { margin-bottom:18px; background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:var(--r-md); padding:14px 16px; }
+.s27-fontuse label { display:flex; flex-direction:column; gap:6px; }
+.s27-fontuse span { font-family:var(--font-body); font-size:13px; color:var(--s27-ink-3); line-height:1.45; }
+.s27-fontuse strong { color:var(--s27-ink); font-family:var(--font-display); font-weight:800; }
+.s27-fontuse input { padding:10px 13px; font-family:var(--font-body); font-size:14px; border:1.5px solid var(--s27-line); border-radius:var(--r-sm); background:var(--s27-paper); color:var(--s27-ink); transition:border-color .15s; }
+.s27-fontuse input:focus { outline:none; border-color:var(--s27-blue); }
+
 /* ============ CHAT REACTIES (v2.2 Fase 39) ============ */
 .s27-chat-msg-actions { display:flex; gap:6px; margin-top:6px; opacity:0; transform:translateY(-3px); transition:opacity .15s, transform .15s; }
 .s27-chat-msg:hover .s27-chat-msg-actions, .s27-chat-msg:focus-within .s27-chat-msg-actions { opacity:1; transform:translateY(0); }
