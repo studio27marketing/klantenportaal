@@ -22,6 +22,7 @@ const ENDPOINTS = {
   chatList:          'https://hook.eu1.make.com/a43sc5vjuic6lpjdehq8pvhn8sjftbn3',
   feedbackV2:        'https://hook.eu1.make.com/vpd7to9pn8ritsih38s4apika49lg31o',
   newProjectIntake:  'https://hook.eu1.make.com/kbomkcljmi9b2oyphmk938wb1qgwll1j',
+  directMessage:     'https://hook.eu1.make.com/s7g32st1esmxxarw0k35ej3j8hthdr2b',
   // Bestaand werkend booking-systeem (read-only hergebruik via CORS *)
   shootAvailability: 'https://hook.eu1.make.com/c1aekp5r567tqvgvp4e2a4juu3npanap'
 };
@@ -325,7 +326,7 @@ async function loadDashboard(){
   } else {
     const res = await api(ENDPOINTS.dashboard, { bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token });
     if(!res.ok || !res.data || res.data.error){
-      $('s27-dash-body').innerHTML = '<div class="s27-error">We krijgen geen verbinding met het portaal. Probeer zo opnieuw of mail naar <a href="mailto:ilke@studio27.be">ilke@studio27.be</a>.</div>';
+      $('s27-dash-body').innerHTML = '<div class="s27-error">We krijgen geen verbinding met het portaal. Probeer zo opnieuw of <a href="#" data-dm="vraag" data-dm-onderwerp="Portal verbinding gefaald">stuur ons een bericht</a>.</div>';
       return;
     }
     data = normaliseDashboard(res.data);
@@ -458,6 +459,129 @@ function renderProjectCompact(p){
 }
 
 /* =================================================================
+   DIRECT MESSAGE naar Studio27 teamlid (v2.2 #51)
+   Filosofie Vincent: alle klant-communicatie via ClickUp, geen mailto.
+   Make scenario bedrijf-direct-message maakt taak in Strategie-lijst.
+   ================================================================= */
+const DM_RECIPIENTS = [
+  { id:'ilke',    naam:'Ilke Meeusen',      rol:'Account manager — projectopvolging' },
+  { id:'arne',    naam:'Arne Goetschalckx', rol:'Sales — offertes & opstart' },
+  { id:'vincent', naam:'Vincent Verleije',  rol:'Zaakvoerder — strategie' }
+];
+
+const DM_PRESETS = {
+  vraag:     { defaultTo:'ilke',    title:'Stel een vraag',         subject:'Vraag via portaal',     icon:'💬', cta:'Bericht versturen' },
+  terugbel:  { defaultTo:'ilke',    title:'Vraag een terugbel',     subject:'Terugbel-verzoek',      icon:'📞', cta:'Verstuur terugbel-verzoek' },
+  meeting:   { defaultTo:'ilke',    title:'Plan een meeting in',    subject:'Meeting-aanvraag',      icon:'📅', cta:'Verstuur meeting-aanvraag' },
+  shoot:     { defaultTo:'ilke',    title:'Plan een shoot in',      subject:'Shoot-aanvraag',        icon:'📸', cta:'Verstuur shoot-aanvraag' },
+  archief:   { defaultTo:'ilke',    title:'Vraag oude deliverables op', subject:'Vraag oud project op', icon:'📁', cta:'Bericht versturen' },
+  upload:    { defaultTo:'ilke',    title:'Hulp bij grote bestanden', subject:'Hulp bij upload',     icon:'📦', cta:'Stuur verzoek' }
+};
+
+function openDMModal(presetKey, prefills){
+  const preset = DM_PRESETS[presetKey] || DM_PRESETS.vraag;
+  prefills = prefills || {};
+  let modal = $('s27-dm-modal');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.id = 's27-dm-modal';
+    modal.className = 's27-dm-overlay';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+    <div class="s27-dm-dialog" role="document">
+      <button class="s27-dm-close" aria-label="Sluiten">×</button>
+      <div class="s27-dm-icon">${preset.icon}</div>
+      <h3 class="s27-dm-title">${esc(preset.title)}</h3>
+      <p class="s27-dm-sub">Je bericht komt direct in onze ClickUp-planning bij de juiste persoon. Sneller dan mail, en wij kunnen meteen actie ondernemen.</p>
+      <form id="s27-dm-form">
+        <label class="s27-form-field">
+          <span>Naar wie?</span>
+          <select name="ontvanger" required>
+            ${DM_RECIPIENTS.map(r => `<option value="${esc(r.id)}"${r.id === (prefills.ontvanger || preset.defaultTo) ? ' selected' : ''}>${esc(r.naam)} — ${esc(r.rol)}</option>`).join('')}
+          </select>
+        </label>
+        <label class="s27-form-field">
+          <span>Onderwerp</span>
+          <input type="text" name="onderwerp" value="${esc(prefills.onderwerp || preset.subject)}" required/>
+        </label>
+        <label class="s27-form-field">
+          <span>Je bericht</span>
+          <textarea name="bericht" rows="6" required placeholder="${esc(prefills.placeholder || 'Type hier je bericht…')}">${esc(prefills.bericht || '')}</textarea>
+        </label>
+        <p class="s27-form-error" id="s27-dm-error" style="display:none"></p>
+        <div class="s27-dm-actions">
+          <button type="button" class="s27-btn s27-btn-ghost" id="s27-dm-cancel">Annuleer</button>
+          <button type="submit" class="s27-btn s27-btn-primary">${esc(preset.cta)}</button>
+        </div>
+      </form>
+    </div>
+  `;
+  // Handlers
+  const close = () => { try { modal.remove(); } catch(e){} };
+  modal.querySelector('.s27-dm-close').addEventListener('click', close);
+  $('s27-dm-cancel').addEventListener('click', close);
+  // Esc to close
+  const escHandler = e => { if(e.key === 'Escape'){ close(); document.removeEventListener('keydown', escHandler); } };
+  document.addEventListener('keydown', escHandler);
+  // Submit
+  $('s27-dm-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const form = e.target;
+    const btn = form.querySelector('button[type="submit"]');
+    const errEl = $('s27-dm-error');
+    if(errEl) errEl.style.display = 'none';
+    if(btn){ btn.disabled = true; btn.textContent = 'Versturen…'; }
+    try {
+      const res = await api(ENDPOINTS.directMessage, {
+        bedrijf_id: state.session.bedrijf_id,
+        klant_naam: state.session.bedrijfsnaam,
+        session_token: state.session.session_token,
+        ontvanger: form.ontvanger.value,
+        type: presetKey,
+        onderwerp: form.onderwerp.value,
+        bericht: form.bericht.value
+      });
+      if(res.ok && res.data && res.data.ok){
+        // Success — toon bevestiging in modal
+        modal.querySelector('.s27-dm-dialog').innerHTML = `
+          <div class="s27-dm-icon">✅</div>
+          <h3 class="s27-dm-title">Bericht onderweg!</h3>
+          <p class="s27-dm-sub">${esc(res.data.message || 'We pakken het zo snel mogelijk op.')}</p>
+          <p class="s27-dm-meta">Verzonden naar <strong>${esc(res.data.ontvanger || 'Studio 27')}</strong></p>
+          <button type="button" class="s27-btn s27-btn-primary" id="s27-dm-ok">Sluiten</button>
+        `;
+        $('s27-dm-ok').addEventListener('click', close);
+        setTimeout(close, 3500);
+      } else {
+        const msg = (res.data && res.data.message) || 'Bericht kon niet verstuurd worden — probeer opnieuw of bel +32 14 70 50 27.';
+        if(errEl){ errEl.style.display = 'block'; errEl.textContent = msg; }
+        if(btn){ btn.disabled = false; btn.textContent = preset.cta; }
+      }
+    } catch(err){
+      if(errEl){ errEl.style.display = 'block'; errEl.textContent = 'Netwerkfout — probeer opnieuw.'; }
+      if(btn){ btn.disabled = false; btn.textContent = preset.cta; }
+    }
+  });
+}
+
+// Globale event delegator voor [data-dm] buttons/links — vervangt mailto:
+document.addEventListener('click', e => {
+  const trg = e.target.closest && e.target.closest('[data-dm]');
+  if(!trg) return;
+  e.preventDefault();
+  const presetKey = trg.dataset.dm || 'vraag';
+  const prefills = {};
+  if(trg.dataset.dmOntvanger) prefills.ontvanger = trg.dataset.dmOntvanger;
+  if(trg.dataset.dmOnderwerp) prefills.onderwerp = trg.dataset.dmOnderwerp;
+  if(trg.dataset.dmBericht) prefills.bericht = trg.dataset.dmBericht;
+  if(trg.dataset.dmPlaceholder) prefills.placeholder = trg.dataset.dmPlaceholder;
+  openDMModal(presetKey, prefills);
+});
+
+/* =================================================================
    TUTORIAL / WALKTHROUGH (v2 Fase 32)
    ================================================================= */
 const TOUR_STEPS = [
@@ -473,8 +597,8 @@ const TOUR_STEPS = [
   },
   {
     icon: '💬',
-    title: 'Chat per project — sneller dan mail',
-    body: 'Vraag iets over een specifiek project? Open het, klik op "Chat" en stuur direct een bericht. Wij krijgen een notificatie en jij ziet onze antwoorden op dezelfde plek. Alles netjes in jouw dossier.'
+    title: 'Chat per project — alles via ClickUp',
+    body: 'Sinds je officieel klant bent, loopt ALLE communicatie via ClickUp. Vraag iets via een project of via "Stuur bericht" — het komt direct in onze planning. Geen mail meer heen-en-weer: sneller antwoord en je kan onze acties live volgen.'
   },
   {
     icon: '🎨',
@@ -484,7 +608,7 @@ const TOUR_STEPS = [
   {
     icon: '🚀',
     title: 'Klaar om te starten',
-    body: 'Vragen? Stuur een chat via een project, of mail rechtstreeks. Liever telefonisch? Klik bovenaan op "Vraag terugbel" — onze account manager belt op een moment dat past. Veel succes!'
+    body: 'Vragen? Klik op "Stuur bericht" of "Vraag terugbel" — alles loopt rechtstreeks naar ClickUp bij de juiste persoon. Wij zien het meteen en kunnen direct actie ondernemen. Veel succes!'
   }
 ];
 
@@ -750,7 +874,7 @@ function renderUploadZone(){
   return `<div class="s27-upload" id="s27-drop">
     <div class="s27-upload-icon"><svg width="22" height="22"><use href="#s27p-upload"/></svg></div>
     <div class="s27-upload-title">Sleep bestanden hier of klik om te uploaden</div>
-    <div class="s27-upload-sub">Logo's, brand-bestanden, referenties of andere assets. Max 5 MB per bestand, 25 MB totaal.<br>Grotere bestanden? Stuur via WeTransfer naar <a href="mailto:ilke@studio27.be">ilke@studio27.be</a>.</div>
+    <div class="s27-upload-sub">Logo's, brand-bestanden, referenties of andere assets. Max 5 MB per bestand, 25 MB totaal.<br>Grotere bestanden? <a href="#" data-dm="upload" data-dm-onderwerp="Hulp bij grote bestanden" data-dm-placeholder="Hoeveel GB? Welk bestandstype? We sturen je een WeTransfer-link of FTP-toegang.">Vraag een upload-link aan</a>.</div>
     <label class="s27-upload-btn" for="s27-up-input"><svg width="12" height="12"><use href="#s27p-upload"/></svg> Bestand kiezen</label>
     <input id="s27-up-input" type="file" multiple style="display:none">
     <ul class="s27-upload-list" id="s27-up-list"></ul>
@@ -786,8 +910,8 @@ function renderContact(c){
       <p class="s27-contact-tip">💡 Vraag over een lopend project? Open het project en chat direct met het team — sneller dan bellen, alles bij je dossier.</p>
     </div>
     <div class="s27-contact-actions">
-      <a class="primary" href="#/?action=jump-projects" id="s27-contact-projects-btn"><svg width="13" height="13"><use href="#s27p-spark"/></svg> Naar mijn projecten</a>
-      <a href="mailto:${esc(c.am_email || 'ilke@studio27.be')}?subject=${encodeURIComponent('Terugbel-verzoek ' + (state.session && state.session.bedrijfsnaam ? state.session.bedrijfsnaam : ''))}&body=${encodeURIComponent('Hallo,\n\nIk wil graag worden teruggebeld door ' + (c.am_naam || 'het Studio 27 team') + '. Beste moment: \n\nOnderwerp: \n\nMet groet,\n')}"><svg width="13" height="13"><use href="#s27p-phone"/></svg> Vraag terugbel</a>
+      <a class="primary" href="#" data-dm="vraag" data-dm-onderwerp="Vraag voor ${esc(c.am_naam || 'team')}"><svg width="13" height="13"><use href="#s27p-mail"/></svg> Stuur bericht</a>
+      <a href="#" data-dm="terugbel" data-dm-onderwerp="Terugbel-verzoek ${esc(state.session && state.session.bedrijfsnaam || '')}" data-dm-placeholder="Beste moment om te bellen: bv. morgen voormiddag, of vrijdag 14u-16u.&#10;&#10;Bespreek onderwerp: "><svg width="13" height="13"><use href="#s27p-phone"/></svg> Vraag terugbel</a>
       ${c.am_gsm ? `<a href="tel:${esc(c.am_gsm)}" class="s27-contact-call-direct"><svg width="13" height="13"><use href="#s27p-phone"/></svg> Direct bellen</a>` : ''}
     </div>
   </div>`;
@@ -957,7 +1081,7 @@ function renderUploadZone(scope, category){
   return `<div class="s27-upload" id="${id}" data-scope="${esc(scope)}" data-category="${esc(category || 'overig')}">
     <div class="s27-upload-icon"><svg width="22" height="22"><use href="#s27p-upload"/></svg></div>
     <div class="s27-upload-title">Sleep bestanden hier of klik om te uploaden</div>
-    <div class="s27-upload-sub">Max 5 MB per bestand · 25 MB totaal. Grotere bestanden? Stuur via WeTransfer naar <a href="mailto:ilke@studio27.be">ilke@studio27.be</a>.</div>
+    <div class="s27-upload-sub">Max 5 MB per bestand · 25 MB totaal. Grotere bestanden? <a href="#" data-dm="upload" data-dm-onderwerp="Hulp bij grote brand-bestanden" data-dm-placeholder="Welke bestanden? Hoeveel GB? We sturen je een upload-link.">Vraag een upload-link aan</a>.</div>
     <label class="s27-upload-btn" for="${inputId}"><svg width="12" height="12"><use href="#s27p-upload"/></svg> Bestand kiezen</label>
     <input id="${inputId}" type="file" multiple style="display:none">
     <ul class="s27-upload-list" id="${listId}"></ul>
@@ -1129,7 +1253,7 @@ function renderArchiveCard(p){
     '<div class="s27-archive-body">' +
       (dels.length
         ? '<div class="s27-archive-dels">' + dels.map(d => '<a href="' + esc(d.url||'#') + '" target="_blank" rel="noopener" class="s27-archive-del"><svg width="13" height="13"><use href="#s27p-link"/></svg>' + esc(d.label || d.type || 'Deliverable') + '</a>').join('') + '</div>'
-        : '<p class="s27-archive-empty">Geen deliverables-links geregistreerd in ClickUp. Mail <a href="mailto:ilke@studio27.be">ilke@studio27.be</a> als je de bestanden nodig hebt.</p>') +
+        : '<p class="s27-archive-empty">Geen deliverables-links geregistreerd in ClickUp. <a href="#" data-dm="archief" data-dm-onderwerp="Oude deliverables opvragen: ' + esc(p.naam || '') + '" data-dm-placeholder="Welke bestanden zoek je? We zoeken het op en sturen ze door.">Vraag de bestanden op via ClickUp →</a></p>') +
     '</div>' +
   '</details>';
 }
@@ -1308,7 +1432,7 @@ async function loadShootPreview(){
     }
     box.innerHTML = renderShootSlots(_shootDataCache);
   } catch(err){
-    box.innerHTML = '<div class="s27-form-error">Beschikbare momenten konden niet geladen worden — mail Ilke voor manuele inplanning.</div>';
+    box.innerHTML = '<div class="s27-form-error">Beschikbare momenten konden niet geladen worden — <a href="#" data-dm="shoot" data-dm-onderwerp="Shoot manueel inplannen">stuur een aanvraag via ClickUp</a>.</div>';
   }
 }
 
@@ -1479,8 +1603,8 @@ function renderInstellingenTab(){
             <div>
               <strong>${esc(contact.am_naam)}</strong>
               <span>${esc(contact.am_rol || 'Account manager')}</span>
-              ${contact.am_email ? `<a href="mailto:${esc(contact.am_email)}">${esc(contact.am_email)}</a>` : ''}
-              ${contact.am_gsm ? `<a href="tel:${esc(contact.am_gsm)}">${esc(contact.am_gsm)}</a>` : ''}
+              <a href="#" data-dm="vraag" data-dm-onderwerp="Bericht voor ${esc(contact.am_naam || 'team')}">💬 Bericht sturen via ClickUp</a>
+              ${contact.am_gsm ? `<a href="tel:${esc(contact.am_gsm)}" class="s27-contact-call-direct">📞 ${esc(contact.am_gsm)}</a>` : ''}
             </div>
           </div>
         ` : '<p class="s27-settings-sub">Contact info wordt binnenkort getoond.</p>'}
@@ -1577,7 +1701,7 @@ async function renderMeetingsTab(){
   }
 
   let meetings = [];
-  let bookingUrl = 'mailto:ilke@studio27.be?subject=Meeting%20aanvraag';
+  let bookingUrl = null; // Fallback: open DM-modal ipv mailto
   if(live){
     // Filter client-side op bedrijfsnaam
     const bn = (state.session.bedrijfsnaam || '').toUpperCase().trim();
@@ -1662,7 +1786,7 @@ async function loadMeetingSlots(externalBookingUrl){
     }
     box.innerHTML = renderMeetingSlots(_shootDataCache, externalBookingUrl);
   } catch(err){
-    box.innerHTML = '<div class="s27-form-error">Beschikbaarheid kon niet opgehaald worden — open de externe agenda via deze <a href="' + esc(externalBookingUrl) + '" target="_blank" rel="noopener">link</a> of mail Ilke.</div>';
+    box.innerHTML = '<div class="s27-form-error">Beschikbaarheid kon niet opgehaald worden — <a href="#" data-dm="meeting" data-dm-onderwerp="Meeting-aanvraag (beschikbaarheid kon niet laden)">stuur een vraag via ClickUp</a>.</div>';
   }
 }
 
@@ -1712,13 +1836,13 @@ function renderMeetingSlots(data, externalBookingUrl){
             <span>${esc(h.rol)}</span>
           </div>
           ${h.slots.length
-            ? '<div class="s27-book-slot-row">' + h.slots.map(s => `<a class="s27-book-slot" href="mailto:${esc(externalBookingUrl.startsWith('mailto:') ? '' : 'ilke@studio27.be')}?subject=${encodeURIComponent('Meeting-aanvraag ' + h.naam + ' op ' + s + ' (' + (state.session ? state.session.bedrijfsnaam : '') + ')')}&body=${encodeURIComponent('Hallo,\n\nIk wil graag een meeting met ' + h.naam + ' inplannen op ' + new Date(s).toLocaleDateString('nl-BE', {weekday:'long', day:'numeric', month:'long'}) + '.\n\nMijn voorkeur voor het tijdstip: \nBespreekonderwerp: \n\nVriendelijke groet,\n')}">${esc(new Date(s).toLocaleDateString('nl-BE',{weekday:'short',day:'2-digit',month:'short'}))}</a>`).join('') + '</div>'
+            ? '<div class="s27-book-slot-row">' + h.slots.map(s => `<button type="button" class="s27-book-slot" data-dm="meeting" data-dm-ontvanger="${esc(h.id === 48338421 ? 'ilke' : (h.id === 8714037 ? 'vincent' : 'arne'))}" data-dm-onderwerp="Meeting-aanvraag met ${esc(h.naam)} op ${esc(new Date(s).toLocaleDateString('nl-BE', {weekday:'long', day:'numeric', month:'long'}))}" data-dm-placeholder="Mijn voorkeur voor het tijdstip: bv. voormiddag, of 14u-16u.&#10;Bespreekonderwerp: ">${esc(new Date(s).toLocaleDateString('nl-BE',{weekday:'short',day:'2-digit',month:'short'}))}</button>`).join('') + '</div>'
             : '<p class="s27-book-empty">Volgeboekt komende 2 weken — kies een andere collega</p>'
           }
         </div>
       `).join('') +
     '</div>' +
-    (externalBookingUrl ? '<p class="s27-book-fallback">Of <a href="' + esc(externalBookingUrl) + '" target="_blank" rel="noopener">open onze Google Calendar agenda</a> direct.</p>' : '');
+    '<p class="s27-book-fallback">Of <a href="#" data-dm="meeting" data-dm-onderwerp="Meeting-aanvraag (vrije keuze tijdstip)">stuur ons een vrij voorstel via ClickUp</a>.</p>';
 }
 
 // Globale handler voor sluiten van booking slots

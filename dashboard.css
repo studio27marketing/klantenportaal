@@ -219,6 +219,20 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-help-btn { width:32px; height:32px; border-radius:50%; background:var(--s27-paper-3); color:var(--s27-ink); border:1.5px solid var(--s27-line); cursor:pointer; font-family:var(--font-display); font-weight:900; font-size:14px; display:inline-flex; align-items:center; justify-content:center; transition:all .15s; margin-left:10px; }
 .s27-help-btn:hover { background:var(--s27-blue-soft); color:var(--s27-blue-ink); border-color:var(--s27-blue); }
 
+/* ============ DIRECT MESSAGE MODAL (v2.2 #51 — ClickUp-first communicatie) ============ */
+.s27-dm-overlay { position:fixed; inset:0; background:rgba(20,15,28,.55); display:flex; align-items:center; justify-content:center; padding:20px; z-index:99999; animation:s27fadeIn .22s var(--ease-out) backwards; }
+.s27-dm-dialog { background:var(--s27-paper); border-radius:var(--r-lg); padding:34px 36px 28px; max-width:560px; width:100%; box-shadow:0 12px 36px rgba(0,0,0,.22); position:relative; animation:s27popIn .28s var(--ease-out) backwards; }
+.s27-dm-close { position:absolute; top:14px; right:14px; background:none; border:none; font-size:24px; line-height:1; color:var(--s27-ink-3); cursor:pointer; padding:6px 10px; border-radius:var(--r-sm); transition:background .15s; }
+.s27-dm-close:hover { background:var(--s27-paper-3); color:var(--s27-ink); }
+.s27-dm-icon { font-size:40px; line-height:1; text-align:center; margin-bottom:14px; }
+.s27-dm-title { font-family:var(--font-display); font-size:22px; font-weight:900; color:var(--s27-ink); margin:0 0 6px; letter-spacing:-0.02em; text-align:center; }
+.s27-dm-sub { font-family:var(--font-body); font-size:13.5px; color:var(--s27-ink-3); margin:0 0 22px; line-height:1.5; text-align:center; }
+.s27-dm-meta { font-family:var(--font-body); font-size:13px; color:var(--s27-ink-3); text-align:center; margin:0 0 18px; }
+#s27-dm-form { display:flex; flex-direction:column; gap:14px; }
+.s27-dm-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:6px; }
+.s27-dm-actions .s27-btn { min-width:120px; }
+@media (max-width:560px){ .s27-dm-dialog { padding:26px 22px 22px; } .s27-dm-title { font-size:18px; } .s27-dm-actions { flex-direction:column-reverse; } .s27-dm-actions .s27-btn { width:100%; } }
+
 /* ============ CHAT REACTIES (v2.2 Fase 39) ============ */
 .s27-chat-msg-actions { display:flex; gap:6px; margin-top:6px; opacity:0; transform:translateY(-3px); transition:opacity .15s, transform .15s; }
 .s27-chat-msg:hover .s27-chat-msg-actions, .s27-chat-msg:focus-within .s27-chat-msg-actions { opacity:1; transform:translateY(0); }
