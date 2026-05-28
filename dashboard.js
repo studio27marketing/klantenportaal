@@ -21,7 +21,9 @@ const ENDPOINTS = {
   chatPost:          'https://hook.eu1.make.com/vi12objw9nkrjg1i8ve13jwj354pvg9n',
   chatList:          'https://hook.eu1.make.com/a43sc5vjuic6lpjdehq8pvhn8sjftbn3',
   feedbackV2:        'https://hook.eu1.make.com/vpd7to9pn8ritsih38s4apika49lg31o',
-  newProjectIntake:  'https://hook.eu1.make.com/kbomkcljmi9b2oyphmk938wb1qgwll1j'
+  newProjectIntake:  'https://hook.eu1.make.com/kbomkcljmi9b2oyphmk938wb1qgwll1j',
+  // Bestaand werkend booking-systeem (read-only hergebruik via CORS *)
+  shootAvailability: 'https://hook.eu1.make.com/c1aekp5r567tqvgvp4e2a4juu3npanap'
 };
 
 /* =================================================================
@@ -1251,12 +1253,13 @@ function renderProjectSubQuestions(projectType){
     return;
   }
   subBox.hidden = false;
+  const needsShoot = (projectType === 'Video' || projectType === 'Fotografie');
   subBox.innerHTML = '<div class="s27-pt-sub-head"><strong>📋 Help ons je offerte sneller op maat maken</strong><span>Beantwoord wat je al weet — je kan altijd later aanpassen</span></div>' +
     qs.map(q => {
       if(q.type === 'select'){
         return `<label class="s27-form-field">
           <span>${esc(q.label)}</span>
-          <select name="sub_${esc(q.id)}">
+          <select name="sub_${esc(q.id)}" ${q.id === 'video_shoot' || q.id === 'foto_type' ? 'data-triggers-shootview="1"' : ''}>
             <option value="">Nog niet zeker</option>
             ${q.opts.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('')}
           </select>
@@ -1269,8 +1272,118 @@ function renderProjectSubQuestions(projectType){
         </label>`;
       }
       return '';
-    }).join('');
+    }).join('') +
+    (needsShoot ? '<div id="s27-shoot-preview" class="s27-shoot-preview" hidden></div>' : '');
+  // Wire shoot-preview triggers
+  if(needsShoot){
+    subBox.querySelectorAll('[data-triggers-shootview]').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const wantsShoot = sel.value && /ja|graag|inplannen|bedrijfsfoto|product|locatie|event|lifestyle/i.test(sel.value);
+        if(wantsShoot) loadShootPreview();
+        else {
+          const sp = $('s27-shoot-preview');
+          if(sp){ sp.hidden = true; sp.innerHTML = ''; }
+        }
+      });
+    });
+  }
 }
+
+/* =================================================================
+   SHOOT BESCHIKBAARHEID (v2.2 #49) — hergebruik bestaand booking systeem
+   Endpoint: ENDPOINTS.shootAvailability geeft {shoots, shoots_27m, vakantie, hosts}
+   We tonen eerstvolgende 5 vrije voormiddag/namiddag slots per host
+   ================================================================= */
+let _shootDataCache = null;
+
+async function loadShootPreview(){
+  const box = $('s27-shoot-preview');
+  if(!box) return;
+  box.hidden = false;
+  box.innerHTML = '<div class="s27-loading" style="padding:14px">Beschikbare shoot-momenten ophalen…</div>';
+  try {
+    if(!_shootDataCache){
+      const r = await fetch(ENDPOINTS.shootAvailability, { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+      _shootDataCache = await r.json();
+    }
+    box.innerHTML = renderShootSlots(_shootDataCache);
+  } catch(err){
+    box.innerHTML = '<div class="s27-form-error">Beschikbare momenten konden niet geladen worden — mail Ilke voor manuele inplanning.</div>';
+  }
+}
+
+function renderShootSlots(data){
+  const hosts = data.hosts || [];
+  const shoots = (data.shoots || []).concat(data.shoots_27m || []);
+  const vakantie = data.vakantie || [];
+  const now = Date.now();
+  const horizonMs = now + (21 * 86400000); // 3 weken vooruit
+  // Per host: bezette dagen identificeren
+  const bezetByHost = {};
+  hosts.forEach(h => bezetByHost[h.id] = new Set());
+  shoots.forEach(t => {
+    const due = parseInt(t.due_date, 10);
+    if(!due || due < now || due > horizonMs) return;
+    const day = new Date(due).toISOString().slice(0,10);
+    (t.assignees || []).forEach(a => {
+      if(bezetByHost[a.id]) bezetByHost[a.id].add(day);
+    });
+  });
+  vakantie.forEach(v => {
+    const start = parseInt(v.start_date, 10);
+    const end = parseInt(v.due_date || v.start_date, 10);
+    if(!start) return;
+    let cur = start;
+    while(cur <= end && cur <= horizonMs){
+      const day = new Date(cur).toISOString().slice(0,10);
+      (v.assignees || []).forEach(a => {
+        if(bezetByHost[a.id]) bezetByHost[a.id].add(day);
+      });
+      cur += 86400000;
+    }
+  });
+  // Per host: eerste 3 vrije werkdagen vinden (ma-vr)
+  const slotsByHost = hosts.map(h => {
+    const vrij = [];
+    for(let d = now; d <= horizonMs && vrij.length < 3; d += 86400000){
+      const dt = new Date(d);
+      const dow = dt.getDay(); // 0=zo, 6=za
+      if(dow === 0 || dow === 6) continue;
+      const dayKey = dt.toISOString().slice(0,10);
+      if(!bezetByHost[h.id].has(dayKey)) vrij.push(dayKey);
+    }
+    return { naam: h.name, slots: vrij };
+  });
+  return '<div class="s27-shoot-head"><strong>📸 Eerstvolgende vrije momenten</strong><span>Onze content creators per dag — kies wat het beste past</span></div>' +
+    '<div class="s27-shoot-grid">' +
+      slotsByHost.map(h => {
+        if(!h.slots.length){
+          return `<div class="s27-shoot-host"><strong>${esc(h.naam)}</strong><span class="s27-shoot-empty">Volgeboekt komende 3 weken</span></div>`;
+        }
+        return `<div class="s27-shoot-host"><strong>${esc(h.naam)}</strong>` +
+          h.slots.map(s => `<button type="button" class="s27-shoot-slot" data-host="${esc(h.naam)}" data-day="${esc(s)}">${esc(new Date(s).toLocaleDateString('nl-BE',{weekday:'short',day:'2-digit',month:'short'}))}</button>`).join('') +
+        '</div>';
+      }).join('') +
+    '</div>' +
+    '<p class="s27-shoot-info">⚡ Tip: klik op een dag om die voorkeur door te geven met je aanvraag.</p>';
+}
+
+// Globale click handler voor shoot-slot keuze → toevoegen aan sub_answers
+document.addEventListener('click', e => {
+  const slot = e.target.closest && e.target.closest('.s27-shoot-slot');
+  if(!slot) return;
+  document.querySelectorAll('.s27-shoot-slot').forEach(s => s.classList.remove('is-chosen'));
+  slot.classList.add('is-chosen');
+  const form = $('s27-nieuw-form');
+  if(!form) return;
+  // Verwijder eerdere shoot-keuze
+  Array.from(form.querySelectorAll('input[name="sub_shoot_voorkeur"]')).forEach(el => el.remove());
+  const hidden = document.createElement('input');
+  hidden.type = 'hidden';
+  hidden.name = 'sub_shoot_voorkeur';
+  hidden.value = slot.dataset.host + ' op ' + slot.dataset.day;
+  form.appendChild(hidden);
+});
 
 function renderNieuwProjectSuccess(result){
   return `
@@ -1496,8 +1609,8 @@ async function renderMeetingsTab(){
   const upcoming = meetings.filter(m => !m.datum_ms || m.datum_ms >= now).sort((a,b) => (a.datum_ms||0) - (b.datum_ms||0));
   const past = meetings.filter(m => m.datum_ms && m.datum_ms < now).sort((a,b) => (b.datum_ms||0) - (a.datum_ms||0));
 
-  const bookingBtn = '<a class="s27-btn s27-btn-primary s27-meetings-cta" href="' + esc(bookingUrl) + '" target="_blank" rel="noopener">' +
-    '<svg width="16" height="16"><use href="#s27p-cal"/></svg> <span>Nieuwe meeting inplannen</span></a>';
+  const bookingBtn = '<button class="s27-btn s27-btn-primary s27-meetings-cta" id="s27-meetings-book-btn" type="button">' +
+    '<svg width="16" height="16"><use href="#s27p-cal"/></svg> <span>Nieuwe meeting inplannen</span></button>';
 
   // Header met titel + CTA rechtsboven — altijd zichtbaar
   const header = '<div class="s27-meetings-head">' +
@@ -1506,15 +1619,19 @@ async function renderMeetingsTab(){
     bookingBtn +
   '</div>';
 
+  // Booking slots overlay container (toegevoegd onder header)
+  const slotsBox = '<div id="s27-book-slots" class="s27-book-slots" hidden></div>';
+
   if(!meetings.length){
-    body.innerHTML = header +
+    body.innerHTML = header + slotsBox +
       '<div class="s27-empty"><div class="s27-empty-icon"><svg width="22" height="22"><use href="#s27p-cal"/></svg></div>' +
       '<div class="s27-empty-title">Nog geen meetings ingepland</div>' +
-      '<p class="s27-empty-sub">Klik bovenaan op <strong>Nieuwe meeting inplannen</strong> — vul je gegevens in, kies een vrij moment, klaar.</p></div>';
+      '<p class="s27-empty-sub">Klik bovenaan op <strong>Nieuwe meeting inplannen</strong> — we tonen meteen de eerstvolgende vrije momenten.</p></div>';
+    wireBookingButton(bookingUrl);
     return;
   }
 
-  let html = header;
+  let html = header + slotsBox;
   if(upcoming.length){
     html += '<div class="s27-section"><h3 class="s27-section-title">Aankomende meetings <span class="s27-badge">' + upcoming.length + '</span></h3>' +
       '<div class="s27-meetings-list">' + upcoming.map(renderMeetingCard).join('') + '</div></div>';
@@ -1524,7 +1641,93 @@ async function renderMeetingsTab(){
       '<div class="s27-meetings-list">' + past.slice(0,10).map(renderMeetingCard).join('') + '</div></div>';
   }
   body.innerHTML = html;
+  wireBookingButton(bookingUrl);
 }
+
+function wireBookingButton(externalBookingUrl){
+  const btn = $('s27-meetings-book-btn');
+  if(!btn) return;
+  btn.addEventListener('click', () => loadMeetingSlots(externalBookingUrl));
+}
+
+async function loadMeetingSlots(externalBookingUrl){
+  const box = $('s27-book-slots');
+  if(!box) return;
+  box.hidden = false;
+  box.innerHTML = '<div class="s27-loading" style="padding:18px">Eerstvolgende vrije momenten zoeken…</div>';
+  try {
+    if(!_shootDataCache){
+      const r = await fetch(ENDPOINTS.shootAvailability, { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+      _shootDataCache = await r.json();
+    }
+    box.innerHTML = renderMeetingSlots(_shootDataCache, externalBookingUrl);
+  } catch(err){
+    box.innerHTML = '<div class="s27-form-error">Beschikbaarheid kon niet opgehaald worden — open de externe agenda via deze <a href="' + esc(externalBookingUrl) + '" target="_blank" rel="noopener">link</a> of mail Ilke.</div>';
+  }
+}
+
+function renderMeetingSlots(data, externalBookingUrl){
+  // Voor meetings tonen we Ilke + Vincent + Arne — als hosts beschikbaar zijn in data, gebruik die
+  // Anders fallback naar de content-hosts uit availability endpoint
+  const teamHosts = [
+    { id:48338421, naam:'Ilke Meeusen',      rol:'Account manager — projectopvolging' },
+    { id:8714037,  naam:'Vincent Verleije',  rol:'Zaakvoerder — strategie' },
+    { id:54513254, naam:'Arne Goetschalckx', rol:'Sales — nieuwe projecten' }
+  ];
+  const allBusy = (data.shoots || []).concat(data.shoots_27m || []).concat(data.vakantie || []);
+  const now = Date.now();
+  const horizonMs = now + (14 * 86400000);
+  const bezetByHost = {};
+  teamHosts.forEach(h => bezetByHost[h.id] = new Set());
+  allBusy.forEach(t => {
+    const due = parseInt(t.due_date || t.start_date, 10);
+    if(!due || due < now || due > horizonMs) return;
+    const day = new Date(due).toISOString().slice(0,10);
+    (t.assignees || []).forEach(a => {
+      if(bezetByHost[a.id]) bezetByHost[a.id].add(day);
+    });
+  });
+  // Per host: eerste 4 vrije werkdagen
+  const slotsByHost = teamHosts.map(h => {
+    const vrij = [];
+    for(let d = now; d <= horizonMs && vrij.length < 4; d += 86400000){
+      const dt = new Date(d);
+      const dow = dt.getDay();
+      if(dow === 0 || dow === 6) continue;
+      const dayKey = dt.toISOString().slice(0,10);
+      if(!bezetByHost[h.id].has(dayKey)) vrij.push(dayKey);
+    }
+    return { ...h, slots: vrij };
+  });
+  return '<div class="s27-book-head">' +
+    '<div><strong>📅 Eerstvolgende vrije momenten (komende 2 weken)</strong>' +
+    '<span>Kies een dag en we bevestigen het exact tijdstip via mail</span></div>' +
+    '<button type="button" class="s27-book-close" id="s27-book-close" aria-label="Sluiten">×</button>' +
+    '</div>' +
+    '<div class="s27-book-grid">' +
+      slotsByHost.map(h => `
+        <div class="s27-book-host">
+          <div class="s27-book-host-head">
+            <strong>${esc(h.naam)}</strong>
+            <span>${esc(h.rol)}</span>
+          </div>
+          ${h.slots.length
+            ? '<div class="s27-book-slot-row">' + h.slots.map(s => `<a class="s27-book-slot" href="mailto:${esc(externalBookingUrl.startsWith('mailto:') ? '' : 'ilke@studio27.be')}?subject=${encodeURIComponent('Meeting-aanvraag ' + h.naam + ' op ' + s + ' (' + (state.session ? state.session.bedrijfsnaam : '') + ')')}&body=${encodeURIComponent('Hallo,\n\nIk wil graag een meeting met ' + h.naam + ' inplannen op ' + new Date(s).toLocaleDateString('nl-BE', {weekday:'long', day:'numeric', month:'long'}) + '.\n\nMijn voorkeur voor het tijdstip: \nBespreekonderwerp: \n\nVriendelijke groet,\n')}">${esc(new Date(s).toLocaleDateString('nl-BE',{weekday:'short',day:'2-digit',month:'short'}))}</a>`).join('') + '</div>'
+            : '<p class="s27-book-empty">Volgeboekt komende 2 weken — kies een andere collega</p>'
+          }
+        </div>
+      `).join('') +
+    '</div>' +
+    (externalBookingUrl ? '<p class="s27-book-fallback">Of <a href="' + esc(externalBookingUrl) + '" target="_blank" rel="noopener">open onze Google Calendar agenda</a> direct.</p>' : '');
+}
+
+// Globale handler voor sluiten van booking slots
+document.addEventListener('click', e => {
+  if(e.target && e.target.id === 's27-book-close'){
+    const box = $('s27-book-slots');
+    if(box){ box.hidden = true; box.innerHTML = ''; }
+  }
+});
 
 function renderMeetingCard(m){
   const d = m.datum_ms ? new Date(m.datum_ms) : null;

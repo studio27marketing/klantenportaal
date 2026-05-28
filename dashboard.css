@@ -372,6 +372,39 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-pt-sub-head strong { font-family:var(--font-display); font-size:13px; font-weight:800; color:var(--s27-blue-ink); }
 .s27-pt-sub-head span { font-family:var(--font-body); font-size:12px; color:var(--s27-blue-ink); opacity:0.8; }
 
+/* Shoot beschikbaarheid preview (v2.2 #49) */
+.s27-shoot-preview { margin-top:10px; padding:16px 18px; background:#fff7ed; border:1.5px solid #fed7aa; border-radius:var(--r-md); display:flex; flex-direction:column; gap:14px; animation:s27fadeIn .25s var(--ease-out) backwards; }
+.s27-shoot-head { display:flex; flex-direction:column; gap:2px; padding-bottom:8px; border-bottom:1px solid #fed7aa; }
+.s27-shoot-head strong { font-family:var(--font-display); font-size:13px; font-weight:800; color:#9a3412; }
+.s27-shoot-head span { font-family:var(--font-body); font-size:12px; color:#9a3412; opacity:0.85; }
+.s27-shoot-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; }
+.s27-shoot-host { background:#fff; padding:10px 12px; border-radius:var(--r-sm); border:1px solid rgba(154,52,18,0.15); display:flex; flex-direction:column; gap:6px; }
+.s27-shoot-host > strong { font-family:var(--font-display); font-size:13px; font-weight:800; color:var(--s27-ink); }
+.s27-shoot-slot { background:var(--s27-paper-2); border:1px solid var(--s27-line); border-radius:var(--r-sm); padding:6px 9px; font-family:var(--font-display); font-size:11.5px; font-weight:700; color:var(--s27-ink); cursor:pointer; text-align:left; transition:all .15s; }
+.s27-shoot-slot:hover { background:var(--s27-orange-soft); border-color:var(--s27-orange); color:var(--s27-orange-ink); }
+.s27-shoot-slot.is-chosen { background:var(--s27-orange); color:#fff; border-color:var(--s27-orange); }
+.s27-shoot-empty { font-family:var(--font-body); font-size:11px; color:var(--s27-ink-3); font-style:italic; }
+.s27-shoot-info { font-family:var(--font-body); font-size:12px; color:#9a3412; margin:0; padding-top:4px; }
+
+/* Meeting booking slots (v2.2 #48) */
+.s27-book-slots { background:var(--s27-blue-soft); border:1.5px solid var(--s27-blue); border-radius:var(--r-md); padding:18px 20px; margin-bottom:24px; animation:s27fadeIn .25s var(--ease-out) backwards; position:relative; }
+.s27-book-head { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; padding-bottom:12px; border-bottom:1px solid color-mix(in srgb, var(--s27-blue) 30%, transparent); margin-bottom:14px; }
+.s27-book-head strong { font-family:var(--font-display); font-size:14px; font-weight:800; color:var(--s27-blue-ink); display:block; margin-bottom:2px; }
+.s27-book-head span { font-family:var(--font-body); font-size:12px; color:var(--s27-blue-ink); opacity:0.8; }
+.s27-book-close { background:rgba(255,255,255,0.6); border:none; width:28px; height:28px; border-radius:50%; cursor:pointer; font-size:18px; line-height:1; color:var(--s27-blue-ink); flex-shrink:0; }
+.s27-book-close:hover { background:#fff; }
+.s27-book-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; }
+.s27-book-host { background:#fff; padding:12px 14px; border-radius:var(--r-sm); display:flex; flex-direction:column; gap:9px; }
+.s27-book-host-head { display:flex; flex-direction:column; gap:1px; }
+.s27-book-host-head strong { font-family:var(--font-display); font-size:13px; font-weight:800; color:var(--s27-ink); }
+.s27-book-host-head span { font-family:var(--font-body); font-size:11px; color:var(--s27-ink-3); }
+.s27-book-slot-row { display:flex; flex-wrap:wrap; gap:5px; }
+.s27-book-slot { background:var(--s27-paper-3); border-radius:var(--r-sm); padding:6px 10px; font-family:var(--font-display); font-size:11.5px; font-weight:700; color:var(--s27-ink); text-decoration:none; transition:all .15s; }
+.s27-book-slot:hover { background:var(--s27-blue); color:#fff; }
+.s27-book-empty { font-family:var(--font-body); font-size:11.5px; color:var(--s27-ink-3); font-style:italic; margin:0; }
+.s27-book-fallback { font-family:var(--font-body); font-size:12px; color:var(--s27-blue-ink); margin:14px 0 0; padding-top:10px; border-top:1px solid color-mix(in srgb, var(--s27-blue) 25%, transparent); }
+.s27-book-fallback a { color:var(--s27-blue-ink); font-weight:700; }
+
 /* ============ FULLSCREEN PROJECT VIEW (v2.1 Fase 34) ============ */
 .s27-projectview { animation:s27fadeIn .25s var(--ease-out) backwards; }
 .s27-pv-head { margin-bottom:24px; }
