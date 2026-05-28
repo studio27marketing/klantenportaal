@@ -15,8 +15,8 @@
 
   var REPO   = 'studio27marketing/klantenportaal';
   var BRANCH = 'main';
-  // raw.githubusercontent.com: direct GitHub, geen CDN cache (5min browser cache via Cache-Control header)
-  var CDN    = 'https://raw.githubusercontent.com/' + REPO + '/' + BRANCH;
+  // raw.githack.com: juiste MIME types voor JS/CSS, instant na purge. Cache-bust via query.
+  var CDN    = 'https://raw.githack.com/' + REPO + '/' + BRANCH;
   var MOUNT_ID = 's27-portal-mount';
 
   // Cache-bust: granulariteit 60s tijdens MVP (auto-fresh elke minuut) of explicit timestamp met ?nocache=1
