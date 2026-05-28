@@ -23,6 +23,7 @@ const ENDPOINTS = {
   feedbackV2:        'https://hook.eu1.make.com/vpd7to9pn8ritsih38s4apika49lg31o',
   newProjectIntake:  'https://hook.eu1.make.com/kbomkcljmi9b2oyphmk938wb1qgwll1j',
   directMessage:     'https://hook.eu1.make.com/s7g32st1esmxxarw0k35ej3j8hthdr2b',
+  chatAttachment:    'https://hook.eu1.make.com/fxaqt9waonf63moiloj1bnm28w1kduj6',
   // Bestaand werkend booking-systeem (read-only hergebruik via CORS *)
   shootAvailability: 'https://hook.eu1.make.com/c1aekp5r567tqvgvp4e2a4juu3npanap'
 };
@@ -1090,7 +1091,7 @@ async function renderBedrijfTab(){
       <div class="s27-section-head">
         <div>
           <h2 class="s27-section-title">Huisstijl-bibliotheek</h2>
-          <p class="s27-section-sub">Logo's, fonts, brand-PDFs en foto's — gestructureerd op één plek. Jij en wij kunnen hier bestanden toevoegen. Alles wordt automatisch opgeslagen in ClickUp.</p>
+          <p class="s27-section-sub">Logo's, fonts, brand-PDFs en foto's — gestructureerd op één plek. Jij en wij kunnen hier bestanden toevoegen.</p>
         </div>
       </div>
       <div class="s27-fontuse">
@@ -1134,6 +1135,27 @@ function renderCategoryCard(cat, items){
     ${previewsHtml}
     <span class="s27-catcard-cta">${count ? 'Bekijk alle' : 'Voeg toe'} →</span>
   </button>`;
+}
+
+// v2.2 #59: surgical update — vervang ALLEEN de category-card zonder hele tab
+function refreshCategoryCard(catId){
+  if(!state.bedrijfContent || !catId) return;
+  const cat = BRAND_CATEGORIES.find(c => c.id === catId);
+  if(!cat) return;
+  const items = (state.bedrijfContent.attachments || []).filter(a => {
+    const c = categoryFromFilename(a.filename || a.name || '');
+    return c === catId;
+  });
+  const oldCard = document.querySelector(`.s27-catcard[data-category="${catId}"]`);
+  if(!oldCard) return;
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = renderCategoryCard(cat, items);
+  const newCard = wrapper.firstElementChild;
+  if(newCard){
+    // Re-wire click handler op nieuwe element
+    newCard.addEventListener('click', () => openCategoryModal(catId));
+    oldCard.replaceWith(newCard);
+  }
 }
 
 function renderFilePreviewTiny(item, cat){
@@ -1362,7 +1384,7 @@ function renderArchiveCard(p){
     '<div class="s27-archive-body">' +
       (dels.length
         ? '<div class="s27-archive-dels">' + dels.map(d => '<a href="' + esc(d.url||'#') + '" target="_blank" rel="noopener" class="s27-archive-del"><svg width="13" height="13"><use href="#s27p-link"/></svg>' + esc(d.label || d.type || 'Deliverable') + '</a>').join('') + '</div>'
-        : '<p class="s27-archive-empty">Geen deliverables-links geregistreerd in ClickUp. <a href="#" data-dm="archief" data-dm-onderwerp="Oude deliverables opvragen: ' + esc(p.naam || '') + '" data-dm-placeholder="Welke bestanden zoek je? We zoeken het op en sturen ze door.">Vraag de bestanden op via ClickUp →</a></p>') +
+        : '<p class="s27-archive-empty">Geen deliverables-links beschikbaar. <a href="#" data-dm="archief" data-dm-onderwerp="Oude deliverables opvragen: ' + esc(p.naam || '') + '" data-dm-placeholder="Welke bestanden zoek je? We zoeken het op en sturen ze door.">Vraag de bestanden bij ons op →</a></p>') +
     '</div>' +
   '</details>';
 }
@@ -1970,7 +1992,7 @@ function renderMeetingCard(m){
   const dayNum  = hasDate ? d.getDate() : '?';
   const month   = hasDate ? d.toLocaleDateString('nl-BE', {month:'short'}).slice(0,3).toLowerCase() : '';
   const timeLabel = hasDate ? d.toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'}) : '';
-  const link = m.link ? '<a href="' + esc(m.link) + '" target="_blank" rel="noopener" class="s27-meeting-link">In ClickUp openen →</a>' : '';
+  const link = ''; // ClickUp-link niet meer tonen — klanten werken niet in ClickUp
   const dateBlock = hasDate
     ? '<div class="s27-meeting-date"><span class="dw">' + esc(dayWeek) + '</span><strong>' + dayNum + '</strong><span class="dm">' + esc(month) + '</span></div>'
     : '<div class="s27-meeting-date s27-meeting-date-tbd"><strong>?</strong><span>nog te<br>bevestigen</span></div>';
@@ -2131,7 +2153,6 @@ function renderProjectView(proj, detail, needsFeedback){
         </div>
         <div class="s27-pv-status-col">
           ${statusLabel ? `<span class="s27-projc-status" data-status="${esc(statusKey)}">${esc(statusLabel)}</span>` : ''}
-          ${detail.project_url ? `<a class="s27-pv-clickup" href="${esc(detail.project_url)}" target="_blank" rel="noopener"><svg width="12" height="12"><use href="#s27p-link"/></svg> Open in ClickUp</a>` : ''}
         </div>
       </div>
     </div>
@@ -2146,14 +2167,16 @@ function renderProjectView(proj, detail, needsFeedback){
       </div>
     ` : ''}
 
-    <div class="s27-pv-section">
-      <h3 class="s27-pv-section-title">📋 Overzicht & tijdlijn</h3>
-      <div class="s27-pv-overview">${renderOverzichtTab(proj, detail)}</div>
-    </div>
+    <div class="s27-pv-twocol">
+      <div class="s27-pv-section">
+        <h3 class="s27-pv-section-title">📋 Projectomschrijving</h3>
+        <div class="s27-pv-overview">${renderOverzichtTab(proj, detail)}</div>
+      </div>
 
-    <div class="s27-pv-section s27-pv-section-chat">
-      <h3 class="s27-pv-section-title">💬 Chat <small style="font-weight:400;color:var(--s27-ink-3);font-size:13px">— direct met het team via ClickUp</small> ${commentCount ? `<span class="s27-pv-tab-badge" style="margin-left:8px">${commentCount}</span>` : ''}</h3>
-      <div id="s27-pv-chatbox" class="s27-pv-chatbox"></div>
+      <div class="s27-pv-section s27-pv-section-chat">
+        <h3 class="s27-pv-section-title">💬 Chat met het team ${commentCount ? `<span class="s27-pv-tab-badge" style="margin-left:8px">${commentCount}</span>` : ''}</h3>
+        <div id="s27-pv-chatbox" class="s27-pv-chatbox"></div>
+      </div>
     </div>
 
     ${needsFeedback ? '<div class="s27-pv-section" id="s27-pv-fb-section" hidden><h3 class="s27-pv-section-title">✅ Feedback geven</h3><div id="s27-pv-fbbox"></div></div>' : ''}
@@ -2168,12 +2191,18 @@ function renderProjectView(proj, detail, needsFeedback){
     } else {
       chatBox.innerHTML = renderChatTab(proj, detail);
       attachChatHandlers();
-      console.log('[Studio 27] Chat rendered + handlers attached');
+      // Auto-scroll naar nieuwste (onderkant) zoals WhatsApp/Slack
+      setTimeout(() => {
+        const thread = $('s27-chat-thread');
+        if(thread) thread.scrollTop = thread.scrollHeight;
+      }, 30);
+      // Start polling voor real-time updates
+      startChatPolling(proj.task_id);
     }
   } catch(e){
     console.error('[Studio 27] Chat render failed:', e);
     const chatBox = $('s27-pv-chatbox');
-    if(chatBox) chatBox.innerHTML = '<div class="s27-form-error">Chat kon niet geladen worden (' + esc(String(e && e.message || e)) + '). <a href="#" data-dm="vraag" data-dm-onderwerp="Chat in dashboard werkt niet">Stuur ons een bericht via ClickUp</a>.</div>';
+    if(chatBox) chatBox.innerHTML = '<div class="s27-form-error">Chat kon niet geladen worden (' + esc(String(e && e.message || e)) + '). <a href="#" data-dm="vraag" data-dm-onderwerp="Chat in dashboard werkt niet">Stuur ons een bericht</a>.</div>';
   }
 
   // Wire up handlers
@@ -2203,8 +2232,71 @@ function renderProjectView(proj, detail, needsFeedback){
 
 // renderProjectViewSideTab (oude 2-kolom helper) — niet meer gebruikt na 1-kolom refactor #53, verwijderd
 
+/* =================================================================
+   CHAT POLLING (v2.2 #58) — real-time team-reacties zonder webhooks
+   ================================================================= */
+let _chatPollTimer = null;
+let _chatPollTaskId = null;
+
+function startChatPolling(taskId){
+  stopChatPolling();
+  if(!taskId || !ENDPOINTS.chatList || state.demoMode) return;
+  _chatPollTaskId = taskId;
+  _chatPollTimer = setInterval(() => pollChatTick(taskId), 15000);
+}
+
+function stopChatPolling(){
+  if(_chatPollTimer){ clearInterval(_chatPollTimer); _chatPollTimer = null; }
+  _chatPollTaskId = null;
+}
+
+async function pollChatTick(taskId){
+  // Stop als gebruiker niet meer in project view of andere taak heeft geopend
+  if(state.viewMode !== 'project' || !state.activeProject || state.activeProject.task_id !== taskId){
+    stopChatPolling();
+    return;
+  }
+  // Pause als tab in background staat
+  if(document.hidden) return;
+  try {
+    const res = await api(ENDPOINTS.chatList, { task_id: taskId, session_token: state.session.session_token });
+    if(!res.ok || !res.data || !Array.isArray(res.data.comments)) return;
+    const newComments = res.data.comments;
+    const oldComments = (state.activeProjectDetail && state.activeProjectDetail.comments) || [];
+    // Vergelijk: zijn er nieuwe id's?
+    const oldIds = new Set(oldComments.map(c => c.id).filter(Boolean));
+    const newOnes = newComments.filter(c => c.id && !oldIds.has(c.id));
+    if(!newOnes.length) return;
+    // Update state + re-render
+    state.activeProjectDetail.comments = newComments;
+    const chatBox = $('s27-pv-chatbox');
+    if(chatBox){
+      const wasAtBottom = chatScrollAtBottom();
+      chatBox.innerHTML = renderChatTab(state.activeProject, state.activeProjectDetail);
+      attachChatHandlers();
+      // Highlight nieuwe berichten
+      newOnes.forEach(c => {
+        const el = chatBox.querySelector(`[data-comment-id="${c.id}"]`);
+        if(el) el.classList.add('s27-chat-msg-new');
+      });
+      // Auto-scroll als gebruiker al onderaan zat
+      if(wasAtBottom){
+        const thread = $('s27-chat-thread');
+        if(thread) thread.scrollTop = thread.scrollHeight;
+      }
+    }
+  } catch(e){ /* silent fail — volgende tick probeert opnieuw */ }
+}
+
+function chatScrollAtBottom(){
+  const thread = $('s27-chat-thread');
+  if(!thread) return true;
+  return (thread.scrollHeight - thread.scrollTop - thread.clientHeight) < 50;
+}
+
 function exitProjectView(){
   // Verberg fullscreen, toon normale tabs terug
+  stopChatPolling();
   const fsView = $('s27-tab-project');
   if(fsView){ fsView.hidden = true; fsView.innerHTML = ''; }
   state.viewMode = 'dashboard';
@@ -2276,38 +2368,89 @@ function renderOverzichtTab(proj, detail){
 
 function renderChatTab(proj, detail){
   const comments = detail.comments || [];
-  const thread = comments.length
-    ? '<div class="s27-chat-thread">' + comments.map(renderChatMessage).join('') + '</div>'
-    : '<div class="s27-empty"><div class="s27-empty-icon"><svg width="22" height="22"><use href="#s27p-mail"/></svg></div><div class="s27-empty-title">Nog geen berichten</div><p class="s27-empty-sub">Start het gesprek met je team. Antwoorden komen hier direct te staan.</p></div>';
+  // Sort: oudste BOVEN, nieuwste ONDER (zoals WhatsApp/Slack)
+  const sorted = comments.slice().sort((a, b) => {
+    const da = parseChatDate(a.datum);
+    const db = parseChatDate(b.datum);
+    return da - db;
+  });
+  // Groepeer per dag voor day-dividers
+  const groups = groupChatByDay(sorted);
+  const thread = sorted.length
+    ? '<div class="s27-chat-thread" id="s27-chat-thread">' + groups.map(g =>
+        `<div class="s27-chat-day-divider"><span>${esc(g.label)}</span></div>` +
+        g.messages.map(renderChatMessage).join('')
+      ).join('') + '</div>'
+    : '<div class="s27-chat-empty"><div class="s27-chat-empty-icon">💬</div><strong>Start het gesprek</strong><p>Stel je vraag, wij antwoorden via dit kanaal. Je krijgt automatisch een notificatie.</p></div>';
   return thread +
     '<div class="s27-chat-compose">' +
-      '<textarea id="s27-chat-input" placeholder="Typ je bericht voor het team…"></textarea>' +
+      '<textarea id="s27-chat-input" placeholder="Typ je bericht voor het team…" rows="2"></textarea>' +
       '<div class="s27-chat-actions">' +
-        '<label class="s27-chat-attach" for="s27-chat-file">' +
-          '<svg width="14" height="14"><use href="#s27p-upload"/></svg> Bestand toevoegen' +
+        '<label class="s27-chat-attach" for="s27-chat-file" title="Bestand toevoegen">' +
+          '<svg width="14" height="14"><use href="#s27p-upload"/></svg> <span>Bestand</span>' +
         '</label>' +
         '<input id="s27-chat-file" type="file" multiple style="display:none">' +
-        '<button class="s27-btn s27-btn-sm" id="s27-chat-send">Versturen</button>' +
+        '<button class="s27-btn s27-btn-sm s27-btn-primary" id="s27-chat-send"><svg width="13" height="13" viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z" fill="currentColor"/></svg> Versturen</button>' +
       '</div>' +
       '<ul id="s27-chat-files" class="s27-chat-files"></ul>' +
     '</div>';
 }
 
+function parseChatDate(d){
+  if(!d) return 0;
+  // ClickUp datum kan ms unix timestamp string zijn of ISO string
+  const asNum = parseInt(d, 10);
+  if(!isNaN(asNum) && asNum > 1000000000) return asNum;
+  const t = new Date(d).getTime();
+  return isNaN(t) ? 0 : t;
+}
+
+function groupChatByDay(messages){
+  const groups = [];
+  let currentDay = null;
+  let currentGroup = null;
+  const today = new Date();
+  const yesterday = new Date(today.getTime() - 86400000);
+  const todayKey = today.toISOString().slice(0,10);
+  const yesterdayKey = yesterday.toISOString().slice(0,10);
+  messages.forEach(m => {
+    const ts = parseChatDate(m.datum);
+    const dayKey = ts ? new Date(ts).toISOString().slice(0,10) : 'onbekend';
+    if(dayKey !== currentDay){
+      currentDay = dayKey;
+      let label = 'Eerder';
+      if(dayKey === todayKey) label = 'Vandaag';
+      else if(dayKey === yesterdayKey) label = 'Gisteren';
+      else if(ts) label = new Date(ts).toLocaleDateString('nl-BE', {weekday:'long', day:'numeric', month:'long'});
+      currentGroup = { label, messages: [] };
+      groups.push(currentGroup);
+    }
+    currentGroup.messages.push(m);
+  });
+  return groups;
+}
+
 function renderChatMessage(c){
   const isKlant = c.is_klant === true || (c.tekst || '').startsWith('💬 [Klant');
   const side = isKlant ? 'klant' : 'team';
-  const cleanText = (c.tekst || '').replace(/^💬 \[Klant: [^\]]+\]\s*/, '').trim();
-  const atts = (c.attachments || []).map(a => '<a class="s27-chat-att" href="' + esc(a.url || '#') + '" target="_blank" rel="noopener">📎 ' + esc(a.filename || 'bestand') + '</a>').join('');
+  const cleanText = decodeMakeString(c.tekst || '').replace(/^💬 \[Klant: [^\]]+\]\s*/, '').trim();
+  const atts = (c.attachments || []).map(a => '<a class="s27-chat-att" href="' + esc(a.url || '#') + '" target="_blank" rel="noopener"><svg width="11" height="11"><use href="#s27p-link"/></svg> ' + esc(a.filename || 'bestand') + '</a>').join('');
   const likeKey = 's27_like_' + (c.id || '');
   const isLiked = c.id ? (localStorage.getItem(likeKey) === '1') : false;
-  const likeCount = c.id ? parseInt(localStorage.getItem(likeKey + '_count') || '0', 10) + (isLiked ? 1 : 0) : 0;
+  // Time-only label (zoals WhatsApp/Slack) — datum staat al in day-divider
+  const ts = parseChatDate(c.datum);
+  const timeStr = ts ? new Date(ts).toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'}) : '';
+  const initial = ((c.auteur || 'S').match(/[A-Za-zÀ-ÿ]/) || ['?'])[0].toUpperCase();
   return '<div class="s27-chat-msg s27-chat-msg-' + side + '" data-comment-id="' + esc(c.id || '') + '">' +
-    '<div class="s27-chat-head"><strong>' + esc(c.auteur || 'Studio 27') + '</strong><span>' + esc(fmtRelTime(c.datum)) + '</span></div>' +
-    '<div class="s27-chat-body">' + esc(cleanText).replace(/\n/g,'<br>') + '</div>' +
-    (atts ? '<div class="s27-chat-atts">' + atts + '</div>' : '') +
-    '<div class="s27-chat-msg-actions">' +
-      (c.id ? '<button class="s27-chat-react' + (isLiked ? ' is-liked' : '') + '" data-action="like" data-cid="' + esc(c.id) + '" aria-label="Bericht liken">👍 ' + (likeCount > 0 ? '<span class="s27-chat-react-count">' + likeCount + '</span>' : '') + '</button>' : '') +
-      '<button class="s27-chat-react" data-action="reply" data-author="' + esc(c.auteur || '') + '" aria-label="Reageren op dit bericht">↩ Reageer</button>' +
+    '<div class="s27-chat-avatar">' + esc(initial) + '</div>' +
+    '<div class="s27-chat-bubble">' +
+      '<div class="s27-chat-head"><strong>' + esc(c.auteur || 'Studio 27') + '</strong>' + (timeStr ? '<span>' + esc(timeStr) + '</span>' : '') + '</div>' +
+      '<div class="s27-chat-body">' + esc(cleanText).replace(/\n/g,'<br>') + '</div>' +
+      (atts ? '<div class="s27-chat-atts">' + atts + '</div>' : '') +
+      '<div class="s27-chat-msg-actions">' +
+        (c.id ? '<button class="s27-chat-react' + (isLiked ? ' is-liked' : '') + '" data-action="like" data-cid="' + esc(c.id) + '" aria-label="Bericht liken">👍</button>' : '') +
+        '<button class="s27-chat-react" data-action="reply" data-author="' + esc(c.auteur || '') + '" aria-label="Reageren">↩</button>' +
+      '</div>' +
     '</div>' +
   '</div>';
 }
@@ -2335,34 +2478,60 @@ function attachChatHandlers(){
     send.addEventListener('click', async () => {
       const text = (input.value || '').trim();
       if(!text && !pending.length){ input.focus(); return; }
-      send.disabled = true; send.textContent = 'Versturen…';
-      const url = ENDPOINTS.chatPost;
-      if(url){
-        await api(url, {
-          task_id: state.activeProject.task_id,
-          bedrijf_id: state.session.bedrijf_id,
-          session_token: state.session.session_token,
-          klant_naam: state.session.bedrijfsnaam,
-          comment_text: text,
-          attachments: pending
-        });
-      } else {
-        await new Promise(r => setTimeout(r, 600)); // mock
-      }
-      send.disabled = false; send.textContent = 'Versturen';
+      send.disabled = true; send.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z" fill="currentColor"/></svg> Versturen…';
+      const optimisticAttachments = [];
+      try {
+        // v2.2 #57: heb je bestanden? Upload elk via chat-attachment scenario (uploadt + post comment in 1)
+        if(pending.length && ENDPOINTS.chatAttachment){
+          for(const f of pending){
+            try {
+              const res = await api(ENDPOINTS.chatAttachment, {
+                task_id: state.activeProject.task_id,
+                bedrijf_id: state.session.bedrijf_id,
+                session_token: state.session.session_token,
+                klant_naam: state.session.bedrijfsnaam,
+                filename: f.filename,
+                data: f.data,
+                comment_text: text || ''
+              });
+              if(res.ok && res.data && res.data.ok && res.data.attachment_url){
+                optimisticAttachments.push({ filename: res.data.filename || f.filename, url: res.data.attachment_url });
+              }
+            } catch(err){ console.warn('[Studio 27] chat-attachment failed for', f.filename, err); }
+          }
+        }
+        // Tekst-only of als pending leeg en text bestaat: gewone chat-post
+        if(text && !pending.length && ENDPOINTS.chatPost){
+          await api(ENDPOINTS.chatPost, {
+            task_id: state.activeProject.task_id,
+            bedrijf_id: state.session.bedrijf_id,
+            session_token: state.session.session_token,
+            klant_naam: state.session.bedrijfsnaam,
+            comment_text: text
+          });
+        }
+      } catch(e){ console.error('[Studio 27] chat send failed:', e); }
+
+      send.disabled = false;
+      send.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z" fill="currentColor"/></svg> Versturen';
       input.value = '';
       filesList.innerHTML = '';
       pending.length = 0;
-      // Optimistisch toevoegen aan thread
-      const newMsg = { auteur:state.session.bedrijfsnaam, is_klant:true, tekst:text, datum:new Date().toISOString(), attachments:[] };
+      // Optimistisch toevoegen aan thread (zo lijkt het direct verstuurd)
+      const newMsg = {
+        id: 'optimistic-' + Date.now(),
+        auteur: state.session.bedrijfsnaam,
+        is_klant: true,
+        tekst: text || (optimisticAttachments.length ? '📎 ' + optimisticAttachments.map(a => a.filename).join(', ') : ''),
+        datum: new Date().toISOString(),
+        attachments: optimisticAttachments
+      };
       state.activeProjectDetail.comments = (state.activeProjectDetail.comments || []).concat([newMsg]);
-      // v2.2 fix #53: render in juiste container — eerst proberen nieuwe fullscreen chatbox, dan oude modal
       const chatBox = $('s27-pv-chatbox');
       if(chatBox){
         chatBox.innerHTML = renderChatTab(state.activeProject, state.activeProjectDetail);
         attachChatHandlers();
-        // Scroll naar onderkant van thread voor zichtbaarheid nieuwste bericht
-        const thread = chatBox.querySelector('.s27-chat-thread');
+        const thread = $('s27-chat-thread');
         if(thread) thread.scrollTop = thread.scrollHeight;
       } else if(typeof renderProjectModalTab === 'function' && $('s27-modaltab-content')){
         renderProjectModalTab('chat');
@@ -2598,10 +2767,20 @@ async function handleFiles(fileList, scope, category){
         scope: scope
       });
       if(res.ok && (!res.data || !res.data.error)){
-        updateUploadRow(li, 'done', 'Geüpload');
-        // Auto-refresh bedrijf-tab indien actief
-        if(scope === 'bedrijf' && state.activeTab === 'bedrijf'){
-          setTimeout(() => renderBedrijfTab(), 1000);
+        updateUploadRow(li, 'done', 'Geüpload ✓');
+        // v2.2 #59 fix: GEEN auto-renderBedrijfTab() meer — dat wist klant's
+        // niet-opgeslagen voorkeuren/kleuren/fonts. Voeg attachment in plaats
+        // toe aan in-memory cache + render alleen attachments-card.
+        if(scope === 'bedrijf' && state.bedrijfContent){
+          if(!Array.isArray(state.bedrijfContent.attachments)) state.bedrijfContent.attachments = [];
+          state.bedrijfContent.attachments.push({
+            filename: filenameWithCat,
+            url: (res.data && res.data.url) || '',
+            uploaded_by: 'klant',
+            uploaded_at: String(Date.now()),
+            size: f.size
+          });
+          refreshCategoryCard(category);
         }
       } else updateUploadRow(li, 'error', 'Mislukt');
     } catch(e){ updateUploadRow(li, 'error', 'Mislukt'); }
