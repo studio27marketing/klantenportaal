@@ -61,20 +61,79 @@
         </div>
         <div class="s27-topbar-right">
           <span class="s27-updated" id="s27-updated">Net bijgewerkt</span>
-          <button class="s27-iconbtn" id="s27-lock-btn" title="Uitloggen"><svg><use href="#s27p-lock"/></svg><span>Vergrendel</span></button>
+          <button class="s27-iconbtn" id="s27-lock-btn" title="Uitloggen"><svg><use href="#s27p-lock"/></svg><span>Uitloggen</span></button>
         </div>
       </div>
     </div>
 
+    <div class="s27-tabnav-wrap">
+      <nav class="s27-tabnav" role="tablist">
+        <button class="s27-tab" data-tab="dashboard" role="tab" aria-selected="true">
+          <svg><use href="#s27p-spark"/></svg><span>Dashboard</span>
+        </button>
+        <button class="s27-tab" data-tab="bedrijf" role="tab" aria-selected="false">
+          <svg><use href="#s27p-brand"/></svg><span>Mijn bedrijf</span>
+        </button>
+        <button class="s27-tab" data-tab="goedgekeurd" role="tab" aria-selected="false">
+          <svg><use href="#s27p-spark"/></svg><span>Goedgekeurd</span>
+        </button>
+        <button class="s27-tab" data-tab="nieuw" role="tab" aria-selected="false">
+          <svg><use href="#s27p-upload"/></svg><span>Nieuw project</span>
+        </button>
+        <button class="s27-tab" data-tab="instellingen" role="tab" aria-selected="false">
+          <svg><use href="#s27p-user"/></svg><span>Instellingen</span>
+        </button>
+      </nav>
+    </div>
+
     <div class="s27-wrap">
-      <div class="s27-hero">
-        <span class="s27-hero-tag">Jouw Studio 27 dashboard</span>
-        <h1>Alles wat we voor jou <span class="accent">aan het doen</span> zijn</h1>
-        <p class="s27-hero-lead">Eén plek voor jouw lopende projecten, meetings, deliverables en feedback. Altijd actueel — geen gemiste mailtjes meer.</p>
+      <div id="s27-tab-dashboard" class="s27-tabview" role="tabpanel">
+        <div class="s27-hero" id="s27-hero">
+          <span class="s27-hero-tag">Jouw Studio 27 dashboard</span>
+          <h1 id="s27-hero-title">Alles wat we voor jou <span class="accent">aan het doen</span> zijn</h1>
+          <p class="s27-hero-lead">Eén plek voor jouw lopende projecten, meetings, deliverables en feedback. Altijd actueel — geen gemiste mailtjes meer.</p>
+        </div>
+        <div id="s27-dash-body"><div class="s27-loading">Dashboard laden</div></div>
       </div>
-      <div id="s27-dash-body"><div class="s27-loading">Dashboard laden</div></div>
+
+      <div id="s27-tab-bedrijf" class="s27-tabview" role="tabpanel" hidden>
+        <div class="s27-hero">
+          <span class="s27-hero-tag">Mijn bedrijf</span>
+          <h1>Jouw <span class="accent">huisstijl</span> en voorkeuren</h1>
+          <p class="s27-hero-lead">Logo, fonts, brand-bestanden, algemene voorkeuren — alles op één plek. Wat hier staat geldt voor àl jouw projecten.</p>
+        </div>
+        <div id="s27-bedrijf-body"><div class="s27-loading">Binnenkort beschikbaar</div></div>
+      </div>
+
+      <div id="s27-tab-goedgekeurd" class="s27-tabview" role="tabpanel" hidden>
+        <div class="s27-hero">
+          <span class="s27-hero-tag">Archief</span>
+          <h1>Alles wat we voor jou <span class="accent">opgeleverd</span> hebben</h1>
+          <p class="s27-hero-lead">Alle goedgekeurde projecten en deliverable-links, gesorteerd in de tijd. Links blijven altijd beschikbaar.</p>
+        </div>
+        <div id="s27-goedgekeurd-body"><div class="s27-loading">Binnenkort beschikbaar</div></div>
+      </div>
+
+      <div id="s27-tab-nieuw" class="s27-tabview" role="tabpanel" hidden>
+        <div class="s27-hero">
+          <span class="s27-hero-tag">Nieuw project</span>
+          <h1>Klaar voor een <span class="accent">volgend project</span>?</h1>
+          <p class="s27-hero-lead">Vertel ons wat je wil — we sturen je vandaag nog een offerte op maat. Geen verplichting, geen kleine letters.</p>
+        </div>
+        <div id="s27-nieuw-body"><div class="s27-loading">Binnenkort beschikbaar</div></div>
+      </div>
+
+      <div id="s27-tab-instellingen" class="s27-tabview" role="tabpanel" hidden>
+        <div class="s27-hero">
+          <span class="s27-hero-tag">Instellingen</span>
+          <h1>Jouw <span class="accent">notificaties</span> en gegevens</h1>
+          <p class="s27-hero-lead">Wijzig je contactgegevens en kies hoe je updates wil krijgen — per mail, per WhatsApp, of beide.</p>
+        </div>
+        <div id="s27-instellingen-body"><div class="s27-loading">Binnenkort beschikbaar</div></div>
+      </div>
+
       <div class="s27-foot">
-        Vragen? Bel of mail je account manager — gegevens vind je bovenaan in <a href="#contact">contact</a>.<br>
+        Vragen? Bel of mail je account manager — gegevens vind je in het <strong>Dashboard</strong>-tabblad.<br>
         © Studio 27 · <a href="https://studio27.be" target="_blank" rel="noopener">studio27.be</a>
       </div>
     </div>

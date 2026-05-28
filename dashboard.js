@@ -42,8 +42,36 @@ const state = {
   session: null,             // { bedrijf_id, bedrijfsnaam, session_token, expires_at }
   dashboard: null,           // gerenderde data
   demoMode: false,
-  uploadQueue: []
+  uploadQueue: [],
+  activeTab: 'dashboard',    // 'dashboard' | 'bedrijf' | 'goedgekeurd' | 'nieuw' | 'instellingen'
+  statusFilter: 'alle'       // 'alle' | 'in_te_plannen' | 'ingepland' | 'wacht_feedback' | 'opgeleverd'
 };
+
+const STATUS_FILTERS = [
+  { id:'alle',           label:'Alle' },
+  { id:'in_te_plannen',  label:'In te plannen' },
+  { id:'ingepland',      label:'Ingepland' },
+  { id:'wacht_feedback', label:'Wacht op jouw feedback' },
+  { id:'opgeleverd',     label:'Opgeleverd' }
+];
+
+function matchesStatusFilter(p, filter){
+  const st = (p.status || '').toLowerCase().replace(/\s+/g, '_');
+  switch(filter){
+    case 'alle':           return true;
+    case 'in_te_plannen':  return st === 'to_do';
+    case 'ingepland':      return st === 'in_progress' || p.kan_beginnen === true;
+    case 'wacht_feedback': return st === 'doorgestuurd';
+    case 'opgeleverd':     return st === 'goedgekeurd' || st === 'done' || st === 'klaar_voor_facturatie' || st === 'gefactureerd';
+    default:               return true;
+  }
+}
+
+function firstNameFromCompany(n){
+  if(!n) return 'daar';
+  // Strip legal suffix (BV, NV, BVBA, BVOF, Comm.V, etc.)
+  return n.replace(/\s+(BV|NV|BVBA|BVOF|Comm\.?V|VOF|VZW|N\.V\.|B\.V\.|S\.A\.|SARL)\b\.?$/i, '').trim();
+}
 
 /* =================================================================
    UTILS
@@ -219,16 +247,26 @@ function normaliseDashboard(d){
    RENDER DASHBOARD
    ================================================================= */
 function renderDashboard(d){
+  // Persoonlijke begroeting in hero
+  const greetingName = firstNameFromCompany(d.klant && d.klant.bedrijfsnaam);
+  const heroTitle = $('s27-hero-title');
+  if(heroTitle) heroTitle.innerHTML = '<span class="greeting">Hey ' + esc(greetingName) + ',</span>Alles wat we voor jou <span class="accent">aan het doen</span> zijn';
+
   const body = $('s27-dash-body');
-  const projectenByDisc = groupBy(d.actieve_projecten, p => p.discipline);
+  const allProjecten = d.actieve_projecten || [];
+  const filtered = allProjecten.filter(p => matchesStatusFilter(p, state.statusFilter));
+  const projectenByDisc = groupBy(filtered, p => p.discipline);
   const aantalDisciplines = Object.keys(projectenByDisc).length;
 
-  const statsHtml = renderStats(d.stats, d.actieve_projecten.length, aantalDisciplines);
+  // Count per filter voor chip badges
+  const counts = {};
+  STATUS_FILTERS.forEach(f => { counts[f.id] = allProjecten.filter(p => matchesStatusFilter(p, f.id)).length; });
+
+  const statsHtml = renderStats(d.stats, allProjecten.length, aantalDisciplines);
+  const filterbarHtml = renderFilterBar(counts);
   const disciplinesHtml = renderDisciplines(projectenByDisc);
-  const meetingsHtml = renderMeetings(d.aankomende_meetings);
-  const historieHtml = renderHistorie(d.historie_3mnd);
-  const uploadHtml = renderUploadZone();
-  const contactHtml = renderContact(d.contact);
+  const meetingsHtml = renderMeetings(d.aankomende_meetings || []);
+  const contactHtml = renderContact(d.contact || {});
 
   body.innerHTML = `
     <div class="s27-section">${statsHtml}</div>
@@ -236,48 +274,29 @@ function renderDashboard(d){
     <div class="s27-section">
       <div class="s27-section-head">
         <div>
-          <h2 class="s27-section-title">Lopende projecten <span class="count">${d.actieve_projecten.length}</span></h2>
-          <p class="s27-section-sub">Alles waar we momenteel voor jou aan werken, gegroepeerd per discipline.</p>
+          <h2 class="s27-section-title">Lopende projecten <span class="count">${allProjecten.length}</span></h2>
+          <p class="s27-section-sub">Filter op wat voor jou relevant is.</p>
         </div>
       </div>
+      ${filterbarHtml}
       ${disciplinesHtml}
     </div>
 
     <div class="s27-section">
       <div class="s27-section-head">
         <div>
-          <h2 class="s27-section-title">Aankomende meetings <span class="count">${d.aankomende_meetings.length}</span></h2>
+          <h2 class="s27-section-title">Aankomende meetings <span class="count">${(d.aankomende_meetings||[]).length}</span></h2>
           <p class="s27-section-sub">Wat staat er gepland tussen jou en het Studio 27-team?</p>
         </div>
       </div>
       ${meetingsHtml}
     </div>
 
-    <div class="s27-section">
-      <div class="s27-section-head">
-        <div>
-          <h2 class="s27-section-title">Recent opgeleverd <span class="count">${d.historie_3mnd.length}</span></h2>
-          <p class="s27-section-sub">Wat we de laatste 3 maanden hebben afgerond — links blijven beschikbaar.</p>
-        </div>
-      </div>
-      ${historieHtml}
-    </div>
-
-    <div class="s27-section">
-      <div class="s27-section-head">
-        <div>
-          <h2 class="s27-section-title">Bestanden delen</h2>
-          <p class="s27-section-sub">Logo, huisstijlgids, referentiebeelden of andere assets? Sleep ze hier of klik om te uploaden.</p>
-        </div>
-      </div>
-      ${uploadHtml}
-    </div>
-
     <div class="s27-section" id="contact">
       <div class="s27-section-head">
         <div>
           <h2 class="s27-section-title">Jouw aanspreekpunt</h2>
-          <p class="s27-section-sub">Vragen, ideeën of een nieuw project? Eén klik en je staat in contact.</p>
+          <p class="s27-section-sub">Vragen, ideeën of even sparren? Eén klik en je staat in contact.</p>
         </div>
       </div>
       ${contactHtml}
@@ -286,6 +305,17 @@ function renderDashboard(d){
 
   attachDashboardHandlers();
   $('s27-updated').textContent = 'Bijgewerkt om ' + new Date().toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'});
+}
+
+function renderFilterBar(counts){
+  return '<div class="s27-filterbar" role="tablist">' +
+    STATUS_FILTERS.map(f =>
+      '<button class="s27-chip" data-filter="' + f.id + '" aria-pressed="' + (state.statusFilter === f.id ? 'true' : 'false') + '">' +
+        esc(f.label) +
+        '<span class="count">' + (counts[f.id] || 0) + '</span>' +
+      '</button>'
+    ).join('') +
+  '</div>';
 }
 
 function renderStats(stats, totalProjecten, totalDisc){
@@ -330,8 +360,8 @@ function renderDisciplines(grouped){
 function renderProject(p){
   const statusKey = (p.status || 'in_progress').toLowerCase().replace(/\s+/g,'_');
   const statusLabel = p.status_label || STATUS_LABELS[statusKey] || p.status || 'In productie';
-  const pct = Math.max(0, Math.min(100, parseInt(p.voortgang_pct || 0)));
   const needsFeedback = statusKey === 'doorgestuurd' || p.feedback_link;
+  // Voortgangsbalken verwijderd in v2 — niet indicatief voor klant
   return `<div class="s27-proj" data-task-id="${esc(p.task_id || '')}" tabindex="0" role="button" aria-label="Bekijk ${esc(p.naam)}">
     ${needsFeedback ? '<span class="s27-proj-flag">Wacht op jou</span>' : ''}
     <div class="s27-proj-head">
@@ -343,8 +373,6 @@ function renderProject(p){
       ${p.type        ? `<span><svg><use href="#s27p-spark"/></svg> ${esc(p.type)}</span>` : ''}
       ${p.laatst_geupdatet ? `<span><svg><use href="#s27p-clock"/></svg> ${esc(fmtRelTime(p.laatst_geupdatet))}</span>` : ''}
     </div>
-    <div class="s27-progress"><div class="s27-progress-fill" style="width:${pct}%"></div></div>
-    <div class="s27-progress-label"><span>Voortgang</span><span>${pct}%</span></div>
     <div class="s27-proj-cta">
       <span class="s27-proj-cta-text">${needsFeedback ? 'Geef feedback' : 'Bekijk details'}</span>
       <span class="s27-proj-cta-arrow">→</span>
@@ -438,15 +466,56 @@ function attachDashboardHandlers(){
     el.addEventListener('click', () => openProjectDetail(el.dataset.taskId));
     el.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openProjectDetail(el.dataset.taskId); } });
   });
-  // upload
-  const drop = $('s27-drop');
-  const input = $('s27-up-input');
-  if(input) input.addEventListener('change', e => handleFiles(e.target.files));
-  if(drop){
-    ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('dragover'); }));
-    ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('dragover'); }));
-    drop.addEventListener('drop', e => handleFiles(e.dataTransfer.files));
-  }
+  // status filter chips
+  document.querySelectorAll('.s27-chip[data-filter]').forEach(el => {
+    el.addEventListener('click', () => {
+      state.statusFilter = el.dataset.filter;
+      if(state.dashboard) renderDashboard(state.dashboard);
+    });
+  });
+}
+
+function switchTab(tabId){
+  state.activeTab = tabId;
+  document.querySelectorAll('.s27-tab').forEach(b => {
+    const isActive = b.dataset.tab === tabId;
+    b.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+  document.querySelectorAll('.s27-tabview').forEach(v => {
+    v.hidden = (v.id !== 's27-tab-' + tabId);
+  });
+  // Lazy-render placeholder tabs
+  if(tabId === 'bedrijf')      renderBedrijfTab();
+  if(tabId === 'goedgekeurd')  renderGoedgekeurdTab();
+  if(tabId === 'nieuw')        renderNieuwTab();
+  if(tabId === 'instellingen') renderInstellingenTab();
+  window.scrollTo({ top:0, behavior:'smooth' });
+}
+
+function renderPlaceholderTab(bodyId, title, body){
+  const el = $(bodyId);
+  if(!el) return;
+  el.innerHTML = '<div class="s27-empty">' +
+    '<div class="s27-empty-icon"><svg width="22" height="22"><use href="#s27p-spark"/></svg></div>' +
+    '<div class="s27-empty-title">' + esc(title) + '</div>' +
+    '<p class="s27-empty-sub">' + body + '</p>' +
+  '</div>';
+}
+function renderBedrijfTab(){
+  renderPlaceholderTab('s27-bedrijf-body', 'Mijn bedrijfsgegevens (binnenkort)',
+    'Hier komt jouw huisstijl-content: logo\'s, fonts, brand-bestanden + algemene voorkeuren in tekst. Alles wat hier staat geldt voor àl je projecten.');
+}
+function renderGoedgekeurdTab(){
+  renderPlaceholderTab('s27-goedgekeurd-body', 'Goedgekeurde projecten (binnenkort)',
+    'Alle deliverables van projecten die we voor jou hebben afgerond, gesorteerd in de tijd. Links blijven altijd beschikbaar.');
+}
+function renderNieuwTab(){
+  renderPlaceholderTab('s27-nieuw-body', 'Nieuw project aanmelden (binnenkort)',
+    'Vertel ons wat je wil en we sturen je vandaag nog een offerte op maat. Geen verplichting.');
+}
+function renderInstellingenTab(){
+  renderPlaceholderTab('s27-instellingen-body', 'Instellingen (binnenkort)',
+    'Wijzig je contactgegevens. Krijg updates per mail, WhatsApp, of beide. Pas notificatie-voorkeuren aan.');
 }
 
 /* =================================================================
@@ -670,6 +739,11 @@ function init(){
   $('s27-modal-close').addEventListener('click', closeModal);
   $('s27-modal').addEventListener('click', e => { if(e.target.id === 's27-modal') closeModal(); });
   document.addEventListener('keydown', e => { if(e.key === 'Escape') closeModal(); });
+
+  // Tab navigatie handlers
+  document.querySelectorAll('.s27-tab[data-tab]').forEach(b => {
+    b.addEventListener('click', () => switchTab(b.dataset.tab));
+  });
 }
 
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
