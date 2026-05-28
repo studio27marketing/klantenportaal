@@ -12,11 +12,12 @@ const ENDPOINTS = {
   calendar:        'https://hook.eu1.make.com/5e1chj9seh9jlw7nejhytwjg66i7vzyd',
   uploadProject:   'https://hook.eu1.make.com/rk5ui1ueb4j42hiqye8dfzfmka0gf318',
   uploadAlg:       'https://hook.eu1.make.com/hyf7ejtbskq743d56nveucv9xto5yo8c',
-  // v2 — folder 13 KLANTPORTAAL v2 (built by background agent #1, all active)
+  // v2 — folder 13 KLANTPORTAAL v2 (all robust met session validation, alle native modules)
   bedrijfContent:    'https://hook.eu1.make.com/o1gvlndn934h2u77vug6k59xgt2qgz6g',
   bedrijfVoorkeuren: 'https://hook.eu1.make.com/fhenjvxv47ldoea5k8h646ovn5gzvgnv',
   bedrijfUpload:     'https://hook.eu1.make.com/vdi231a5w9c8wronm71panyc2okq716y',
   meetingsList:      'https://hook.eu1.make.com/5vkfigdkwwowpmhbmicsyddkjt5k18f5',
+  projectDetailV2:   'https://hook.eu1.make.com/tp6jpd91vyecsz693pj2hmdd1bs8pd5e',
   chatPost:          'https://hook.eu1.make.com/vi12objw9nkrjg1i8ve13jwj354pvg9n',
   chatList:          'https://hook.eu1.make.com/a43sc5vjuic6lpjdehq8pvhn8sjftbn3',
   feedbackV2:        'https://hook.eu1.make.com/vpd7to9pn8ritsih38s4apika49lg31o',
@@ -981,11 +982,30 @@ async function openProjectDetail(taskId, openOnTab){
   fsView.hidden = false;
   fsView.innerHTML = '<div class="s27-loading">Project laden…</div>';
 
-  // Parallel: project detail + chat-list-comments
+  // Parallel: project detail (v2 endpoint preferred, v1 fallback) + chat-list-comments
+  const detailEndpoint = ENDPOINTS.projectDetailV2 || ENDPOINTS.projectDetail;
   const detailPromise = state.demoMode
     ? Promise.resolve(getDemoDetail(taskId, proj))
-    : api(ENDPOINTS.projectDetail, { task_id: taskId, bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token })
-        .then(r => (r.ok && r.data && !r.data.error) ? r.data : { beschrijving:'', taken:[], deliverables:[] });
+    : api(detailEndpoint, { task_id: taskId, bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token })
+        .then(r => {
+          if(!r.ok || !r.data) return { beschrijving:'', taken:[], deliverables:[] };
+          if(r.data.error || r.data.ok === false) return { beschrijving:'', taken:[], deliverables:[] };
+          // Normaliseer v2-shape naar wat renderProjectView verwacht
+          return {
+            beschrijving: r.data.beschrijving || '',
+            taken: Array.isArray(r.data.taken) ? r.data.taken.map(t => ({
+              naam: t.naam || '',
+              status: (t.status || '').toLowerCase().replace(/\s+/g, '_'),
+              status_label: t.status || '',
+              status_color: t.status_color || '#cccccc',
+              datum: t.datum ? new Date(parseInt(t.datum, 10)).toISOString() : '',
+              link: t.url || ''
+            })) : [],
+            deliverables: r.data.deliverables || [],
+            project_status: r.data.status || '',
+            project_url: r.data.url || ''
+          };
+        });
   const chatPromise = (state.demoMode || !ENDPOINTS.chatList)
     ? Promise.resolve({ comments: [] })
     : api(ENDPOINTS.chatList, { task_id: taskId, bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token })
