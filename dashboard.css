@@ -179,6 +179,23 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-mini-meeting-meta { font-family:var(--font-body); font-size:11px; color:var(--s27-ink-3); }
 .s27-home-contact { margin-bottom:24px; }
 
+/* ============ MEETINGS TAB (v2.1 Fase 38) ============ */
+.s27-section { margin-bottom:18px; }
+.s27-section .s27-section-title { margin-bottom:14px; }
+.s27-badge { font-family:var(--font-display); font-size:11px; font-weight:800; background:var(--s27-blue-soft); color:var(--s27-blue-ink); padding:3px 9px; border-radius:var(--r-pill); letter-spacing:0.04em; }
+.s27-badge-muted { background:var(--s27-paper-3); color:var(--s27-ink-3); }
+.s27-meetings-list { display:flex; flex-direction:column; gap:10px; }
+.s27-meeting-card { display:flex; gap:18px; align-items:center; padding:14px 16px; background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:var(--r-md); transition:border-color .15s; }
+.s27-meeting-card:hover { border-color:var(--s27-blue); }
+.s27-meeting-date { display:flex; flex-direction:column; align-items:center; gap:2px; min-width:80px; padding:8px 10px; background:var(--s27-blue-soft); border-radius:var(--r-sm); flex-shrink:0; }
+.s27-meeting-date strong { font-family:var(--font-display); font-size:13px; font-weight:900; color:var(--s27-blue-ink); text-transform:uppercase; letter-spacing:0.04em; line-height:1.2; text-align:center; }
+.s27-meeting-date span { font-family:var(--font-body); font-size:12px; color:var(--s27-blue-ink); }
+.s27-meeting-body { flex:1; min-width:0; }
+.s27-meeting-title { font-family:var(--font-display); font-size:15px; font-weight:800; color:var(--s27-ink); line-height:1.25; margin-bottom:4px; }
+.s27-meeting-type { display:inline-block; font-family:var(--font-display); font-size:10px; font-weight:800; color:var(--s27-purple-ink); background:var(--s27-purple-soft); padding:2px 8px; border-radius:var(--r-pill); letter-spacing:0.05em; text-transform:uppercase; margin-bottom:6px; }
+.s27-meeting-link { font-family:var(--font-display); font-size:12px; font-weight:700; color:var(--s27-blue-ink); text-decoration:none; }
+.s27-meeting-link:hover { text-decoration:underline; }
+
 /* ============ FULLSCREEN PROJECT VIEW (v2.1 Fase 34) ============ */
 .s27-projectview { animation:s27fadeIn .25s var(--ease-out) backwards; }
 .s27-pv-head { margin-bottom:24px; }

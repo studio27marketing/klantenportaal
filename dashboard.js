@@ -16,6 +16,7 @@ const ENDPOINTS = {
   bedrijfContent:    'https://hook.eu1.make.com/o1gvlndn934h2u77vug6k59xgt2qgz6g',
   bedrijfVoorkeuren: 'https://hook.eu1.make.com/fhenjvxv47ldoea5k8h646ovn5gzvgnv',
   bedrijfUpload:     'https://hook.eu1.make.com/vdi231a5w9c8wronm71panyc2okq716y',
+  meetingsList:      'https://hook.eu1.make.com/5vkfigdkwwowpmhbmicsyddkjt5k18f5',
   chatPost:          'https://hook.eu1.make.com/vi12objw9nkrjg1i8ve13jwj354pvg9n',
   chatList:          'https://hook.eu1.make.com/a43sc5vjuic6lpjdehq8pvhn8sjftbn3',
   feedbackV2:        'https://hook.eu1.make.com/vpd7to9pn8ritsih38s4apika49lg31o',
@@ -839,18 +840,94 @@ function renderInstellingenTab(){
   renderPlaceholderTab('s27-instellingen-body', 'Instellingen (binnenkort)',
     'Wijzig je contactgegevens. Krijg updates per mail, WhatsApp, of beide. Pas notificatie-voorkeuren aan.');
 }
-function renderMeetingsTab(){
+async function renderMeetingsTab(){
   const body = $('s27-meetings-body');
   if(!body) return;
-  const meetings = (state.dashboard && state.dashboard.aankomende_meetings) || [];
+  body.innerHTML = '<div class="s27-loading">Meetings laden…</div>';
+
+  // Probeer live data uit ClickUp Meetings-lijst (v2 endpoint), fallback naar dashboard.aankomende_meetings
+  let live = null;
+  if(ENDPOINTS.meetingsList && !state.demoMode){
+    try {
+      const res = await api(ENDPOINTS.meetingsList, {
+        bedrijf_id: state.session.bedrijf_id,
+        session_token: state.session.session_token,
+        bedrijfsnaam: state.session.bedrijfsnaam
+      });
+      if(res.ok && res.data && Array.isArray(res.data.meetings)) live = res.data;
+    } catch(e){ /* fallback */ }
+  }
+
+  let meetings = [];
+  let bookingUrl = 'mailto:ilke@studio27.be?subject=Meeting%20aanvraag';
+  if(live){
+    // Filter client-side op bedrijfsnaam
+    const bn = (state.session.bedrijfsnaam || '').toUpperCase().trim();
+    const allMeetings = live.meetings.filter(m => {
+      const title = (m.titel || '').toUpperCase();
+      // Match bedrijfsnaam in titel (case-insensitive)
+      return bn && title.includes(bn);
+    }).map(m => {
+      const dateMs = m.datum ? parseInt(m.datum, 10) : 0;
+      return {
+        meeting_id: m.meeting_id,
+        titel: m.titel,
+        datum: dateMs ? new Date(dateMs).toISOString() : '',
+        datum_ms: dateMs,
+        status: m.status,
+        link: m.link,
+        type: m.titel && m.titel.toLowerCase().includes('kickoff') ? 'Kickoff' : ''
+      };
+    });
+    meetings = allMeetings;
+    if(live.booking_url) bookingUrl = live.booking_url;
+  } else {
+    // Fallback naar v1 dashboard data
+    meetings = (state.dashboard && state.dashboard.aankomende_meetings) || [];
+  }
+
+  // Split: upcoming (datum_ms >= now) vs past
+  const now = Date.now();
+  const upcoming = meetings.filter(m => !m.datum_ms || m.datum_ms >= now).sort((a,b) => (a.datum_ms||0) - (b.datum_ms||0));
+  const past = meetings.filter(m => m.datum_ms && m.datum_ms < now).sort((a,b) => (b.datum_ms||0) - (a.datum_ms||0));
+
+  const bookingBtn = '<a class="s27-btn" href="' + esc(bookingUrl) + '" target="_blank" rel="noopener" style="display:inline-flex;width:auto;padding:14px 26px;text-decoration:none;gap:8px">' +
+    '<svg width="16" height="16"><use href="#s27p-cal"/></svg> Nieuwe meeting inplannen</a>';
+
   if(!meetings.length){
-    body.innerHTML = '<div class="s27-empty"><div class="s27-empty-icon"><svg width="22" height="22"><use href="#s27p-cal"/></svg></div><div class="s27-empty-title">Geen aankomende meetings</div><p class="s27-empty-sub">Wil je iets bespreken? Plan rechtsstreeks een tijdslot in via de knop hieronder.</p></div>' +
-      '<div style="text-align:center;margin-top:18px"><a class="s27-btn" href="mailto:ilke@studio27.be?subject=Meeting%20aanvraag" style="display:inline-flex;width:auto;padding:14px 26px;text-decoration:none;gap:8px">📅 Plan een meeting in</a></div>';
+    body.innerHTML = '<div class="s27-empty"><div class="s27-empty-icon"><svg width="22" height="22"><use href="#s27p-cal"/></svg></div>' +
+      '<div class="s27-empty-title">Nog geen meetings ingepland</div>' +
+      '<p class="s27-empty-sub">Plan rechtstreeks een tijdslot bij je account manager. Vul automatisch je gegevens in, kies een vrij moment, klaar.</p></div>' +
+      '<div style="text-align:center;margin-top:18px">' + bookingBtn + '</div>';
     return;
   }
-  // gebruik bestaande renderMeetings() die de volledige <div class="s27-meetings"> wrapper bevat
-  body.innerHTML = renderMeetings(meetings) +
-    '<div style="text-align:center;margin-top:22px"><a class="s27-btn" href="mailto:ilke@studio27.be?subject=Meeting%20aanvraag" style="display:inline-flex;width:auto;padding:12px 22px;text-decoration:none;gap:8px;background:var(--s27-paper);color:var(--s27-blue-ink);border:1.5px solid var(--s27-blue)">📅 Nieuwe meeting inplannen</a></div>';
+
+  let html = '';
+  if(upcoming.length){
+    html += '<div class="s27-section"><h3 class="s27-section-title">Aankomende meetings <span class="s27-badge">' + upcoming.length + '</span></h3>' +
+      '<div class="s27-meetings-list">' + upcoming.map(renderMeetingCard).join('') + '</div></div>';
+  }
+  if(past.length){
+    html += '<div class="s27-section" style="margin-top:24px"><h3 class="s27-section-title">Eerdere meetings <span class="s27-badge s27-badge-muted">' + past.length + '</span></h3>' +
+      '<div class="s27-meetings-list">' + past.slice(0,10).map(renderMeetingCard).join('') + '</div></div>';
+  }
+  html += '<div style="text-align:center;margin-top:28px">' + bookingBtn + '</div>';
+  body.innerHTML = html;
+}
+
+function renderMeetingCard(m){
+  const d = m.datum_ms ? new Date(m.datum_ms) : null;
+  const dateLabel = d ? d.toLocaleDateString('nl-BE', {weekday:'short', day:'2-digit', month:'short'}) : 'datum nog te bevestigen';
+  const timeLabel = d ? d.toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'}) : '';
+  const link = m.link ? '<a href="' + esc(m.link) + '" target="_blank" rel="noopener" class="s27-meeting-link">In ClickUp openen →</a>' : '';
+  return '<div class="s27-meeting-card">' +
+    '<div class="s27-meeting-date"><strong>' + esc(dateLabel) + '</strong>' + (timeLabel ? '<span>' + esc(timeLabel) + '</span>' : '') + '</div>' +
+    '<div class="s27-meeting-body">' +
+      '<div class="s27-meeting-title">' + esc(m.titel || 'Meeting') + '</div>' +
+      (m.type ? '<div class="s27-meeting-type">' + esc(m.type) + '</div>' : '') +
+      link +
+    '</div>' +
+  '</div>';
 }
 
 /* =================================================================
