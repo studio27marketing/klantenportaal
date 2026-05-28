@@ -497,7 +497,7 @@ function openDMModal(presetKey, prefills){
       <button class="s27-dm-close" aria-label="Sluiten">×</button>
       <div class="s27-dm-icon">${preset.icon}</div>
       <h3 class="s27-dm-title">${esc(preset.title)}</h3>
-      <p class="s27-dm-sub">Je bericht komt direct in onze ClickUp-planning bij de juiste persoon. Sneller dan mail, en wij kunnen meteen actie ondernemen.</p>
+      <p class="s27-dm-sub">Je bericht komt direct in onze planning bij de juiste persoon. Sneller dan mail, en wij kunnen meteen actie ondernemen.</p>
       <form id="s27-dm-form">
         <label class="s27-form-field">
           <span>Naar wie?</span>
@@ -599,8 +599,8 @@ const TOUR_STEPS = [
   },
   {
     icon: '💬',
-    title: 'Chat per project — alles via ClickUp',
-    body: 'Sinds je officieel klant bent, loopt ALLE communicatie via ClickUp. Vraag iets via een project of via "Stuur bericht" — het komt direct in onze planning. Geen mail meer heen-en-weer: sneller antwoord en je kan onze acties live volgen.'
+    title: 'Chat per project — direct met het team',
+    body: 'Sinds je officieel klant bent, loopt ALLE communicatie via dit portaal. Vraag iets via een project of via "Stuur bericht" — het komt direct in onze planning. Geen mail meer heen-en-weer: sneller antwoord en je kan onze acties live volgen.'
   },
   {
     icon: '🎨',
@@ -610,7 +610,7 @@ const TOUR_STEPS = [
   {
     icon: '🚀',
     title: 'Klaar om te starten',
-    body: 'Vragen? Klik op "Stuur bericht" of "Vraag terugbel" — alles loopt rechtstreeks naar ClickUp bij de juiste persoon. Wij zien het meteen en kunnen direct actie ondernemen. Veel succes!'
+    body: 'Vragen? Klik op "Stuur bericht" of "Vraag terugbel" — alles loopt rechtstreeks naar de juiste persoon. Wij zien het meteen en kunnen direct actie ondernemen. Veel succes!'
   }
 ];
 
@@ -912,7 +912,7 @@ function renderContact(c){
       <p class="s27-contact-tip">💡 Vraag over een lopend project? Open het project en chat direct met het team — sneller dan bellen, alles bij je dossier.</p>
     </div>
     <div class="s27-contact-actions">
-      <a class="primary" href="#" data-dm="vraag" data-dm-onderwerp="Vraag voor ${esc(c.am_naam || 'team')}"><svg width="13" height="13"><use href="#s27p-mail"/></svg> Stuur bericht</a>
+      <a class="primary" href="#" data-dm="vraag" data-dm-onderwerp="Vraag voor ${esc(c.am_naam || 'team')}"><svg width="13" height="13"><use href="#s27p-mail"/></svg> Bericht sturen naar ${esc(c.am_naam ? c.am_naam.split(' ')[0] : 'team')}</a>
       <a href="#" data-dm="terugbel" data-dm-onderwerp="Terugbel-verzoek ${esc(state.session && state.session.bedrijfsnaam || '')}" data-dm-placeholder="Beste moment om te bellen: bv. morgen voormiddag, of vrijdag 14u-16u.&#10;&#10;Bespreek onderwerp: "><svg width="13" height="13"><use href="#s27p-phone"/></svg> Vraag terugbel</a>
       ${c.am_gsm ? `<a href="tel:${esc(c.am_gsm)}" class="s27-contact-call-direct"><svg width="13" height="13"><use href="#s27p-phone"/></svg> Direct bellen</a>` : ''}
     </div>
@@ -1064,22 +1064,24 @@ async function renderBedrijfTab(){
       <div class="s27-section-head">
         <div>
           <h2 class="s27-section-title">Contactgegevens</h2>
-          <p class="s27-section-sub">Wijzig je gegevens hier. Wij werken het binnen 24u bij in onze administratie, PandaDoc-template en CRM.</p>
+          <p class="s27-section-sub">Deze gegevens gebruiken we voor offertes, facturen en projectcommunicatie. Klik op "Bewerken" om iets aan te passen.</p>
         </div>
+        <button class="s27-btn s27-btn-ghost s27-btn-sm" id="s27-contact-edit-btn">✏️ Bewerken</button>
       </div>
-      <div class="s27-contactform" id="s27-contactform">
+      <div class="s27-contactform s27-contactform-readonly" id="s27-contactform" data-edit-mode="off">
         <div class="s27-form-row">
-          <label class="s27-form-field"><span>Voornaam</span><input type="text" name="voornaam" value="${esc(savedContact.voornaam || '')}" placeholder="Bv. Vincent"/></label>
-          <label class="s27-form-field"><span>Achternaam</span><input type="text" name="achternaam" value="${esc(savedContact.achternaam || '')}" placeholder="Bv. Verleije"/></label>
+          <div class="s27-form-field s27-readfield"><span class="s27-readlabel">Voornaam</span><div class="s27-readvalue">${esc(savedContact.voornaam || (state.session && state.session.bedrijfsnaam ? state.session.bedrijfsnaam.split(' ')[0] : '—'))}</div><input type="text" name="voornaam" value="${esc(savedContact.voornaam || '')}" placeholder="Bv. Vincent" hidden/></div>
+          <div class="s27-form-field s27-readfield"><span class="s27-readlabel">Achternaam</span><div class="s27-readvalue">${esc(savedContact.achternaam || '—')}</div><input type="text" name="achternaam" value="${esc(savedContact.achternaam || '')}" placeholder="Bv. Verleije" hidden/></div>
         </div>
         <div class="s27-form-row">
-          <label class="s27-form-field"><span>GSM</span><input type="tel" name="gsm" value="${esc(savedContact.gsm || '')}" placeholder="+32 4xx xx xx xx"/></label>
-          <label class="s27-form-field"><span>E-mail</span><input type="email" name="email" value="${esc(savedContact.email || '')}" placeholder="naam@bedrijf.be"/></label>
+          <div class="s27-form-field s27-readfield"><span class="s27-readlabel">GSM</span><div class="s27-readvalue">${esc(savedContact.gsm || '—')}</div><input type="tel" name="gsm" value="${esc(savedContact.gsm || '')}" placeholder="+32 4xx xx xx xx" hidden/></div>
+          <div class="s27-form-field s27-readfield"><span class="s27-readlabel">E-mail</span><div class="s27-readvalue">${esc(savedContact.email || (data._raw_email || '—'))}</div><input type="email" name="email" value="${esc(savedContact.email || '')}" placeholder="naam@bedrijf.be" hidden/></div>
         </div>
-        <label class="s27-form-field"><span>BTW-nummer</span><input type="text" name="btw" value="${esc(savedContact.btw || '')}" placeholder="BE0xxx.xxx.xxx"/></label>
-        <label class="s27-form-field"><span>Bedrijfsadres (factuur-adres)</span><input type="text" name="adres" value="${esc(savedContact.adres || '')}" placeholder="Straat nummer, postcode stad"/></label>
-        <div class="s27-contactform-foot">
+        <div class="s27-form-field s27-readfield"><span class="s27-readlabel">BTW-nummer</span><div class="s27-readvalue">${esc(savedContact.btw || (data._raw_btw || '—'))}</div><input type="text" name="btw" value="${esc(savedContact.btw || '')}" placeholder="BE0xxx.xxx.xxx" hidden/></div>
+        <div class="s27-form-field s27-readfield"><span class="s27-readlabel">Bedrijfsadres (factuur-adres)</span><div class="s27-readvalue">${esc(savedContact.adres || '—')}</div><input type="text" name="adres" value="${esc(savedContact.adres || '')}" placeholder="Straat nummer, postcode stad" hidden/></div>
+        <div class="s27-contactform-foot" id="s27-contactform-foot" hidden>
           <span class="s27-contactform-state" id="s27-contactform-state"></span>
+          <button class="s27-btn s27-btn-ghost s27-btn-sm" id="s27-contactform-cancel">Annuleer</button>
           <button class="s27-btn s27-btn-sm s27-btn-primary" id="s27-contactform-save">Wijzigingen opslaan</button>
         </div>
       </div>
@@ -1120,7 +1122,7 @@ async function renderBedrijfTab(){
       <div class="s27-section-head">
         <div>
           <h2 class="s27-section-title">Huisstijl-bibliotheek</h2>
-          <p class="s27-section-sub">Logo's, fonts, brand-PDFs en foto's — gestructureerd op één plek. Jij en wij kunnen hier bestanden toevoegen.</p>
+          <p class="s27-section-sub">Logo's, fonts, kleurpaletten, brand-PDFs en foto's — alles op één plek. Sleep bestanden in het kader hieronder of klik om te uploaden.</p>
         </div>
       </div>
       <div class="s27-fontuse">
@@ -1129,8 +1131,17 @@ async function renderBedrijfTab(){
           <input type="text" id="s27-fontuse-input" value="${esc(fontGebruik)}" placeholder="Inter voor headings, Open Sans voor body…"/>
         </label>
       </div>
-      <div class="s27-catgrid">
-        ${BRAND_CATEGORIES.map(c => renderCategoryCard(c, cats[c.id] || [])).join('')}
+      <div class="s27-uploadzone" id="s27-drop-bedrijf" data-category="overig">
+        <input id="s27-up-input-bedrijf" type="file" multiple style="display:none">
+        <label for="s27-up-input-bedrijf" class="s27-uploadzone-cta">
+          <svg width="22" height="22"><use href="#s27p-upload"/></svg>
+          <strong>Klik of sleep bestanden hier</strong>
+          <span>Max 5 MB per bestand · 25 MB totaal</span>
+        </label>
+        <ul id="s27-up-list-bedrijf" class="s27-upload-list"></ul>
+      </div>
+      <div class="s27-files-flat" id="s27-files-flat">
+        ${renderFilesFlat(data.attachments || [])}
       </div>
     </div>
 
@@ -1166,25 +1177,45 @@ function renderCategoryCard(cat, items){
   </button>`;
 }
 
-// v2.2 #59: surgical update — vervang ALLEEN de category-card zonder hele tab
-function refreshCategoryCard(catId){
-  if(!state.bedrijfContent || !catId) return;
-  const cat = BRAND_CATEGORIES.find(c => c.id === catId);
-  if(!cat) return;
-  const items = (state.bedrijfContent.attachments || []).filter(a => {
-    const c = categoryFromFilename(a.filename || a.name || '');
-    return c === catId;
+// v2.2 #68: flat lijst van ALLE bestanden (geen categorieën meer)
+function renderFilesFlat(attachments){
+  const files = (attachments || []).slice().sort((a, b) => {
+    const da = parseInt(a.uploaded_at, 10) || 0;
+    const db = parseInt(b.uploaded_at, 10) || 0;
+    return db - da; // nieuwste eerst
   });
-  const oldCard = document.querySelector(`.s27-catcard[data-category="${catId}"]`);
-  if(!oldCard) return;
-  const wrapper = document.createElement('div');
-  wrapper.innerHTML = renderCategoryCard(cat, items);
-  const newCard = wrapper.firstElementChild;
-  if(newCard){
-    // Re-wire click handler op nieuwe element
-    newCard.addEventListener('click', () => openCategoryModal(catId));
-    oldCard.replaceWith(newCard);
+  if(!files.length){
+    return '<div class="s27-files-empty"><div class="s27-files-empty-icon">📁</div><strong>Nog geen bestanden</strong><p>Upload je eerste huisstijl-bestand hierboven.</p></div>';
   }
+  return files.map(renderFileCard).join('');
+}
+
+function renderFileCard(a){
+  const fname = (a.filename || a.name || 'bestand').replace(/^\[[A-Z]+\]\s*/, ''); // strip oude prefix
+  const ext = (fname.split('.').pop() || '').toLowerCase();
+  const ico = ext === 'pdf' ? '📄' : (['jpg','jpeg','png','gif','webp','heic','svg'].includes(ext) ? '🖼️' : (['mp4','mov','avi'].includes(ext) ? '🎬' : (['ai','psd','eps'].includes(ext) ? '🎨' : (['ttf','otf','woff','woff2'].includes(ext) ? '🔤' : '📎'))));
+  const by = a.uploaded_by === 'studio27' ? 'Door Studio 27' : 'Door jou';
+  const ts = parseInt(a.uploaded_at, 10);
+  const dateStr = ts ? new Date(ts).toLocaleDateString('nl-BE', {day:'2-digit', month:'short', year:'numeric'}) : '';
+  const sizeStr = a.size ? bytes(a.size) : '';
+  return `<div class="s27-filecard">
+    <div class="s27-filecard-ico">${ico}</div>
+    <div class="s27-filecard-body">
+      <div class="s27-filecard-name">${esc(fname)}</div>
+      <div class="s27-filecard-meta">${esc(by)}${dateStr ? ' · ' + esc(dateStr) : ''}${sizeStr ? ' · ' + esc(sizeStr) : ''}</div>
+    </div>
+    <a class="s27-filecard-dl" href="${esc(a.url || '#')}" download="${esc(fname)}" target="_blank" rel="noopener" title="Download ${esc(fname)}">
+      <svg width="14" height="14" viewBox="0 0 24 24"><path fill="currentColor" d="M5 20h14v-2H5v2zM12 2v12l4-4 1.4 1.4L12 17l-5.4-5.6L8 10l4 4V2h0z"/></svg>
+      Download
+    </a>
+  </div>`;
+}
+
+function refreshFilesFlat(){
+  if(!state.bedrijfContent) return;
+  const container = $('s27-files-flat');
+  if(!container) return;
+  container.innerHTML = renderFilesFlat(state.bedrijfContent.attachments || []);
 }
 
 function renderFilePreviewTiny(item, cat){
@@ -1276,10 +1307,31 @@ function attachBedrijfHandlers(){
     });
   }
 
-  // v2.2 #60: contact form save handler
+  // v2.2 #67: contact form edit-modus (read-only by default → Bewerken → invoer → save terug read-only)
   const contactForm = $('s27-contactform');
+  const contactEditBtn = $('s27-contact-edit-btn');
   const contactSave = $('s27-contactform-save');
+  const contactCancel = $('s27-contactform-cancel');
+  const contactFoot = $('s27-contactform-foot');
   const contactState = $('s27-contactform-state');
+
+  function toggleEditMode(on){
+    if(!contactForm) return;
+    contactForm.dataset.editMode = on ? 'on' : 'off';
+    contactForm.classList.toggle('s27-contactform-readonly', !on);
+    contactForm.querySelectorAll('.s27-readfield').forEach(field => {
+      const readValue = field.querySelector('.s27-readvalue');
+      const input = field.querySelector('input');
+      if(readValue) readValue.hidden = on;
+      if(input) input.hidden = !on;
+    });
+    if(contactFoot) contactFoot.hidden = !on;
+    if(contactEditBtn) contactEditBtn.hidden = on;
+  }
+
+  if(contactEditBtn) contactEditBtn.addEventListener('click', () => toggleEditMode(true));
+  if(contactCancel) contactCancel.addEventListener('click', () => toggleEditMode(false));
+
   if(contactForm && contactSave){
     contactSave.addEventListener('click', async () => {
       contactSave.disabled = true; contactSave.textContent = 'Versturen…';
@@ -1308,7 +1360,14 @@ function attachBedrijfHandlers(){
           await api(ENDPOINTS.bedrijfVoorkeuren, { bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token, voorkeuren: combined });
           if(state.bedrijfContent) state.bedrijfContent.algemene_voorkeuren = combined;
         }
-        if(contactState) contactState.textContent = '✓ Doorgegeven — Ilke en Arne verwerken dit binnen 24u';
+        if(contactState) contactState.textContent = '✓ Opgeslagen — Ilke en Arne werken het binnen 24u bij';
+        // Update read-only values met nieuwe data, ga terug naar read mode
+        contactForm.querySelectorAll('.s27-readfield').forEach(field => {
+          const input = field.querySelector('input');
+          const readValue = field.querySelector('.s27-readvalue');
+          if(input && readValue) readValue.textContent = input.value || '—';
+        });
+        setTimeout(() => toggleEditMode(false), 1000);
       } catch(err){
         console.error('[Studio 27] contact save failed:', err);
         if(contactState) contactState.textContent = 'Iets ging mis — probeer opnieuw';
@@ -1621,15 +1680,25 @@ function renderProjectSubQuestions(projectType){
 function renderShootStep2(){
   return `
     <div class="s27-shoot-step2-head"><strong>📸 Stap 2 — Shoot in detail</strong><span>Geef de duur door, kies een dag, of laat een opmerking achter</span></div>
-    <label class="s27-form-field">
-      <span>Verwachte duur van de shoot <em>*</em></span>
-      <select name="sub_shoot_duur" id="s27-shoot-duur">
-        <option value="">Kies een duur…</option>
-        <option value="halve dag">Halve dag (incl. reistijd ±4u)</option>
-        <option value="hele dag">Hele dag (incl. reistijd ±8u)</option>
-        <option value="meerdere dagen">Meerdere dagen — overleg nodig</option>
-      </select>
-    </label>
+    <div class="s27-form-row">
+      <label class="s27-form-field">
+        <span>Verwachte duur van de shoot <em>*</em></span>
+        <select name="sub_shoot_duur" id="s27-shoot-duur">
+          <option value="">Kies een duur…</option>
+          <option value="halve dag">Halve dag (incl. reistijd ±4u)</option>
+          <option value="hele dag">Hele dag (incl. reistijd ±8u)</option>
+          <option value="meerdere dagen">Meerdere dagen — overleg nodig</option>
+        </select>
+      </label>
+      <label class="s27-form-field">
+        <span>Hoeveel content creators? <em>*</em></span>
+        <select name="sub_shoot_creators">
+          <option value="">Kies een aantal…</option>
+          <option value="1 content creator">1 content creator</option>
+          <option value="2+ content creators">2 of meer content creators</option>
+        </select>
+      </label>
+    </div>
     <div id="s27-shoot-availability" class="s27-shoot-availability" hidden>
       <div class="s27-loading" style="padding:14px">Beschikbare momenten ophalen…</div>
     </div>
@@ -1843,7 +1912,7 @@ function renderInstellingenTab(){
             <div>
               <strong>${esc(contact.am_naam)}</strong>
               <span>${esc(contact.am_rol || 'Account manager')}</span>
-              <a href="#" data-dm="vraag" data-dm-onderwerp="Bericht voor ${esc(contact.am_naam || 'team')}">💬 Bericht sturen via ClickUp</a>
+              <a href="#" data-dm="vraag" data-dm-onderwerp="Bericht voor ${esc(contact.am_naam || 'team')}">💬 Bericht sturen naar ${esc(contact.am_naam ? contact.am_naam.split(' ')[0] : 'team')}</a>
               ${contact.am_gsm ? `<a href="tel:${esc(contact.am_gsm)}" class="s27-contact-call-direct">📞 ${esc(contact.am_gsm)}</a>` : ''}
             </div>
           </div>
@@ -2025,12 +2094,13 @@ async function loadMeetingSlots(externalBookingUrl){
       _shootDataCache = await r.json();
     }
     box.innerHTML = renderMeetingSlots(_shootDataCache);
-    // Wire location toggle
+    // Wire location toggle — updates BOTH oude .s27-book-slot en nieuwe .s27-book-slot-time
     document.querySelectorAll('input[name="s27-meet-loc"]').forEach(r => {
       r.addEventListener('change', () => {
-        document.querySelectorAll('.s27-book-slot').forEach(slot => {
-          const loc = document.querySelector('input[name="s27-meet-loc"]:checked');
-          if(loc) slot.dataset.dmOnderwerp = slot.dataset.dmOnderwerpBase + ' — ' + loc.value;
+        const loc = document.querySelector('input[name="s27-meet-loc"]:checked');
+        if(!loc) return;
+        document.querySelectorAll('.s27-book-slot, .s27-book-slot-time').forEach(slot => {
+          if(slot.dataset.dmOnderwerpBase) slot.dataset.dmOnderwerp = slot.dataset.dmOnderwerpBase + ' — ' + loc.value;
         });
       });
     });
@@ -2045,10 +2115,14 @@ function renderMeetingSlots(data){
     { id:8714037,  naam:'Vincent Verleije',  rol:'Zaakvoerder — strategie' },
     { id:54513254, naam:'Arne Goetschalckx', rol:'Sales — nieuwe projecten' }
   ];
+  // v2.2 #70: 90-min meeting slots in office hours, geen last-minute
+  const SLOT_TEMPLATES = [
+    { tijd: '10:00 – 11:30', startHour: 10 },
+    { tijd: '14:00 – 15:30', startHour: 14 }
+  ];
   const allBusy = (data.shoots || []).concat(data.shoots_27m || []).concat(data.vakantie || []);
-  // v2.2 #61: GEEN last-minute. Begin pas overmorgen (48u vooruit) zodat team kan voorbereiden.
   const now = Date.now();
-  const startMs = now + (48 * 3600000); // +48 uur
+  const startMs = now + (48 * 3600000); // +48u (geen vandaag/morgen)
   const horizonMs = now + (14 * 86400000);
   const bezetByHost = {};
   teamHosts.forEach(h => bezetByHost[h.id] = new Set());
@@ -2060,24 +2134,29 @@ function renderMeetingSlots(data){
       if(bezetByHost[a.id]) bezetByHost[a.id].add(day);
     });
   });
+  // Per host: bouw lijst van {dag, tijd, ts} slots (voor 4 dagen)
   const slotsByHost = teamHosts.map(h => {
-    const vrij = [];
-    // Begin loop pas vanaf startMs (overmorgen)
-    for(let d = Math.ceil(startMs / 86400000) * 86400000; d <= horizonMs && vrij.length < 4; d += 86400000){
+    const slots = [];
+    for(let d = Math.ceil(startMs / 86400000) * 86400000; d <= horizonMs && slots.length < 6; d += 86400000){
       const dt = new Date(d);
       const dow = dt.getDay();
       if(dow === 0 || dow === 6) continue;
       const dayKey = dt.toISOString().slice(0,10);
-      if(!bezetByHost[h.id].has(dayKey)) vrij.push(dayKey);
+      if(bezetByHost[h.id].has(dayKey)) continue;
+      SLOT_TEMPLATES.forEach(tpl => {
+        if(slots.length >= 6) return;
+        const slotDate = new Date(d);
+        slotDate.setHours(tpl.startHour, 0, 0, 0);
+        slots.push({ dag: dayKey, tijd: tpl.tijd, dateLabel: slotDate.toLocaleDateString('nl-BE',{weekday:'short',day:'2-digit',month:'short'}), dateLong: slotDate.toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'long'}) });
+      });
     }
-    return { ...h, slots: vrij };
+    return { ...h, slots };
   });
   return '<div class="s27-book-head">' +
-    '<div><strong>📅 Eerstvolgende vrije momenten</strong>' +
-    '<span>Vanaf overmorgen — kies eerst je locatie-voorkeur, dan een dag</span></div>' +
+    '<div><strong>📅 Eerstvolgende vrije momenten (1u30 meeting)</strong>' +
+    '<span>Vanaf overmorgen — kies eerst je locatie-voorkeur, dan een tijdslot</span></div>' +
     '<button type="button" class="s27-book-close" id="s27-book-close" aria-label="Sluiten">×</button>' +
     '</div>' +
-    // Location keuze: online OF bij Studio27 op locatie. NIET bij klant (reistijden).
     '<div class="s27-meet-locchoice">' +
       '<label class="s27-meet-locopt"><input type="radio" name="s27-meet-loc" value="online" checked/><div><strong>💻 Online</strong><span>Google Meet — geen reistijd</span></div></label>' +
       '<label class="s27-meet-locopt"><input type="radio" name="s27-meet-loc" value="bij Studio 27"/><div><strong>🏢 Bij Studio 27</strong><span>Geel — koffie staat klaar</span></div></label>' +
@@ -2092,18 +2171,19 @@ function renderMeetingSlots(data){
             <span>${esc(h.rol)}</span>
           </div>
           ${h.slots.length
-            ? '<div class="s27-book-slot-row">' + h.slots.map(s => {
-                const dateLabel = new Date(s).toLocaleDateString('nl-BE',{weekday:'short',day:'2-digit',month:'short'});
-                const dateLong = new Date(s).toLocaleDateString('nl-BE', {weekday:'long', day:'numeric', month:'long'});
-                const baseSubject = 'Meeting-aanvraag met ' + h.naam + ' op ' + dateLong;
-                return `<button type="button" class="s27-book-slot" data-dm="meeting" data-dm-ontvanger="${esc(ontvKey)}" data-dm-onderwerp="${esc(baseSubject + ' — online')}" data-dm-onderwerp-base="${esc(baseSubject)}" data-dm-placeholder="Mijn voorkeur voor het tijdstip: bv. voormiddag, of 14u-16u.&#10;Bespreekonderwerp: ">${esc(dateLabel)}</button>`;
+            ? '<div class="s27-book-slot-list">' + h.slots.map(s => {
+                const baseSubject = 'Meeting-aanvraag met ' + h.naam + ' op ' + s.dateLong + ' om ' + s.tijd;
+                return `<button type="button" class="s27-book-slot-time" data-dm="meeting" data-dm-ontvanger="${esc(ontvKey)}" data-dm-onderwerp="${esc(baseSubject + ' — online')}" data-dm-onderwerp-base="${esc(baseSubject)}" data-dm-placeholder="Bespreekonderwerp: &#10;Eventuele opmerkingen: ">
+                  <span class="s27-book-slot-date">${esc(s.dateLabel)}</span>
+                  <span class="s27-book-slot-time-val">${esc(s.tijd)}</span>
+                </button>`;
               }).join('') + '</div>'
-            : '<p class="s27-book-empty">Volgeboekt komende 2 weken — kies een andere collega</p>'
+            : '<p class="s27-book-empty">Volgeboekt komende 2 weken — probeer een andere collega</p>'
           }
         </div>
       `;}).join('') +
     '</div>' +
-    '<p class="s27-book-fallback">Of <a href="#" data-dm="meeting" data-dm-onderwerp="Meeting-aanvraag (vrije keuze tijdstip)">stuur ons een vrij voorstel</a>. Na bevestiging maken we een Google Calendar invite aan.</p>';
+    '<p class="s27-book-fallback">Of <a href="#" data-dm="meeting" data-dm-onderwerp="Meeting-aanvraag (vrij voorstel)">stuur ons een vrij voorstel</a>. Na bevestiging maken we een Google Calendar invite aan.</p>';
 }
 
 // Globale handler voor sluiten van booking slots
@@ -2287,20 +2367,19 @@ function renderProjectView(proj, detail, needsFeedback){
       </div>
     </div>
 
-    ${needsFeedback ? `
-      <div class="s27-pv-fb-banner" id="s27-pv-fb-banner">
-        <div>
-          <strong>🔔 Dit project wacht op jouw feedback</strong>
-          <span>Bekijk de deliverables en laat ons weten of het OK is of dat we bijsturen.</span>
-        </div>
-        <button class="s27-btn s27-btn-primary" id="s27-pv-open-fb">Geef feedback</button>
-      </div>
-    ` : ''}
-
     <div class="s27-pv-twocol">
-      <div class="s27-pv-section">
-        <h3 class="s27-pv-section-title">📋 Projectomschrijving</h3>
-        <div class="s27-pv-overview">${renderOverzichtTab(proj, detail)}</div>
+      <div class="s27-pv-leftcol">
+        ${needsFeedback ? `
+          <div class="s27-pv-section s27-pv-section-fb">
+            <h3 class="s27-pv-section-title">🔔 Dit project wacht op jouw feedback</h3>
+            <p class="s27-pv-fb-lead">Bekijk de deliverables hieronder en geef per onderdeel aan of het goedgekeurd is of feedback nodig heeft.</p>
+            <div id="s27-pv-fbbox"></div>
+          </div>
+        ` : ''}
+        <div class="s27-pv-section">
+          <h3 class="s27-pv-section-title">📋 Projectomschrijving</h3>
+          <div class="s27-pv-overview">${renderOverzichtTab(proj, detail)}</div>
+        </div>
       </div>
 
       <div class="s27-pv-section s27-pv-section-chat">
@@ -2308,8 +2387,6 @@ function renderProjectView(proj, detail, needsFeedback){
         <div id="s27-pv-chatbox" class="s27-pv-chatbox"></div>
       </div>
     </div>
-
-    ${needsFeedback ? '<div class="s27-pv-section" id="s27-pv-fb-section" hidden><h3 class="s27-pv-section-title">✅ Feedback geven</h3><div id="s27-pv-fbbox"></div></div>' : ''}
   `;
 
   // Render chat in box (altijd zichtbaar)
@@ -2339,24 +2416,19 @@ function renderProjectView(proj, detail, needsFeedback){
   const back = $('s27-pv-back-btn');
   if(back) back.addEventListener('click', exitProjectView);
 
-  // Feedback banner opens collapsible feedback section
-  const openFb = $('s27-pv-open-fb');
-  if(openFb){
-    openFb.addEventListener('click', () => {
-      const fbSection = $('s27-pv-fb-section');
+  // v2.2 #64: feedback widget renders DIRECT in linkerkolom — geen knop meer nodig
+  if(needsFeedback){
+    try {
       const fbBox = $('s27-pv-fbbox');
-      if(fbSection && fbBox){
-        fbSection.hidden = false;
-        try {
-          fbBox.innerHTML = renderFeedbackV2Tab(proj, detail);
-          attachFeedbackV2Handlers();
-          fbSection.scrollIntoView({behavior:'smooth', block:'start'});
-        } catch(e){
-          console.error('[Studio 27] Feedback render failed:', e);
-          fbBox.innerHTML = '<div class="s27-form-error">Feedback widget kon niet laden. <a href="#" data-dm="vraag" data-dm-onderwerp="Feedback widget probleem">Stuur ons een bericht</a>.</div>';
-        }
+      if(fbBox){
+        fbBox.innerHTML = renderFeedbackV2Tab(proj, detail);
+        attachFeedbackV2Handlers();
       }
-    });
+    } catch(e){
+      console.error('[Studio 27] Feedback render failed:', e);
+      const fbBox = $('s27-pv-fbbox');
+      if(fbBox) fbBox.innerHTML = '<div class="s27-form-error">Feedback widget kon niet laden. <a href="#" data-dm="vraag" data-dm-onderwerp="Feedback widget probleem">Stuur ons een bericht</a>.</div>';
+    }
   }
 }
 
@@ -2561,25 +2633,42 @@ function groupChatByDay(messages){
 }
 
 function renderChatMessage(c){
-  const isKlant = c.is_klant === true || (c.tekst || '').startsWith('💬 [Klant');
+  const rawText = decodeMakeString(c.tekst || '');
+  // v2.2 #65: detecteer klant-prefix + extract bedrijfsnaam (API account = "Vincent Verleije", maar dit is een klant-post)
+  const klantMatch = rawText.match(/^💬 \[Klant: ([^\]]+)\]/);
+  const isKlant = c.is_klant === true || !!klantMatch;
   const side = isKlant ? 'klant' : 'team';
-  const cleanText = decodeMakeString(c.tekst || '').replace(/^💬 \[Klant: [^\]]+\]\s*/, '').trim();
-  const atts = (c.attachments || []).map(a => '<a class="s27-chat-att" href="' + esc(a.url || '#') + '" target="_blank" rel="noopener"><svg width="11" height="11"><use href="#s27p-link"/></svg> ' + esc(a.filename || 'bestand') + '</a>').join('');
+  // Auteur: bij klant-post → bedrijfsnaam uit prefix. Bij team-post → user.username.
+  const displayAuthor = isKlant && klantMatch ? klantMatch[1].trim() : (c.auteur || 'Studio 27');
+  let cleanText = rawText.replace(/^💬 \[Klant: [^\]]+\]\s*/, '').trim();
+  // v2.2 #65: chat-attachment scenario plaatst "📎 Bestand gedeeld: name\n{url}" in tekst — extract als attachment
+  const inlineAttMatches = [];
+  cleanText = cleanText.replace(/📎 Bestand gedeeld: ([^\n]+)\n(https:\/\/[^\s\n]+)/g, (m, fname, url) => {
+    inlineAttMatches.push({ filename: fname.trim(), url: url.trim() });
+    return '';
+  }).trim();
+  const allAtts = (c.attachments || []).concat(inlineAttMatches);
+  // v2.2 #65: download-attribute → 1-klik download. Plus file-type icoon.
+  const atts = allAtts.map(a => {
+    const ext = ((a.filename || '').split('.').pop() || '').toLowerCase();
+    const ico = ext === 'pdf' ? '📄' : (['jpg','jpeg','png','gif','webp','heic','svg'].includes(ext) ? '🖼️' : (['mp4','mov','avi'].includes(ext) ? '🎬' : (['ai','psd','eps'].includes(ext) ? '🎨' : (['ttf','otf','woff','woff2'].includes(ext) ? '🔤' : '📎'))));
+    return '<a class="s27-chat-att" href="' + esc(a.url || '#') + '" download="' + esc(a.filename || 'bestand') + '" target="_blank" rel="noopener" title="Download ' + esc(a.filename || 'bestand') + '">' + ico + ' <span>' + esc(a.filename || 'bestand') + '</span><svg width="11" height="11" viewBox="0 0 24 24" style="flex-shrink:0"><path fill="currentColor" d="M5 20h14v-2H5v2zM12 2v12l4-4 1.4 1.4L12 17l-5.4-5.6L8 10l4 4V2h0z"/></svg></a>';
+  }).join('');
   const likeKey = 's27_like_' + (c.id || '');
   const isLiked = c.id ? (localStorage.getItem(likeKey) === '1') : false;
-  // Time-only label (zoals WhatsApp/Slack) — datum staat al in day-divider
   const ts = parseChatDate(c.datum);
   const timeStr = ts ? new Date(ts).toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'}) : '';
-  const initial = ((c.auteur || 'S').match(/[A-Za-zÀ-ÿ]/) || ['?'])[0].toUpperCase();
+  // Initialen: 1-2 letters (Vincent Verleije → VV, TEST CLIENT BV → TC)
+  const initials = displayAuthor.split(/\s+/).filter(w => /[A-Za-zÀ-ÿ]/.test(w)).slice(0,2).map(w => w[0].toUpperCase()).join('') || '?';
   return '<div class="s27-chat-msg s27-chat-msg-' + side + '" data-comment-id="' + esc(c.id || '') + '">' +
-    '<div class="s27-chat-avatar">' + esc(initial) + '</div>' +
+    '<div class="s27-chat-avatar">' + esc(initials) + '</div>' +
     '<div class="s27-chat-bubble">' +
-      '<div class="s27-chat-head"><strong>' + esc(c.auteur || 'Studio 27') + '</strong>' + (timeStr ? '<span>' + esc(timeStr) + '</span>' : '') + '</div>' +
-      '<div class="s27-chat-body">' + esc(cleanText).replace(/\n/g,'<br>') + '</div>' +
+      '<div class="s27-chat-head"><strong>' + esc(displayAuthor) + '</strong>' + (timeStr ? '<span>' + esc(timeStr) + '</span>' : '') + '</div>' +
+      (cleanText ? '<div class="s27-chat-body">' + esc(cleanText).replace(/\n/g,'<br>') + '</div>' : '') +
       (atts ? '<div class="s27-chat-atts">' + atts + '</div>' : '') +
       '<div class="s27-chat-msg-actions">' +
         (c.id ? '<button class="s27-chat-react' + (isLiked ? ' is-liked' : '') + '" data-action="like" data-cid="' + esc(c.id) + '" aria-label="Bericht liken">👍</button>' : '') +
-        '<button class="s27-chat-react" data-action="reply" data-author="' + esc(c.auteur || '') + '" aria-label="Reageren">↩</button>' +
+        '<button class="s27-chat-react" data-action="reply" data-author="' + esc(displayAuthor) + '" aria-label="Reageren">↩</button>' +
       '</div>' +
     '</div>' +
   '</div>';
@@ -2898,9 +2987,7 @@ async function handleFiles(fileList, scope, category){
       });
       if(res.ok && (!res.data || !res.data.error)){
         updateUploadRow(li, 'done', 'Geüpload ✓');
-        // v2.2 #59 fix: GEEN auto-renderBedrijfTab() meer — dat wist klant's
-        // niet-opgeslagen voorkeuren/kleuren/fonts. Voeg attachment in plaats
-        // toe aan in-memory cache + render alleen attachments-card.
+        // v2.2 #59 + #68: surgical flat-list update zonder hele tab re-render
         if(scope === 'bedrijf' && state.bedrijfContent){
           if(!Array.isArray(state.bedrijfContent.attachments)) state.bedrijfContent.attachments = [];
           state.bedrijfContent.attachments.push({
@@ -2910,7 +2997,7 @@ async function handleFiles(fileList, scope, category){
             uploaded_at: String(Date.now()),
             size: f.size
           });
-          refreshCategoryCard(category);
+          refreshFilesFlat();
         }
       } else updateUploadRow(li, 'error', 'Mislukt');
     } catch(e){ updateUploadRow(li, 'error', 'Mislukt'); }
