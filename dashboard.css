@@ -285,6 +285,11 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-fontuse input { padding:10px 13px; font-family:var(--font-body); font-size:14px; border:1.5px solid var(--s27-line); border-radius:var(--r-sm); background:var(--s27-paper); color:var(--s27-ink); transition:border-color .15s; }
 .s27-fontuse input:focus { outline:none; border-color:var(--s27-blue); }
 
+/* Contactgegevens form (v2.2 #60) */
+.s27-contactform { display:flex; flex-direction:column; gap:14px; background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:var(--r-md); padding:18px 20px; }
+.s27-contactform-foot { display:flex; justify-content:space-between; align-items:center; gap:14px; padding-top:8px; border-top:1px solid var(--s27-line); margin-top:6px; }
+.s27-contactform-state { font-family:var(--font-body); font-size:12px; color:var(--s27-ink-3); }
+
 /* ============ CHAT REACTIES (v2.2 Fase 39) ============ */
 .s27-chat-msg-actions { display:flex; gap:6px; margin-top:6px; opacity:0; transform:translateY(-3px); transition:opacity .15s, transform .15s; }
 .s27-chat-msg:hover .s27-chat-msg-actions, .s27-chat-msg:focus-within .s27-chat-msg-actions { opacity:1; transform:translateY(0); }
@@ -451,6 +456,12 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-shoot-slot.is-chosen { background:var(--s27-orange); color:#fff; border-color:var(--s27-orange); }
 .s27-shoot-empty { font-family:var(--font-body); font-size:11px; color:var(--s27-ink-3); font-style:italic; }
 .s27-shoot-info { font-family:var(--font-body); font-size:12px; color:#9a3412; margin:0; padding-top:4px; }
+/* Shoot step 2 (v2.2 #62) — duur + tijdsloten + opmerkingen */
+.s27-shoot-step2 { background:#fff7ed; border:1.5px solid #fed7aa; border-radius:var(--r-md); padding:18px 20px; display:flex; flex-direction:column; gap:14px; margin-top:10px; animation:s27fadeIn .25s var(--ease-out) backwards; }
+.s27-shoot-step2-head { display:flex; flex-direction:column; gap:2px; padding-bottom:8px; border-bottom:1px solid #fed7aa; }
+.s27-shoot-step2-head strong { font-family:var(--font-display); font-size:13px; font-weight:800; color:#9a3412; }
+.s27-shoot-step2-head span { font-family:var(--font-body); font-size:12px; color:#9a3412; opacity:0.8; }
+.s27-shoot-availability { background:#fff; border-radius:var(--r-sm); padding:14px; }
 
 /* Meeting booking slots (v2.2 #48) */
 .s27-book-slots { background:var(--s27-blue-soft); border:1.5px solid var(--s27-blue); border-radius:var(--r-md); padding:18px 20px; margin-bottom:24px; animation:s27fadeIn .25s var(--ease-out) backwards; position:relative; }
@@ -470,6 +481,15 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-book-empty { font-family:var(--font-body); font-size:11.5px; color:var(--s27-ink-3); font-style:italic; margin:0; }
 .s27-book-fallback { font-family:var(--font-body); font-size:12px; color:var(--s27-blue-ink); margin:14px 0 0; padding-top:10px; border-top:1px solid color-mix(in srgb, var(--s27-blue) 25%, transparent); }
 .s27-book-fallback a { color:var(--s27-blue-ink); font-weight:700; }
+/* Meeting location keuze (v2.2 #61) — online of bij Studio27, NIET bij klant */
+.s27-meet-locchoice { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+@media (max-width:520px){ .s27-meet-locchoice { grid-template-columns:1fr; } }
+.s27-meet-locopt { display:flex; gap:10px; align-items:flex-start; padding:10px 12px; background:#fff; border:1.5px solid var(--s27-line); border-radius:var(--r-sm); cursor:pointer; transition:all .15s; }
+.s27-meet-locopt:has(input:checked) { border-color:var(--s27-blue); background:var(--s27-blue-soft); }
+.s27-meet-locopt input { margin-top:2px; accent-color:var(--s27-blue-ink); }
+.s27-meet-locopt div { display:flex; flex-direction:column; gap:1px; }
+.s27-meet-locopt strong { font-family:var(--font-display); font-size:12.5px; font-weight:800; color:var(--s27-ink); }
+.s27-meet-locopt span { font-family:var(--font-body); font-size:11.5px; color:var(--s27-ink-3); }
 
 /* ============ FULLSCREEN PROJECT VIEW (v2.1 Fase 34) ============ */
 .s27-projectview { animation:s27fadeIn .25s var(--ease-out) backwards; }

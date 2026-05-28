@@ -24,6 +24,7 @@ const ENDPOINTS = {
   newProjectIntake:  'https://hook.eu1.make.com/kbomkcljmi9b2oyphmk938wb1qgwll1j',
   directMessage:     'https://hook.eu1.make.com/s7g32st1esmxxarw0k35ej3j8hthdr2b',
   chatAttachment:    'https://hook.eu1.make.com/fxaqt9waonf63moiloj1bnm28w1kduj6',
+  bedrijfContact:    'https://hook.eu1.make.com/459dayjdq34xgkt9bcbv8g1nxd9r9ubs',
   // Bestaand werkend booking-systeem (read-only hergebruik via CORS *)
   shootAvailability: 'https://hook.eu1.make.com/c1aekp5r567tqvgvp4e2a4juu3npanap'
 };
@@ -985,9 +986,9 @@ function renderPlaceholderTab(bodyId, title, body){
 const STRUCT_SEPARATOR = '---STRUCTURED---';
 
 function parseBedrijfVoorkeuren(raw){
-  if(!raw) return { tekst:'', kleuren:{}, fontGebruik:'' };
+  if(!raw) return { tekst:'', kleuren:{}, fontGebruik:'', contact:{} };
   const idx = raw.indexOf(STRUCT_SEPARATOR);
-  if(idx < 0) return { tekst:raw.trim(), kleuren:{}, fontGebruik:'' };
+  if(idx < 0) return { tekst:raw.trim(), kleuren:{}, fontGebruik:'', contact:{} };
   const tekst = raw.slice(0, idx).trim();
   const jsonStr = raw.slice(idx + STRUCT_SEPARATOR.length).trim();
   try {
@@ -995,15 +996,16 @@ function parseBedrijfVoorkeuren(raw){
     return {
       tekst,
       kleuren: parsed.kleuren || {},
-      fontGebruik: parsed.fontGebruik || ''
+      fontGebruik: parsed.fontGebruik || '',
+      contact: parsed.contact || {}
     };
   } catch(e){
-    return { tekst, kleuren:{}, fontGebruik:'' };
+    return { tekst, kleuren:{}, fontGebruik:'', contact:{} };
   }
 }
 
-function serializeBedrijfVoorkeuren(tekst, kleuren, fontGebruik){
-  const blob = { kleuren: kleuren || {}, fontGebruik: fontGebruik || '' };
+function serializeBedrijfVoorkeuren(tekst, kleuren, fontGebruik, contact){
+  const blob = { kleuren: kleuren || {}, fontGebruik: fontGebruik || '', contact: contact || {} };
   return (tekst || '').trim() + '\n\n' + STRUCT_SEPARATOR + '\n' + JSON.stringify(blob);
 }
 
@@ -1055,7 +1057,34 @@ async function renderBedrijfTab(){
   const merkkleuren = parsed.kleuren || { primary:'', secondary:'', accent:'', tekst:'' };
   const fontGebruik = parsed.fontGebruik || '';
 
+  // Contactgegevens: parse uit description-blob OR session
+  const savedContact = parsed.contact || {};
   body.innerHTML = `
+    <div class="s27-section">
+      <div class="s27-section-head">
+        <div>
+          <h2 class="s27-section-title">Contactgegevens</h2>
+          <p class="s27-section-sub">Wijzig je gegevens hier. Wij werken het binnen 24u bij in onze administratie, PandaDoc-template en CRM.</p>
+        </div>
+      </div>
+      <div class="s27-contactform" id="s27-contactform">
+        <div class="s27-form-row">
+          <label class="s27-form-field"><span>Voornaam</span><input type="text" name="voornaam" value="${esc(savedContact.voornaam || '')}" placeholder="Bv. Vincent"/></label>
+          <label class="s27-form-field"><span>Achternaam</span><input type="text" name="achternaam" value="${esc(savedContact.achternaam || '')}" placeholder="Bv. Verleije"/></label>
+        </div>
+        <div class="s27-form-row">
+          <label class="s27-form-field"><span>GSM</span><input type="tel" name="gsm" value="${esc(savedContact.gsm || '')}" placeholder="+32 4xx xx xx xx"/></label>
+          <label class="s27-form-field"><span>E-mail</span><input type="email" name="email" value="${esc(savedContact.email || '')}" placeholder="naam@bedrijf.be"/></label>
+        </div>
+        <label class="s27-form-field"><span>BTW-nummer</span><input type="text" name="btw" value="${esc(savedContact.btw || '')}" placeholder="BE0xxx.xxx.xxx"/></label>
+        <label class="s27-form-field"><span>Bedrijfsadres (factuur-adres)</span><input type="text" name="adres" value="${esc(savedContact.adres || '')}" placeholder="Straat nummer, postcode stad"/></label>
+        <div class="s27-contactform-foot">
+          <span class="s27-contactform-state" id="s27-contactform-state"></span>
+          <button class="s27-btn s27-btn-sm s27-btn-primary" id="s27-contactform-save">Wijzigingen opslaan</button>
+        </div>
+      </div>
+    </div>
+
     <div class="s27-section">
       <div class="s27-section-head">
         <div>
@@ -1232,15 +1261,60 @@ function attachBedrijfHandlers(){
         kleuren[hex.dataset.kleurHex] = hex.value || '';
       });
       const fontGebruik = fontInput ? fontInput.value : '';
-      const combined = serializeBedrijfVoorkeuren(ta ? ta.value : '', kleuren, fontGebruik);
+      // v2.2 #60: behoud bestaande contact info in serialize
+      const existingContact = (state.bedrijfContent && parseBedrijfVoorkeuren(decodeMakeString(state.bedrijfContent.algemene_voorkeuren || '')).contact) || {};
+      const combined = serializeBedrijfVoorkeuren(ta ? ta.value : '', kleuren, fontGebruik, existingContact);
       if(ENDPOINTS.bedrijfVoorkeuren && !state.demoMode){
         await api(ENDPOINTS.bedrijfVoorkeuren, { bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token, voorkeuren: combined });
+        if(state.bedrijfContent) state.bedrijfContent.algemene_voorkeuren = combined;
       } else {
         await new Promise(r => setTimeout(r, 500));
       }
       btn.textContent = 'Opslaan';
       if(stateLabel) stateLabel.textContent = '✓ Opgeslagen (voorkeuren + kleuren + fonts)';
       setTimeout(() => { if(stateLabel) stateLabel.textContent = ''; }, 3000);
+    });
+  }
+
+  // v2.2 #60: contact form save handler
+  const contactForm = $('s27-contactform');
+  const contactSave = $('s27-contactform-save');
+  const contactState = $('s27-contactform-state');
+  if(contactForm && contactSave){
+    contactSave.addEventListener('click', async () => {
+      contactSave.disabled = true; contactSave.textContent = 'Versturen…';
+      if(contactState) contactState.textContent = 'Bezig…';
+      const payload = {
+        bedrijf_id: state.session.bedrijf_id,
+        session_token: state.session.session_token,
+        klant_naam: state.session.bedrijfsnaam,
+        voornaam: contactForm.querySelector('[name="voornaam"]').value.trim(),
+        achternaam: contactForm.querySelector('[name="achternaam"]').value.trim(),
+        gsm: contactForm.querySelector('[name="gsm"]').value.trim(),
+        email: contactForm.querySelector('[name="email"]').value.trim(),
+        btw: contactForm.querySelector('[name="btw"]').value.trim(),
+        adres: contactForm.querySelector('[name="adres"]').value.trim()
+      };
+      try {
+        // 1. Stuur audit-comment via bedrijfContact endpoint
+        if(ENDPOINTS.bedrijfContact && !state.demoMode){
+          await api(ENDPOINTS.bedrijfContact, payload);
+        }
+        // 2. Bewaar lokaal in voorkeuren-blob zodat het zichtbaar blijft voor klant
+        const parsedNow = parseBedrijfVoorkeuren(decodeMakeString((state.bedrijfContent && state.bedrijfContent.algemene_voorkeuren) || ''));
+        const updatedContact = { voornaam: payload.voornaam, achternaam: payload.achternaam, gsm: payload.gsm, email: payload.email, btw: payload.btw, adres: payload.adres };
+        const combined = serializeBedrijfVoorkeuren(parsedNow.tekst, parsedNow.kleuren, parsedNow.fontGebruik, updatedContact);
+        if(ENDPOINTS.bedrijfVoorkeuren && !state.demoMode){
+          await api(ENDPOINTS.bedrijfVoorkeuren, { bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token, voorkeuren: combined });
+          if(state.bedrijfContent) state.bedrijfContent.algemene_voorkeuren = combined;
+        }
+        if(contactState) contactState.textContent = '✓ Doorgegeven — Ilke en Arne verwerken dit binnen 24u';
+      } catch(err){
+        console.error('[Studio 27] contact save failed:', err);
+        if(contactState) contactState.textContent = 'Iets ging mis — probeer opnieuw';
+      }
+      contactSave.disabled = false; contactSave.textContent = 'Wijzigingen opslaan';
+      setTimeout(() => { if(contactState) contactState.textContent = ''; }, 4000);
     });
   }
 
@@ -1388,42 +1462,38 @@ function renderArchiveCard(p){
     '</div>' +
   '</details>';
 }
-/* Dynamische vervolgvragen per project-type — v2.2 #46 / #47 (PandaDoc-integratie volgt) */
+/* Dynamische vervolgvragen per project-type — v2.2 #62 (Studio27 tone of voice) */
 const PROJECT_SUB_QUESTIONS = {
-  'Video': [
-    { id:'video_type',    label:'Wat voor video?',                 type:'select', opts:['Corporate / bedrijfsfilm','Promovideo / reclame','Social media reels (verticaal)','Interview / testimonial','Event-coverage','Productvideo','Animatie / motion design'] },
-    { id:'video_shoot',   label:'Shoot inplannen?',                type:'select', opts:['Ja, graag plannen','Bestaand beeldmateriaal hergebruiken','Mix van beide'] },
-    { id:'video_lengte',  label:'Verwachte lengte van eindproduct',type:'select', opts:['15 sec','30 sec','60 sec','1 – 2 min','2 – 5 min','5+ min'] },
-    { id:'video_aantal',  label:'Hoeveel deliverables?',           type:'select', opts:['1 versie','2 – 3 versies','4 – 6 versies','7+ versies (campagne)'] }
-  ],
-  'Fotografie': [
-    { id:'foto_type',   label:'Wat voor fotografie?',     type:'select', opts:['Bedrijfsfoto\'s / team','Productfotografie','Locatie / interieur','Event','Lifestyle / brand'] },
-    { id:'foto_aantal', label:'Hoeveel beelden ongeveer?',type:'select', opts:['< 20','20 – 50','50 – 100','100+'] }
+  'Video + Fotografie': [
+    { id:'vf_type',     label:'Wat voor content?',               type:'select', opts:['Corporate / bedrijfsfilm','Promovideo / reclame','Social media reels (verticaal)','Interview / testimonial','Event-coverage','Productvideo + productfoto\'s','Bedrijfsfoto\'s / team','Lifestyle / brand'] },
+    { id:'vf_shoot',    label:'Shoot inplannen voor dit project?', type:'select', opts:['Ja, we willen een shoot','Bestaand beeldmateriaal hergebruiken','Nog niet zeker — eerst overleg'] },
+    { id:'vf_lengte',   label:'Verwachte lengte van de video',    type:'select', opts:['15 sec','30 sec','60 sec','1 – 2 min','2 – 5 min','5+ min','Geen video — enkel foto'] },
+    { id:'vf_aantal',   label:'Hoeveel deliverables verwacht je?',type:'select', opts:['1 versie','2 – 3 versies','4 – 6 versies','7+ versies (campagne)'] }
   ],
   'Webdesign': [
     { id:'web_type',    label:'Wat voor site?',          type:'select', opts:['Nieuwe website (one-pager)','Nieuwe website (5 – 10 pagina\'s)','Nieuwe website (10+ pagina\'s)','Webshop / ecommerce','Landing page','Restyling bestaande site'] },
     { id:'web_talen',   label:'Aantal taalversies',      type:'select', opts:['1 taal','2 talen','3+ talen'] },
     { id:'web_cms',     label:'CMS / zelf kunnen wijzigen?', type:'select', opts:['Ja, ik wil zelf updates kunnen doen','Nee, jullie beheren','Twijfel nog'] }
   ],
-  'Branding': [
-    { id:'brand_scope', label:'Wat heb je nodig?', type:'select', opts:['Alleen logo','Logo + basis-huisstijl','Volledige rebranding','Brandbook + guidelines'] }
+  'Branding / huisstijl / grafisch ontwerp': [
+    { id:'brand_scope', label:'Wat heb je nodig?', type:'select', opts:['Eenmalig grafisch ontwerp (banner, flyer, advertentie…)','Alleen logo','Logo + basis-huisstijl','Volledige rebranding','Brandbook + guidelines'] }
   ],
-  'Social Media': [
+  'Social media beheer': [
     { id:'soc_freq',    label:'Hoeveel posts per maand?', type:'select', opts:['4 – 8 posts','8 – 16 posts','16 – 30 posts','30+ posts'] },
     { id:'soc_kanalen', label:'Welke kanalen?',           type:'select', opts:['Instagram + Facebook','+ LinkedIn','+ TikTok','Multichannel (alles)'] }
   ],
-  'Advertising': [
+  'Advertentiebeheer': [
     { id:'ads_kanalen',  label:'Welke kanalen wil je inzetten?',         type:'select', opts:['Google Ads','Meta (Facebook + Instagram)','TikTok / Snapchat','LinkedIn','Multichannel'] },
     { id:'ads_doel',     label:'Hoofddoel van de campagne',              type:'select', opts:['Meer leads','Meer omzet (ecommerce)','Naamsbekendheid','Recruitment / employer branding'] }
   ],
-  'SEO': [
-    { id:'seo_status',  label:'Huidige SEO-situatie',   type:'select', opts:['Nooit echt mee bezig','Basis opgezet maar geen opvolging','Loopt al maar moet beter','Optimaliseren voor AI / GEO'] }
+  'Online organische vindbaarheid (SEO + GEO)': [
+    { id:'seo_status',  label:'Huidige situatie?',   type:'select', opts:['Nooit echt mee bezig','Basis opgezet maar geen opvolging','Loopt al maar moet beter','Optimaliseren voor AI (GEO)'] }
   ],
-  'Opleiding': [
-    { id:'opl_thema',   label:'Wat wil je leren?',           type:'select', opts:['Social media beheer','Content creation','SEO / GEO','Advertising-basis','AI & automatisatie','Op maat'] },
-    { id:'opl_groep',   label:'Hoeveel deelnemers?',         type:'select', opts:['1 op 1','2 – 5','6 – 12','13+'] }
+  'Opleiding op maat': [
+    { id:'opl_thema',   label:'Welk onderwerp?',           type:'select', opts:['Social media beheer','Content creation','SEO + GEO','Advertentiebeheer-basis','AI & automatisatie','Op maat'] },
+    { id:'opl_groep',   label:'Hoeveel deelnemers?',       type:'select', opts:['1 op 1','2 – 5','6 – 12','13+'] }
   ],
-  'Automatisatie': [
+  'AI & automatisatie': [
     { id:'auto_tools',  label:'Welke tools wil je koppelen?',  type:'text',   placeholder:'Bv. ClickUp + Gmail + Slack' },
     { id:'auto_doel',   label:'Wat moet de automation oplossen?', type:'text',placeholder:'Bv. "Lead vanuit website automatisch in CRM + welkomstmail"' }
   ]
@@ -1453,15 +1523,14 @@ function renderNieuwTab(){
         <span>Type project <em>*</em></span>
         <select name="project_type" id="s27-pt-select" required>
           <option value="">Kies een type…</option>
-          <option value="Video">Video productie</option>
-          <option value="Fotografie">Fotografie</option>
+          <option value="Video + Fotografie">Video + Fotografie</option>
           <option value="Webdesign">Webdesign / nieuwe site</option>
-          <option value="Branding">Branding / huisstijl</option>
-          <option value="Social Media">Social media campagne</option>
-          <option value="Advertising">Advertising (Google / Meta / TikTok)</option>
-          <option value="SEO">SEO / GEO</option>
-          <option value="Opleiding">Opleiding / workshop</option>
-          <option value="Automatisatie">AI / Automatisatie</option>
+          <option value="Branding / huisstijl / grafisch ontwerp">Branding, huisstijl of grafisch ontwerp</option>
+          <option value="Social media beheer">Social media beheer</option>
+          <option value="Advertentiebeheer">Advertentiebeheer</option>
+          <option value="Online organische vindbaarheid (SEO + GEO)">Online organische vindbaarheid (SEO + GEO)</option>
+          <option value="Opleiding op maat">Opleiding op maat</option>
+          <option value="AI & automatisatie">AI &amp; automatisatie</option>
           <option value="Anders">Iets anders…</option>
         </select>
       </label>
@@ -1508,13 +1577,13 @@ function renderProjectSubQuestions(projectType){
     return;
   }
   subBox.hidden = false;
-  const needsShoot = (projectType === 'Video' || projectType === 'Fotografie');
+  const needsShoot = projectType === 'Video + Fotografie';
   subBox.innerHTML = '<div class="s27-pt-sub-head"><strong>📋 Help ons je offerte sneller op maat maken</strong><span>Beantwoord wat je al weet — je kan altijd later aanpassen</span></div>' +
     qs.map(q => {
       if(q.type === 'select'){
         return `<label class="s27-form-field">
           <span>${esc(q.label)}</span>
-          <select name="sub_${esc(q.id)}" ${q.id === 'video_shoot' || q.id === 'foto_type' ? 'data-triggers-shootview="1"' : ''}>
+          <select name="sub_${esc(q.id)}" ${q.id === 'vf_shoot' ? 'data-triggers-shootstep="1"' : ''}>
             <option value="">Nog niet zeker</option>
             ${q.opts.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('')}
           </select>
@@ -1528,20 +1597,59 @@ function renderProjectSubQuestions(projectType){
       }
       return '';
     }).join('') +
-    (needsShoot ? '<div id="s27-shoot-preview" class="s27-shoot-preview" hidden></div>' : '');
-  // Wire shoot-preview triggers
+    (needsShoot ? '<div id="s27-shoot-step2" class="s27-shoot-step2" hidden></div>' : '');
+  // v2.2 #62: shoot is 2-stap. Stap 1 = ja/nee in sub-vragen. Stap 2 = duur + tijdsloten + opmerkingen.
   if(needsShoot){
-    subBox.querySelectorAll('[data-triggers-shootview]').forEach(sel => {
+    subBox.querySelectorAll('[data-triggers-shootstep]').forEach(sel => {
       sel.addEventListener('change', () => {
-        const wantsShoot = sel.value && /ja|graag|inplannen|bedrijfsfoto|product|locatie|event|lifestyle/i.test(sel.value);
-        if(wantsShoot) loadShootPreview();
-        else {
-          const sp = $('s27-shoot-preview');
-          if(sp){ sp.hidden = true; sp.innerHTML = ''; }
+        const wantsShoot = /ja|we willen/i.test(sel.value);
+        const step2 = $('s27-shoot-step2');
+        if(!step2) return;
+        if(wantsShoot){
+          step2.hidden = false;
+          step2.innerHTML = renderShootStep2();
+          wireShootStep2();
+        } else {
+          step2.hidden = true;
+          step2.innerHTML = '';
         }
       });
     });
   }
+}
+
+function renderShootStep2(){
+  return `
+    <div class="s27-shoot-step2-head"><strong>📸 Stap 2 — Shoot in detail</strong><span>Geef de duur door, kies een dag, of laat een opmerking achter</span></div>
+    <label class="s27-form-field">
+      <span>Verwachte duur van de shoot <em>*</em></span>
+      <select name="sub_shoot_duur" id="s27-shoot-duur">
+        <option value="">Kies een duur…</option>
+        <option value="halve dag">Halve dag (incl. reistijd ±4u)</option>
+        <option value="hele dag">Hele dag (incl. reistijd ±8u)</option>
+        <option value="meerdere dagen">Meerdere dagen — overleg nodig</option>
+      </select>
+    </label>
+    <div id="s27-shoot-availability" class="s27-shoot-availability" hidden>
+      <div class="s27-loading" style="padding:14px">Beschikbare momenten ophalen…</div>
+    </div>
+    <label class="s27-form-field">
+      <span>Opmerkingen / afwijkingen</span>
+      <textarea name="sub_shoot_opmerkingen" rows="3" placeholder="Bv. graag in de namiddag, of een specifieke datum, of beschikbaarheid van locatie…"></textarea>
+    </label>
+  `;
+}
+
+function wireShootStep2(){
+  const duurSel = $('s27-shoot-duur');
+  if(!duurSel) return;
+  duurSel.addEventListener('change', () => {
+    if(duurSel.value) loadShootPreview();
+    else {
+      const av = $('s27-shoot-availability');
+      if(av){ av.hidden = true; av.innerHTML = ''; }
+    }
+  });
 }
 
 /* =================================================================
@@ -1552,7 +1660,8 @@ function renderProjectSubQuestions(projectType){
 let _shootDataCache = null;
 
 async function loadShootPreview(){
-  const box = $('s27-shoot-preview');
+  // v2.2 #62: schrijft naar nieuwe stap-2 container (s27-shoot-availability) of legacy s27-shoot-preview
+  const box = $('s27-shoot-availability') || $('s27-shoot-preview');
   if(!box) return;
   box.hidden = false;
   box.innerHTML = '<div class="s27-loading" style="padding:14px">Beschikbare shoot-momenten ophalen…</div>';
@@ -1563,7 +1672,7 @@ async function loadShootPreview(){
     }
     box.innerHTML = renderShootSlots(_shootDataCache);
   } catch(err){
-    box.innerHTML = '<div class="s27-form-error">Beschikbare momenten konden niet geladen worden — <a href="#" data-dm="shoot" data-dm-onderwerp="Shoot manueel inplannen">stuur een aanvraag via ClickUp</a>.</div>';
+    box.innerHTML = '<div class="s27-form-error">Beschikbare momenten konden niet geladen worden — <a href="#" data-dm="shoot" data-dm-onderwerp="Shoot manueel inplannen">stuur een aanvraag</a>.</div>';
   }
 }
 
@@ -1915,22 +2024,31 @@ async function loadMeetingSlots(externalBookingUrl){
       const r = await fetch(ENDPOINTS.shootAvailability, { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
       _shootDataCache = await r.json();
     }
-    box.innerHTML = renderMeetingSlots(_shootDataCache, externalBookingUrl);
+    box.innerHTML = renderMeetingSlots(_shootDataCache);
+    // Wire location toggle
+    document.querySelectorAll('input[name="s27-meet-loc"]').forEach(r => {
+      r.addEventListener('change', () => {
+        document.querySelectorAll('.s27-book-slot').forEach(slot => {
+          const loc = document.querySelector('input[name="s27-meet-loc"]:checked');
+          if(loc) slot.dataset.dmOnderwerp = slot.dataset.dmOnderwerpBase + ' — ' + loc.value;
+        });
+      });
+    });
   } catch(err){
-    box.innerHTML = '<div class="s27-form-error">Beschikbaarheid kon niet opgehaald worden — <a href="#" data-dm="meeting" data-dm-onderwerp="Meeting-aanvraag (beschikbaarheid kon niet laden)">stuur een vraag via ClickUp</a>.</div>';
+    box.innerHTML = '<div class="s27-form-error">Beschikbaarheid kon niet opgehaald worden — <a href="#" data-dm="meeting" data-dm-onderwerp="Meeting-aanvraag (beschikbaarheid kon niet laden)">stuur een vraag</a>.</div>';
   }
 }
 
-function renderMeetingSlots(data, externalBookingUrl){
-  // Voor meetings tonen we Ilke + Vincent + Arne — als hosts beschikbaar zijn in data, gebruik die
-  // Anders fallback naar de content-hosts uit availability endpoint
+function renderMeetingSlots(data){
   const teamHosts = [
     { id:48338421, naam:'Ilke Meeusen',      rol:'Account manager — projectopvolging' },
     { id:8714037,  naam:'Vincent Verleije',  rol:'Zaakvoerder — strategie' },
     { id:54513254, naam:'Arne Goetschalckx', rol:'Sales — nieuwe projecten' }
   ];
   const allBusy = (data.shoots || []).concat(data.shoots_27m || []).concat(data.vakantie || []);
+  // v2.2 #61: GEEN last-minute. Begin pas overmorgen (48u vooruit) zodat team kan voorbereiden.
   const now = Date.now();
+  const startMs = now + (48 * 3600000); // +48 uur
   const horizonMs = now + (14 * 86400000);
   const bezetByHost = {};
   teamHosts.forEach(h => bezetByHost[h.id] = new Set());
@@ -1942,10 +2060,10 @@ function renderMeetingSlots(data, externalBookingUrl){
       if(bezetByHost[a.id]) bezetByHost[a.id].add(day);
     });
   });
-  // Per host: eerste 4 vrije werkdagen
   const slotsByHost = teamHosts.map(h => {
     const vrij = [];
-    for(let d = now; d <= horizonMs && vrij.length < 4; d += 86400000){
+    // Begin loop pas vanaf startMs (overmorgen)
+    for(let d = Math.ceil(startMs / 86400000) * 86400000; d <= horizonMs && vrij.length < 4; d += 86400000){
       const dt = new Date(d);
       const dow = dt.getDay();
       if(dow === 0 || dow === 6) continue;
@@ -1955,25 +2073,37 @@ function renderMeetingSlots(data, externalBookingUrl){
     return { ...h, slots: vrij };
   });
   return '<div class="s27-book-head">' +
-    '<div><strong>📅 Eerstvolgende vrije momenten (komende 2 weken)</strong>' +
-    '<span>Kies een dag en we bevestigen het exact tijdstip via mail</span></div>' +
+    '<div><strong>📅 Eerstvolgende vrije momenten</strong>' +
+    '<span>Vanaf overmorgen — kies eerst je locatie-voorkeur, dan een dag</span></div>' +
     '<button type="button" class="s27-book-close" id="s27-book-close" aria-label="Sluiten">×</button>' +
     '</div>' +
+    // Location keuze: online OF bij Studio27 op locatie. NIET bij klant (reistijden).
+    '<div class="s27-meet-locchoice">' +
+      '<label class="s27-meet-locopt"><input type="radio" name="s27-meet-loc" value="online" checked/><div><strong>💻 Online</strong><span>Google Meet — geen reistijd</span></div></label>' +
+      '<label class="s27-meet-locopt"><input type="radio" name="s27-meet-loc" value="bij Studio 27"/><div><strong>🏢 Bij Studio 27</strong><span>Geel — koffie staat klaar</span></div></label>' +
+    '</div>' +
     '<div class="s27-book-grid">' +
-      slotsByHost.map(h => `
+      slotsByHost.map(h => {
+        const ontvKey = h.id === 48338421 ? 'ilke' : (h.id === 8714037 ? 'vincent' : 'arne');
+        return `
         <div class="s27-book-host">
           <div class="s27-book-host-head">
             <strong>${esc(h.naam)}</strong>
             <span>${esc(h.rol)}</span>
           </div>
           ${h.slots.length
-            ? '<div class="s27-book-slot-row">' + h.slots.map(s => `<button type="button" class="s27-book-slot" data-dm="meeting" data-dm-ontvanger="${esc(h.id === 48338421 ? 'ilke' : (h.id === 8714037 ? 'vincent' : 'arne'))}" data-dm-onderwerp="Meeting-aanvraag met ${esc(h.naam)} op ${esc(new Date(s).toLocaleDateString('nl-BE', {weekday:'long', day:'numeric', month:'long'}))}" data-dm-placeholder="Mijn voorkeur voor het tijdstip: bv. voormiddag, of 14u-16u.&#10;Bespreekonderwerp: ">${esc(new Date(s).toLocaleDateString('nl-BE',{weekday:'short',day:'2-digit',month:'short'}))}</button>`).join('') + '</div>'
+            ? '<div class="s27-book-slot-row">' + h.slots.map(s => {
+                const dateLabel = new Date(s).toLocaleDateString('nl-BE',{weekday:'short',day:'2-digit',month:'short'});
+                const dateLong = new Date(s).toLocaleDateString('nl-BE', {weekday:'long', day:'numeric', month:'long'});
+                const baseSubject = 'Meeting-aanvraag met ' + h.naam + ' op ' + dateLong;
+                return `<button type="button" class="s27-book-slot" data-dm="meeting" data-dm-ontvanger="${esc(ontvKey)}" data-dm-onderwerp="${esc(baseSubject + ' — online')}" data-dm-onderwerp-base="${esc(baseSubject)}" data-dm-placeholder="Mijn voorkeur voor het tijdstip: bv. voormiddag, of 14u-16u.&#10;Bespreekonderwerp: ">${esc(dateLabel)}</button>`;
+              }).join('') + '</div>'
             : '<p class="s27-book-empty">Volgeboekt komende 2 weken — kies een andere collega</p>'
           }
         </div>
-      `).join('') +
+      `;}).join('') +
     '</div>' +
-    '<p class="s27-book-fallback">Of <a href="#" data-dm="meeting" data-dm-onderwerp="Meeting-aanvraag (vrije keuze tijdstip)">stuur ons een vrij voorstel via ClickUp</a>.</p>';
+    '<p class="s27-book-fallback">Of <a href="#" data-dm="meeting" data-dm-onderwerp="Meeting-aanvraag (vrije keuze tijdstip)">stuur ons een vrij voorstel</a>. Na bevestiging maken we een Google Calendar invite aan.</p>';
 }
 
 // Globale handler voor sluiten van booking slots
