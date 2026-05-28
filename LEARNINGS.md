@@ -302,6 +302,24 @@ of bij invalid: `{"ok":false, "message":"..."}` met HTTP 401.
 }
 ```
 
+### ClickUp custom field IDs (Productie-taken — voor deliverables/feedback)
+- **Bestanden** (text, deliverable-referentie/URLs): `b071307b-84c4-4372-9d7e-783e999c618f` — bevat YouTube/Vimeo/Picflow links die naar klant doorgestuurd worden. Extract via `first(map(body.custom_fields; "value"; "id"; "<id>"))`.
+- **Feedback link** (url): `f2610454-1961-42cf-9ba3-c7371b81353d`
+- **Budget** (currency, hidden from guests): `c8d2dd2c-2428-4236-ba37-a3f3cd90c9ec`
+
+### ClickUp custom field IDs (Bedrijven-taak — voor contactgegevens)
+- **Ondernemingsnummer** (btw): `034f4443-5b50-4176-8c91-0b6d60e5870e`
+- **Facturatie Email**: `9613b4aa-2285-485b-80a6-d1d34a96884c`
+- **Website** (url): `90b63173-378a-4fa8-bae8-1a513eea4eca`
+
+### PandaDoc offerte-creatie (uit werkende S27 Intake Processor 4525911)
+- Module `pandadoc:createADocuments`, connection `3580567`
+- Template `HQRvZ3sdrEm2GcuNsdP2Uf`, folder_uuid `/syK5YdV2RpbtTsDDnonSAP`
+- Tokens: Klant.Email/Company/FirstName/LastName + Projectmanager.Email/Phone/FirstName/LastName
+- `send: false` (draft — team vervolledigt)
+- Link PandaDoc-id terug naar ClickUp offerte-taak: custom field `748009c1-6e97-4b87-b6bd-fadeeaa24701` (type text) via `editATaskWithCustomFieldsAdvanced`
+- new-project-intake (5942536) doet nu: createTaskInListAdvanced (Offertes 901520180289) → pandadoc:createADocuments → editATask link. Getest: offerte 86ca11p05 + pandadoc wAb8xKQc79pZ8ktjnfBCu3.
+
 ### POST /upload-alg (scope=algemeen) → v1 Drive integratie
 ```json
 {"ok":true, "message":"Upload ontvangen"}

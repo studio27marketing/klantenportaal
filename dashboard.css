@@ -493,6 +493,16 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-shoot-slot.is-chosen { background:var(--s27-orange); color:#fff; border-color:var(--s27-orange); }
 .s27-shoot-empty { font-family:var(--font-body); font-size:11px; color:var(--s27-ink-3); font-style:italic; }
 .s27-shoot-info { font-family:var(--font-body); font-size:12px; color:#9a3412; margin:0; padding-top:4px; }
+.s27-shoot-info a { color:#9a3412; font-weight:700; }
+/* Shoot dag-grid (v2.2 #76 — moment-based, geen per-persoon) */
+.s27-shoot-daygrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:8px; }
+.s27-shoot-day { display:flex; flex-direction:column; gap:2px; align-items:flex-start; background:#fff; border:1.5px solid #fed7aa; border-radius:var(--r-sm); padding:10px 13px; cursor:pointer; text-align:left; transition:all .15s; }
+.s27-shoot-day:hover { background:var(--s27-orange); border-color:var(--s27-orange); }
+.s27-shoot-day:hover .s27-shoot-day-label, .s27-shoot-day:hover .s27-shoot-day-free { color:#fff; }
+.s27-shoot-day.is-chosen { background:var(--s27-orange); border-color:var(--s27-orange); }
+.s27-shoot-day.is-chosen .s27-shoot-day-label, .s27-shoot-day.is-chosen .s27-shoot-day-free { color:#fff; }
+.s27-shoot-day-label { font-family:var(--font-display); font-size:12.5px; font-weight:800; color:var(--s27-ink); }
+.s27-shoot-day-free { font-family:var(--font-body); font-size:11px; color:#9a3412; }
 /* Shoot step 2 (v2.2 #62) — duur + tijdsloten + opmerkingen */
 .s27-shoot-step2 { background:#fff7ed; border:1.5px solid #fed7aa; border-radius:var(--r-md); padding:18px 20px; display:flex; flex-direction:column; gap:14px; margin-top:10px; animation:s27fadeIn .25s var(--ease-out) backwards; }
 .s27-shoot-step2-head { display:flex; flex-direction:column; gap:2px; padding-bottom:8px; border-bottom:1px solid #fed7aa; }

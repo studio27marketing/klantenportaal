@@ -1676,75 +1676,76 @@ async function loadShootPreview(){
 }
 
 function renderShootSlots(data){
+  // v2.2 #76: GEEN keuze per content creator. Klant kiest een shootMOMENT (dag).
+  // We tellen per dag hoeveel content creators vrij zijn; tonen dagen waar genoeg vrij zijn voor het gekozen aantal.
   const hosts = data.hosts || [];
   const shoots = (data.shoots || []).concat(data.shoots_27m || []);
   const vakantie = data.vakantie || [];
   const now = Date.now();
-  const horizonMs = now + (21 * 86400000); // 3 weken vooruit
-  // Per host: bezette dagen identificeren
+  const startMs = now + 48 * 3600000; // geen last-minute
+  const horizonMs = now + (28 * 86400000); // 4 weken vooruit
+  // hoeveel creators nodig? uit sub_shoot_creators select
+  const creatorsSel = document.querySelector('[name="sub_shoot_creators"]');
+  const needed = creatorsSel && /2\+/.test(creatorsSel.value) ? 2 : 1;
+
+  // Per host: bezette dagen (shoots + vakantie)
   const bezetByHost = {};
   hosts.forEach(h => bezetByHost[h.id] = new Set());
   shoots.forEach(t => {
     const due = parseInt(t.due_date, 10);
-    if(!due || due < now || due > horizonMs) return;
+    if(!due || due > horizonMs) return;
     const day = new Date(due).toISOString().slice(0,10);
-    (t.assignees || []).forEach(a => {
-      if(bezetByHost[a.id]) bezetByHost[a.id].add(day);
-    });
+    (t.assignees || []).forEach(a => { if(bezetByHost[a.id]) bezetByHost[a.id].add(day); });
   });
   vakantie.forEach(v => {
-    const start = parseInt(v.start_date, 10);
+    const start = parseInt(v.start_date || v.due_date, 10);
     const end = parseInt(v.due_date || v.start_date, 10);
     if(!start) return;
-    let cur = start;
-    while(cur <= end && cur <= horizonMs){
+    for(let cur = start; cur <= end && cur <= horizonMs; cur += 86400000){
       const day = new Date(cur).toISOString().slice(0,10);
-      (v.assignees || []).forEach(a => {
-        if(bezetByHost[a.id]) bezetByHost[a.id].add(day);
-      });
-      cur += 86400000;
+      (v.assignees || []).forEach(a => { if(bezetByHost[a.id]) bezetByHost[a.id].add(day); });
     }
   });
-  // Per host: eerste 3 vrije werkdagen vinden (ma-vr)
-  const slotsByHost = hosts.map(h => {
-    const vrij = [];
-    for(let d = now; d <= horizonMs && vrij.length < 3; d += 86400000){
-      const dt = new Date(d);
-      const dow = dt.getDay(); // 0=zo, 6=za
-      if(dow === 0 || dow === 6) continue;
-      const dayKey = dt.toISOString().slice(0,10);
-      if(!bezetByHost[h.id].has(dayKey)) vrij.push(dayKey);
+  // Per dag: tel vrije content creators; toon dagen met >= needed vrij
+  const dagen = [];
+  for(let d = Math.ceil(startMs / 86400000) * 86400000; d <= horizonMs && dagen.length < 8; d += 86400000){
+    const dt = new Date(d);
+    const dow = dt.getDay();
+    if(dow === 0 || dow === 6) continue;
+    const dayKey = dt.toISOString().slice(0,10);
+    const vrijCount = hosts.filter(h => !bezetByHost[h.id].has(dayKey)).length;
+    if(vrijCount >= needed){
+      dagen.push({ day: dayKey, label: dt.toLocaleDateString('nl-BE',{weekday:'long',day:'2-digit',month:'long'}), vrij: vrijCount });
     }
-    return { naam: h.name, slots: vrij };
-  });
-  return '<div class="s27-shoot-head"><strong>📸 Eerstvolgende vrije momenten</strong><span>Onze content creators per dag — kies wat het beste past</span></div>' +
-    '<div class="s27-shoot-grid">' +
-      slotsByHost.map(h => {
-        if(!h.slots.length){
-          return `<div class="s27-shoot-host"><strong>${esc(h.naam)}</strong><span class="s27-shoot-empty">Volgeboekt komende 3 weken</span></div>`;
-        }
-        return `<div class="s27-shoot-host"><strong>${esc(h.naam)}</strong>` +
-          h.slots.map(s => `<button type="button" class="s27-shoot-slot" data-host="${esc(h.naam)}" data-day="${esc(s)}">${esc(new Date(s).toLocaleDateString('nl-BE',{weekday:'short',day:'2-digit',month:'short'}))}</button>`).join('') +
-        '</div>';
-      }).join('') +
+  }
+  const creatorTxt = needed === 1 ? '1 content creator' : needed + ' content creators';
+  if(!dagen.length){
+    return '<div class="s27-shoot-head"><strong>📸 Beschikbare shootdagen</strong><span>Geen dagen met ' + esc(creatorTxt) + ' vrij in de komende 4 weken</span></div>' +
+      '<p class="s27-shoot-info">Geen geschikt moment? <a href="#" data-dm="shoot" data-dm-onderwerp="Shoot inplannen — geen geschikt moment gevonden">Stuur ons je voorkeuren</a> en we zoeken samen.</p>';
+  }
+  return '<div class="s27-shoot-head"><strong>📸 Beschikbare shootdagen</strong><span>Kies een dag — we wijzen ' + esc(creatorTxt) + ' toe (jij hoeft niet te kiezen wie)</span></div>' +
+    '<div class="s27-shoot-daygrid">' +
+      dagen.map(dg => `<button type="button" class="s27-shoot-day" data-day="${esc(dg.day)}" data-label="${esc(dg.label)}">
+        <span class="s27-shoot-day-label">${esc(dg.label)}</span>
+        <span class="s27-shoot-day-free">${dg.vrij} creator${dg.vrij===1?'':'s'} vrij</span>
+      </button>`).join('') +
     '</div>' +
-    '<p class="s27-shoot-info">⚡ Tip: klik op een dag om die voorkeur door te geven met je aanvraag.</p>';
+    '<p class="s27-shoot-info">⚡ Klik op een dag om die als voorkeur mee te sturen. Definitieve bevestiging volgt na de offerte.</p>';
 }
 
-// Globale click handler voor shoot-slot keuze → toevoegen aan sub_answers
+// Globale click handler voor shoot-dag keuze → toevoegen aan formulier
 document.addEventListener('click', e => {
-  const slot = e.target.closest && e.target.closest('.s27-shoot-slot');
+  const slot = e.target.closest && e.target.closest('.s27-shoot-day');
   if(!slot) return;
-  document.querySelectorAll('.s27-shoot-slot').forEach(s => s.classList.remove('is-chosen'));
+  document.querySelectorAll('.s27-shoot-day').forEach(s => s.classList.remove('is-chosen'));
   slot.classList.add('is-chosen');
   const form = $('s27-nieuw-form');
   if(!form) return;
-  // Verwijder eerdere shoot-keuze
   Array.from(form.querySelectorAll('input[name="sub_shoot_voorkeur"]')).forEach(el => el.remove());
   const hidden = document.createElement('input');
   hidden.type = 'hidden';
   hidden.name = 'sub_shoot_voorkeur';
-  hidden.value = slot.dataset.host + ' op ' + slot.dataset.day;
+  hidden.value = 'Voorkeursdatum: ' + slot.dataset.label;
   form.appendChild(hidden);
 });
 
