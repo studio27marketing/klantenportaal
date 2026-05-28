@@ -119,6 +119,44 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-tabview { animation:s27fadeIn .3s var(--ease-out) backwards; }
 .s27-tabview[hidden] { display:none !important; }
 
+/* ============ MIJN BEDRIJF — HUISSTIJL SYSTEEM (v2 Fase 2) ============ */
+.s27-voorkeuren { background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:var(--r-lg); padding:18px 20px; box-shadow:var(--sh-sm); }
+.s27-voorkeuren textarea { width:100%; padding:14px 16px; border:1.5px solid var(--s27-line); border-radius:var(--r-md); font-size:14px; font-family:var(--font-body); background:var(--s27-paper-2); color:var(--s27-ink); min-height:110px; resize:vertical; line-height:1.5; box-sizing:border-box; transition:border-color .15s, box-shadow .15s; }
+.s27-voorkeuren textarea:focus { outline:none; border-color:var(--s27-blue); box-shadow:var(--sh-focus); background:var(--s27-paper); }
+.s27-voorkeuren-foot { display:flex; align-items:center; justify-content:space-between; margin-top:12px; gap:12px; }
+.s27-voorkeuren-state { font-family:var(--font-display); font-size:12px; font-weight:700; color:var(--s27-ink-3); }
+.s27-btn-sm { padding:10px 18px !important; font-size:12px !important; width:auto !important; min-width:120px !important; }
+
+.s27-catgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:14px; }
+.s27-catcard { background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:var(--r-lg); padding:18px 18px 14px; cursor:pointer; transition:all .2s var(--ease-out); box-shadow:var(--sh-sm); text-align:left; font-family:inherit; border-top:4px solid var(--cat-accent, var(--s27-blue)); display:flex; flex-direction:column; gap:12px; min-height:170px; }
+.s27-catcard:hover { transform:translateY(-2px); box-shadow:var(--sh-md); }
+.s27-catcard-head { display:flex; align-items:center; gap:10px; }
+.s27-catcard-icon { width:36px; height:36px; border-radius:10px; background:color-mix(in srgb, var(--cat-accent) 15%, transparent); color:var(--cat-accent); display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
+.s27-catcard-icon svg { width:18px; height:18px; }
+.s27-catcard-title { font-family:var(--font-display); font-size:15px; font-weight:800; color:var(--s27-ink); flex:1; letter-spacing:-0.005em; }
+.s27-catcard-count { font-family:var(--font-display); font-size:11px; font-weight:800; color:var(--cat-accent); background:color-mix(in srgb, var(--cat-accent) 12%, transparent); padding:4px 10px; border-radius:var(--r-pill); min-width:28px; text-align:center; letter-spacing:0.02em; }
+.s27-cat-previews { display:flex; gap:6px; min-height:60px; align-items:stretch; }
+.s27-tile { flex:1; min-width:0; border-radius:8px; background:var(--s27-paper-2); border:1px solid var(--s27-line); padding:8px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; overflow:hidden; }
+.s27-tile-img { background-size:cover; background-position:center; background-repeat:no-repeat; background-color:var(--s27-paper-3); }
+.s27-tile-text { text-align:center; padding:6px 4px; }
+.s27-tile-text strong { font-family:var(--font-display); font-size:11px; font-weight:800; color:var(--s27-ink-2); letter-spacing:0.04em; }
+.s27-tile-text span { font-family:var(--font-body); font-size:9px; color:var(--s27-ink-3); line-height:1.2; word-break:break-all; }
+.s27-cat-empty { font-family:var(--font-body); font-size:12px; color:var(--s27-ink-3); padding:18px 8px; text-align:center; background:var(--s27-paper-2); border-radius:8px; border:1px dashed var(--s27-line); }
+.s27-catcard-cta { font-family:var(--font-display); font-size:11px; font-weight:800; color:var(--cat-accent); letter-spacing:0.04em; text-transform:uppercase; margin-top:auto; padding-top:6px; }
+
+/* Category modal items */
+.s27-cat-items { display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:12px; margin-bottom:24px; }
+.s27-cat-item { background:var(--s27-paper-2); border:1px solid var(--s27-line); border-radius:var(--r-md); overflow:hidden; display:flex; flex-direction:column; }
+.s27-cat-item-preview { aspect-ratio:4/3; background-color:var(--s27-paper-3); background-size:cover; background-position:center; display:flex; align-items:center; justify-content:center; }
+.s27-cat-item-icon strong { font-family:var(--font-display); font-size:24px; font-weight:900; color:var(--s27-ink-3); letter-spacing:0.04em; }
+.s27-cat-item-body { padding:10px 12px; }
+.s27-cat-item-name { font-family:var(--font-display); font-size:12px; font-weight:700; color:var(--s27-ink); margin-bottom:6px; word-break:break-word; line-height:1.3; }
+.s27-cat-item-row { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:6px; align-items:center; }
+.s27-cat-tag { font-family:var(--font-display); font-size:9px; font-weight:800; padding:3px 8px; border-radius:var(--r-pill); background:var(--s27-paper-3); color:var(--s27-ink-3); letter-spacing:0.04em; text-transform:uppercase; }
+.s27-cat-meta { font-family:var(--font-body); font-size:11px; color:var(--s27-ink-3); }
+.s27-cat-dl { display:inline-block; font-family:var(--font-display); font-size:11px; font-weight:700; color:var(--s27-blue-ink); text-decoration:none; margin-top:4px; }
+.s27-cat-dl:hover { text-decoration:underline; }
+
 /* ============ STATUS FILTER CHIPS (v2) ============ */
 .s27-filterbar { display:flex; gap:8px; margin-bottom:24px; flex-wrap:wrap; padding:4px 0; overflow-x:auto; -webkit-overflow-scrolling:touch; }
 .s27-filterbar::-webkit-scrollbar { display:none; }

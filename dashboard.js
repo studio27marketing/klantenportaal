@@ -5,13 +5,54 @@
    CONFIG
    ================================================================= */
 const ENDPOINTS = {
-  login:        'https://hook.eu1.make.com/gk7fxusnnrwkyfhcpyup8w39ygoz5m5u',
-  dashboard:    'https://hook.eu1.make.com/q1hklcvhum7m14ie57p6t6ci7l6un48e',
-  projectDetail:'https://hook.eu1.make.com/1mmhcsa0sie22po3kbwcx423dakidc44',
-  calendar:     'https://hook.eu1.make.com/5e1chj9seh9jlw7nejhytwjg66i7vzyd',
-  uploadProject:'https://hook.eu1.make.com/rk5ui1ueb4j42hiqye8dfzfmka0gf318',
-  uploadAlg:    'https://hook.eu1.make.com/hyf7ejtbskq743d56nveucv9xto5yo8c'
+  login:           'https://hook.eu1.make.com/gk7fxusnnrwkyfhcpyup8w39ygoz5m5u',
+  dashboard:       'https://hook.eu1.make.com/q1hklcvhum7m14ie57p6t6ci7l6un48e',
+  projectDetail:   'https://hook.eu1.make.com/1mmhcsa0sie22po3kbwcx423dakidc44',
+  calendar:        'https://hook.eu1.make.com/5e1chj9seh9jlw7nejhytwjg66i7vzyd',
+  uploadProject:   'https://hook.eu1.make.com/rk5ui1ueb4j42hiqye8dfzfmka0gf318',
+  uploadAlg:       'https://hook.eu1.make.com/hyf7ejtbskq743d56nveucv9xto5yo8c',
+  bedrijfContent:  null, // wordt set wanneer Make scenario klaar is — fallback naar mock
+  bedrijfVoorkeuren: null
 };
+
+/* =================================================================
+   BRAND CATEGORIEËN (Mijn bedrijf tab)
+   ================================================================= */
+const BRAND_CATEGORIES = [
+  { id:'logos',      label:"Logo's",        icon:'s27p-brand', accent:'#9441DB', accept:'.png,.svg,.jpg,.jpeg,.ai,.eps,.pdf', hint:'PNG / SVG / AI / EPS' },
+  { id:'fonts',      label:'Fonts',         icon:'s27p-spark', accent:'#F66131', accept:'.ttf,.otf,.woff,.woff2,.pdf,.zip', hint:'TTF / OTF / WOFF / PDF spec' },
+  { id:'kleuren',    label:'Kleuren',       icon:'s27p-brand', accent:'#3083DC', accept:'.pdf,.png,.jpg,.jpeg,.ase,.txt', hint:'PDF palette / hex-codes' },
+  { id:'brand_pdfs', label:'Brand-PDFs',    icon:'s27p-inbox', accent:'#12AC4E', accept:'.pdf', hint:'Style guides / brand books' },
+  { id:'fotos',      label: "Foto's",       icon:'s27p-cam',   accent:'#F8C028', accept:'.jpg,.jpeg,.png,.heic,.tif,.tiff,.raw', hint:'JPG / PNG / HEIC' },
+  { id:'overig',     label:'Overig',        icon:'s27p-link',  accent:'#6B5B6B', accept:'*', hint:'Alle andere assets' }
+];
+
+function categoryFromFilename(name){
+  const lower = (name||'').toLowerCase();
+  // Prefix-based (preferred): [LOGO] xxx, [FONT] xxx, ...
+  const prefixMatch = lower.match(/^\[(logo|font|kleur|brand|foto|overig)\]/);
+  if(prefixMatch){
+    const map = { logo:'logos', font:'fonts', kleur:'kleuren', brand:'brand_pdfs', foto:'fotos', overig:'overig' };
+    return map[prefixMatch[1]];
+  }
+  // Extension-based fallback
+  const ext = lower.split('.').pop();
+  if(['png','svg','ai','eps'].includes(ext)) return 'logos';
+  if(['ttf','otf','woff','woff2'].includes(ext)) return 'fonts';
+  if(['ase'].includes(ext)) return 'kleuren';
+  if(['pdf'].includes(ext)) return 'brand_pdfs';
+  if(['jpg','jpeg','heic','tif','tiff','raw'].includes(ext)) return 'fotos';
+  return 'overig';
+}
+
+function getMockBedrijfContent(){
+  return {
+    algemene_voorkeuren: '',
+    categorieen: {
+      logos: [], fonts: [], kleuren: [], brand_pdfs: [], fotos: [], overig: []
+    }
+  };
+}
 const FEEDBACK_BASE_URL = 'https://studio27.be/feedback'; // wordt: ?taskId=...
 const SESSION_KEY = 's27_session_v1';
 const REMEMBER_KEY = 's27_remember_v1';
@@ -501,9 +542,205 @@ function renderPlaceholderTab(bodyId, title, body){
     '<p class="s27-empty-sub">' + body + '</p>' +
   '</div>';
 }
-function renderBedrijfTab(){
-  renderPlaceholderTab('s27-bedrijf-body', 'Mijn bedrijfsgegevens (binnenkort)',
-    'Hier komt jouw huisstijl-content: logo\'s, fonts, brand-bestanden + algemene voorkeuren in tekst. Alles wat hier staat geldt voor àl je projecten.');
+async function renderBedrijfTab(){
+  const body = $('s27-bedrijf-body');
+  if(!body) return;
+  body.innerHTML = '<div class="s27-loading">Huisstijl laden</div>';
+
+  let data;
+  if(state.demoMode || !ENDPOINTS.bedrijfContent){
+    data = getMockBedrijfContent();
+  } else {
+    const res = await api(ENDPOINTS.bedrijfContent, { bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token });
+    data = (res.ok && res.data && !res.data.error) ? res.data : getMockBedrijfContent();
+  }
+  state.bedrijfContent = data;
+
+  // Build categorieën uit ofwel server-side (data.categorieen) ofwel client-side parsing van plain attachments[]
+  let cats = data.categorieen;
+  if(!cats && Array.isArray(data.attachments)){
+    cats = { logos:[], fonts:[], kleuren:[], brand_pdfs:[], fotos:[], overig:[] };
+    data.attachments.forEach(a => {
+      const cat = categoryFromFilename(a.filename || a.name || '');
+      if(cats[cat]) cats[cat].push(a);
+    });
+  }
+  cats = cats || { logos:[], fonts:[], kleuren:[], brand_pdfs:[], fotos:[], overig:[] };
+
+  const voorkeuren = (data.algemene_voorkeuren || '').replace(/<[^>]+>/g,'').trim();
+
+  body.innerHTML = `
+    <div class="s27-section">
+      <div class="s27-section-head">
+        <div>
+          <h2 class="s27-section-title">Algemene voorkeuren</h2>
+          <p class="s27-section-sub">Wat moeten we zeker (niet) doen voor jouw merk? Wat hier staat zien al onze teamleden voor elk project.</p>
+        </div>
+      </div>
+      <div class="s27-voorkeuren">
+        <textarea id="s27-voorkeuren-input" placeholder="Bv. We houden van minimalistische typografie. Geen stockfoto's. Onze kleur is altijd warm. Vermijd: gradients, drop shadows…">${esc(voorkeuren)}</textarea>
+        <div class="s27-voorkeuren-foot">
+          <span class="s27-voorkeuren-state" id="s27-voorkeuren-state"></span>
+          <button class="s27-btn s27-btn-sm" id="s27-voorkeuren-save" disabled>Opslaan</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="s27-section">
+      <div class="s27-section-head">
+        <div>
+          <h2 class="s27-section-title">Huisstijl-bibliotheek</h2>
+          <p class="s27-section-sub">Logo's, fonts, brand-PDFs en foto's — gestructureerd op één plek. Jij en wij kunnen hier bestanden toevoegen. Alles wordt automatisch opgeslagen in ClickUp.</p>
+        </div>
+      </div>
+      <div class="s27-catgrid">
+        ${BRAND_CATEGORIES.map(c => renderCategoryCard(c, cats[c.id] || [])).join('')}
+      </div>
+    </div>
+
+    <div class="s27-section">
+      <div class="s27-section-head">
+        <div>
+          <h2 class="s27-section-title">Snel bestand toevoegen</h2>
+          <p class="s27-section-sub">Of klik op een specifieke categorie hierboven om gericht toe te voegen.</p>
+        </div>
+      </div>
+      ${renderUploadZone('bedrijf', 'overig')}
+    </div>
+  `;
+
+  attachBedrijfHandlers();
+}
+
+function renderCategoryCard(cat, items){
+  const count = items.length;
+  const previews = items.slice(0, 3);
+  const previewsHtml = previews.length
+    ? '<div class="s27-cat-previews">' + previews.map(it => renderFilePreviewTiny(it, cat)).join('') + '</div>'
+    : '<div class="s27-cat-empty">Nog geen bestanden in deze categorie</div>';
+
+  return `<button type="button" class="s27-catcard" data-category="${esc(cat.id)}" style="--cat-accent:${cat.accent}" aria-expanded="false">
+    <div class="s27-catcard-head">
+      <span class="s27-catcard-icon"><svg><use href="#${cat.icon}"/></svg></span>
+      <span class="s27-catcard-title">${esc(cat.label)}</span>
+      <span class="s27-catcard-count">${count}</span>
+    </div>
+    ${previewsHtml}
+    <span class="s27-catcard-cta">${count ? 'Bekijk alle' : 'Voeg toe'} →</span>
+  </button>`;
+}
+
+function renderFilePreviewTiny(item, cat){
+  const fn = item.filename || item.name || '';
+  const ext = (fn.split('.').pop() || '').toLowerCase();
+  if(['png','jpg','jpeg','svg','webp','gif','heic'].includes(ext) && item.url){
+    return '<div class="s27-tile s27-tile-img" style="background-image:url(\'' + esc(item.url) + '\')" title="' + esc(fn) + '"></div>';
+  }
+  // Tekstuele preview
+  const label = ext.toUpperCase() || '·';
+  return '<div class="s27-tile s27-tile-text" title="' + esc(fn) + '"><strong>' + esc(label) + '</strong><span>' + esc(fn.length > 18 ? fn.substring(0,16)+'…' : fn) + '</span></div>';
+}
+
+function renderUploadZone(scope, category){
+  const id = scope === 'bedrijf' ? 's27-drop-bedrijf' : 's27-drop';
+  const inputId = scope === 'bedrijf' ? 's27-up-input-bedrijf' : 's27-up-input';
+  const listId = scope === 'bedrijf' ? 's27-up-list-bedrijf' : 's27-up-list';
+  return `<div class="s27-upload" id="${id}" data-scope="${esc(scope)}" data-category="${esc(category || 'overig')}">
+    <div class="s27-upload-icon"><svg width="22" height="22"><use href="#s27p-upload"/></svg></div>
+    <div class="s27-upload-title">Sleep bestanden hier of klik om te uploaden</div>
+    <div class="s27-upload-sub">Max 5 MB per bestand · 25 MB totaal. Grotere bestanden? Stuur via WeTransfer naar <a href="mailto:ilke@studio27.be">ilke@studio27.be</a>.</div>
+    <label class="s27-upload-btn" for="${inputId}"><svg width="12" height="12"><use href="#s27p-upload"/></svg> Bestand kiezen</label>
+    <input id="${inputId}" type="file" multiple style="display:none">
+    <ul class="s27-upload-list" id="${listId}"></ul>
+  </div>`;
+}
+
+function attachBedrijfHandlers(){
+  // Voorkeuren editor
+  const ta = $('s27-voorkeuren-input');
+  const btn = $('s27-voorkeuren-save');
+  const stateLabel = $('s27-voorkeuren-state');
+  if(ta && btn){
+    const original = ta.value;
+    ta.addEventListener('input', () => {
+      btn.disabled = (ta.value.trim() === original.trim());
+      stateLabel.textContent = btn.disabled ? '' : 'Niet opgeslagen';
+    });
+    btn.addEventListener('click', async () => {
+      btn.disabled = true; btn.textContent = 'Bezig…';
+      stateLabel.textContent = 'Bezig met opslaan…';
+      if(ENDPOINTS.bedrijfVoorkeuren && !state.demoMode){
+        await api(ENDPOINTS.bedrijfVoorkeuren, { bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token, voorkeuren: ta.value });
+      } else {
+        await new Promise(r => setTimeout(r, 500));
+      }
+      btn.textContent = 'Opslaan';
+      stateLabel.textContent = '✓ Opgeslagen';
+      setTimeout(() => { stateLabel.textContent = ''; }, 2500);
+    });
+  }
+
+  // Category cards → openen modal of inline expand
+  document.querySelectorAll('.s27-catcard[data-category]').forEach(card => {
+    card.addEventListener('click', () => openCategoryModal(card.dataset.category));
+  });
+
+  // Generic upload zone in bedrijf-tab
+  const drop = $('s27-drop-bedrijf');
+  const input = $('s27-up-input-bedrijf');
+  if(input) input.addEventListener('change', e => handleFiles(e.target.files, 'bedrijf', drop.dataset.category || 'overig'));
+  if(drop){
+    ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('dragover'); }));
+    ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('dragover'); }));
+    drop.addEventListener('drop', e => handleFiles(e.dataTransfer.files, 'bedrijf', drop.dataset.category || 'overig'));
+  }
+}
+
+function openCategoryModal(catId){
+  const cat = BRAND_CATEGORIES.find(c => c.id === catId);
+  if(!cat) return;
+  const items = (state.bedrijfContent && state.bedrijfContent.categorieen && state.bedrijfContent.categorieen[catId]) || [];
+
+  const itemsHtml = items.length
+    ? '<div class="s27-cat-items">' + items.map(it => renderCategoryItem(it, cat)).join('') + '</div>'
+    : '<div class="s27-empty"><div class="s27-empty-icon"><svg width="22" height="22"><use href="#' + cat.icon + '"/></svg></div><div class="s27-empty-title">Nog geen bestanden in ' + esc(cat.label) + '</div><p class="s27-empty-sub">Sleep ze hieronder erin of klik op "Bestand kiezen".</p></div>';
+
+  $('s27-modal-title').textContent = cat.label;
+  $('s27-modal-sub').textContent = items.length + ' bestand' + (items.length === 1 ? '' : 'en') + ' · ' + cat.hint;
+  $('s27-modal-body').innerHTML = itemsHtml + renderUploadZone('bedrijf', catId);
+  $('s27-modal-foot').innerHTML = '<button type="button" class="s27-btn" id="s27-cat-close" style="background:var(--s27-paper);color:var(--s27-ink);border:1.5px solid var(--s27-line)">Sluiten</button>';
+  $('s27-modal').classList.add('open');
+
+  const drop = $('s27-drop-bedrijf');
+  const input = $('s27-up-input-bedrijf');
+  if(input) input.addEventListener('change', e => handleFiles(e.target.files, 'bedrijf', catId));
+  if(drop){
+    ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('dragover'); }));
+    ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('dragover'); }));
+    drop.addEventListener('drop', e => handleFiles(e.dataTransfer.files, 'bedrijf', catId));
+  }
+  const close = $('s27-cat-close');
+  if(close) close.addEventListener('click', closeModal);
+}
+
+function renderCategoryItem(item, cat){
+  const fn = item.filename || item.name || 'bestand';
+  const ext = (fn.split('.').pop() || '').toLowerCase();
+  const isImg = ['png','jpg','jpeg','svg','webp','gif'].includes(ext);
+  const by = item.uploaded_by === 'studio27' ? '<span class="s27-cat-tag" style="background:var(--s27-blue-soft);color:var(--s27-blue-ink)">Door Studio 27</span>' : '<span class="s27-cat-tag">Door jou</span>';
+  const date = item.uploaded_at ? '<span class="s27-cat-meta">' + esc(fmtDate(item.uploaded_at)) + '</span>' : '';
+  const preview = isImg && item.url
+    ? '<div class="s27-cat-item-preview" style="background-image:url(\'' + esc(item.url) + '\')"></div>'
+    : '<div class="s27-cat-item-preview s27-cat-item-icon"><strong>' + esc(ext.toUpperCase() || '·') + '</strong></div>';
+  const dl = item.url ? '<a href="' + esc(item.url) + '" download="' + esc(fn) + '" target="_blank" rel="noopener" class="s27-cat-dl">↓ Download</a>' : '';
+  return `<div class="s27-cat-item">
+    ${preview}
+    <div class="s27-cat-item-body">
+      <div class="s27-cat-item-name">${esc(fn)}</div>
+      <div class="s27-cat-item-row">${by}${date}</div>
+      ${dl}
+    </div>
+  </div>`;
 }
 function renderGoedgekeurdTab(){
   renderPlaceholderTab('s27-goedgekeurd-body', 'Goedgekeurde projecten (binnenkort)',
@@ -600,33 +837,47 @@ function fileToBase64(file){
     r.readAsDataURL(file);
   });
 }
-async function handleFiles(fileList){
+async function handleFiles(fileList, scope, category){
+  scope = scope || 'algemeen';
+  category = category || 'overig';
+  const listId = scope === 'bedrijf' ? 's27-up-list-bedrijf' : 's27-up-list';
   const files = Array.from(fileList || []);
   for(const f of files){
     if(f.size > MAX_FILE_BYTES){
-      addUploadRow(f.name, 'error', 'Te groot (max 5 MB)');
+      addUploadRow(f.name, 'error', 'Te groot (max 5 MB)', listId);
       continue;
     }
-    const li = addUploadRow(f.name, 'uploading', bytes(f.size));
+    const li = addUploadRow(f.name, 'uploading', bytes(f.size), listId);
     try {
       const b64 = await fileToBase64(f);
+      // Voeg categorie prefix toe aan filename voor server-side categorisering
+      const catLabel = ({logos:'LOGO',fonts:'FONT',kleuren:'KLEUR',brand_pdfs:'BRAND',fotos:'FOTO',overig:'OVERIG'})[category] || 'OVERIG';
+      const filenameWithCat = scope === 'bedrijf' ? '[' + catLabel + '] ' + f.name : f.name;
       const res = await api(ENDPOINTS.uploadAlg, {
         bedrijf_id: state.session.bedrijf_id,
         session_token: state.session.session_token,
-        filename: f.name,
+        filename: filenameWithCat,
         size: f.size,
         type: f.type,
         data: b64,
-        klant_naam: state.session.bedrijfsnaam
+        klant_naam: state.session.bedrijfsnaam,
+        categorie: category,
+        scope: scope
       });
-      if(res.ok && (!res.data || !res.data.error)) updateUploadRow(li, 'done', 'Geüpload');
-      else updateUploadRow(li, 'error', 'Mislukt');
+      if(res.ok && (!res.data || !res.data.error)){
+        updateUploadRow(li, 'done', 'Geüpload');
+        // Auto-refresh bedrijf-tab indien actief
+        if(scope === 'bedrijf' && state.activeTab === 'bedrijf'){
+          setTimeout(() => renderBedrijfTab(), 1000);
+        }
+      } else updateUploadRow(li, 'error', 'Mislukt');
     } catch(e){ updateUploadRow(li, 'error', 'Mislukt'); }
   }
-  const input = $('s27-up-input'); if(input) input.value = '';
+  const inputId = scope === 'bedrijf' ? 's27-up-input-bedrijf' : 's27-up-input';
+  const input = $(inputId); if(input) input.value = '';
 }
-function addUploadRow(name, state, status){
-  const ul = $('s27-up-list'); if(!ul) return null;
+function addUploadRow(name, state, status, listId){
+  const ul = $(listId || 's27-up-list'); if(!ul) return null;
   const li = document.createElement('li');
   li.className = 's27-upload-item';
   li.innerHTML = `<svg width="14" height="14" style="color:var(--s27-ink-3)"><use href="#s27p-upload"/></svg>
