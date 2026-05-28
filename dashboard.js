@@ -15,6 +15,7 @@ const ENDPOINTS = {
   // v2 — folder 13 KLANTPORTAAL v2 (built by background agent #1, all active)
   bedrijfContent:    'https://hook.eu1.make.com/o1gvlndn934h2u77vug6k59xgt2qgz6g',
   bedrijfVoorkeuren: 'https://hook.eu1.make.com/fhenjvxv47ldoea5k8h646ovn5gzvgnv',
+  bedrijfUpload:     'https://hook.eu1.make.com/vdi231a5w9c8wronm71panyc2okq716y',
   chatPost:          'https://hook.eu1.make.com/vi12objw9nkrjg1i8ve13jwj354pvg9n',
   chatList:          'https://hook.eu1.make.com/a43sc5vjuic6lpjdehq8pvhn8sjftbn3',
   feedbackV2:        'https://hook.eu1.make.com/vpd7to9pn8ritsih38s4apika49lg31o',
@@ -1205,7 +1206,10 @@ async function handleFiles(fileList, scope, category){
       // Voeg categorie prefix toe aan filename voor server-side categorisering
       const catLabel = ({logos:'LOGO',fonts:'FONT',kleuren:'KLEUR',brand_pdfs:'BRAND',fotos:'FOTO',overig:'OVERIG'})[category] || 'OVERIG';
       const filenameWithCat = scope === 'bedrijf' ? '[' + catLabel + '] ' + f.name : f.name;
-      const res = await api(ENDPOINTS.uploadAlg, {
+      // v2.1 — scope bedrijf gaat naar nieuw bedrijfUpload endpoint (native uploadTaskAttachment)
+      // scope algemeen blijft v1 uploadAlg (Drive integratie)
+      const endpoint = (scope === 'bedrijf' && ENDPOINTS.bedrijfUpload) ? ENDPOINTS.bedrijfUpload : ENDPOINTS.uploadAlg;
+      const res = await api(endpoint, {
         bedrijf_id: state.session.bedrijf_id,
         session_token: state.session.session_token,
         filename: filenameWithCat,

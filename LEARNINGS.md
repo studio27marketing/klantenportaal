@@ -32,7 +32,41 @@ Persistente kennis voor toekomstige iteraties. Lees dit eerst bij elke klantenpo
 
 ### 2.1 IML-functies die NIET bestaan
 - `filter()` — **bestaat niet** ondanks docs. Gebruik `map(arr; outputKey; filterKey; filterValue)` voor filter+map in één.
+- `string()` — bestaat NIET op top-level WebhookRespond body. Werkt soms in `clickup:makeApiCall` body field (onbetrouwbaar, vermijden).
+- `parseJSON()` — bestaat niet.
+- `get(module; "path")` — werkt niet betrouwbaar voor pad-traversal.
 - AND/OR — gebruik nested `if(cond1; if(cond2; "yes"; "no"); "no")`.
+
+### 2.1.1 Array building for JSON response — WERKENDE patroon
+Voor `[{...}, {...}]` shape in WebhookRespond body:
+```
+clickup:makeApiCall (GET)
+  → builtin:BasicFeeder { array: "{{2.body.items}}" }
+  → util:TextAggregator { feeder: 4, rowSeparator: "other", otherRowSeparator: "," 
+                          value: "{\"key1\":\"{{4.field1}}\",...}" }
+  → gateway:WebhookRespond { body: "{\"items\":[{{ifempty(5.text; \"\")}}]}" }
+```
+Filter op TextAggregator om items te skippen (bv. [INTERN] comments).
+String-escape in waarde: `replace(replace(replace(x; "\\\\"; "\\\\\\\\"); "\\\""; "\\\\\\\""); newline; "\\\\n")`.
+
+### 2.1.2 Module name: Iterator
+- Iterator = `builtin:BasicFeeder` (NIET `builtin:Iterator`).
+- Array Aggregator = `builtin:BasicAggregator`.
+- Text Aggregator = `util:TextAggregator`.
+- Feeder ID gaat in `parameters.feeder` (number), niet als top-level field.
+
+### 2.1.3 clickup:makeApiCall response field NIET betrouwbaar leesbaar (May 2026)
+- Voor POST (create task) is `2.body.id` empty in alle geteste paden (`2.body.id`, `2.id`, `2.data.id`, `2.statusCode`).
+- GET endpoint werkt wel: `2.body.description`, `2.body.attachments`, `2.body.comments` etc.
+- Workaround voor POST: gebruik typed module `clickup:createTaskInList` voor expliciete output mapping, OF accepteer "created" sentinel en sla task_id over.
+
+### 2.1.4 clickup:makeApiCall PUT met body — STILLE FAIL (May 2026, kritiek!)
+- Scenario `bedrijf-update-voorkeuren` gebruikte `clickup:makeApiCall` met PUT + body `{"description":"..."}` naar `/v2/task/{id}`.
+- **Symptoom**: scenario rapporteert `ok:true` + `operations:3` + status SUCCESS, maar ClickUp description wordt **NIET** bijgewerkt.
+- Geprobeerd: directe escape (`{\"description\":\"{{1.voorkeuren}}\"}`), `toJSON(1.voorkeuren)`, SetVariables met replace-chains. Allemaal "succesvol" maar geen update.
+- `{{2.statusCode}}` is altijd LEEG na een `makeApiCall` PUT — bevestigt dat module body parsing niet betrouwbaar werkt.
+- **Oplossing**: gebruik **`clickup:editATaskAdvanced`** (native module). Mapper accepteert `task_id` en `content` (voor description) als directe velden. Plus 4 verplichte booleans: `due_date_time`, `start_date_time`, `notify_all`, `archived` allemaal `false`.
+- **Rule of thumb**: voor ALLE typed CRUD operaties (POST/PUT/DELETE op tasks/comments/checklists/lists/etc.) — gebruik native modules, niet `makeApiCall`. `makeApiCall` is alleen veilig voor GET met body-leesbare response.
 
 ### 2.2 Scheduling type
 - Webhook scenarios met sync response: **`scheduling: { type: "immediately" }`**.
@@ -148,10 +182,17 @@ of bij invalid: `{"ok":false, "message":"..."}` met HTTP 401.
 }
 ```
 
-### POST /upload-* → 
+### POST /upload-alg (scope=algemeen) → v1 Drive integratie
 ```json
 {"ok":true, "message":"Upload ontvangen"}
 ```
+
+### POST /bedrijf-upload (scope=bedrijf, v2 native attachment) → 
+```json
+{"ok":true, "message":"Bestand geüpload", "attachment_id":"...", "url":"https://t24419872.p.clickup-attachments.com/..."}
+```
+Frontend stuurt: `bedrijf_id`, `session_token`, `filename` (met `[LOGO]/[FONT]/[KLEUR]/[BRAND]/[FOTO]/[OVERIG]` prefix), `data` (base64), `categorie`, `scope:"bedrijf"`.
+Backend (Make `bedrijf-upload-file` ID 5943461) gebruikt `clickup:uploadTaskAttachment` met `data: {{base64(1.data)}}` om base64 naar buffer te converteren. Attachment komt op de Bedrijven-task (e.g. 86c9yv1wy).
 
 ## 7. Discipline → ClickUp list mapping
 
