@@ -863,9 +863,114 @@ function renderNieuwTab(){
     'Vertel ons wat je wil en we sturen je vandaag nog een offerte op maat. Geen verplichting.');
 }
 function renderInstellingenTab(){
-  renderPlaceholderTab('s27-instellingen-body', 'Instellingen (binnenkort)',
-    'Wijzig je contactgegevens. Krijg updates per mail, WhatsApp, of beide. Pas notificatie-voorkeuren aan.');
+  const body = $('s27-instellingen-body');
+  if(!body) return;
+  const sess = state.session || {};
+  const dash = state.dashboard || {};
+  const contact = dash.contact || {};
+  const prefs = loadNotifPrefs();
+  const expiresStr = sess.expires_at ? new Date(sess.expires_at).toLocaleString('nl-BE', {dateStyle:'long', timeStyle:'short'}) : '–';
+  body.innerHTML = `
+    <div class="s27-settings-grid">
+      <section class="s27-settings-card">
+        <h3 class="s27-settings-title"><svg width="16" height="16"><use href="#s27p-spark"/></svg> Notificatie-voorkeuren</h3>
+        <p class="s27-settings-sub">Hoe wil je dat we je waarschuwen bij nieuwe feedback-vraag, opleveringen of vragen vanuit het team?</p>
+        <div class="s27-notif-options">
+          <label class="s27-notif-opt"><input type="radio" name="notif" value="mail" ${prefs.kanaal === 'mail' ? 'checked' : ''}/><div><strong>Alleen e-mail</strong><span>Klassieke updates in je inbox</span></div></label>
+          <label class="s27-notif-opt"><input type="radio" name="notif" value="whatsapp" ${prefs.kanaal === 'whatsapp' ? 'checked' : ''}/><div><strong>Alleen WhatsApp</strong><span>Snel, direct, op je telefoon</span></div></label>
+          <label class="s27-notif-opt"><input type="radio" name="notif" value="beide" ${prefs.kanaal === 'beide' || !prefs.kanaal ? 'checked' : ''}/><div><strong>Beide kanalen</strong><span>Niets missen — aanbevolen</span></div></label>
+        </div>
+        <button class="s27-btn s27-btn-primary" id="s27-save-notif" style="margin-top:14px">Voorkeuren opslaan</button>
+        <p class="s27-settings-status" id="s27-notif-status" style="display:none"></p>
+      </section>
+
+      <section class="s27-settings-card">
+        <h3 class="s27-settings-title"><svg width="16" height="16"><use href="#s27p-user"/></svg> Jouw contactpersoon bij Studio 27</h3>
+        ${contact.am_naam ? `
+          <div class="s27-am-card">
+            ${contact.am_foto_url ? `<img src="${esc(contact.am_foto_url)}" alt="${esc(contact.am_naam)}" class="s27-am-photo"/>` : '<div class="s27-am-photo s27-am-photo-fallback">' + esc((contact.am_naam||'?')[0]) + '</div>'}
+            <div>
+              <strong>${esc(contact.am_naam)}</strong>
+              <span>${esc(contact.am_rol || 'Account manager')}</span>
+              ${contact.am_email ? `<a href="mailto:${esc(contact.am_email)}">${esc(contact.am_email)}</a>` : ''}
+              ${contact.am_gsm ? `<a href="tel:${esc(contact.am_gsm)}">${esc(contact.am_gsm)}</a>` : ''}
+            </div>
+          </div>
+        ` : '<p class="s27-settings-sub">Contact info wordt binnenkort getoond.</p>'}
+      </section>
+
+      <section class="s27-settings-card">
+        <h3 class="s27-settings-title"><svg width="16" height="16"><use href="#s27p-lock"/></svg> Sessie & toegang</h3>
+        <dl class="s27-settings-dl">
+          <dt>Ingelogd als</dt><dd>${esc(sess.bedrijfsnaam || '–')}</dd>
+          <dt>Bedrijf-ID</dt><dd><code>${esc(sess.bedrijf_id || '–')}</code></dd>
+          <dt>Sessie geldig tot</dt><dd>${esc(expiresStr)}</dd>
+        </dl>
+        <div class="s27-settings-actions">
+          <button class="s27-btn s27-btn-ghost" id="s27-clear-cache">Wis lokale cache</button>
+          <button class="s27-btn s27-btn-danger" id="s27-logout-btn">Uitloggen</button>
+        </div>
+      </section>
+
+      <section class="s27-settings-card s27-settings-card-muted">
+        <h3 class="s27-settings-title">🚧 Binnenkort</h3>
+        <ul class="s27-coming-list">
+          <li>Auto-reminders bij openstaande feedback (mail + WhatsApp)</li>
+          <li>Wachtwoord/PIN ipv login-token</li>
+          <li>Multi-user toegang per bedrijf (collega's uitnodigen)</li>
+          <li>API-koppeling voor jouw eigen tools</li>
+        </ul>
+      </section>
+    </div>
+  `;
+  // Wire up handlers
+  const saveBtn = $('s27-save-notif');
+  if(saveBtn) saveBtn.addEventListener('click', saveNotifPrefs);
+  const clearBtn = $('s27-clear-cache');
+  if(clearBtn) clearBtn.addEventListener('click', () => {
+    try { localStorage.clear(); } catch(e){}
+    showSettingsStatus('s27-notif-status', 'Lokale cache gewist. Login opnieuw om vers te starten.', 'info');
+  });
+  const logoutBtn = $('s27-logout-btn');
+  if(logoutBtn) logoutBtn.addEventListener('click', () => {
+    try { localStorage.removeItem('s27_portal_session'); } catch(e){}
+    state.session = null;
+    state.viewMode = 'login';
+    renderApp();
+  });
 }
+
+function loadNotifPrefs(){
+  try { return JSON.parse(localStorage.getItem('s27_notif_prefs') || '{}'); }
+  catch(e){ return {}; }
+}
+
+function saveNotifPrefs(){
+  const checked = document.querySelector('input[name="notif"]:checked');
+  if(!checked) return;
+  const kanaal = checked.value;
+  try { localStorage.setItem('s27_notif_prefs', JSON.stringify({kanaal, savedAt: new Date().toISOString()})); } catch(e){}
+  // Audit trail naar ClickUp via chat-post op Bedrijf-task
+  if(ENDPOINTS.chatPost && !state.demoMode){
+    api(ENDPOINTS.chatPost, {
+      task_id: state.session.bedrijf_id,
+      klant_naam: state.session.bedrijfsnaam,
+      comment_text: '[INTERN] Klantvoorkeuren bijgewerkt via portaal — notificatiekanaal: ' + kanaal,
+      session_token: state.session.session_token
+    }).catch(() => {});
+  }
+  showSettingsStatus('s27-notif-status', 'Voorkeur opgeslagen — we sturen voortaan via "' + kanaal + '".', 'success');
+}
+
+function showSettingsStatus(id, msg, type){
+  const el = $(id);
+  if(!el) return;
+  el.style.display = 'block';
+  el.textContent = msg;
+  el.setAttribute('data-status', type || 'info');
+  setTimeout(() => { try { el.style.display = 'none'; } catch(e){} }, 4500);
+}
+
 async function renderMeetingsTab(){
   const body = $('s27-meetings-body');
   if(!body) return;
