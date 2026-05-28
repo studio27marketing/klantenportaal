@@ -2111,11 +2111,10 @@ function renderProjectView(proj, detail, needsFeedback){
   const statusKey = (proj.status || '').toLowerCase().replace(/\s+/g,'_');
   const statusLabel = proj.status_label || STATUS_LABELS[statusKey] || proj.status || '';
   const eta = computeETA(proj);
-  const rightTabs = [];
-  if(needsFeedback) rightTabs.push({id:'feedback', label:'Geef feedback', icon:'s27p-spark', flag:true});
-  rightTabs.push({id:'chat', label:'Chat', icon:'s27p-mail', badge:(detail.comments||[]).length || null});
-  const activeRight = state.projectViewTab && rightTabs.some(t => t.id === state.projectViewTab) ? state.projectViewTab : rightTabs[0].id;
+  const commentCount = (detail.comments || []).length;
 
+  // v2.2 fix #51b: 1-kolom layout. Chat ALTIJD direct zichtbaar onder overzicht.
+  // Feedback (indien nodig) bovenaan als prominente actie-banner — opent feedback panel.
   fsView.innerHTML = `
     <div class="s27-pv-head">
       <button class="s27-pv-back" id="s27-pv-back-btn"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M5 12h14M13 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Terug naar projecten</button>
@@ -2136,51 +2135,73 @@ function renderProjectView(proj, detail, needsFeedback){
         </div>
       </div>
     </div>
-    <div class="s27-pv-grid">
-      <div class="s27-pv-left">
-        <h3 class="s27-pv-section-title">Overzicht & tijdlijn</h3>
-        ${renderOverzichtTab(proj, detail)}
-      </div>
-      <aside class="s27-pv-right">
-        <div class="s27-pv-tabs" role="tablist">
-          ${rightTabs.map(t => `<button class="s27-pv-tab${t.flag ? ' s27-pv-tab-flag' : ''}${t.id === activeRight ? ' is-active' : ''}" data-pvtab="${t.id}" role="tab" aria-selected="${t.id === activeRight}"><svg width="13" height="13" viewBox="0 0 24 24"><use href="#${t.icon}"/></svg> ${esc(t.label)}${t.badge ? `<span class="s27-pv-tab-badge">${t.badge}</span>` : ''}</button>`).join('')}
+
+    ${needsFeedback ? `
+      <div class="s27-pv-fb-banner" id="s27-pv-fb-banner">
+        <div>
+          <strong>🔔 Dit project wacht op jouw feedback</strong>
+          <span>Bekijk de deliverables en laat ons weten of het OK is of dat we bijsturen.</span>
         </div>
-        <div class="s27-pv-tabbody" id="s27-pv-tabbody"></div>
-      </aside>
+        <button class="s27-btn s27-btn-primary" id="s27-pv-open-fb">Geef feedback</button>
+      </div>
+    ` : ''}
+
+    <div class="s27-pv-section">
+      <h3 class="s27-pv-section-title">📋 Overzicht & tijdlijn</h3>
+      <div class="s27-pv-overview">${renderOverzichtTab(proj, detail)}</div>
     </div>
+
+    <div class="s27-pv-section s27-pv-section-chat">
+      <h3 class="s27-pv-section-title">💬 Chat <small style="font-weight:400;color:var(--s27-ink-3);font-size:13px">— direct met het team via ClickUp</small> ${commentCount ? `<span class="s27-pv-tab-badge" style="margin-left:8px">${commentCount}</span>` : ''}</h3>
+      <div id="s27-pv-chatbox" class="s27-pv-chatbox"></div>
+    </div>
+
+    ${needsFeedback ? '<div class="s27-pv-section" id="s27-pv-fb-section" hidden><h3 class="s27-pv-section-title">✅ Feedback geven</h3><div id="s27-pv-fbbox"></div></div>' : ''}
   `;
-  state.projectViewTab = activeRight;
-  renderProjectViewSideTab(activeRight);
+
+  // Render chat in box (altijd zichtbaar)
+  console.log('[Studio 27] renderProjectView: project=', proj.task_id, 'comments=', (detail.comments || []).length, 'needsFeedback=', needsFeedback);
+  try {
+    const chatBox = $('s27-pv-chatbox');
+    if(!chatBox){
+      console.error('[Studio 27] #s27-pv-chatbox container niet gevonden in DOM');
+    } else {
+      chatBox.innerHTML = renderChatTab(proj, detail);
+      attachChatHandlers();
+      console.log('[Studio 27] Chat rendered + handlers attached');
+    }
+  } catch(e){
+    console.error('[Studio 27] Chat render failed:', e);
+    const chatBox = $('s27-pv-chatbox');
+    if(chatBox) chatBox.innerHTML = '<div class="s27-form-error">Chat kon niet geladen worden (' + esc(String(e && e.message || e)) + '). <a href="#" data-dm="vraag" data-dm-onderwerp="Chat in dashboard werkt niet">Stuur ons een bericht via ClickUp</a>.</div>';
+  }
 
   // Wire up handlers
   const back = $('s27-pv-back-btn');
   if(back) back.addEventListener('click', exitProjectView);
-  document.querySelectorAll('.s27-pv-tab[data-pvtab]').forEach(b => {
-    b.addEventListener('click', () => {
-      state.projectViewTab = b.dataset.pvtab;
-      document.querySelectorAll('.s27-pv-tab').forEach(x => {
-        const isActive = x.dataset.pvtab === state.projectViewTab;
-        x.classList.toggle('is-active', isActive);
-        x.setAttribute('aria-selected', isActive);
-      });
-      renderProjectViewSideTab(state.projectViewTab);
-    });
-  });
-}
 
-function renderProjectViewSideTab(tabId){
-  const proj = state.activeProject;
-  const detail = state.activeProjectDetail || {};
-  const body = $('s27-pv-tabbody');
-  if(!body) return;
-  if(tabId === 'chat'){
-    body.innerHTML = renderChatTab(proj, detail);
-    attachChatHandlers();
-  } else if(tabId === 'feedback'){
-    body.innerHTML = renderFeedbackV2Tab(proj, detail);
-    attachFeedbackV2Handlers();
+  // Feedback banner opens collapsible feedback section
+  const openFb = $('s27-pv-open-fb');
+  if(openFb){
+    openFb.addEventListener('click', () => {
+      const fbSection = $('s27-pv-fb-section');
+      const fbBox = $('s27-pv-fbbox');
+      if(fbSection && fbBox){
+        fbSection.hidden = false;
+        try {
+          fbBox.innerHTML = renderFeedbackV2Tab(proj, detail);
+          attachFeedbackV2Handlers();
+          fbSection.scrollIntoView({behavior:'smooth', block:'start'});
+        } catch(e){
+          console.error('[Studio 27] Feedback render failed:', e);
+          fbBox.innerHTML = '<div class="s27-form-error">Feedback widget kon niet laden. <a href="#" data-dm="vraag" data-dm-onderwerp="Feedback widget probleem">Stuur ons een bericht</a>.</div>';
+        }
+      }
+    });
   }
 }
+
+// renderProjectViewSideTab (oude 2-kolom helper) — niet meer gebruikt na 1-kolom refactor #53, verwijderd
 
 function exitProjectView(){
   // Verberg fullscreen, toon normale tabs terug
@@ -2335,7 +2356,17 @@ function attachChatHandlers(){
       // Optimistisch toevoegen aan thread
       const newMsg = { auteur:state.session.bedrijfsnaam, is_klant:true, tekst:text, datum:new Date().toISOString(), attachments:[] };
       state.activeProjectDetail.comments = (state.activeProjectDetail.comments || []).concat([newMsg]);
-      renderProjectModalTab('chat');
+      // v2.2 fix #53: render in juiste container — eerst proberen nieuwe fullscreen chatbox, dan oude modal
+      const chatBox = $('s27-pv-chatbox');
+      if(chatBox){
+        chatBox.innerHTML = renderChatTab(state.activeProject, state.activeProjectDetail);
+        attachChatHandlers();
+        // Scroll naar onderkant van thread voor zichtbaarheid nieuwste bericht
+        const thread = chatBox.querySelector('.s27-chat-thread');
+        if(thread) thread.scrollTop = thread.scrollHeight;
+      } else if(typeof renderProjectModalTab === 'function' && $('s27-modaltab-content')){
+        renderProjectModalTab('chat');
+      }
     });
   }
   // v2.2 #39: Like + Reply handlers

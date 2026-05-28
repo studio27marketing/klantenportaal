@@ -193,6 +193,33 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-pv-tabbody .s27-chat-thread { flex:1; overflow-y:auto; max-height:520px; margin-bottom:12px; }
 .s27-pv-tabbody .s27-chat-compose { border-top:1px solid var(--s27-line); padding-top:12px; }
 
+/* ============ FULLSCREEN PROJECT VIEW 1-KOLOM LAYOUT (v2.2 #53 fix) ============ */
+.s27-pv-section { background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:var(--r-md); padding:22px 24px; margin-bottom:18px; box-shadow:var(--sh-sm); }
+.s27-pv-section-chat { background:var(--s27-blue-soft); border-color:var(--s27-blue); }
+.s27-pv-section .s27-pv-section-title { display:flex; align-items:center; gap:8px; margin:0 0 16px; font-family:var(--font-display); font-size:15px; font-weight:800; color:var(--s27-ink); letter-spacing:0.01em; }
+.s27-pv-overview { font-family:var(--font-body); }
+
+.s27-pv-chatbox { display:flex; flex-direction:column; gap:14px; }
+.s27-pv-chatbox .s27-chat-thread { max-height:480px; overflow-y:auto; padding-right:4px; display:flex; flex-direction:column; gap:10px; }
+.s27-pv-chatbox .s27-chat-compose { background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:var(--r-md); padding:12px 14px; display:flex; flex-direction:column; gap:10px; }
+.s27-pv-chatbox .s27-chat-compose textarea { border:1px solid var(--s27-line); border-radius:var(--r-sm); padding:10px 12px; font-family:var(--font-body); font-size:13.5px; resize:vertical; min-height:80px; }
+.s27-pv-chatbox .s27-chat-compose textarea:focus { outline:none; border-color:var(--s27-blue); }
+.s27-pv-chatbox .s27-chat-actions { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+.s27-pv-chatbox .s27-chat-attach { font-family:var(--font-display); font-size:12px; font-weight:700; color:var(--s27-ink-3); cursor:pointer; display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid var(--s27-line); border-radius:var(--r-sm); background:var(--s27-paper-2); transition:all .15s; }
+.s27-pv-chatbox .s27-chat-attach:hover { border-color:var(--s27-blue); color:var(--s27-blue-ink); }
+
+/* Feedback wacht-banner (oranje attention-grabber) */
+.s27-pv-fb-banner { background:#fef3c7; border:1.5px solid #fbbf24; border-radius:var(--r-md); padding:16px 20px; margin-bottom:18px; display:flex; align-items:center; justify-content:space-between; gap:14px; animation:s27pulse-bg 2s ease-in-out infinite; }
+@keyframes s27pulse-bg { 0%, 100% { box-shadow:0 0 0 0 rgba(251,191,36,0.3); } 50% { box-shadow:0 0 0 8px rgba(251,191,36,0); } }
+.s27-pv-fb-banner strong { font-family:var(--font-display); font-size:14px; font-weight:900; color:#78350f; display:block; margin-bottom:2px; }
+.s27-pv-fb-banner span { font-family:var(--font-body); font-size:13px; color:#92400e; }
+.s27-pv-fb-banner .s27-btn { background:var(--s27-orange); color:#fff; border:none; padding:11px 18px; font-size:13px; flex-shrink:0; white-space:nowrap; }
+.s27-pv-fb-banner .s27-btn:hover { background:#e0552a; }
+@media (max-width:560px){
+  .s27-pv-fb-banner { flex-direction:column; align-items:stretch; text-align:center; }
+  .s27-pv-fb-banner .s27-btn { width:100%; }
+}
+
 /* ============ TELEFONIE DEFLECT (v2 Fase 31) ============ */
 .s27-contact-tip { font-family:var(--font-body); font-size:12px; color:var(--s27-ink-3); line-height:1.5; margin:8px 0 0; padding:8px 11px; background:var(--s27-blue-soft); border-left:3px solid var(--s27-blue); border-radius:var(--r-sm); }
 .s27-contact-call-direct { opacity:0.8; font-size:11px !important; padding:6px 11px !important; }
