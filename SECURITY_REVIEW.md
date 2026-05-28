@@ -2,8 +2,24 @@
 
 **Reviewer:** Background security audit
 **Datum:** 2026-05-28
+**Laatste mitigatie-update:** 2026-05-28 19:35 (na foundation refactor)
 **Scope:** `dashboard.js`, `dashboard.html`, `dashboard.css`, `loader.js` + Make-architectuur (LEARNINGS.md)
 **Context:** MVP B2B portal voor ~50-100 klanten. Risico-profiel = laag-medium (projectstatussen, deliverable-links, contactgegevens — geen betalingen, geen PII van eindklanten van de klant).
+
+## MITIGATION STATUS (28 mei 2026 na foundation refactor)
+
+| Issue | Status | Mitigatie |
+|---|---|---|
+| P0-1 IDOR (session_token niet gecheckt) | 🟡 **Partial** | ALLE 8 v2-scenarios valideren nu `session_token` tegen TST-DEMO hardcode. Geen bedrijf-ownership check op resources nog (anyone met geldig token kan andere bedrijven data zien — laag risico bij 1 token). Productie-fix vereist Make Data Store met per-klant tokens. |
+| P0-2 Token in localStorage forever | 🟢 **Fixed** | loadSession() checkt nu expires_at + 7-dag rotatie via created_at field; sessionStorage prefered boven localStorage; api() handler triggert auto-logout bij 401. |
+| P1-1 Geen rate limiting login | 🔴 **Open** | Make webhook heeft geen rate limit. Mitigation: Cloudflare voor het webhook-domein OF nieuw scenario met `data-stores_*` voor IP-tracking. |
+| P1-2 Publicly indexable /klanten | 🔴 **Open** | Webflow page settings: noindex + robots.txt disallow (manuele actie van Vincent in Webflow Designer). |
+| P1-3 CORS open `*` | 🟡 **Acceptabel** | Bij hardening kan dit naar `https://www.studio27.be` worden gezet maar dat breekt local dev/testing. Voor MVP OK. |
+| P2-1 XSS via innerHTML | 🟢 **Fixed** | `esc()` consistent gebruikt; geen onveilige raw HTML inserts gevonden in v2.1 nieuwe code. |
+| P2-2 File MIME-validatie zwak | 🟡 **Acceptabel** | Frontend valideert via `accept=` attribuut; backend (ClickUp uploadTaskAttachment) accepteert alles. Hardening later. |
+| P2-3 25MB JSON payload | 🟡 **Acceptabel** | Frontend MAX_FILE_BYTES = 5MB blokt grote uploads. |
+| P2-4 Session leak via XSS | 🟢 **Fixed** | Door P2-1 gemitigeerd + sessionStorage shorter lifespan. |
+| P2-5 Hardcoded test client | 🟡 **Acceptabel** | TST-DEMO is alleen MVP — productie wordt per-klant token via Make Data Store. |
 
 ---
 

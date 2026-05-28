@@ -204,12 +204,26 @@ function discMeta(id){ return DISCIPLINES.find(d => d.id === id) || { id, label:
    ================================================================= */
 function loadSession(){
   try {
-    const raw = localStorage.getItem(SESSION_KEY);
+    // v2.1 #30: prefer sessionStorage (single-tab, browser-close clears) over localStorage
+    const raw = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(SESSION_KEY);
     if(!raw) return null;
     const s = JSON.parse(raw);
     if(s.expires_at && new Date(s.expires_at) < new Date()) {
+      sessionStorage.removeItem(SESSION_KEY);
       localStorage.removeItem(SESSION_KEY);
       return null;
+    }
+    // v2.1 #30: token rotation soft-warning — als token >7 dagen oud, vraag herlogin (security debt mitigation)
+    if(s.created_at){
+      const ageDays = (Date.now() - new Date(s.created_at).getTime()) / 86400000;
+      if(ageDays > 7){
+        sessionStorage.removeItem(SESSION_KEY);
+        localStorage.removeItem(SESSION_KEY);
+        return null;
+      }
+    } else {
+      // Geen created_at = oude sessie zonder rotatie info → flush
+      s.created_at = new Date().toISOString();
     }
     return s;
   } catch { return null; }
@@ -269,7 +283,8 @@ async function handleLogin(e){
     bedrijf_id: res.data.bedrijf_id,
     bedrijfsnaam: res.data.bedrijfsnaam || bedrijfsnaam,
     session_token: res.data.session_token,
-    expires_at: res.data.expires_at
+    expires_at: res.data.expires_at,
+    created_at: new Date().toISOString()  // v2.1 #30: voor token rotation
   };
   saveSession(sess, remember);
   showDashboard();
