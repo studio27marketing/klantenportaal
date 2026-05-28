@@ -280,6 +280,12 @@ pandadoc:makeApiCall  GET /public/v1/templates/HQRvZ3sdrEm2GcuNsdP2Uf/details
 ```
 Of `getADocument` voor een bestaand document (output.pricing.tables[].items[]).
 
+**LIVE & GETEST (28/5): pandadoc-pricelist 5946435** — hook `uw2974b7b2yurygsgcn2i97x4lh9h86e`.
+Body: `{session_token, template?}` (default template = Adverteren HQRvZ...). Antwoord: `{ok, template_id, sections:[{name,total,items:[{name,description,price,qty,sku}]}]}`.
+Gebruikt `pricing.quotes[1].sections` (IML 1-indexed → eerste quote). Gewired in 3-staps nieuw-project formulier stap 2 (`renderPriceSections`).
+⚠️ Alleen Adverteren-template bekend. Andere disciplines → frontend toont nette "prijs op maat"-fallback tot Vincent de template-IDs aanlevert (ochtendlijst).
+⚠️ CSS-les: een class met `display:flex/grid` overschrijft het `[hidden]`-attribuut → forceer `[hidden]{display:none!important}` voor toggle-divs (`.s27-pt-sub` bug, fixed).
+
 ## 13. CONTACTPERSOON-RESOLUTIE (Bedrijven → Contact-taak)
 
 Bedrijven-taak heeft relationship-veld **"Contact"** `1bce8db8-717f-4e94-abdc-64feb241087c` (type tasks)

@@ -28,6 +28,8 @@ const ENDPOINTS = {
   meetingAvailability:'https://hook.eu1.make.com/s4tuw763p9x4dc7o8n1h9sm48vhs77rb',
   // v3 — AI Status Bot (folder 348572, scenario 5946454). Beantwoordt projectvragen, escaleert via DM.
   aiStatusBot:       'https://hook.eu1.make.com/3uor4cy6vmhe77sh2uvujg9iufoewj3u',
+  // v3 — PandaDoc prijslijst (scenario 5946435). Stap 2 nieuw-project: kostprijs-detail.
+  pandadocPricelist: 'https://hook.eu1.make.com/uw2974b7b2yurygsgcn2i97x4lh9h86e',
   // Bestaand werkend booking-systeem (read-only hergebruik via CORS *)
   shootAvailability: 'https://hook.eu1.make.com/c1aekp5r567tqvgvp4e2a4juu3npanap'
 };
@@ -1514,32 +1516,65 @@ const PROJECT_CONTACT_OPTIONS = [
   { id:'vincent', naam:'Vincent Verleije',  email:'vincent@studio27.be', rol:'Zaakvoerder — strategie & grote trajecten' }
 ];
 
+// v3-D: project_type → PandaDoc template-ID voor échte prijsindicatie (stap 2).
+// Alleen Adverteren bekend (28/5). Andere disciplines: template-ID nog van Vincent → ochtendlijst.
+const PROJECT_TEMPLATES = {
+  'Advertentiebeheer': 'HQRvZ3sdrEm2GcuNsdP2Uf'
+};
+const PROJECT_TYPE_OPTIONS = [
+  { v:'Video + Fotografie',                              l:'Video + Fotografie' },
+  { v:'Webdesign',                                       l:'Webdesign / nieuwe site' },
+  { v:'Branding / huisstijl / grafisch ontwerp',         l:'Branding, huisstijl of grafisch ontwerp' },
+  { v:'Social media beheer',                             l:'Social media beheer' },
+  { v:'Advertentiebeheer',                               l:'Advertentiebeheer' },
+  { v:'Online organische vindbaarheid (SEO + GEO)',      l:'Online organische vindbaarheid (SEO + GEO)' },
+  { v:'Opleiding op maat',                               l:'Opleiding op maat' },
+  { v:'AI & automatisatie',                              l:'AI & automatisatie' },
+  { v:'Anders',                                          l:'Iets anders…' }
+];
+
 function renderNieuwTab(){
   const body = $('s27-nieuw-body');
   if(!body) return;
   if(state._nieuwProjectSubmitted){
     body.innerHTML = renderNieuwProjectSuccess(state._nieuwProjectSubmitted);
+    wireNieuwSuccess();
     return;
   }
-  body.innerHTML = `
+  if(!state._nieuwStep) state._nieuwStep = 1;
+  if(!state._nieuwData) state._nieuwData = {};
+  const step = state._nieuwStep;
+  body.innerHTML = renderNieuwStepper(step) +
+    (step === 1 ? renderNieuwStep1() : step === 2 ? renderNieuwStep2() : renderNieuwStep3());
+  if(step === 1) wireNieuwStep1();
+  else if(step === 2) wireNieuwStep2();
+  else wireNieuwStep3();
+}
+
+function renderNieuwStepper(active){
+  const steps = [{n:1,label:'Wat wil je?'},{n:2,label:'Prijsindicatie'},{n:3,label:'Bevestigen'}];
+  return '<div class="s27-wiz-steps">' + steps.map((s,i) =>
+    (i ? '<span class="s27-wiz-sep"></span>' : '') +
+    `<div class="s27-wiz-step${s.n===active?' is-active':''}${s.n<active?' is-done':''}">` +
+      `<span class="s27-wiz-num">${s.n<active?'✓':s.n}</span>` +
+      `<span class="s27-wiz-label">${esc(s.label)}</span>` +
+    '</div>'
+  ).join('') + '</div>';
+}
+
+function renderNieuwStep1(){
+  const d = state._nieuwData;
+  return `
     <div class="s27-nieuw-intro">
-      <h3>Nieuw project aanvragen</h3>
-      <p>Vertel ons in een paar regels wat je wil. We sturen je <strong>vandaag nog</strong> een offerte op maat — vrijblijvend.</p>
+      <h3>Wat heb je nodig?</h3>
+      <p>Vertel ons je idee in een paar regels. Op basis hiervan tonen we je meteen een <strong>prijsindicatie</strong> — vrijblijvend.</p>
     </div>
     <form class="s27-nieuw-form" id="s27-nieuw-form" autocomplete="off">
       <label class="s27-form-field">
         <span>Type project <em>*</em></span>
         <select name="project_type" id="s27-pt-select" required>
           <option value="">Kies een type…</option>
-          <option value="Video + Fotografie">Video + Fotografie</option>
-          <option value="Webdesign">Webdesign / nieuwe site</option>
-          <option value="Branding / huisstijl / grafisch ontwerp">Branding, huisstijl of grafisch ontwerp</option>
-          <option value="Social media beheer">Social media beheer</option>
-          <option value="Advertentiebeheer">Advertentiebeheer</option>
-          <option value="Online organische vindbaarheid (SEO + GEO)">Online organische vindbaarheid (SEO + GEO)</option>
-          <option value="Opleiding op maat">Opleiding op maat</option>
-          <option value="AI & automatisatie">AI &amp; automatisatie</option>
-          <option value="Anders">Iets anders…</option>
+          ${PROJECT_TYPE_OPTIONS.map(o => `<option value="${esc(o.v)}"${d.project_type===o.v?' selected':''}>${esc(o.l)}</option>`).join('')}
         </select>
       </label>
 
@@ -1547,32 +1582,192 @@ function renderNieuwTab(){
 
       <label class="s27-form-field">
         <span>Gewenste opleverdatum</span>
-        <input type="date" name="gewenste_opleverdatum"/>
+        <input type="date" name="gewenste_opleverdatum" value="${esc(d.gewenste_opleverdatum || '')}"/>
       </label>
 
       <label class="s27-form-field">
         <span>Omschrijf je idee in een paar regels <em>*</em></span>
-        <textarea name="omschrijving" rows="6" required placeholder="Voorbeeld: nieuwe corporate website met meertalig CMS, koppeling met onze Odoo-database en focus op SEO. Designstijl: modern, donker, met veel beweging."></textarea>
-      </label>
-
-      <label class="s27-form-field">
-        <span>Naar wie sturen we de offerte? <em>*</em></span>
-        <select name="contact_owner" id="s27-contact-owner" required>
-          ${PROJECT_CONTACT_OPTIONS.map(o => `<option value="${esc(o.id)}"${o.id === 'arne' ? ' selected' : ''}>${esc(o.naam)} — ${esc(o.rol)}</option>`).join('')}
-        </select>
+        <textarea name="omschrijving" rows="6" required placeholder="Voorbeeld: nieuwe corporate website met meertalig CMS, koppeling met onze Odoo-database en focus op SEO. Designstijl: modern, donker, met veel beweging.">${esc(d.omschrijving || '')}</textarea>
       </label>
 
       <div class="s27-form-actions">
-        <button type="submit" class="s27-btn s27-btn-primary" id="s27-nieuw-submit">Stuur aanvraag</button>
-        <p class="s27-form-info">We reageren binnen 24u. Geen verplichting tot iets — eerst luisteren, dan offerte.</p>
+        <button type="submit" class="s27-btn s27-btn-primary" id="s27-nieuw-next1">Volgende → Prijsindicatie</button>
+        <p class="s27-form-info">Stap 1 van 3 — je kan altijd terug en aanpassen.</p>
       </div>
       <p class="s27-form-error" id="s27-nieuw-error" style="display:none"></p>
     </form>
   `;
+}
+
+function wireNieuwStep1(){
   const form = $('s27-nieuw-form');
-  if(form) form.addEventListener('submit', submitNieuwProject);
   const ptSelect = $('s27-pt-select');
   if(ptSelect) ptSelect.addEventListener('change', () => renderProjectSubQuestions(ptSelect.value));
+  // Herstel sub-vragen + antwoorden bij terugkeer naar stap 1
+  const d = state._nieuwData;
+  if(d.project_type){
+    renderProjectSubQuestions(d.project_type);
+    if(d.sub_answers){
+      Object.entries(d.sub_answers).forEach(([k,v]) => {
+        const el = form && form.querySelector(`[name="sub_${k}"]`);
+        if(el){ el.value = v; }
+      });
+      // shoot stap-2 opnieuw tonen als die gekozen was
+      const shootSel = form && form.querySelector('[data-triggers-shootstep]');
+      if(shootSel && /ja|we willen/i.test(shootSel.value)){
+        const step2 = $('s27-shoot-step2');
+        if(step2){ step2.hidden = false; step2.innerHTML = renderShootStep2(); wireShootStep2();
+          Object.entries(d.sub_answers).forEach(([k,v]) => { const el = step2.querySelector(`[name="sub_${k}"]`); if(el) el.value = v; });
+        }
+      }
+    }
+  }
+  if(form) form.addEventListener('submit', e => {
+    e.preventDefault();
+    const errEl = $('s27-nieuw-error');
+    if(!form.project_type.value){ if(errEl){errEl.style.display='block';errEl.textContent='Kies eerst een type project.';} return; }
+    if(!form.omschrijving.value.trim()){ if(errEl){errEl.style.display='block';errEl.textContent='Vertel ons kort wat je wil.';} return; }
+    // verzamel sub-antwoorden
+    const subAnswers = {};
+    Array.from(form.querySelectorAll('[name^="sub_"]')).forEach(el => { if(el.value) subAnswers[el.name.replace('sub_','')] = el.value; });
+    state._nieuwData = Object.assign({}, state._nieuwData, {
+      project_type: form.project_type.value,
+      gewenste_opleverdatum: form.gewenste_opleverdatum.value,
+      omschrijving: form.omschrijving.value.trim(),
+      sub_answers: subAnswers
+    });
+    state._nieuwStep = 2;
+    renderNieuwTab();
+  });
+}
+
+function renderNieuwStep2(){
+  return `
+    <div class="s27-nieuw-intro">
+      <h3>Jouw prijsindicatie</h3>
+      <p>Op basis van je keuze. Dit is een richtprijs — je definitieve offerte stemmen we samen af.</p>
+    </div>
+    <div id="s27-price-box" class="s27-price-box"><div class="s27-loading" style="padding:20px">Prijzen ophalen…</div></div>
+    <div class="s27-form-actions s27-wiz-nav">
+      <button type="button" class="s27-btn s27-btn-ghost" id="s27-wiz-back2">← Terug</button>
+      <button type="button" class="s27-btn s27-btn-primary" id="s27-wiz-next2">Volgende → Bevestigen</button>
+    </div>
+  `;
+}
+
+function wireNieuwStep2(){
+  const back = $('s27-wiz-back2'), next = $('s27-wiz-next2');
+  if(back) back.addEventListener('click', () => { state._nieuwStep = 1; renderNieuwTab(); });
+  if(next) next.addEventListener('click', () => { state._nieuwStep = 3; renderNieuwTab(); });
+  loadPricing();
+}
+
+async function loadPricing(){
+  const box = $('s27-price-box');
+  if(!box) return;
+  const d = state._nieuwData;
+  const template = PROJECT_TEMPLATES[d.project_type];
+  // Geen bekend template → nette indicatieve weergave (richtprijs op maat)
+  if(!template){
+    state._nieuwData.prijs_indicatie = 'Op maat — wordt in de offerte gedetailleerd';
+    box.innerHTML = `
+      <div class="s27-price-onmaat">
+        <div class="s27-price-onmaat-icon">✦</div>
+        <strong>Prijs op maat voor ${esc(d.project_type)}</strong>
+        <p>Voor dit type stellen we je prijs persoonlijk samen op basis van je antwoorden. Je krijgt het volledige detail in je offerte — transparant en zonder verrassingen.</p>
+      </div>`;
+    return;
+  }
+  try {
+    const res = await api(ENDPOINTS.pandadocPricelist, { session_token: state.session.session_token, template });
+    if(res.ok && res.data && res.data.ok && Array.isArray(res.data.sections) && res.data.sections.length){
+      box.innerHTML = renderPriceSections(res.data.sections);
+      // bewaar totaal voor mee te sturen
+      const totaal = res.data.sections.reduce((sum, s) => sum + (parseFloat(s.total || s.summary && s.summary.total || 0) || 0), 0);
+      state._nieuwData.prijs_indicatie = res.data.sections.map(s => (s.name||'Sectie') + ': €' + (s.total||'?')).join(' · ');
+    } else {
+      throw new Error('geen prijsdata');
+    }
+  } catch(e){
+    state._nieuwData.prijs_indicatie = 'Op maat (prijslijst niet beschikbaar)';
+    box.innerHTML = `
+      <div class="s27-price-onmaat">
+        <div class="s27-price-onmaat-icon">✦</div>
+        <strong>Prijs op maat</strong>
+        <p>We konden de standaard-prijslijst nu niet ophalen, maar geen zorgen — je krijgt een offerte op maat met het volledige detail.</p>
+      </div>`;
+  }
+}
+
+function stripHtml(s){ return (s==null?'':String(s)).replace(/<[^>]*>/g,'').replace(/&nbsp;/g,' ').trim(); }
+function fmtEuro(v){ const n = parseFloat(v); if(isNaN(n)) return ''; return '€' + n.toLocaleString('nl-BE', {minimumFractionDigits:0, maximumFractionDigits:2}); }
+
+function renderPriceSections(sections){
+  return sections.map(sec => {
+    const items = Array.isArray(sec.items) ? sec.items : [];
+    return `<div class="s27-price-section">
+      <div class="s27-price-sec-head"><strong>${esc(sec.name || 'Pakket')}</strong>${sec.total ? `<span class="s27-price-sec-total">${esc(fmtEuro(sec.total))}</span>` : ''}</div>
+      <div class="s27-price-items">
+        ${items.map(it => `<div class="s27-price-item">
+          <div class="s27-price-item-main">
+            <span class="s27-price-item-name">${esc(it.name || '')}</span>
+            ${it.description ? `<span class="s27-price-item-desc">${esc(stripHtml(it.description))}</span>` : ''}
+          </div>
+          <span class="s27-price-item-price">${esc(fmtEuro(it.price))}${it.qty && parseFloat(it.qty)>1 ? ' <small>× '+esc(it.qty)+'</small>' : ''}</span>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('') + '<p class="s27-price-note">Richtprijzen excl. btw. Je definitieve offerte stemmen we samen af op je specifieke wensen.</p>';
+}
+
+function renderNieuwStep3(){
+  const d = state._nieuwData;
+  const isShoot = d.project_type === 'Video + Fotografie';
+  const intentie = d._intentie || '';
+  return `
+    <div class="s27-nieuw-intro">
+      <h3>Hoe wil je verder?</h3>
+      <p>Kies wat het beste past. Je aanvraag komt sowieso bij ons binnen — we pakken het meteen op.</p>
+    </div>
+    <div class="s27-choice-cards">
+      <button type="button" class="s27-choice-card${intentie==='offerte_meeting'?' is-chosen':''}" data-intentie="offerte_meeting">
+        <span class="s27-choice-icon">📄</span>
+        <strong>Gedetailleerde offerte + gesprek</strong>
+        <span class="s27-choice-sub">We maken een offerte op maat en plannen een kort gesprek om alles scherp te krijgen.</span>
+      </button>
+      <button type="button" class="s27-choice-card${intentie==='direct_start'?' is-chosen':''}" data-intentie="direct_start">
+        <span class="s27-choice-icon">🚀</span>
+        <strong>Dit klopt — laten we starten</strong>
+        <span class="s27-choice-sub">Bevestig en plan meteen je ${isShoot ? 'shoot' : 'opstartmoment'} in. We zetten alles in gang.</span>
+      </button>
+    </div>
+    <form class="s27-nieuw-form" id="s27-nieuw-form3" autocomplete="off"${intentie ? '' : ' hidden'}>
+      <label class="s27-form-field">
+        <span>Naar wie sturen we het? <em>*</em></span>
+        <select name="contact_owner" id="s27-contact-owner" required>
+          ${PROJECT_CONTACT_OPTIONS.map(o => `<option value="${esc(o.id)}"${o.id === (d.contact_owner||'arne') ? ' selected' : ''}>${esc(o.naam)} — ${esc(o.rol)}</option>`).join('')}
+        </select>
+      </label>
+      <div class="s27-form-actions s27-wiz-nav">
+        <button type="button" class="s27-btn s27-btn-ghost" id="s27-wiz-back3">← Terug</button>
+        <button type="submit" class="s27-btn s27-btn-primary" id="s27-nieuw-submit">${intentie==='direct_start'?'Bevestigen & inplannen':'Aanvraag versturen'}</button>
+      </div>
+      <p class="s27-form-error" id="s27-nieuw-error" style="display:none"></p>
+    </form>
+  `;
+}
+
+function wireNieuwStep3(){
+  const back = $('s27-wiz-back3');
+  if(back) back.addEventListener('click', () => { state._nieuwStep = 2; renderNieuwTab(); });
+  document.querySelectorAll('.s27-choice-card').forEach(card => {
+    card.addEventListener('click', () => {
+      state._nieuwData._intentie = card.dataset.intentie;
+      renderNieuwTab(); // re-render om de juiste knop-tekst + form te tonen
+    });
+  });
+  const form = $('s27-nieuw-form3');
+  if(form) form.addEventListener('submit', submitNieuwProject);
 }
 
 function renderProjectSubQuestions(projectType){
@@ -1769,15 +1964,34 @@ document.addEventListener('click', e => {
 });
 
 function renderNieuwProjectSuccess(result){
+  const direct = result._intentie === 'direct_start';
+  const isShoot = result._project_type === 'Video + Fotografie';
+  const planLabel = isShoot ? '📸 Plan je shoot in' : '📅 Plan je opstartmoment';
+  const planPreset = isShoot ? 'shoot' : 'meeting';
   return `
     <div class="s27-nieuw-success">
       <div class="s27-success-icon"><svg width="32" height="32"><use href="#s27p-check"/></svg></div>
-      <h3>Bedankt — we hebben je aanvraag goed ontvangen!</h3>
-      <p>Onze account manager neemt binnen 24u contact op met een offerte op maat. Geen verplichting.</p>
+      <h3>${direct ? 'Top — we hebben je bevestiging!' : 'Bedankt — je aanvraag is binnen!'}</h3>
+      <p>${direct
+        ? 'We zetten alles in gang. Plan hieronder meteen je ' + (isShoot ? 'shoot' : 'opstartmoment') + ', dan kunnen we direct starten.'
+        : 'Je krijgt een offerte op maat én we plannen een kort gesprek om alles scherp te krijgen. We nemen binnen 24u contact op.'}</p>
       ${result.offerte_task_url ? `<p class="s27-success-meta">Status van je aanvraag: <a href="${esc(result.offerte_task_url)}" target="_blank" rel="noopener">bekijk in onze planning</a></p>` : ''}
-      <button class="s27-btn s27-btn-ghost" onclick="state._nieuwProjectSubmitted=null; renderNieuwTab()">Nog een aanvraag indienen</button>
+      <div class="s27-success-actions">
+        ${direct ? `<button class="s27-btn s27-btn-primary" data-dm="${esc(planPreset)}" data-dm-onderwerp="${esc((isShoot?'Shoot':'Opstartmoment')+' inplannen — '+(result._project_type||'nieuw project'))}">${planLabel}</button>` : ''}
+        <button class="s27-btn s27-btn-ghost" id="s27-nieuw-again">Nog een aanvraag indienen</button>
+      </div>
     </div>
   `;
+}
+
+function wireNieuwSuccess(){
+  const again = $('s27-nieuw-again');
+  if(again) again.addEventListener('click', () => {
+    state._nieuwProjectSubmitted = null;
+    state._nieuwStep = 1;
+    state._nieuwData = {};
+    renderNieuwTab();
+  });
 }
 
 async function submitNieuwProject(e){
@@ -1786,50 +2000,55 @@ async function submitNieuwProject(e){
   const btn = $('s27-nieuw-submit');
   const errEl = $('s27-nieuw-error');
   if(errEl) errEl.style.display = 'none';
-  if(btn){ btn.disabled = true; btn.textContent = 'Aanvraag versturen…'; }
+  const d = state._nieuwData || {};
+  const intentie = d._intentie || 'offerte_meeting';
+  if(btn){ btn.disabled = true; btn.textContent = 'Versturen…'; }
 
-  // Verzamel dynamische sub-vragen
-  const subAnswers = {};
-  Array.from(form.querySelectorAll('[name^="sub_"]')).forEach(el => {
-    if(el.value) subAnswers[el.name.replace('sub_','')] = el.value;
-  });
+  // Bouw omschrijving met sub-antwoorden + gekozen prijs + intentie
+  const subAnswers = d.sub_answers || {};
   const subText = Object.keys(subAnswers).length
     ? '\n\n— Antwoorden op vervolgvragen:\n' + Object.entries(subAnswers).map(([k,v]) => '• ' + k + ': ' + v).join('\n')
     : '';
-  // Resolve contactpersoon
-  const contactOwner = form.contact_owner ? form.contact_owner.value : 'arne';
+  const intentieText = intentie === 'direct_start'
+    ? '\n\n✅ KLANT BEVESTIGT — wil meteen starten (' + (d.project_type === 'Video + Fotografie' ? 'shoot' : 'opstartmoment') + ' inplannen).'
+    : '\n\n📄 Klant vraagt gedetailleerde offerte + gesprek.';
+  const prijsText = d.prijs_indicatie ? '\n💶 Getoonde prijsindicatie: ' + d.prijs_indicatie : '';
+
+  const contactOwner = (form.contact_owner ? form.contact_owner.value : d.contact_owner) || 'arne';
+  state._nieuwData.contact_owner = contactOwner;
   const owner = PROJECT_CONTACT_OPTIONS.find(o => o.id === contactOwner) || PROJECT_CONTACT_OPTIONS[0];
   const payload = {
     bedrijf_id: state.session.bedrijf_id,
     klant_naam: state.session.bedrijfsnaam,
     session_token: state.session.session_token,
-    project_type: form.project_type.value,
-    gewenste_opleverdatum: form.gewenste_opleverdatum.value,
-    omschrijving: form.omschrijving.value + subText,
+    project_type: d.project_type,
+    gewenste_opleverdatum: d.gewenste_opleverdatum || '',
+    omschrijving: (d.omschrijving || '') + subText + prijsText + intentieText,
     contactpersoon_email: owner.email,
     contactpersoon_naam: owner.naam,
-    sub_answers: subAnswers
+    sub_answers: subAnswers,
+    intentie: intentie,
+    prijs_indicatie: d.prijs_indicatie || ''
   };
 
   try {
     if(state.demoMode){
-      // Demo mode — toon success met dummy ID
-      state._nieuwProjectSubmitted = {ok:true, offerte_task_id:'DEMO-001', message:'Bedankt — demo mode'};
+      state._nieuwProjectSubmitted = { ok:true, offerte_task_id:'DEMO-001', message:'Bedankt — demo mode', _intentie:intentie, _project_type:d.project_type };
       renderNieuwTab();
       return;
     }
     const res = await api(ENDPOINTS.newProjectIntake, payload);
     if(res.ok && res.data && res.data.ok){
-      state._nieuwProjectSubmitted = res.data;
+      state._nieuwProjectSubmitted = Object.assign({}, res.data, { _intentie:intentie, _project_type:d.project_type });
       renderNieuwTab();
     } else {
-      const msg = (res.data && res.data.message) || 'Aanvraag kon niet worden verzonden. Mail rechtstreeks naar ilke@studio27.be.';
+      const msg = (res.data && res.data.message) || 'Aanvraag kon niet worden verzonden. Stuur ons gerust een bericht via "Stuur bericht".';
       if(errEl){ errEl.style.display = 'block'; errEl.textContent = msg; }
-      if(btn){ btn.disabled = false; btn.textContent = 'Stuur aanvraag'; }
+      if(btn){ btn.disabled = false; btn.textContent = intentie==='direct_start'?'Bevestigen & inplannen':'Aanvraag versturen'; }
     }
   } catch(err){
     if(errEl){ errEl.style.display = 'block'; errEl.textContent = 'Netwerkfout — probeer opnieuw.'; }
-    if(btn){ btn.disabled = false; btn.textContent = 'Stuur aanvraag'; }
+    if(btn){ btn.disabled = false; btn.textContent = intentie==='direct_start'?'Bevestigen & inplannen':'Aanvraag versturen'; }
   }
 }
 function renderInstellingenTab(){
