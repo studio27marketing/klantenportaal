@@ -69,19 +69,22 @@
     <div class="s27-tabnav-wrap">
       <nav class="s27-tabnav" role="tablist">
         <button class="s27-tab" data-tab="dashboard" role="tab" aria-selected="true">
-          <svg><use href="#s27p-spark"/></svg><span>Dashboard</span>
+          <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-spark"/></svg><span>Dashboard</span>
+        </button>
+        <button class="s27-tab" data-tab="meetings" role="tab" aria-selected="false">
+          <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-cal"/></svg><span>Meetings</span>
         </button>
         <button class="s27-tab" data-tab="bedrijf" role="tab" aria-selected="false">
-          <svg><use href="#s27p-brand"/></svg><span>Mijn bedrijf</span>
+          <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-brand"/></svg><span>Mijn bedrijf</span>
         </button>
         <button class="s27-tab" data-tab="goedgekeurd" role="tab" aria-selected="false">
-          <svg><use href="#s27p-spark"/></svg><span>Goedgekeurd</span>
+          <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-spark"/></svg><span>Goedgekeurd</span>
         </button>
         <button class="s27-tab" data-tab="nieuw" role="tab" aria-selected="false">
-          <svg><use href="#s27p-upload"/></svg><span>Nieuw project</span>
+          <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-upload"/></svg><span>Nieuw project</span>
         </button>
         <button class="s27-tab" data-tab="instellingen" role="tab" aria-selected="false">
-          <svg><use href="#s27p-user"/></svg><span>Instellingen</span>
+          <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-user"/></svg><span>Instellingen</span>
         </button>
       </nav>
     </div>
@@ -121,6 +124,15 @@
           <p class="s27-hero-lead">Vertel ons wat je wil — we sturen je vandaag nog een offerte op maat. Geen verplichting, geen kleine letters.</p>
         </div>
         <div id="s27-nieuw-body"><div class="s27-loading">Binnenkort beschikbaar</div></div>
+      </div>
+
+      <div id="s27-tab-meetings" class="s27-tabview" role="tabpanel" hidden>
+        <div class="s27-hero">
+          <span class="s27-hero-tag">Meetings</span>
+          <h1>Jouw <span class="accent">agenda</span> met Studio 27</h1>
+          <p class="s27-hero-lead">Geplande meetings, recente notulen, en de mogelijkheid om zelf direct een nieuwe meeting in te plannen.</p>
+        </div>
+        <div id="s27-meetings-body"><div class="s27-loading">Meetings laden</div></div>
       </div>
 
       <div id="s27-tab-instellingen" class="s27-tabview" role="tabpanel" hidden>

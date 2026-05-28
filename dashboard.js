@@ -294,64 +294,111 @@ function normaliseDashboard(d){
    RENDER DASHBOARD
    ================================================================= */
 function renderDashboard(d){
-  // Persoonlijke begroeting in hero
+  // Persoonlijke compacte begroeting in hero (1 regel)
   const greetingName = firstNameFromCompany(d.klant && d.klant.bedrijfsnaam);
   const heroTitle = $('s27-hero-title');
-  if(heroTitle) heroTitle.innerHTML = '<span class="greeting">Hey ' + esc(greetingName) + ',</span>Alles wat we voor jou <span class="accent">aan het doen</span> zijn';
+  if(heroTitle) heroTitle.innerHTML = '<span class="greeting">Hey ' + esc(greetingName) + ',</span><span class="s27-hero-subline">Hier zijn jouw lopende projecten.</span>';
+  // Verberg verbose hero-lead voor compacter overzicht
+  const heroLead = document.querySelector('#s27-tab-dashboard .s27-hero-lead'); if(heroLead) heroLead.style.display = 'none';
+  const heroTag  = document.querySelector('#s27-tab-dashboard .s27-hero-tag');  if(heroTag) heroTag.style.display = 'none';
 
   const body = $('s27-dash-body');
   const allProjecten = d.actieve_projecten || [];
   const filtered = allProjecten.filter(p => matchesStatusFilter(p, state.statusFilter));
   const projectenByDisc = groupBy(filtered, p => p.discipline);
-  const aantalDisciplines = Object.keys(projectenByDisc).length;
+  const meetings = d.aankomende_meetings || [];
 
   // Count per filter voor chip badges
   const counts = {};
   STATUS_FILTERS.forEach(f => { counts[f.id] = allProjecten.filter(p => matchesStatusFilter(p, f.id)).length; });
 
-  const statsHtml = renderStats(d.stats, allProjecten.length, aantalDisciplines);
-  const filterbarHtml = renderFilterBar(counts);
-  const disciplinesHtml = renderDisciplines(projectenByDisc);
-  const meetingsHtml = renderMeetings(d.aankomende_meetings || []);
-  const contactHtml = renderContact(d.contact || {});
+  // Default uitklappen: als <= 4 disciplines, alles open; anders alleen waar projecten met "wacht op feedback" zijn + eerste discipline
+  if(!state.expandedDisciplines){
+    state.expandedDisciplines = {};
+    const disciplineKeys = Object.keys(projectenByDisc);
+    if(disciplineKeys.length <= 4){
+      disciplineKeys.forEach(k => state.expandedDisciplines[k] = true);
+    } else {
+      // Open disciplines die feedback nodig hebben
+      disciplineKeys.forEach(k => {
+        const hasWaiting = projectenByDisc[k].some(p => (p.status||'').toLowerCase() === 'doorgestuurd');
+        state.expandedDisciplines[k] = hasWaiting;
+      });
+      // Als geen enkele open, open de eerste
+      if(!Object.values(state.expandedDisciplines).some(Boolean)) state.expandedDisciplines[disciplineKeys[0]] = true;
+    }
+  }
 
   body.innerHTML = `
-    <div class="s27-section">${statsHtml}</div>
-
-    <div class="s27-section">
-      <div class="s27-section-head">
-        <div>
-          <h2 class="s27-section-title">Lopende projecten <span class="count">${allProjecten.length}</span></h2>
-          <p class="s27-section-sub">Filter op wat voor jou relevant is.</p>
-        </div>
-      </div>
-      ${filterbarHtml}
-      ${disciplinesHtml}
+    <div class="s27-home-filterhead">
+      <div class="s27-home-filterhead-label">Filter op status</div>
+      ${renderFilterBar(counts)}
     </div>
-
-    <div class="s27-section">
-      <div class="s27-section-head">
-        <div>
-          <h2 class="s27-section-title">Aankomende meetings <span class="count">${(d.aankomende_meetings||[]).length}</span></h2>
-          <p class="s27-section-sub">Wat staat er gepland tussen jou en het Studio 27-team?</p>
-        </div>
+    ${renderDisciplinesAccordion(projectenByDisc)}
+    <div class="s27-meetings-mini">
+      <div class="s27-meetings-mini-head">
+        <strong>Aankomende meetings</strong>
+        ${meetings.length ? '<button class="s27-mini-cta" data-go-tab="meetings">Alle ' + meetings.length + ' bekijken →</button>' : ''}
       </div>
-      ${meetingsHtml}
+      ${meetings.length ? '<div class="s27-meetings-mini-list">' + meetings.slice(0,2).map(renderMiniMeeting).join('') + '</div>' : '<p class="s27-meetings-mini-empty">Geen meetings gepland.</p>'}
     </div>
-
-    <div class="s27-section" id="contact">
-      <div class="s27-section-head">
-        <div>
-          <h2 class="s27-section-title">Jouw aanspreekpunt</h2>
-          <p class="s27-section-sub">Vragen, ideeën of even sparren? Eén klik en je staat in contact.</p>
-        </div>
-      </div>
-      ${contactHtml}
-    </div>
+    <div class="s27-home-contact" id="contact">${renderContact(d.contact || {})}</div>
   `;
 
   attachDashboardHandlers();
   $('s27-updated').textContent = 'Bijgewerkt om ' + new Date().toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'});
+}
+
+function renderDisciplinesAccordion(grouped){
+  const orderedKeys = DISCIPLINES.map(d=>d.id).filter(k => grouped[k] && grouped[k].length);
+  if(!orderedKeys.length){
+    return '<div class="s27-empty"><div class="s27-empty-icon"><svg width="22" height="22"><use href="#s27p-inbox"/></svg></div><div class="s27-empty-title">Niets in deze filter</div><p class="s27-empty-sub">Probeer een andere status of "Alle".</p></div>';
+  }
+  return '<div class="s27-acc-list">' + orderedKeys.map(key => {
+    const meta = discMeta(key);
+    const projs = grouped[key];
+    const isOpen = !!state.expandedDisciplines[key];
+    const waitingCount = projs.filter(p => (p.status||'').toLowerCase() === 'doorgestuurd').length;
+    return '<div class="s27-acc" data-disc="' + esc(key) + '" data-discipline="' + esc(key) + '">' +
+      '<button class="s27-acc-head" aria-expanded="' + (isOpen ? 'true' : 'false') + '" data-disc-toggle="' + esc(key) + '">' +
+        '<span class="s27-acc-chevron">' + (isOpen ? '▼' : '▶') + '</span>' +
+        '<span class="s27-acc-icon"><svg width="16" height="16" viewBox="0 0 24 24"><use href="#' + meta.icon + '"/></svg></span>' +
+        '<span class="s27-acc-title">' + esc(meta.label) + '</span>' +
+        '<span class="s27-acc-count">' + projs.length + '</span>' +
+        (waitingCount ? '<span class="s27-acc-flag">' + waitingCount + ' wacht op jou</span>' : '') +
+      '</button>' +
+      (isOpen ? '<div class="s27-acc-body">' + projs.map(renderProjectCompact).join('') + '</div>' : '') +
+    '</div>';
+  }).join('') + '</div>';
+}
+
+function renderProjectCompact(p){
+  const statusKey = (p.status || 'in_progress').toLowerCase().replace(/\s+/g,'_');
+  const statusLabel = p.status_label || STATUS_LABELS[statusKey] || p.status || 'In productie';
+  const needsFeedback = statusKey === 'doorgestuurd' || p.feedback_link;
+  return '<div class="s27-projc" data-task-id="' + esc(p.task_id || '') + '" tabindex="0" role="button" aria-label="' + esc(p.naam) + '">' +
+    '<div class="s27-projc-main">' +
+      '<div class="s27-projc-name">' + esc(p.naam || 'Project') + '</div>' +
+      '<div class="s27-projc-meta">' +
+        (p.opleverdatum ? '<span>📅 ' + esc(fmtDate(p.opleverdatum)) + '</span>' : '') +
+        (p.type ? '<span>· ' + esc(p.type) + '</span>' : '') +
+        (p.laatst_geupdatet ? '<span>· ' + esc(fmtRelTime(p.laatst_geupdatet)) + '</span>' : '') +
+      '</div>' +
+    '</div>' +
+    '<div class="s27-projc-right">' +
+      (needsFeedback ? '<span class="s27-projc-flag">🔔 Wacht op jou</span>' : '') +
+      '<span class="s27-projc-status" data-status="' + esc(statusKey) + '">' + esc(statusLabel) + '</span>' +
+      '<span class="s27-projc-arrow">→</span>' +
+    '</div>' +
+  '</div>';
+}
+
+function renderMiniMeeting(m){
+  return '<div class="s27-mini-meeting">' +
+    '<span class="s27-mini-meeting-date"><strong>' + fmtDay(m.datum) + '</strong>' + fmtMonth(m.datum) + '</span>' +
+    '<div><div class="s27-mini-meeting-title">' + esc(m.titel || 'Meeting') + '</div>' +
+    '<div class="s27-mini-meeting-meta">' + esc(m.tijdslot || '') + (m.type ? ' · ' + esc(m.type) : '') + '</div></div>' +
+  '</div>';
 }
 
 function renderFilterBar(counts){
@@ -526,8 +573,8 @@ function renderContact(c){
    DASHBOARD HANDLERS
    ================================================================= */
 function attachDashboardHandlers(){
-  // project klik
-  document.querySelectorAll('.s27-proj').forEach(el => {
+  // project klik (zowel compact als oude variant)
+  document.querySelectorAll('.s27-projc, .s27-proj').forEach(el => {
     el.addEventListener('click', () => openProjectDetail(el.dataset.taskId));
     el.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openProjectDetail(el.dataset.taskId); } });
   });
@@ -537,6 +584,18 @@ function attachDashboardHandlers(){
       state.statusFilter = el.dataset.filter;
       if(state.dashboard) renderDashboard(state.dashboard);
     });
+  });
+  // accordion uitklap
+  document.querySelectorAll('[data-disc-toggle]').forEach(el => {
+    el.addEventListener('click', () => {
+      const k = el.dataset.discToggle;
+      state.expandedDisciplines[k] = !state.expandedDisciplines[k];
+      if(state.dashboard) renderDashboard(state.dashboard);
+    });
+  });
+  // mini cta naar andere tab
+  document.querySelectorAll('[data-go-tab]').forEach(el => {
+    el.addEventListener('click', () => switchTab(el.dataset.goTab));
   });
 }
 
@@ -554,6 +613,7 @@ function switchTab(tabId){
   if(tabId === 'goedgekeurd')  renderGoedgekeurdTab();
   if(tabId === 'nieuw')        renderNieuwTab();
   if(tabId === 'instellingen') renderInstellingenTab();
+  if(tabId === 'meetings')     renderMeetingsTab();
   window.scrollTo({ top:0, behavior:'smooth' });
 }
 
@@ -778,35 +838,59 @@ function renderInstellingenTab(){
   renderPlaceholderTab('s27-instellingen-body', 'Instellingen (binnenkort)',
     'Wijzig je contactgegevens. Krijg updates per mail, WhatsApp, of beide. Pas notificatie-voorkeuren aan.');
 }
+function renderMeetingsTab(){
+  const body = $('s27-meetings-body');
+  if(!body) return;
+  const meetings = (state.dashboard && state.dashboard.aankomende_meetings) || [];
+  if(!meetings.length){
+    body.innerHTML = '<div class="s27-empty"><div class="s27-empty-icon"><svg width="22" height="22"><use href="#s27p-cal"/></svg></div><div class="s27-empty-title">Geen aankomende meetings</div><p class="s27-empty-sub">Wil je iets bespreken? Plan rechtsstreeks een tijdslot in via de knop hieronder.</p></div>' +
+      '<div style="text-align:center;margin-top:18px"><a class="s27-btn" href="mailto:ilke@studio27.be?subject=Meeting%20aanvraag" style="display:inline-flex;width:auto;padding:14px 26px;text-decoration:none;gap:8px">📅 Plan een meeting in</a></div>';
+    return;
+  }
+  body.innerHTML = '<div class="s27-meetings">' + meetings.map(renderMeeting).join('') + '</div>' +
+    '<div style="text-align:center;margin-top:22px"><a class="s27-btn" href="mailto:ilke@studio27.be?subject=Meeting%20aanvraag" style="display:inline-flex;width:auto;padding:12px 22px;text-decoration:none;gap:8px;background:var(--s27-paper);color:var(--s27-blue-ink);border:1.5px solid var(--s27-blue)">📅 Nieuwe meeting inplannen</a></div>';
+}
 
 /* =================================================================
    PROJECT DETAIL MODAL
    ================================================================= */
 async function openProjectDetail(taskId, openOnTab){
   if(!taskId) return;
-  const modal = $('s27-modal');
   const proj = state.dashboard.actieve_projecten.find(p => p.task_id === taskId);
   if(!proj) return;
   state.activeProject = proj;
-  const meta = discMeta(proj.discipline);
+  state.viewMode = 'project';
   const stKey = (proj.status||'').toLowerCase().replace(/\s+/g,'_');
   const needsFeedback = stKey === 'doorgestuurd' || proj.feedback_link;
-  state.projectModalTab = openOnTab || (needsFeedback ? 'feedback' : 'overzicht');
-  $('s27-modal-title').textContent = proj.naam || 'Project';
-  $('s27-modal-sub').textContent = meta.label + ' · ' + (proj.status_label || STATUS_LABELS[stKey] || 'In productie');
-  $('s27-modal-body').innerHTML = '<div class="s27-loading">Detail laden</div>';
-  $('s27-modal-foot').innerHTML = '';
-  modal.classList.add('open');
+  state.projectViewTab = openOnTab || (needsFeedback ? 'feedback' : 'overzicht');
+  if(location.hash !== '#/project/' + taskId) location.hash = '#/project/' + taskId;
 
-  let detail;
-  if(state.demoMode) {
-    detail = getDemoDetail(taskId, proj);
-  } else {
-    const res = await api(ENDPOINTS.projectDetail, { task_id: taskId, bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token });
-    detail = (res.ok && res.data && !res.data.error) ? res.data : { beschrijving:'', taken:[], comments:[], deliverables:[] };
+  // Verberg alle tabs, render fullscreen project view
+  document.querySelectorAll('.s27-tabview').forEach(v => v.hidden = true);
+  let fsView = document.getElementById('s27-tab-project');
+  if(!fsView){
+    fsView = document.createElement('div');
+    fsView.id = 's27-tab-project';
+    fsView.className = 's27-tabview s27-projectview';
+    document.querySelector('.s27-wrap').appendChild(fsView);
   }
+  fsView.hidden = false;
+  fsView.innerHTML = '<div class="s27-loading">Project laden…</div>';
+
+  // Parallel: project detail + chat-list-comments
+  const detailPromise = state.demoMode
+    ? Promise.resolve(getDemoDetail(taskId, proj))
+    : api(ENDPOINTS.projectDetail, { task_id: taskId, bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token })
+        .then(r => (r.ok && r.data && !r.data.error) ? r.data : { beschrijving:'', taken:[], deliverables:[] });
+  const chatPromise = (state.demoMode || !ENDPOINTS.chatList)
+    ? Promise.resolve({ comments: [] })
+    : api(ENDPOINTS.chatList, { task_id: taskId, bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token })
+        .then(r => (r.ok && r.data && !r.data.error) ? r.data : { comments: [] });
+
+  const [detail, chat] = await Promise.all([detailPromise, chatPromise]);
+  detail.comments = (chat.comments || detail.comments || []);
   state.activeProjectDetail = detail;
-  renderProjectModal(proj, detail, needsFeedback);
+  renderProjectView(proj, detail, needsFeedback);
 }
 
 function renderProjectModal(proj, detail, needsFeedback){
