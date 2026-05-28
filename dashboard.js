@@ -130,6 +130,17 @@ const $ = id => document.getElementById(id);
 function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function qs(){ return new URLSearchParams(window.location.search); }
 
+// v2.2: Decode Make.com-encoded strings (newlines + quotes komen dubbel-escaped uit WebhookRespond body)
+function decodeMakeString(s){
+  if(s == null) return '';
+  return String(s)
+    .replace(/\\n/g, '\n')       // \n → newline
+    .replace(/\\r/g, '\r')       // \r → carriage return
+    .replace(/\\t/g, '\t')       // \t → tab
+    .replace(/\\"/g, '"')        // \" → "
+    .replace(/\\\\/g, '\\');     // \\ → \ (last om recursie te voorkomen)
+}
+
 async function api(url, payload){
   try {
     const r = await fetch(url, {
@@ -862,7 +873,8 @@ async function renderBedrijfTab(){
   }
   cats = cats || { logos:[], fonts:[], kleuren:[], brand_pdfs:[], fotos:[], overig:[] };
 
-  const voorkeuren = (data.algemene_voorkeuren || '').replace(/<[^>]+>/g,'').trim();
+  // v2.2 #45 fix: Make scenario double-encodes \n + \" — decode terug naar echte chars
+  const voorkeuren = decodeMakeString(data.algemene_voorkeuren || '').replace(/<[^>]+>/g,'').trim();
 
   body.innerHTML = `
     <div class="s27-section">
@@ -1099,8 +1111,9 @@ function renderGoedgekeurdTab(){
 
 function renderArchiveCard(p){
   const dLabel = p.afgerond_op ? new Date(p.afgerond_op).toLocaleDateString('nl-BE', {day:'2-digit', month:'short', year:'numeric'}) : '–';
-  const discAccent = DISCIPLINES[p.discipline] && DISCIPLINES[p.discipline].accent || '#3083DC';
-  const discLabel = DISCIPLINES[p.discipline] && DISCIPLINES[p.discipline].label || (p.discipline||'').replace(/_/g, ' ');
+  const di = getDisciplineInfo(p.discipline);
+  const discAccent = di.accent;
+  const discLabel = di.label;
   const dels = Array.isArray(p.deliverables) ? p.deliverables : [];
   return '<details class="s27-archive-card">' +
     '<summary>' +
@@ -1118,6 +1131,54 @@ function renderArchiveCard(p){
     '</div>' +
   '</details>';
 }
+/* Dynamische vervolgvragen per project-type — v2.2 #46 / #47 (PandaDoc-integratie volgt) */
+const PROJECT_SUB_QUESTIONS = {
+  'Video': [
+    { id:'video_type',    label:'Wat voor video?',                 type:'select', opts:['Corporate / bedrijfsfilm','Promovideo / reclame','Social media reels (verticaal)','Interview / testimonial','Event-coverage','Productvideo','Animatie / motion design'] },
+    { id:'video_shoot',   label:'Shoot inplannen?',                type:'select', opts:['Ja, graag plannen','Bestaand beeldmateriaal hergebruiken','Mix van beide'] },
+    { id:'video_lengte',  label:'Verwachte lengte van eindproduct',type:'select', opts:['15 sec','30 sec','60 sec','1 – 2 min','2 – 5 min','5+ min'] },
+    { id:'video_aantal',  label:'Hoeveel deliverables?',           type:'select', opts:['1 versie','2 – 3 versies','4 – 6 versies','7+ versies (campagne)'] }
+  ],
+  'Fotografie': [
+    { id:'foto_type',   label:'Wat voor fotografie?',     type:'select', opts:['Bedrijfsfoto\'s / team','Productfotografie','Locatie / interieur','Event','Lifestyle / brand'] },
+    { id:'foto_aantal', label:'Hoeveel beelden ongeveer?',type:'select', opts:['< 20','20 – 50','50 – 100','100+'] }
+  ],
+  'Webdesign': [
+    { id:'web_type',    label:'Wat voor site?',          type:'select', opts:['Nieuwe website (one-pager)','Nieuwe website (5 – 10 pagina\'s)','Nieuwe website (10+ pagina\'s)','Webshop / ecommerce','Landing page','Restyling bestaande site'] },
+    { id:'web_talen',   label:'Aantal taalversies',      type:'select', opts:['1 taal','2 talen','3+ talen'] },
+    { id:'web_cms',     label:'CMS / zelf kunnen wijzigen?', type:'select', opts:['Ja, ik wil zelf updates kunnen doen','Nee, jullie beheren','Twijfel nog'] }
+  ],
+  'Branding': [
+    { id:'brand_scope', label:'Wat heb je nodig?', type:'select', opts:['Alleen logo','Logo + basis-huisstijl','Volledige rebranding','Brandbook + guidelines'] }
+  ],
+  'Social Media': [
+    { id:'soc_freq',    label:'Hoeveel posts per maand?', type:'select', opts:['4 – 8 posts','8 – 16 posts','16 – 30 posts','30+ posts'] },
+    { id:'soc_kanalen', label:'Welke kanalen?',           type:'select', opts:['Instagram + Facebook','+ LinkedIn','+ TikTok','Multichannel (alles)'] }
+  ],
+  'Advertising': [
+    { id:'ads_kanalen',  label:'Welke kanalen wil je inzetten?',         type:'select', opts:['Google Ads','Meta (Facebook + Instagram)','TikTok / Snapchat','LinkedIn','Multichannel'] },
+    { id:'ads_doel',     label:'Hoofddoel van de campagne',              type:'select', opts:['Meer leads','Meer omzet (ecommerce)','Naamsbekendheid','Recruitment / employer branding'] }
+  ],
+  'SEO': [
+    { id:'seo_status',  label:'Huidige SEO-situatie',   type:'select', opts:['Nooit echt mee bezig','Basis opgezet maar geen opvolging','Loopt al maar moet beter','Optimaliseren voor AI / GEO'] }
+  ],
+  'Opleiding': [
+    { id:'opl_thema',   label:'Wat wil je leren?',           type:'select', opts:['Social media beheer','Content creation','SEO / GEO','Advertising-basis','AI & automatisatie','Op maat'] },
+    { id:'opl_groep',   label:'Hoeveel deelnemers?',         type:'select', opts:['1 op 1','2 – 5','6 – 12','13+'] }
+  ],
+  'Automatisatie': [
+    { id:'auto_tools',  label:'Welke tools wil je koppelen?',  type:'text',   placeholder:'Bv. ClickUp + Gmail + Slack' },
+    { id:'auto_doel',   label:'Wat moet de automation oplossen?', type:'text',placeholder:'Bv. "Lead vanuit website automatisch in CRM + welkomstmail"' }
+  ]
+};
+
+// Wie krijgt welke offerte? Arne default (offertes), Ilke (opstart bestaande klant), Vincent (zaakvoerder)
+const PROJECT_CONTACT_OPTIONS = [
+  { id:'arne',    naam:'Arne Goetschalckx', email:'arne@studio27.be',    rol:'Sales — offertes & nieuwe projecten' },
+  { id:'ilke',    naam:'Ilke Meeusen',      email:'ilke@studio27.be',    rol:'Account manager — bestaande klanten / opstart' },
+  { id:'vincent', naam:'Vincent Verleije',  email:'vincent@studio27.be', rol:'Zaakvoerder — strategie & grote trajecten' }
+];
+
 function renderNieuwTab(){
   const body = $('s27-nieuw-body');
   if(!body) return;
@@ -1125,55 +1186,48 @@ function renderNieuwTab(){
     body.innerHTML = renderNieuwProjectSuccess(state._nieuwProjectSubmitted);
     return;
   }
-  const dash = state.dashboard || {};
-  const contact = dash.contact || {};
   body.innerHTML = `
     <div class="s27-nieuw-intro">
       <h3>Nieuw project aanvragen</h3>
       <p>Vertel ons in een paar regels wat je wil. We sturen je <strong>vandaag nog</strong> een offerte op maat — vrijblijvend.</p>
     </div>
     <form class="s27-nieuw-form" id="s27-nieuw-form" autocomplete="off">
-      <div class="s27-form-row">
-        <label class="s27-form-field">
-          <span>Type project <em>*</em></span>
-          <select name="project_type" required>
-            <option value="">Kies een type…</option>
-            <option value="Webdesign">Webdesign / nieuwe site</option>
-            <option value="Branding">Branding / huisstijl</option>
-            <option value="Video">Video productie</option>
-            <option value="Fotografie">Fotografie</option>
-            <option value="Social Media">Social Media campagne</option>
-            <option value="Advertising">Advertising (Google / Meta)</option>
-            <option value="SEO">SEO / GEO</option>
-            <option value="Opleiding">Opleiding / workshop</option>
-            <option value="Automatisatie">AI / Automatisatie</option>
-            <option value="Anders">Iets anders…</option>
-          </select>
-        </label>
-        <label class="s27-form-field">
-          <span>Budget (richtprijs)</span>
-          <select name="budget_range">
-            <option value="">Nog niet bepaald</option>
-            <option value="< €2.500">&lt; € 2.500</option>
-            <option value="€2.500 - €5.000">€ 2.500 – € 5.000</option>
-            <option value="€5.000 - €10.000">€ 5.000 – € 10.000</option>
-            <option value="€10.000 - €25.000">€ 10.000 – € 25.000</option>
-            <option value="> €25.000">&gt; € 25.000</option>
-          </select>
-        </label>
-      </div>
+      <label class="s27-form-field">
+        <span>Type project <em>*</em></span>
+        <select name="project_type" id="s27-pt-select" required>
+          <option value="">Kies een type…</option>
+          <option value="Video">Video productie</option>
+          <option value="Fotografie">Fotografie</option>
+          <option value="Webdesign">Webdesign / nieuwe site</option>
+          <option value="Branding">Branding / huisstijl</option>
+          <option value="Social Media">Social media campagne</option>
+          <option value="Advertising">Advertising (Google / Meta / TikTok)</option>
+          <option value="SEO">SEO / GEO</option>
+          <option value="Opleiding">Opleiding / workshop</option>
+          <option value="Automatisatie">AI / Automatisatie</option>
+          <option value="Anders">Iets anders…</option>
+        </select>
+      </label>
+
+      <div id="s27-pt-sub" class="s27-pt-sub" hidden></div>
+
       <label class="s27-form-field">
         <span>Gewenste opleverdatum</span>
         <input type="date" name="gewenste_opleverdatum"/>
       </label>
+
       <label class="s27-form-field">
         <span>Omschrijf je idee in een paar regels <em>*</em></span>
         <textarea name="omschrijving" rows="6" required placeholder="Voorbeeld: nieuwe corporate website met meertalig CMS, koppeling met onze Odoo-database en focus op SEO. Designstijl: modern, donker, met veel beweging."></textarea>
       </label>
+
       <label class="s27-form-field">
-        <span>Contact e-mail (voor offerte) <em>*</em></span>
-        <input type="email" name="contactpersoon_email" required value="${esc(contact.am_email || '')}"/>
+        <span>Naar wie sturen we de offerte? <em>*</em></span>
+        <select name="contact_owner" id="s27-contact-owner" required>
+          ${PROJECT_CONTACT_OPTIONS.map(o => `<option value="${esc(o.id)}"${o.id === 'arne' ? ' selected' : ''}>${esc(o.naam)} — ${esc(o.rol)}</option>`).join('')}
+        </select>
       </label>
+
       <div class="s27-form-actions">
         <button type="submit" class="s27-btn s27-btn-primary" id="s27-nieuw-submit">Stuur aanvraag</button>
         <p class="s27-form-info">We reageren binnen 24u. Geen verplichting tot iets — eerst luisteren, dan offerte.</p>
@@ -1183,6 +1237,39 @@ function renderNieuwTab(){
   `;
   const form = $('s27-nieuw-form');
   if(form) form.addEventListener('submit', submitNieuwProject);
+  const ptSelect = $('s27-pt-select');
+  if(ptSelect) ptSelect.addEventListener('change', () => renderProjectSubQuestions(ptSelect.value));
+}
+
+function renderProjectSubQuestions(projectType){
+  const subBox = $('s27-pt-sub');
+  if(!subBox) return;
+  const qs = PROJECT_SUB_QUESTIONS[projectType];
+  if(!qs || !qs.length){
+    subBox.hidden = true;
+    subBox.innerHTML = '';
+    return;
+  }
+  subBox.hidden = false;
+  subBox.innerHTML = '<div class="s27-pt-sub-head"><strong>📋 Help ons je offerte sneller op maat maken</strong><span>Beantwoord wat je al weet — je kan altijd later aanpassen</span></div>' +
+    qs.map(q => {
+      if(q.type === 'select'){
+        return `<label class="s27-form-field">
+          <span>${esc(q.label)}</span>
+          <select name="sub_${esc(q.id)}">
+            <option value="">Nog niet zeker</option>
+            ${q.opts.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('')}
+          </select>
+        </label>`;
+      }
+      if(q.type === 'text'){
+        return `<label class="s27-form-field">
+          <span>${esc(q.label)}</span>
+          <input type="text" name="sub_${esc(q.id)}" placeholder="${esc(q.placeholder || '')}"/>
+        </label>`;
+      }
+      return '';
+    }).join('');
 }
 
 function renderNieuwProjectSuccess(result){
@@ -1205,15 +1292,27 @@ async function submitNieuwProject(e){
   if(errEl) errEl.style.display = 'none';
   if(btn){ btn.disabled = true; btn.textContent = 'Aanvraag versturen…'; }
 
+  // Verzamel dynamische sub-vragen
+  const subAnswers = {};
+  Array.from(form.querySelectorAll('[name^="sub_"]')).forEach(el => {
+    if(el.value) subAnswers[el.name.replace('sub_','')] = el.value;
+  });
+  const subText = Object.keys(subAnswers).length
+    ? '\n\n— Antwoorden op vervolgvragen:\n' + Object.entries(subAnswers).map(([k,v]) => '• ' + k + ': ' + v).join('\n')
+    : '';
+  // Resolve contactpersoon
+  const contactOwner = form.contact_owner ? form.contact_owner.value : 'arne';
+  const owner = PROJECT_CONTACT_OPTIONS.find(o => o.id === contactOwner) || PROJECT_CONTACT_OPTIONS[0];
   const payload = {
     bedrijf_id: state.session.bedrijf_id,
     klant_naam: state.session.bedrijfsnaam,
     session_token: state.session.session_token,
     project_type: form.project_type.value,
-    budget_range: form.budget_range.value,
     gewenste_opleverdatum: form.gewenste_opleverdatum.value,
-    omschrijving: form.omschrijving.value,
-    contactpersoon_email: form.contactpersoon_email.value
+    omschrijving: form.omschrijving.value + subText,
+    contactpersoon_email: owner.email,
+    contactpersoon_naam: owner.naam,
+    sub_answers: subAnswers
   };
 
   try {
@@ -1397,18 +1496,25 @@ async function renderMeetingsTab(){
   const upcoming = meetings.filter(m => !m.datum_ms || m.datum_ms >= now).sort((a,b) => (a.datum_ms||0) - (b.datum_ms||0));
   const past = meetings.filter(m => m.datum_ms && m.datum_ms < now).sort((a,b) => (b.datum_ms||0) - (a.datum_ms||0));
 
-  const bookingBtn = '<a class="s27-btn" href="' + esc(bookingUrl) + '" target="_blank" rel="noopener" style="display:inline-flex;width:auto;padding:14px 26px;text-decoration:none;gap:8px">' +
-    '<svg width="16" height="16"><use href="#s27p-cal"/></svg> Nieuwe meeting inplannen</a>';
+  const bookingBtn = '<a class="s27-btn s27-btn-primary s27-meetings-cta" href="' + esc(bookingUrl) + '" target="_blank" rel="noopener">' +
+    '<svg width="16" height="16"><use href="#s27p-cal"/></svg> <span>Nieuwe meeting inplannen</span></a>';
+
+  // Header met titel + CTA rechtsboven — altijd zichtbaar
+  const header = '<div class="s27-meetings-head">' +
+    '<div><h3 class="s27-meetings-h">Jouw meetings</h3>' +
+      '<p class="s27-meetings-sub">Een overzicht van wat aankomt en wat al langs is gekomen.</p></div>' +
+    bookingBtn +
+  '</div>';
 
   if(!meetings.length){
-    body.innerHTML = '<div class="s27-empty"><div class="s27-empty-icon"><svg width="22" height="22"><use href="#s27p-cal"/></svg></div>' +
+    body.innerHTML = header +
+      '<div class="s27-empty"><div class="s27-empty-icon"><svg width="22" height="22"><use href="#s27p-cal"/></svg></div>' +
       '<div class="s27-empty-title">Nog geen meetings ingepland</div>' +
-      '<p class="s27-empty-sub">Plan rechtstreeks een tijdslot bij je account manager. Vul automatisch je gegevens in, kies een vrij moment, klaar.</p></div>' +
-      '<div style="text-align:center;margin-top:18px">' + bookingBtn + '</div>';
+      '<p class="s27-empty-sub">Klik bovenaan op <strong>Nieuwe meeting inplannen</strong> — vul je gegevens in, kies een vrij moment, klaar.</p></div>';
     return;
   }
 
-  let html = '';
+  let html = header;
   if(upcoming.length){
     html += '<div class="s27-section"><h3 class="s27-section-title">Aankomende meetings <span class="s27-badge">' + upcoming.length + '</span></h3>' +
       '<div class="s27-meetings-list">' + upcoming.map(renderMeetingCard).join('') + '</div></div>';
@@ -1417,19 +1523,26 @@ async function renderMeetingsTab(){
     html += '<div class="s27-section" style="margin-top:24px"><h3 class="s27-section-title">Eerdere meetings <span class="s27-badge s27-badge-muted">' + past.length + '</span></h3>' +
       '<div class="s27-meetings-list">' + past.slice(0,10).map(renderMeetingCard).join('') + '</div></div>';
   }
-  html += '<div style="text-align:center;margin-top:28px">' + bookingBtn + '</div>';
   body.innerHTML = html;
 }
 
 function renderMeetingCard(m){
   const d = m.datum_ms ? new Date(m.datum_ms) : null;
-  const dateLabel = d ? d.toLocaleDateString('nl-BE', {weekday:'short', day:'2-digit', month:'short'}) : 'datum nog te bevestigen';
-  const timeLabel = d ? d.toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'}) : '';
+  const hasDate = !!d;
+  // Compact 2-letter dag + dag-getal + maand 3-letter (past in date-block ZONDER overflow)
+  const dayWeek = hasDate ? d.toLocaleDateString('nl-BE', {weekday:'short'}).slice(0,2).toUpperCase() : '';
+  const dayNum  = hasDate ? d.getDate() : '?';
+  const month   = hasDate ? d.toLocaleDateString('nl-BE', {month:'short'}).slice(0,3).toLowerCase() : '';
+  const timeLabel = hasDate ? d.toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'}) : '';
   const link = m.link ? '<a href="' + esc(m.link) + '" target="_blank" rel="noopener" class="s27-meeting-link">In ClickUp openen →</a>' : '';
+  const dateBlock = hasDate
+    ? '<div class="s27-meeting-date"><span class="dw">' + esc(dayWeek) + '</span><strong>' + dayNum + '</strong><span class="dm">' + esc(month) + '</span></div>'
+    : '<div class="s27-meeting-date s27-meeting-date-tbd"><strong>?</strong><span>nog te<br>bevestigen</span></div>';
   return '<div class="s27-meeting-card">' +
-    '<div class="s27-meeting-date"><strong>' + esc(dateLabel) + '</strong>' + (timeLabel ? '<span>' + esc(timeLabel) + '</span>' : '') + '</div>' +
+    dateBlock +
     '<div class="s27-meeting-body">' +
       '<div class="s27-meeting-title">' + esc(m.titel || 'Meeting') + '</div>' +
+      (timeLabel ? '<div class="s27-meeting-time">⏰ ' + esc(timeLabel) + '</div>' : '') +
       (m.type ? '<div class="s27-meeting-type">' + esc(m.type) + '</div>' : '') +
       link +
     '</div>' +
@@ -1440,9 +1553,16 @@ function renderMeetingCard(m){
    PROJECT DETAIL MODAL
    ================================================================= */
 async function openProjectDetail(taskId, openOnTab){
-  if(!taskId) return;
+  if(!taskId) { console.warn('[Studio 27] openProjectDetail zonder taskId'); return; }
+  if(!state.dashboard || !Array.isArray(state.dashboard.actieve_projecten)){
+    console.error('[Studio 27] state.dashboard ontbreekt of heeft geen actieve_projecten');
+    return;
+  }
   const proj = state.dashboard.actieve_projecten.find(p => p.task_id === taskId);
-  if(!proj) return;
+  if(!proj){
+    console.warn('[Studio 27] Project niet gevonden voor task_id:', taskId);
+    return;
+  }
   state.activeProject = proj;
   state.viewMode = 'project';
   const stKey = (proj.status||'').toLowerCase().replace(/\s+/g,'_');
@@ -1457,7 +1577,12 @@ async function openProjectDetail(taskId, openOnTab){
     fsView = document.createElement('div');
     fsView.id = 's27-tab-project';
     fsView.className = 's27-tabview s27-projectview';
-    document.querySelector('.s27-wrap').appendChild(fsView);
+    const wrap = document.querySelector('.s27-wrap');
+    if(!wrap){
+      console.error('[Studio 27] .s27-wrap niet gevonden — kan project view niet plaatsen');
+      return;
+    }
+    wrap.appendChild(fsView);
   }
   fsView.hidden = false;
   fsView.innerHTML = '<div class="s27-loading">Project laden…</div>';
@@ -1491,18 +1616,62 @@ async function openProjectDetail(taskId, openOnTab){
     : api(ENDPOINTS.chatList, { task_id: taskId, bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token })
         .then(r => (r.ok && r.data && !r.data.error) ? r.data : { comments: [] });
 
-  const [detail, chat] = await Promise.all([detailPromise, chatPromise]);
-  detail.comments = (chat.comments || detail.comments || []);
+  let detail, chat;
+  try {
+    [detail, chat] = await Promise.all([detailPromise, chatPromise]);
+  } catch(err){
+    console.error('[Studio 27] Detail/chat fetch failed:', err);
+    detail = { beschrijving:'', taken:[], deliverables:[] };
+    chat = { comments: [] };
+  }
+  detail = detail || { beschrijving:'', taken:[], deliverables:[] };
+  detail.comments = (chat && chat.comments) || detail.comments || [];
   state.activeProjectDetail = detail;
-  renderProjectView(proj, detail, needsFeedback);
+  try {
+    renderProjectView(proj, detail, needsFeedback);
+  } catch(err){
+    console.error('[Studio 27] renderProjectView crashed:', err, '\nproj=', proj, '\ndetail=', detail);
+    const fsView = $('s27-tab-project');
+    if(fsView){
+      fsView.innerHTML = '<div style="padding:40px 20px;text-align:center;font-family:system-ui">' +
+        '<h3 style="margin:0 0 10px;color:#991b1b">Project kon niet getoond worden</h3>' +
+        '<p style="color:#7f1d1d;font-size:14px;margin:0 0 16px">Er ging iets mis bij het laden. Probeer opnieuw of mail naar ilke@studio27.be.</p>' +
+        '<details style="text-align:left;max-width:600px;margin:0 auto;font-size:12px;color:#444"><summary>Technische details</summary>' +
+        '<pre style="white-space:pre-wrap;background:#f8f8f8;padding:10px;border-radius:6px">' + esc(String(err && err.message || err)) + '</pre></details>' +
+        '<button onclick="exitProjectView()" style="margin-top:20px;padding:10px 20px;background:#3083DC;color:#fff;border:none;border-radius:8px;cursor:pointer">← Terug naar projecten</button>' +
+      '</div>';
+    }
+  }
+}
+
+// Discipline-accent mapping (DISCIPLINES const heeft alleen id+label+icon, geen accent)
+const DISCIPLINE_ACCENTS = {
+  video_fotografie: '#9441DB',
+  webdesign:        '#12AC4E',
+  branding:         '#F697CE',
+  social:           '#3083DC',
+  ads:              '#F66131',
+  seo:              '#F8C028',
+  opleiding:        '#6B5B6B',
+  automation:       '#0D8A8A',
+  strategie:        '#0D8A8A'
+};
+
+function getDisciplineInfo(disc){
+  const found = Array.isArray(DISCIPLINES) ? DISCIPLINES.find(d => d.id === disc) : null;
+  return {
+    label: found ? found.label : (disc || '').replace(/_/g, ' '),
+    accent: DISCIPLINE_ACCENTS[disc] || '#3083DC',
+    icon: found ? found.icon : 's27p-spark'
+  };
 }
 
 function renderProjectView(proj, detail, needsFeedback){
   const fsView = $('s27-tab-project');
   if(!fsView){ console.warn('[Studio 27] Project view container niet gevonden'); return; }
-  const discipline = DISCIPLINES[proj.discipline] || {};
-  const accent = discipline.accent || '#3083DC';
-  const discLabel = discipline.label || (proj.discipline||'').replace(/_/g, ' ');
+  const discipline = getDisciplineInfo(proj.discipline);
+  const accent = discipline.accent;
+  const discLabel = discipline.label;
   const statusKey = (proj.status || '').toLowerCase().replace(/\s+/g,'_');
   const statusLabel = proj.status_label || STATUS_LABELS[statusKey] || proj.status || '';
   const eta = computeETA(proj);
