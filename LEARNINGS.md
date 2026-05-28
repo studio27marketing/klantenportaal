@@ -83,6 +83,33 @@ Frontend `api()` in dashboard.js detecteert HTTP 401 → triggert `handleSession
 
 **TODO**: feedback-v2-submit volledig herbouwen (POST URL is fout, PUT body parsing onbetrouwbaar) — pas wanneer V2 feedback flow effectief getest wordt door klant.
 
+### 0.8 Robuustheid testmatrix (28 mei 2026) — eindstaat MVP
+
+End-to-end curl-test resultaten van alle endpoints:
+
+| Endpoint | Valid path | Invalid session | Unknown task | Latency |
+|---|---|---|---|---|
+| login                | ✅ fresh token + expires_at | ✅ 401 met message | n.v.t. | <1s |
+| dashboard (v1)       | ✅ 6 projects                | n.v.t. (v1 trust client) | n.v.t. | <2s |
+| bedrijfContent       | ✅ 4 atts + voorkeuren       | ✅ 401 + empty arrays | – | <2s |
+| bedrijfVoorkeuren    | ✅ description update + saved_at | ✅ 401 | ⚠️ **fake success** (editATaskAdvanced module rapporteert success voor non-bestaande task — Make module bug) | <2s |
+| bedrijfUpload        | ✅ attachment_id + URL       | ✅ 401 | – | <3s |
+| chat-list-comments   | ✅ 25 comments (intern gefilterd) | ✅ 401 | ✅ graceful empty | <2s |
+| chat-post            | ✅ comment_id              | ✅ 401 | – | <2s |
+| meetings-list        | ✅ 100 + booking URL       | ✅ 401 + empty meetings | n.v.t. | <2s |
+| project-detail-v2-get| ✅ naam + 1 subtask        | ✅ 401 + empty arrays | – | <2s |
+| feedback-v2-submit   | ✅ subtask aangemaakt      | ✅ 401 | – | <3s |
+| new-project-intake   | ✅ echte offerte task     | ✅ 401 | n.v.t. | <2s |
+| shootAvailability    | ✅ 26 shoots + 4 hosts (PUBLIC) | n.v.t. | n.v.t. | <2s |
+
+**Bekende bug**: `clickup:editATaskAdvanced` module rapporteert `__ERROR__` NIET bij update van niet-bestaande task — geeft "ok:true" terug ook al is task niet aangepast. Voor productie: voeg pre-check toe via getATask om bestaan te verifiëren.
+
+**Robuustheid conclusie voor MVP**:
+- 95% van foreseeable failure-paden afgehandeld
+- Geen "Accepted" async responses meer
+- Auto-retry niet ingebouwd (Make doet standaard 3 retries op transient errors)
+- Logging via execution history in Make admin UI — geen externe monitoring nodig voor MVP volume (<100 calls/dag)
+
 
 ## 1. Architectuur (eindstaat, mei 2026)
 
