@@ -19,8 +19,10 @@
   var CDN    = 'https://raw.githack.com/' + REPO + '/' + BRANCH;
   var MOUNT_ID = 's27-portal-mount';
 
-  // Cache-bust query when ?nocache=1 in page URL
-  var CB = (location.search.indexOf('nocache=1') >= 0) ? ('?cb=' + Date.now()) : '';
+  // Cache-bust: granulariteit 60s tijdens MVP (auto-fresh elke minuut) of explicit timestamp met ?nocache=1
+  var CB = (location.search.indexOf('nocache=1') >= 0)
+    ? ('?cb=' + Date.now())
+    : ('?v=' + Math.floor(Date.now() / 60000));
 
   function loadCSS(href) {
     if (document.querySelector('link[data-s27-portal-css]')) return;
