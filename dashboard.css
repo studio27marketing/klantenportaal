@@ -58,6 +58,9 @@
 }
 
 body { margin:0; background:var(--s27-paper-2); }
+/* Globale fix: een class met display:flex/grid overschrijft het [hidden]-attribuut.
+   Forceer correct gedrag zodat hidden-toggles overal werken (contactform-foot, pt-sub, shoot-step2…). */
+#s27-portal [hidden] { display:none !important; }
 .s27-portal { font-family:var(--font-body); color:var(--s27-ink); position:relative; background:var(--s27-paper-2); min-height:100vh; -webkit-font-smoothing:antialiased; }
 .s27-portal *, .s27-portal *::before, .s27-portal *::after { box-sizing:border-box; }
 .s27-portal a { color:var(--s27-blue-ink); }
@@ -958,8 +961,6 @@ body { margin:0; background:var(--s27-paper-2); }
 }
 
 /* ============ NIEUW-PROJECT WIZARD (v3-D) ============ */
-/* fix: class-display (flex/grid) overschreef [hidden] → forceer none bij hidden */
-#s27-nieuw-body [hidden] { display:none !important; }
 .s27-wiz-steps { display:flex; align-items:center; justify-content:center; gap:6px; margin:4px 0 26px; }
 .s27-wiz-step { display:flex; align-items:center; gap:9px; opacity:0.5; transition:opacity .2s; }
 .s27-wiz-step.is-active, .s27-wiz-step.is-done { opacity:1; }

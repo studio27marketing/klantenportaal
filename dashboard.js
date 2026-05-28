@@ -2430,7 +2430,10 @@ async function openProjectDetail(taskId, openOnTab){
       console.error('[Studio 27] .s27-wrap niet gevonden — kan project view niet plaatsen');
       return;
     }
-    wrap.appendChild(fsView);
+    // Plaats de project-view tussen de tabs (vóór de footer) i.p.v. helemaal onderaan,
+    // anders verschijnt de footer + lege ruimte bóven de project-inhoud.
+    const foot = wrap.querySelector('.s27-foot');
+    if(foot) wrap.insertBefore(fsView, foot); else wrap.appendChild(fsView);
   }
   fsView.hidden = false;
   fsView.innerHTML = '<div class="s27-loading">Project laden…</div>';
@@ -2486,7 +2489,7 @@ async function openProjectDetail(taskId, openOnTab){
     if(fsView){
       fsView.innerHTML = '<div style="padding:40px 20px;text-align:center;font-family:system-ui">' +
         '<h3 style="margin:0 0 10px;color:#991b1b">Project kon niet getoond worden</h3>' +
-        '<p style="color:#7f1d1d;font-size:14px;margin:0 0 16px">Er ging iets mis bij het laden. Probeer opnieuw of mail naar ilke@studio27.be.</p>' +
+        '<p style="color:#7f1d1d;font-size:14px;margin:0 0 16px">Er ging iets mis bij het laden. Probeer opnieuw of <a href="#" data-dm="vraag" data-dm-onderwerp="Project laadt niet">stuur ons een bericht</a>.</p>' +
         '<details style="text-align:left;max-width:600px;margin:0 auto;font-size:12px;color:#444"><summary>Technische details</summary>' +
         '<pre style="white-space:pre-wrap;background:#f8f8f8;padding:10px;border-radius:6px">' + esc(String(err && err.message || err)) + '</pre></details>' +
         '<button onclick="exitProjectView()" style="margin-top:20px;padding:10px 20px;background:#3083DC;color:#fff;border:none;border-radius:8px;cursor:pointer">← Terug naar projecten</button>' +
@@ -2984,7 +2987,7 @@ function renderFeedbackV2Tab(proj, detail){
     'Bevestig onderaan zodat we direct verder kunnen.' +
     '</div>';
   if(!deliverables.length){
-    return intro + '<div class="s27-empty"><div class="s27-empty-title">Geen deliverables gevonden</div><p class="s27-empty-sub">Mail naar ilke@studio27.be om dit te laten oplossen.</p></div>';
+    return intro + '<div class="s27-empty"><div class="s27-empty-title">Nog geen deliverables klaar</div><p class="s27-empty-sub">Zodra we iets opleveren verschijnt het hier. Benieuwd naar de stand van zaken? <a href="#" data-dm="vraag" data-dm-onderwerp="Vraag over deliverables">Stuur ons even een bericht</a>.</p></div>';
   }
   return intro +
     '<div class="s27-fb-list">' +
