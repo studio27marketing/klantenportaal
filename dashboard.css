@@ -254,6 +254,28 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-archive-empty { font-family:var(--font-body); font-size:13px; color:var(--s27-ink-3); padding:14px 0 0; margin:0; }
 .s27-archive-empty a { color:var(--s27-blue-ink); }
 
+/* ============ NIEUW PROJECT FORMULIER (v2 Fase 27) ============ */
+.s27-nieuw-intro h3 { font-family:var(--font-display); font-size:22px; font-weight:900; color:var(--s27-ink); margin:0 0 6px; letter-spacing:-0.02em; }
+.s27-nieuw-intro p { font-family:var(--font-body); font-size:14px; color:var(--s27-ink-2, var(--s27-ink-3)); margin:0 0 28px; line-height:1.5; }
+.s27-nieuw-form { display:flex; flex-direction:column; gap:18px; max-width:680px; }
+.s27-form-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+@media (max-width:560px){ .s27-form-row { grid-template-columns:1fr; } }
+.s27-form-field { display:flex; flex-direction:column; gap:6px; }
+.s27-form-field span { font-family:var(--font-display); font-size:13px; font-weight:700; color:var(--s27-ink); }
+.s27-form-field em { color:var(--s27-red, #d33); font-style:normal; }
+.s27-form-field input, .s27-form-field select, .s27-form-field textarea { font-family:var(--font-body); font-size:14px; padding:11px 13px; border:1.5px solid var(--s27-line); border-radius:var(--r-sm); background:var(--s27-paper); color:var(--s27-ink); transition:border-color .15s; }
+.s27-form-field input:focus, .s27-form-field select:focus, .s27-form-field textarea:focus { outline:none; border-color:var(--s27-blue); }
+.s27-form-field textarea { resize:vertical; min-height:120px; font-family:var(--font-body); line-height:1.5; }
+.s27-form-actions { display:flex; flex-direction:column; gap:8px; margin-top:8px; }
+.s27-form-info { font-family:var(--font-body); font-size:12px; color:var(--s27-ink-3); margin:0; }
+.s27-form-error { font-family:var(--font-body); font-size:13px; color:#991b1b; background:#fef2f2; border:1px solid #fecaca; padding:10px 14px; border-radius:var(--r-sm); margin:0; }
+.s27-nieuw-success { text-align:center; padding:40px 24px; background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:var(--r-md); max-width:520px; margin:24px auto; }
+.s27-success-icon { width:64px; height:64px; margin:0 auto 18px; background:#dcfce7; color:#166534; border-radius:50%; display:flex; align-items:center; justify-content:center; }
+.s27-nieuw-success h3 { font-family:var(--font-display); font-size:22px; font-weight:900; color:var(--s27-ink); margin:0 0 10px; letter-spacing:-0.015em; }
+.s27-nieuw-success p { font-family:var(--font-body); font-size:14px; color:var(--s27-ink-3); margin:0 0 18px; line-height:1.5; }
+.s27-success-meta a { color:var(--s27-blue-ink); font-weight:700; text-decoration:none; }
+.s27-success-meta a:hover { text-decoration:underline; }
+
 /* ============ FULLSCREEN PROJECT VIEW (v2.1 Fase 34) ============ */
 .s27-projectview { animation:s27fadeIn .25s var(--ease-out) backwards; }
 .s27-pv-head { margin-bottom:24px; }

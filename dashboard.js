@@ -936,8 +936,123 @@ function renderArchiveCard(p){
   '</details>';
 }
 function renderNieuwTab(){
-  renderPlaceholderTab('s27-nieuw-body', 'Nieuw project aanmelden (binnenkort)',
-    'Vertel ons wat je wil en we sturen je vandaag nog een offerte op maat. Geen verplichting.');
+  const body = $('s27-nieuw-body');
+  if(!body) return;
+  if(state._nieuwProjectSubmitted){
+    body.innerHTML = renderNieuwProjectSuccess(state._nieuwProjectSubmitted);
+    return;
+  }
+  const dash = state.dashboard || {};
+  const contact = dash.contact || {};
+  body.innerHTML = `
+    <div class="s27-nieuw-intro">
+      <h3>Nieuw project aanvragen</h3>
+      <p>Vertel ons in een paar regels wat je wil. We sturen je <strong>vandaag nog</strong> een offerte op maat — vrijblijvend.</p>
+    </div>
+    <form class="s27-nieuw-form" id="s27-nieuw-form" autocomplete="off">
+      <div class="s27-form-row">
+        <label class="s27-form-field">
+          <span>Type project <em>*</em></span>
+          <select name="project_type" required>
+            <option value="">Kies een type…</option>
+            <option value="Webdesign">Webdesign / nieuwe site</option>
+            <option value="Branding">Branding / huisstijl</option>
+            <option value="Video">Video productie</option>
+            <option value="Fotografie">Fotografie</option>
+            <option value="Social Media">Social Media campagne</option>
+            <option value="Advertising">Advertising (Google / Meta)</option>
+            <option value="SEO">SEO / GEO</option>
+            <option value="Opleiding">Opleiding / workshop</option>
+            <option value="Automatisatie">AI / Automatisatie</option>
+            <option value="Anders">Iets anders…</option>
+          </select>
+        </label>
+        <label class="s27-form-field">
+          <span>Budget (richtprijs)</span>
+          <select name="budget_range">
+            <option value="">Nog niet bepaald</option>
+            <option value="< €2.500">&lt; € 2.500</option>
+            <option value="€2.500 - €5.000">€ 2.500 – € 5.000</option>
+            <option value="€5.000 - €10.000">€ 5.000 – € 10.000</option>
+            <option value="€10.000 - €25.000">€ 10.000 – € 25.000</option>
+            <option value="> €25.000">&gt; € 25.000</option>
+          </select>
+        </label>
+      </div>
+      <label class="s27-form-field">
+        <span>Gewenste opleverdatum</span>
+        <input type="date" name="gewenste_opleverdatum"/>
+      </label>
+      <label class="s27-form-field">
+        <span>Omschrijf je idee in een paar regels <em>*</em></span>
+        <textarea name="omschrijving" rows="6" required placeholder="Voorbeeld: nieuwe corporate website met meertalig CMS, koppeling met onze Odoo-database en focus op SEO. Designstijl: modern, donker, met veel beweging."></textarea>
+      </label>
+      <label class="s27-form-field">
+        <span>Contact e-mail (voor offerte) <em>*</em></span>
+        <input type="email" name="contactpersoon_email" required value="${esc(contact.am_email || '')}"/>
+      </label>
+      <div class="s27-form-actions">
+        <button type="submit" class="s27-btn s27-btn-primary" id="s27-nieuw-submit">Stuur aanvraag</button>
+        <p class="s27-form-info">We reageren binnen 24u. Geen verplichting tot iets — eerst luisteren, dan offerte.</p>
+      </div>
+      <p class="s27-form-error" id="s27-nieuw-error" style="display:none"></p>
+    </form>
+  `;
+  const form = $('s27-nieuw-form');
+  if(form) form.addEventListener('submit', submitNieuwProject);
+}
+
+function renderNieuwProjectSuccess(result){
+  return `
+    <div class="s27-nieuw-success">
+      <div class="s27-success-icon"><svg width="32" height="32"><use href="#s27p-check"/></svg></div>
+      <h3>Bedankt — we hebben je aanvraag goed ontvangen!</h3>
+      <p>Onze account manager neemt binnen 24u contact op met een offerte op maat. Geen verplichting.</p>
+      ${result.offerte_task_url ? `<p class="s27-success-meta">Status van je aanvraag: <a href="${esc(result.offerte_task_url)}" target="_blank" rel="noopener">bekijk in onze planning</a></p>` : ''}
+      <button class="s27-btn s27-btn-ghost" onclick="state._nieuwProjectSubmitted=null; renderNieuwTab()">Nog een aanvraag indienen</button>
+    </div>
+  `;
+}
+
+async function submitNieuwProject(e){
+  e.preventDefault();
+  const form = e.target;
+  const btn = $('s27-nieuw-submit');
+  const errEl = $('s27-nieuw-error');
+  if(errEl) errEl.style.display = 'none';
+  if(btn){ btn.disabled = true; btn.textContent = 'Aanvraag versturen…'; }
+
+  const payload = {
+    bedrijf_id: state.session.bedrijf_id,
+    klant_naam: state.session.bedrijfsnaam,
+    session_token: state.session.session_token,
+    project_type: form.project_type.value,
+    budget_range: form.budget_range.value,
+    gewenste_opleverdatum: form.gewenste_opleverdatum.value,
+    omschrijving: form.omschrijving.value,
+    contactpersoon_email: form.contactpersoon_email.value
+  };
+
+  try {
+    if(state.demoMode){
+      // Demo mode — toon success met dummy ID
+      state._nieuwProjectSubmitted = {ok:true, offerte_task_id:'DEMO-001', message:'Bedankt — demo mode'};
+      renderNieuwTab();
+      return;
+    }
+    const res = await api(ENDPOINTS.newProjectIntake, payload);
+    if(res.ok && res.data && res.data.ok){
+      state._nieuwProjectSubmitted = res.data;
+      renderNieuwTab();
+    } else {
+      const msg = (res.data && res.data.message) || 'Aanvraag kon niet worden verzonden. Mail rechtstreeks naar ilke@studio27.be.';
+      if(errEl){ errEl.style.display = 'block'; errEl.textContent = msg; }
+      if(btn){ btn.disabled = false; btn.textContent = 'Stuur aanvraag'; }
+    }
+  } catch(err){
+    if(errEl){ errEl.style.display = 'block'; errEl.textContent = 'Netwerkfout — probeer opnieuw.'; }
+    if(btn){ btn.disabled = false; btn.textContent = 'Stuur aanvraag'; }
+  }
 }
 function renderInstellingenTab(){
   const body = $('s27-instellingen-body');
