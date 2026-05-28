@@ -637,10 +637,12 @@ function renderContact(c){
       <div class="s27-contact-tag">Account manager</div>
       <div class="s27-contact-name">${esc(c.am_naam || 'Ilke Meeusen')}</div>
       <div class="s27-contact-role">${esc(c.am_rol || 'Jouw vast aanspreekpunt bij Studio 27')}</div>
+      <p class="s27-contact-tip">💡 Vraag over een lopend project? Open het project en chat direct met het team — sneller dan bellen, alles bij je dossier.</p>
     </div>
     <div class="s27-contact-actions">
-      ${c.am_gsm   ? `<a href="tel:${esc(c.am_gsm)}"><svg width="13" height="13"><use href="#s27p-phone"/></svg> Bellen</a>` : ''}
-      <a class="primary" href="mailto:${esc(c.am_email || 'ilke@studio27.be')}"><svg width="13" height="13"><use href="#s27p-mail"/></svg> Mail sturen</a>
+      <a class="primary" href="#/?action=jump-projects" id="s27-contact-projects-btn"><svg width="13" height="13"><use href="#s27p-spark"/></svg> Naar mijn projecten</a>
+      <a href="mailto:${esc(c.am_email || 'ilke@studio27.be')}?subject=${encodeURIComponent('Terugbel-verzoek ' + (state.session && state.session.bedrijfsnaam ? state.session.bedrijfsnaam : ''))}&body=${encodeURIComponent('Hallo,\n\nIk wil graag worden teruggebeld door ' + (c.am_naam || 'het Studio 27 team') + '. Beste moment: \n\nOnderwerp: \n\nMet groet,\n')}"><svg width="13" height="13"><use href="#s27p-phone"/></svg> Vraag terugbel</a>
+      ${c.am_gsm ? `<a href="tel:${esc(c.am_gsm)}" class="s27-contact-call-direct"><svg width="13" height="13"><use href="#s27p-phone"/></svg> Direct bellen</a>` : ''}
     </div>
   </div>`;
 }
