@@ -198,6 +198,27 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-contact-call-direct { opacity:0.8; font-size:11px !important; padding:6px 11px !important; }
 .s27-contact-call-direct:hover { opacity:1; }
 
+/* ============ TUTORIAL / WALKTHROUGH (v2 Fase 32) ============ */
+.s27-tour-overlay { position:fixed; inset:0; background:rgba(20,15,28,.55); display:flex; align-items:center; justify-content:center; padding:20px; z-index:99998; animation:s27fadeIn .25s var(--ease-out) backwards; }
+.s27-tour-dialog { background:var(--s27-paper); border-radius:var(--r-lg); padding:36px 40px 30px; max-width:520px; width:100%; box-shadow:0 10px 30px rgba(0,0,0,.18); position:relative; text-align:center; animation:s27popIn .3s var(--ease-out) backwards; }
+@keyframes s27popIn { from { opacity:0; transform:scale(.95) translateY(8px); } to { opacity:1; transform:scale(1) translateY(0); } }
+.s27-tour-close { position:absolute; top:14px; right:14px; background:none; border:none; font-size:24px; line-height:1; color:var(--s27-ink-3); cursor:pointer; padding:6px 10px; border-radius:var(--r-sm); transition:background .15s; }
+.s27-tour-close:hover { background:var(--s27-paper-3); color:var(--s27-ink); }
+.s27-tour-icon { font-size:44px; line-height:1; margin-bottom:14px; }
+.s27-tour-title { font-family:var(--font-display); font-size:24px; font-weight:900; color:var(--s27-ink); margin:0 0 12px; letter-spacing:-0.025em; line-height:1.15; }
+.s27-tour-body { font-family:var(--font-body); font-size:14.5px; color:var(--s27-ink-2, var(--s27-ink-3)); line-height:1.6; margin:0 0 24px; }
+.s27-tour-dots { display:flex; justify-content:center; gap:7px; margin-bottom:22px; }
+.s27-tour-dot { width:8px; height:8px; border-radius:50%; background:var(--s27-paper-3); cursor:pointer; transition:background .15s, transform .15s; }
+.s27-tour-dot:hover { background:var(--s27-ink-3); }
+.s27-tour-dot.is-active { background:var(--s27-blue); transform:scale(1.25); }
+.s27-tour-actions { display:flex; justify-content:space-between; align-items:center; gap:14px; }
+.s27-tour-actions .s27-btn { min-width:120px; }
+.s27-tour-actions > span { flex:1; }
+@media (max-width:520px){ .s27-tour-dialog { padding:28px 22px 22px; } .s27-tour-title { font-size:20px; } .s27-tour-body { font-size:13.5px; } }
+
+.s27-help-btn { width:32px; height:32px; border-radius:50%; background:var(--s27-paper-3); color:var(--s27-ink); border:1.5px solid var(--s27-line); cursor:pointer; font-family:var(--font-display); font-weight:900; font-size:14px; display:inline-flex; align-items:center; justify-content:center; transition:all .15s; margin-left:10px; }
+.s27-help-btn:hover { background:var(--s27-blue-soft); color:var(--s27-blue-ink); border-color:var(--s27-blue); }
+
 /* Meetings mini widget op home */
 .s27-meetings-mini { background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:var(--r-md); padding:16px 18px; margin-bottom:28px; }
 .s27-meetings-mini-head { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; }

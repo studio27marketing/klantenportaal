@@ -326,6 +326,12 @@ function renderDashboard(d){
   const greetingName = firstNameFromCompany(d.klant && d.klant.bedrijfsnaam);
   const heroTitle = $('s27-hero-title');
   if(heroTitle) heroTitle.innerHTML = '<span class="greeting">Hey ' + esc(greetingName) + ',</span><span class="s27-hero-subline">Hier zijn jouw lopende projecten.</span>';
+  // v2 Fase 32: tutorial bij eerste bezoek
+  if(!localStorage.getItem('s27_tour_completed')){
+    setTimeout(() => showWelcomeTour(true), 400);
+  }
+  // Help-knop in header injecteren als nog niet bestaat
+  injectHelpButton();
   // Verberg verbose hero-lead voor compacter overzicht
   const heroLead = document.querySelector('#s27-tab-dashboard .s27-hero-lead'); if(heroLead) heroLead.style.display = 'none';
   const heroTag  = document.querySelector('#s27-tab-dashboard .s27-hero-tag');  if(heroTag) heroTag.style.display = 'none';
@@ -421,6 +427,118 @@ function renderProjectCompact(p){
       '<span class="s27-projc-arrow">→</span>' +
     '</div>' +
   '</div>';
+}
+
+/* =================================================================
+   TUTORIAL / WALKTHROUGH (v2 Fase 32)
+   ================================================================= */
+const TOUR_STEPS = [
+  {
+    icon: '👋',
+    title: 'Welkom in jouw klantenportaal!',
+    body: 'Hier vind je alles van Studio 27 op één plek: lopende projecten, deliverables, meetings en directe chat met ons team. We hebben dit gebouwd zodat je nooit meer hoeft te wachten op een antwoord.'
+  },
+  {
+    icon: '📁',
+    title: 'Lopende projecten in 1 oogopslag',
+    body: 'Per discipline (video, web, branding…) zie je elke taak. Filter op status, klik om in te zoomen, en zie altijd de verwachte oplevering — onze Smart ETA berekent dit live op basis van de echte planning.'
+  },
+  {
+    icon: '💬',
+    title: 'Chat per project — sneller dan mail',
+    body: 'Vraag iets over een specifiek project? Open het, klik op "Chat" en stuur direct een bericht. Wij krijgen een notificatie en jij ziet onze antwoorden op dezelfde plek. Alles netjes in jouw dossier.'
+  },
+  {
+    icon: '🎨',
+    title: 'Mijn bedrijf — jouw huisstijl-cloud',
+    body: 'Upload logos, fonts, kleurpaletten, brand PDFs en foto\'s. Onze designers en content creators putten direct hieruit — geen "kun je nog eens de fonts sturen?" meer. En je voorkeuren tekst bovenaan helpt ons je merk te begrijpen.'
+  },
+  {
+    icon: '🚀',
+    title: 'Klaar om te starten',
+    body: 'Vragen? Stuur een chat via een project, of mail rechtstreeks. Liever telefonisch? Klik bovenaan op "Vraag terugbel" — onze account manager belt op een moment dat past. Veel succes!'
+  }
+];
+
+function showWelcomeTour(firstTime){
+  // Build modal
+  let modal = $('s27-tour-modal');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.id = 's27-tour-modal';
+    modal.className = 's27-tour-overlay';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 's27-tour-title');
+    document.body.appendChild(modal);
+  }
+  state._tourStep = 0;
+  renderTourStep(modal, firstTime);
+}
+
+function renderTourStep(modal, firstTime){
+  const step = TOUR_STEPS[state._tourStep] || TOUR_STEPS[0];
+  const isLast = state._tourStep === TOUR_STEPS.length - 1;
+  const isFirst = state._tourStep === 0;
+  modal.innerHTML = `
+    <div class="s27-tour-dialog" role="document">
+      <button class="s27-tour-close" aria-label="Tour sluiten">×</button>
+      <div class="s27-tour-icon">${step.icon}</div>
+      <h3 class="s27-tour-title" id="s27-tour-title">${esc(step.title)}</h3>
+      <p class="s27-tour-body">${esc(step.body)}</p>
+      <div class="s27-tour-dots">
+        ${TOUR_STEPS.map((_, i) => `<span class="s27-tour-dot${i === state._tourStep ? ' is-active' : ''}" data-step="${i}"></span>`).join('')}
+      </div>
+      <div class="s27-tour-actions">
+        ${!isFirst ? `<button class="s27-btn s27-btn-ghost" id="s27-tour-prev">← Vorige</button>` : (firstTime ? `<button class="s27-btn s27-btn-ghost" id="s27-tour-skip">Tour overslaan</button>` : '<span></span>')}
+        ${!isLast
+          ? `<button class="s27-btn s27-btn-primary" id="s27-tour-next">Volgende →</button>`
+          : `<button class="s27-btn s27-btn-primary" id="s27-tour-done">${firstTime ? 'Aan de slag' : 'Sluiten'}</button>`}
+      </div>
+    </div>
+  `;
+  // Handlers
+  const close = () => {
+    try { modal.remove(); } catch(e){}
+    if(firstTime) try { localStorage.setItem('s27_tour_completed', new Date().toISOString()); } catch(e){}
+  };
+  const next = () => {
+    if(state._tourStep < TOUR_STEPS.length - 1){
+      state._tourStep += 1;
+      renderTourStep(modal, firstTime);
+    }
+  };
+  const prev = () => {
+    if(state._tourStep > 0){
+      state._tourStep -= 1;
+      renderTourStep(modal, firstTime);
+    }
+  };
+  modal.querySelector('.s27-tour-close').addEventListener('click', close);
+  const skip = $('s27-tour-skip'); if(skip) skip.addEventListener('click', close);
+  const nextBtn = $('s27-tour-next'); if(nextBtn) nextBtn.addEventListener('click', next);
+  const prevBtn = $('s27-tour-prev'); if(prevBtn) prevBtn.addEventListener('click', prev);
+  const doneBtn = $('s27-tour-done'); if(doneBtn) doneBtn.addEventListener('click', close);
+  modal.querySelectorAll('.s27-tour-dot').forEach(d => {
+    d.addEventListener('click', () => {
+      state._tourStep = parseInt(d.dataset.step, 10) || 0;
+      renderTourStep(modal, firstTime);
+    });
+  });
+}
+
+function injectHelpButton(){
+  if($('s27-help-btn')) return;
+  const header = document.querySelector('.s27-header-actions') || document.querySelector('.s27-header');
+  if(!header) return;
+  const btn = document.createElement('button');
+  btn.id = 's27-help-btn';
+  btn.className = 's27-help-btn';
+  btn.setAttribute('aria-label', 'Help / rondleiding heropenen');
+  btn.title = 'Rondleiding heropenen';
+  btn.innerHTML = '?';
+  btn.addEventListener('click', () => showWelcomeTour(false));
+  header.appendChild(btn);
 }
 
 /* =================================================================
