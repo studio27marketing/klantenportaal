@@ -1657,10 +1657,17 @@ function renderChatMessage(c){
   const side = isKlant ? 'klant' : 'team';
   const cleanText = (c.tekst || '').replace(/^💬 \[Klant: [^\]]+\]\s*/, '').trim();
   const atts = (c.attachments || []).map(a => '<a class="s27-chat-att" href="' + esc(a.url || '#') + '" target="_blank" rel="noopener">📎 ' + esc(a.filename || 'bestand') + '</a>').join('');
-  return '<div class="s27-chat-msg s27-chat-msg-' + side + '">' +
+  const likeKey = 's27_like_' + (c.id || '');
+  const isLiked = c.id ? (localStorage.getItem(likeKey) === '1') : false;
+  const likeCount = c.id ? parseInt(localStorage.getItem(likeKey + '_count') || '0', 10) + (isLiked ? 1 : 0) : 0;
+  return '<div class="s27-chat-msg s27-chat-msg-' + side + '" data-comment-id="' + esc(c.id || '') + '">' +
     '<div class="s27-chat-head"><strong>' + esc(c.auteur || 'Studio 27') + '</strong><span>' + esc(fmtRelTime(c.datum)) + '</span></div>' +
     '<div class="s27-chat-body">' + esc(cleanText).replace(/\n/g,'<br>') + '</div>' +
     (atts ? '<div class="s27-chat-atts">' + atts + '</div>' : '') +
+    '<div class="s27-chat-msg-actions">' +
+      (c.id ? '<button class="s27-chat-react' + (isLiked ? ' is-liked' : '') + '" data-action="like" data-cid="' + esc(c.id) + '" aria-label="Bericht liken">👍 ' + (likeCount > 0 ? '<span class="s27-chat-react-count">' + likeCount + '</span>' : '') + '</button>' : '') +
+      '<button class="s27-chat-react" data-action="reply" data-author="' + esc(c.auteur || '') + '" aria-label="Reageren op dit bericht">↩ Reageer</button>' +
+    '</div>' +
   '</div>';
 }
 
@@ -1711,6 +1718,40 @@ function attachChatHandlers(){
       renderProjectModalTab('chat');
     });
   }
+  // v2.2 #39: Like + Reply handlers
+  document.querySelectorAll('.s27-chat-react[data-action]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.preventDefault();
+      const action = btn.dataset.action;
+      if(action === 'like'){
+        const cid = btn.dataset.cid;
+        const key = 's27_like_' + cid;
+        const isLiked = localStorage.getItem(key) === '1';
+        try {
+          if(isLiked){
+            localStorage.removeItem(key);
+            btn.classList.remove('is-liked');
+          } else {
+            localStorage.setItem(key, '1');
+            btn.classList.add('is-liked');
+            // Subtle bounce-animation
+            btn.style.animation = 's27like .3s var(--ease-out)';
+            setTimeout(() => { try { btn.style.animation = ''; } catch(e){} }, 320);
+          }
+        } catch(err){}
+      } else if(action === 'reply'){
+        const author = btn.dataset.author || '';
+        const inputEl = $('s27-chat-input');
+        if(inputEl){
+          const mention = '@' + (author.split(' ')[0] || 'team') + ' ';
+          inputEl.value = mention + inputEl.value;
+          inputEl.focus();
+          inputEl.setSelectionRange(mention.length, mention.length);
+          inputEl.scrollIntoView({behavior:'smooth', block:'nearest'});
+        }
+      }
+    });
+  });
 }
 
 function renderFeedbackV2Tab(proj, detail){
