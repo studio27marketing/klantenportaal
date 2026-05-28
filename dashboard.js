@@ -794,7 +794,7 @@ function renderProjectModal(proj, detail, needsFeedback){
 
   const tabsHtml = '<div class="s27-modaltabs" role="tablist">' + tabs.map(t =>
     '<button class="s27-modaltab' + (t.flag ? ' s27-modaltab-flag' : '') + '" data-modaltab="' + t.id + '" role="tab" aria-selected="' + (state.projectModalTab === t.id ? 'true' : 'false') + '">' +
-      '<svg><use href="#' + t.icon + '"/></svg><span>' + esc(t.label) + '</span>' +
+      '<svg width="14" height="14" viewBox="0 0 24 24" style="flex-shrink:0"><use href="#' + t.icon + '"/></svg><span>' + esc(t.label) + '</span>' +
       (t.badge ? '<span class="s27-modaltab-badge">' + t.badge + '</span>' : '') +
     '</button>'
   ).join('') + '</div>';
