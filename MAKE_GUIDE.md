@@ -243,17 +243,32 @@ Er bestaan al werkende AI-connecties in Make team 507999 — **GEEN nieuwe key n
 3585829  openai-gpt-3 connection
 ```
 **Module:** `ai-local-agent:RunLocalAIAgent` (app v0, type agent) — self-contained, geen agent-resource nodig.
+
+### ⚠️ KRITIEK (28/5): zonder `defaultModel` → LEEG antwoord
+Eerste bouw van ai-status-bot gaf `response = ""` (executie 220ms = te snel, géén LLM-call).
+Oorzaak: mapper miste het model + config. De module roept pas een LLM aan als deze velden er zijn.
+Bewezen werkende config (gespiegeld van prod-scenario 4526005 "Find or Create Company"):
 ```
-parameters: { makeConnectionId: 5306534 }
+parameters: { makeConnectionId: 3626326 }          ← Gemini-conn (prod-bewezen)
 mapper: {
+  defaultModel: "gemini-3.1-pro-preview",          ← VERPLICHT, anders leeg
+  modelConfig: { "recursionLimit": 300, "iterationsFromHistoryCount": "6" },
+  reasoningEffort: "low",                           ← low=snel, medium=prod-default
+  outputType: "text",                               ← of "make-schema" → 4.jsonResponse
   systemPrompt: "<rol + regels>",
   message: "<de input/taak>",
-  threadId: "<optioneel voor conversatie-geheugen>"
+  threadId: "<optioneel, vb portalbot-{bedrijf_id} voor geheugen>"
 }
-output: 4.response (tekst)  |  4.jsonResponse (bij outputType schema)
+onerror: [ builtin:Resume met fallback-tekst ]      ← bot mag nooit hard falen
+output: 4.response (tekst)  |  4.jsonResponse (bij outputType make-schema)
 ```
-Test eerst met defaults; modelConfig/outputType zijn advanced velden (request schema met advancedFields).
-Voor klant-comments/bot → Anthropic 5306534. Escape naar mens bij twijfel via aparte Router-branch.
+WebhookRespond body moet `4.response` triple-escapen (\\ → \" → newline→\\n) en frontend doet `decodeMakeString()`.
+Anthropic-conn 5306534 werkt ook maar vereist een geldige Claude `defaultModel`-naam; Gemini 3626326 is veiligst (prod-bewezen).
+Voor klant-comments/bot → escaleer naar mens via ESCALATE-marker als eerste regel (zie ai-status-bot 5946454).
+
+**LIVE & GETEST (28/5): ai-status-bot 5946454** — hook `3uor4cy6vmhe77sh2uvujg9iufoewj3u`.
+5 curl-cases + 1 browser-case groen: website-ETA, klacht→Vincent, spoed→Ilke, sales→Arne, wacht-op-klant→feedback-ETA, 401.
+Escalatie-DM via directMessage (5944659) maakt ClickUp-taak (getest: 86ca12c8a → Vincent). CORS preflight OK.
 
 ## 12. PANDADOC PRIJSLIJST (voor offerte-stap kostprijs)
 

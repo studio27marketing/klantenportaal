@@ -26,6 +26,8 @@ const ENDPOINTS = {
   chatAttachment:    'https://hook.eu1.make.com/fxaqt9waonf63moiloj1bnm28w1kduj6',
   bedrijfContact:    'https://hook.eu1.make.com/459dayjdq34xgkt9bcbv8g1nxd9r9ubs',
   meetingAvailability:'https://hook.eu1.make.com/s4tuw763p9x4dc7o8n1h9sm48vhs77rb',
+  // v3 — AI Status Bot (folder 348572, scenario 5946454). Beantwoordt projectvragen, escaleert via DM.
+  aiStatusBot:       'https://hook.eu1.make.com/3uor4cy6vmhe77sh2uvujg9iufoewj3u',
   // Bestaand werkend booking-systeem (read-only hergebruik via CORS *)
   shootAvailability: 'https://hook.eu1.make.com/c1aekp5r567tqvgvp4e2a4juu3npanap'
 };
@@ -262,10 +264,18 @@ function clearSession(){
 function showLogin(){
   $('s27-login-view').style.display = 'flex';
   $('s27-dash-view').style.display = 'none';
+  // AI-bot verbergen op login
+  const fab = $('s27-bot-fab'), panel = $('s27-bot-panel');
+  if(fab) fab.style.display = 'none';
+  if(panel) panel.setAttribute('aria-hidden', 'true');
 }
 function showDashboard(){
   $('s27-login-view').style.display = 'none';
   $('s27-dash-view').style.display = 'block';
+  // AI Status Bot beschikbaar maken (eenmalig injecteren, daarna tonen)
+  injectStatusBot();
+  const fab = $('s27-bot-fab');
+  if(fab) fab.style.display = '';
 }
 function showLoginError(msg){
   const el = $('s27-login-err');
@@ -3077,6 +3087,237 @@ function getDemoDetail(taskId, proj){
       { auteur:'Ilke (Studio 27)',  datum:new Date(Date.now()-86400000*2).toISOString(), tekst:'Shoot is goed verlopen. We hebben extra B-roll opgenomen die we kunnen gebruiken voor social cuts.' }
     ]
   };
+}
+
+/* =================================================================
+   AI STATUS BOT — floating assistent (v3 Feature 2B)
+   Backend: scenario 5946454 (folder 348572). Beantwoordt projectvragen,
+   escaleert via DM (directMessage) als het buiten data/te complex/klacht is.
+   ESCALATE-conventie: eerste regel "ESCALATE: <Ilke|Arne|Vincent> | <reden>"
+   gevolgd door een warme klant-boodschap. Klant ziet enkel die boodschap.
+   ================================================================= */
+const BOT_SUGGESTIONS = [
+  'Hoever staat mijn project?',
+  'Wanneer is alles klaar?',
+  'Wat wacht er nog op mij?'
+];
+
+function botRecipientId(naam){
+  const n = (naam || '').toLowerCase();
+  if(n.indexOf('vincent') >= 0) return 'vincent';
+  if(n.indexOf('arne') >= 0)    return 'arne';
+  return 'ilke';
+}
+
+function buildProjectenContext(){
+  const projs = (state.dashboard && state.dashboard.actieve_projecten) || [];
+  const today = new Date().toLocaleDateString('nl-BE', { day:'numeric', month:'long', year:'numeric' });
+  if(!projs.length) return 'Datum vandaag: ' + today + '\n\n(geen lopende projecten gevonden)';
+  const lines = projs.map(p => {
+    const disc = discMeta(p.discipline).label;
+    const statusKey = (p.status || '').toLowerCase().replace(/\s+/g, '_');
+    const statusLabel = p.status_label || STATUS_LABELS[statusKey] || p.status || 'in productie';
+    const waits = (statusKey === 'doorgestuurd' || p.feedback_link) ? ' (wacht op feedback van de klant)' : '';
+    const due = p.opleverdatum ? fmtDate(p.opleverdatum) : 'geen datum';
+    return '- ' + (p.naam || 'Project') + ' (' + disc + ') | status: ' + statusLabel + waits + ' | opleverdatum: ' + due;
+  }).join('\n');
+  return 'Datum vandaag: ' + today + '\n\n' + lines;
+}
+
+function parseEscalation(answer){
+  const m = (answer || '').match(/^\s*ESCALATE:\s*(Ilke|Arne|Vincent)\s*\|\s*([^\n]+)/i);
+  if(!m) return null;
+  const persoon = m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase();
+  const reden = m[2].trim();
+  const nlIdx = answer.indexOf('\n');
+  let klantBoodschap = nlIdx >= 0 ? answer.slice(nlIdx + 1).trim() : '';
+  // Soms staat de hele rest op dezelfde regel na de reden — pak dan een nette fallback
+  if(!klantBoodschap){
+    const heenWeer = persoon === 'Ilke' ? 'haar' : 'hem';
+    klantBoodschap = 'Ik geef dit even persoonlijk door aan ' + persoon + ' van ons team — je hoort snel van ' + heenWeer + '.';
+  }
+  return { persoon, reden, klantBoodschap };
+}
+
+function fireEscalationDM(persoon, reden, vraag){
+  if(state.demoMode || !ENDPOINTS.directMessage) return;
+  try {
+    api(ENDPOINTS.directMessage, {
+      bedrijf_id: state.session.bedrijf_id,
+      klant_naam: state.session.bedrijfsnaam,
+      session_token: state.session.session_token,
+      ontvanger: botRecipientId(persoon),
+      type: 'vraag',
+      onderwerp: 'AI-assistent: ' + vraag.slice(0, 60),
+      bericht: 'Deze vraag kwam binnen via de AI-assistent in het klantenportaal en is automatisch naar jou doorgezet.\n\nVRAAG VAN DE KLANT:\n"' + vraag + '"\n\nREDEN ESCALATIE (ingeschat door AI):\n' + reden + '\n\nGraag persoonlijk opvolgen.'
+    });
+  } catch(e){ /* stil falen — klant ziet sowieso de warme boodschap */ }
+}
+
+function botMsgsEl(){ return $('s27-bot-msgs'); }
+
+function appendBotMsg(role, html){
+  const el = botMsgsEl(); if(!el) return null;
+  const wrap = document.createElement('div');
+  wrap.className = 's27-bot-msg s27-bot-msg-' + role;
+  wrap.innerHTML = (role === 'bot' ? '<span class="s27-bot-msg-av">✦</span>' : '') +
+    '<div class="s27-bot-bubble">' + html + '</div>';
+  el.appendChild(wrap);
+  el.scrollTop = el.scrollHeight;
+  return wrap;
+}
+
+function appendBotTyping(){
+  const el = botMsgsEl(); if(!el) return null;
+  const wrap = document.createElement('div');
+  wrap.className = 's27-bot-msg s27-bot-msg-bot';
+  wrap.innerHTML = '<span class="s27-bot-msg-av">✦</span><div class="s27-bot-bubble s27-bot-typing"><span></span><span></span><span></span></div>';
+  el.appendChild(wrap);
+  el.scrollTop = el.scrollHeight;
+  return wrap;
+}
+
+function appendBotEscBadge(persoon){
+  const el = botMsgsEl(); if(!el) return;
+  const wrap = document.createElement('div');
+  wrap.className = 's27-bot-escbadge';
+  wrap.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Doorgegeven aan <strong>' + esc(persoon) + '</strong> — je krijgt persoonlijk antwoord.';
+  el.appendChild(wrap);
+  el.scrollTop = el.scrollHeight;
+}
+
+function demoBotAnswer(text){
+  const t = (text || '').toLowerCase();
+  if(t.indexOf('klacht') >= 0 || t.indexOf('ontevreden') >= 0 || t.indexOf('belachelijk') >= 0)
+    return 'ESCALATE: Vincent | Klant lijkt ontevreden in demo-modus.\nWat vervelend om te horen! Ik laat Vincent dit persoonlijk met je opnemen.';
+  if(t.indexOf('prijs') >= 0 || t.indexOf('kost') >= 0 || t.indexOf('offerte') >= 0 || t.indexOf('nieuw project') >= 0)
+    return 'ESCALATE: Arne | Vraag over prijs/nieuw project in demo-modus.\nLeuk dat je verder wil! Ik laat Arne contact met je opnemen om de mogelijkheden te bespreken.';
+  return 'Dit is de demo-modus, dus ik geef geen live antwoorden. In jouw echte portaal kijk ik naar je lopende projecten en vertel ik precies hoever alles staat en wanneer het klaar is. 👍';
+}
+
+let _botFirstOpen = true;
+function botGreet(){
+  if(!_botFirstOpen) return;
+  _botFirstOpen = false;
+  appendBotMsg('bot', 'Hey! Ik ben de Studio&nbsp;27-assistent.<br>Vraag me gerust hoever een project staat, wanneer iets klaar is of wat er nog op jou wacht. 👋');
+  const sug = $('s27-bot-suggest');
+  if(sug) sug.innerHTML = BOT_SUGGESTIONS.map(s =>
+    '<button type="button" class="s27-bot-sugbtn" data-bot-suggest="' + esc(s) + '">' + esc(s) + '</button>'
+  ).join('');
+}
+
+async function sendBotMessage(text){
+  text = (text || '').trim();
+  if(!text || state._botBusy) return;
+  state._botBusy = true;
+  const sug = $('s27-bot-suggest'); if(sug) sug.innerHTML = '';
+  appendBotMsg('user', esc(text).replace(/\n/g, '<br>'));
+  const input = $('s27-bot-input');
+  if(input){ input.value = ''; input.style.height = 'auto'; }
+  const typing = appendBotTyping();
+
+  let answer = '';
+  try {
+    if(state.demoMode){
+      await new Promise(r => setTimeout(r, 650));
+      answer = demoBotAnswer(text);
+    } else {
+      const res = await api(ENDPOINTS.aiStatusBot, {
+        bedrijf_id: state.session.bedrijf_id,
+        session_token: state.session.session_token,
+        klant_naam: state.session.bedrijfsnaam,
+        vraag: text,
+        projecten_context: buildProjectenContext()
+      });
+      if(res.ok && res.data && res.data.ok && res.data.answer){
+        answer = decodeMakeString(res.data.answer);
+      } else {
+        answer = 'Sorry, ik kan je vraag nu even niet beantwoorden. Stuur gerust een bericht via "Stuur bericht", dan pakt iemand van het team het meteen op.';
+      }
+    }
+  } catch(e){
+    answer = 'Er ging iets mis met de verbinding. Probeer het zo nog eens, of stuur ons een bericht.';
+  }
+
+  if(typing) try { typing.remove(); } catch(e){}
+
+  const escResult = parseEscalation(answer);
+  if(escResult){
+    appendBotMsg('bot', esc(escResult.klantBoodschap).replace(/\n/g, '<br>'));
+    appendBotEscBadge(escResult.persoon);
+    fireEscalationDM(escResult.persoon, escResult.reden, text);
+  } else {
+    appendBotMsg('bot', esc(answer).replace(/\n/g, '<br>'));
+  }
+  state._botBusy = false;
+}
+
+function toggleStatusBot(forceOpen){
+  const panel = $('s27-bot-panel'), fab = $('s27-bot-fab');
+  if(!panel || !fab) return;
+  const willOpen = (forceOpen === true) || (forceOpen === undefined && panel.getAttribute('aria-hidden') === 'true');
+  panel.setAttribute('aria-hidden', willOpen ? 'false' : 'true');
+  fab.classList.toggle('s27-bot-fab-open', willOpen);
+  if(willOpen){
+    botGreet();
+    setTimeout(() => { const i = $('s27-bot-input'); if(i) i.focus(); }, 120);
+  }
+}
+
+function injectStatusBot(){
+  if($('s27-bot-fab')) return;                       // al geïnjecteerd
+  if(!state.demoMode && !ENDPOINTS.aiStatusBot) return;
+
+  const fab = document.createElement('button');
+  fab.id = 's27-bot-fab';
+  fab.className = 's27-bot-fab';
+  fab.type = 'button';
+  fab.setAttribute('aria-label', 'Vraag het de Studio 27-assistent');
+  fab.innerHTML =
+    '<svg class="s27-bot-fab-chat" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>' +
+    '<svg class="s27-bot-fab-x" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>' +
+    '<span class="s27-bot-fab-spark">✦</span>';
+  document.body.appendChild(fab);
+
+  const panel = document.createElement('div');
+  panel.id = 's27-bot-panel';
+  panel.className = 's27-bot-panel';
+  panel.setAttribute('aria-hidden', 'true');
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-label', 'Studio 27-assistent');
+  panel.innerHTML =
+    '<div class="s27-bot-head">' +
+      '<span class="s27-bot-head-av">✦</span>' +
+      '<div class="s27-bot-head-txt"><strong>Studio&nbsp;27-assistent</strong><span>Antwoordt direct · schakelt het team bij waar nodig</span></div>' +
+      '<button class="s27-bot-close" type="button" aria-label="Sluiten">×</button>' +
+    '</div>' +
+    '<div class="s27-bot-msgs" id="s27-bot-msgs"></div>' +
+    '<div class="s27-bot-suggest" id="s27-bot-suggest"></div>' +
+    '<form class="s27-bot-inputbar" id="s27-bot-form">' +
+      '<textarea id="s27-bot-input" rows="1" placeholder="Stel je vraag…" autocomplete="off"></textarea>' +
+      '<button type="submit" class="s27-bot-send" aria-label="Versturen"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>' +
+    '</form>';
+  document.body.appendChild(panel);
+
+  // Handlers
+  fab.addEventListener('click', () => toggleStatusBot());
+  panel.querySelector('.s27-bot-close').addEventListener('click', () => toggleStatusBot(false));
+  const form = $('s27-bot-form');
+  const input = $('s27-bot-input');
+  form.addEventListener('submit', e => { e.preventDefault(); sendBotMessage(input.value); });
+  // Enter = verstuur, Shift+Enter = nieuwe regel; auto-grow
+  input.addEventListener('keydown', e => {
+    if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendBotMessage(input.value); }
+  });
+  input.addEventListener('input', () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+  });
+  // Suggestie-knoppen (event delegation)
+  $('s27-bot-suggest').addEventListener('click', e => {
+    const b = e.target.closest('[data-bot-suggest]');
+    if(b) sendBotMessage(b.dataset.botSuggest);
+  });
 }
 
 /* =================================================================
