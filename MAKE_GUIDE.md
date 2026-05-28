@@ -270,6 +270,11 @@ Voor klant-comments/bot → escaleer naar mens via ESCALATE-marker als eerste re
 5 curl-cases + 1 browser-case groen: website-ETA, klacht→Vincent, spoed→Ilke, sales→Arne, wacht-op-klant→feedback-ETA, 401.
 Escalatie-DM via directMessage (5944659) maakt ClickUp-taak (getest: 86ca12c8a → Vincent). CORS preflight OK.
 
+**LIVE & GETEST (29/5): auto-status-comment 5946712** — hook `ujqtpor1whyi9lb2wfkhq52b4ilaexyd`.
+Body: `{task_id, status}`. getATask → RunLocalAIAgent (Gemini-config, SKIP-marker voor interne statussen) → postATaskComment (notify_all:true, géén [INTERN] → zichtbaar in portal-chat). Geneste router POST/SKIP.
+3 cases groen: doorgestuurd→comment "klaar voor review" (comment_id 90150228419949 op 86ca0hp3f), to-do→SKIP, geen task_id→400.
+⚠️ TRIGGER NOG TE WIREN (ochtendlijst): Vincent moet een ClickUp-automation maken "wanneer status wijzigt → POST naar deze webhook met task_id + status". Bewust opt-in want comments zijn klant-zichtbaar. Alternatief: Make 'Watch Tasks'-trigger, maar dan eerst scopen op test-lijst.
+
 ## 12. PANDADOC PRIJSLIJST (voor offerte-stap kostprijs)
 
 Geen catalog-module. Prijzen zitten in template/document pricing-tables. Uitlezen via:
