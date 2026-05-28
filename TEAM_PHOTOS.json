@@ -1,0 +1,82 @@
+{
+  "_meta": {
+    "bron": "https://www.studio27.be/ons-team",
+    "opgehaald_op": "2026-05-28",
+    "cdn_base": "https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/",
+    "gebruik": "Voor s27_session contact-data (am_foto_url) in dashboard.js → renderContact()",
+    "format_note": "Alle URLs zijn .webp varianten — voor portal gebruik kan extra resize via Webflow image transformatie nodig zijn"
+  },
+  "ilke_meeusen": {
+    "foto_url": "https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/6901f37c53ba7dde08b1b67d_Ilke1.webp",
+    "rol": "Account manager",
+    "functie_officieel": "Project manager",
+    "email": "ilke@studio27.be"
+  },
+  "arne_goetschalckx": {
+    "foto_url": "https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/6901f59fb2e09fb90990219e_Arne1.webp",
+    "rol": "Sales 27 Automations",
+    "functie_officieel": "Performance marketeer",
+    "email": "arne@studio27.be"
+  },
+  "vincent_verleije": {
+    "foto_url": "https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/690461794835cbd36d6b5504_Vincent1.webp",
+    "rol": "Sales / Zaakvoerder",
+    "functie_officieel": "Zaakvoerder",
+    "email": "vincent@studio27.be"
+  },
+  "bjorn_borgers": {
+    "foto_url": "https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/690213e0b51b9994b2004649_Bjorn1.webp",
+    "rol": "Content creator",
+    "functie_officieel": "Content creator",
+    "email": "bjorn@studio27.be"
+  },
+  "guus_van_den_heuvel": {
+    "foto_url": "https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/690212a2b6375b61606b5e93_Guus1.webp",
+    "rol": "Content creator",
+    "functie_officieel": "Content creator",
+    "email": "guus@studio27.be"
+  },
+  "ines_permentiers": {
+    "foto_url": "https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/690213ee2448e852bd82586d_Ines1.webp",
+    "rol": "Content creator",
+    "functie_officieel": "Content creator",
+    "email": "ines@studio27.be"
+  },
+  "anouk_de_hoon": {
+    "foto_url": "https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/69046d5be50f353389303b75_Anouk1.webp",
+    "rol": "Grafisch ontwerper",
+    "functie_officieel": "Grafisch ontwerper",
+    "email": "anouk@studio27.be"
+  },
+  "griet_beyens": {
+    "foto_url": "https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/69a97f8cea8b957932ac841b_Griet1.webp",
+    "rol": "Grafisch ontwerper",
+    "functie_officieel": "Grafisch ontwerper",
+    "email": "griet@studio27.be"
+  },
+  "johanna_augustyns": {
+    "foto_url": "https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/6901f9323e951d8eeba050a4_Johanna1.webp",
+    "rol": "Ads / Performance marketing",
+    "functie_officieel": "Performance marketeer",
+    "email": "johanna@studio27.be"
+  },
+  "klaas_vanhove": {
+    "foto_url": "https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/69020f1ff19e3a4db9b97ffa_Klaas1.webp",
+    "rol": "Support / Web developer",
+    "functie_officieel": "Web developer",
+    "email": "klaas@studio27.be"
+  },
+  "danique_bosch": {
+    "foto_url": "https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/69020f14e0e331cd429f9c36_Danique1.webp",
+    "rol": "Social media",
+    "functie_officieel": "Social media expert",
+    "email": "danique@studio27.be"
+  },
+  "lara_hooyberghs": {
+    "foto_url": "https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/6901f371b8bc70f2c4403146_Lara1.webp",
+    "rol": "Project manager",
+    "functie_officieel": "Project manager",
+    "email": "lara@studio27.be",
+    "_note": "Niet expliciet gevraagd, maar wel beschikbaar als 2e PM-optie voor klanttoewijzing"
+  }
+}

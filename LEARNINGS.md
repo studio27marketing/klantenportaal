@@ -2,6 +2,81 @@
 
 Persistente kennis voor toekomstige iteraties. Lees dit eerst bij elke klantenportaal-taak.
 
+## 0. FOUNDATION PATTERNS (uit werkende S27-scenarios, mei 2026)
+
+Vincent's mandaat: **scenarios moeten de fundament zijn, dashboard is de add-on laag**. Daarom volgen ALLE v2-scenarios deze patterns die in productie werken in folder S27 (id 303277):
+
+### 0.1 Sync-webhook met dual-respond Router (uit Login 5896031)
+```
+gateway:CustomWebHook
+  └─ util:SetVariables (pre-validatie: is_valid, computed fields)
+       └─ builtin:BasicRouter
+            ├─ Branch VALID  → [..work modules..] → gateway:WebhookRespond 200
+            └─ Branch INVALID                     → gateway:WebhookRespond 401
+```
+**Regel**: NOOIT `if(...; "true"; "false")` in WebhookRespond body. Maak per status een eigen branch met directe valide JSON.
+
+### 0.2 Iterator/Aggregator bug-vrij maken
+- **Bug**: Iterator met empty array → downstream Aggregator + WebhookRespond NIET uitgevoerd → client krijgt "Accepted"/"Scenario failed".
+- **Oplossing 1** (preferred): Router VOOR Iterator splits "has_items vs no_items"; no_items-branch heeft eigen direct WebhookRespond met `{"data":[]}`.
+- **Oplossing 2** (compact): laat Iterator runnen op `ifempty(array; ["__sentinel__"])` en filter sentinel weg in Aggregator value met `if(4.id = "__sentinel__"; ""; jsonContent)`. WebhookRespond strip leading/trailing commas.
+- **Oplossing 3** (clean voor lezen): GEEN filter op Iterator-level — alle items door, filter binnen TextAggregator value: `if(matchCondition; jsonContent; "")` — leading/trailing commas opruimen in WebhookRespond body.
+
+### 0.3 Native ClickUp modules > makeApiCall (uit Find or Create Company 4526005)
+Voor élke CRUD-operatie op ClickUp:
+| Operatie | Module | Waarom |
+|---|---|---|
+| Lees taken in lijst | `clickup:getListTasks` | Native filtering, schema-validated output |
+| Maak taak | `clickup:createTaskInListAdvanced` | Custom fields direct mappable |
+| Update taak | `clickup:editATaskAdvanced` | **Description PUT werkt** (makeApiCall faalde stil!) |
+| Upload attachment | `clickup:uploadTaskAttachment` | Buffer-conversie via `base64()` IML |
+| Comments lezen | `clickup:listAllComments` | Schema heeft user, date, comment_text als velden |
+| Comment posten | `clickup:postATaskComment` | Notify-flag, plain-text vs markdown |
+
+`makeApiCall` ALLEEN voor read-only GET met response-body lezen. NIET voor PUT/POST/DELETE — body parsing is onbetrouwbaar.
+
+### 0.4 Session validatie patroon (security foundation)
+Elke v2-scenario die met klantdata werkt, MOET:
+1. `session_token` valideren (nu hardcoded TST-DEMO; later via Make Data Store)
+2. `bedrijf_id` ownership check op resource (task moet hebben `Bedrijf` custom field = `bedrijf_id`)
+3. Bij mismatch → `gateway:WebhookRespond` 401 of 403 — NIET zwijgend door
+
+Voor MVP (TEST CLIENT BV demo): hardcode token-check. Voor productie: data-store lookup.
+
+### 0.5 String normalisatie (uit Webflow Form Router 4525470)
+- Naam: `{{capitalize(lower(field))}}`
+- Email: `{{lower(trim(field))}}`
+- Telefoon: `{{replace(phone; "[^0-9]"; "")}}`
+- Fallback chain: `{{ifempty(primary; secondary)}}`
+- Token: `{{substring(replace(uuid; "-"; ""); 0; 32)}}`
+- Expiry: `{{formatDate(addHours(now; 24); "YYYY-MM-DDTHH:mm:ssZ")}}`
+
+### 0.6 Subscenario hergebruik (uit Webflow Form Router → Intake Processor)
+- Common operations (Find Bedrijf, Find Contact, Send Mail) = `chainingRole: "child"` scenarios
+- Aangeroepen via `scenario-service:CallSubscenario` met `shouldWaitForExecutionEnd: false` voor fire-and-forget
+- Subscenario gebruikt `scenario-service:ReturnData` om data terug te geven
+- Voorkomt code-duplicatie. Voor v2-portal: overweeg `find-bedrijf-by-token` als subscenario.
+
+### 0.7 Status v2-scenarios na foundation refactor (28 mei 2026)
+
+Alle 6 productie-kritieke v2-scenarios nu volgens 0.1-0.4 patterns:
+
+| Scenario | ID | Session validatie | Module(s) | Status |
+|---|---|---|---|---|
+| bedrijf-content-get      | 5942494 | ✅ 401 | makeApiCall GET | ✅ robust |
+| bedrijf-update-voorkeuren| 5942498 | ✅ 401 | editATaskAdvanced | ✅ robust |
+| bedrijf-upload-file      | 5943461 | ✅ 401 | uploadTaskAttachment | ✅ robust |
+| chat-list-comments       | 5942511 | ✅ 401 | makeApiCall GET | ✅ robust |
+| chat-post                | 5942504 | ✅ 401 | postATaskComment | ✅ robust |
+| bedrijf-meetings-list    | 5943499 | ✅ 401 | makeApiCall GET | ✅ robust |
+| feedback-v2-submit       | 5942527 | ❌ TODO | makeApiCall PUT (bug!) | ⚠️ broken, low prio |
+| new-project-intake       | 5942536 | ❌ TODO | ? | ⚠️ untested |
+
+Frontend `api()` in dashboard.js detecteert HTTP 401 → triggert `handleSessionExpired()` met visuele banner + auto-redirect naar login. Bescherming tegen infinite loops via `state._sessionExpiredHandled` flag.
+
+**TODO**: feedback-v2-submit volledig herbouwen (POST URL is fout, PUT body parsing onbetrouwbaar) — pas wanneer V2 feedback flow effectief getest wordt door klant.
+
+
 ## 1. Architectuur (eindstaat, mei 2026)
 
 ```

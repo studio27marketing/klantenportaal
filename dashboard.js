@@ -137,9 +137,34 @@ async function api(url, payload){
       body: JSON.stringify(payload || {})
     });
     const t = await r.text();
-    try { return { ok:r.ok, status:r.status, data:JSON.parse(t) }; }
-    catch { return { ok:r.ok, status:r.status, data:{ _raw:t } }; }
+    let parsed;
+    try { parsed = { ok:r.ok, status:r.status, data:JSON.parse(t) }; }
+    catch { parsed = { ok:r.ok, status:r.status, data:{ _raw:t } }; }
+    // v2.1 Foundation: 401 = expired session → auto-logout
+    if(parsed.status === 401 && state && state.session){
+      handleSessionExpired(parsed.data && parsed.data.message);
+    }
+    return parsed;
   } catch(e){ return { ok:false, status:0, error:e.message }; }
+}
+
+function handleSessionExpired(message){
+  // Voorkom infinite loop: alleen één keer triggeren per sessie
+  if(state._sessionExpiredHandled) return;
+  state._sessionExpiredHandled = true;
+  try { localStorage.removeItem('s27_portal_session'); } catch(e){}
+  // Toon korte melding voor we naar login springen
+  const msg = message || 'Je sessie is verlopen — log opnieuw in.';
+  const banner = document.createElement('div');
+  banner.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#fef2f2;color:#991b1b;border:1px solid #fecaca;padding:14px 22px;border-radius:12px;font:600 14px/1.4 system-ui;z-index:99999;box-shadow:0 4px 12px rgba(0,0,0,.08)';
+  banner.textContent = msg;
+  document.body.appendChild(banner);
+  setTimeout(() => {
+    try { banner.remove(); } catch(e){}
+    state.session = null;
+    state.viewMode = 'login';
+    renderApp();
+  }, 1600);
 }
 
 function fmtDate(d){
