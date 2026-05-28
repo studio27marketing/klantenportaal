@@ -950,6 +950,14 @@ function attachDashboardHandlers(){
   });
 }
 
+// v3-C: global handler — links met data-goto-tab springen naar een tab
+document.addEventListener('click', e => {
+  const t = e.target.closest && e.target.closest('[data-goto-tab]');
+  if(!t) return;
+  e.preventDefault();
+  switchTab(t.dataset.gotoTab);
+});
+
 function switchTab(tabId){
   state.activeTab = tabId;
   document.querySelectorAll('.s27-tab').forEach(b => {
@@ -1053,13 +1061,14 @@ async function renderBedrijfTab(){
   // Voorkeuren = platte tekst (geen ---STRUCTURED--- blob meer; server stript die ook)
   const voorkeurenTekst = decodeMakeString(data.algemene_voorkeuren || '').replace(/<[^>]+>/g,'').replace(/---STRUCTURED---[\s\S]*/,'').trim();
 
-  // v2.2 #74: contact = ClickUp company fields (btw/email/website) + lokaal bewaarde persoonsvelden
+  // v3-B: contact = ClickUp Contact-taak (voornaam/achternaam/gsm/email) + company fields + lokale edits
+  const cc = data.contact || {};
   const localC = loadContactCache();
   const c = {
-    voornaam:   localC.voornaam || '',
-    achternaam: localC.achternaam || '',
-    gsm:        localC.gsm || '',
-    email:      localC.email || data.facturatie_email || '',
+    voornaam:   localC.voornaam || cc.voornaam || '',
+    achternaam: localC.achternaam || cc.achternaam || '',
+    gsm:        localC.gsm || cc.gsm || '',
+    email:      localC.email || cc.email || data.facturatie_email || '',
     btw:        localC.btw || data.btw || '',
     adres:      localC.adres || '',
     website:    localC.website || data.website || ''
@@ -1820,6 +1829,9 @@ function renderInstellingenTab(){
   const dash = state.dashboard || {};
   const contact = dash.contact || {};
   const prefs = loadNotifPrefs();
+  const contactC = loadContactCache();
+  const waGsm = contactC.gsm || (state.bedrijfContent && state.bedrijfContent.contact && state.bedrijfContent.contact.gsm) || '';
+  const waEmail = contactC.email || (state.bedrijfContent && state.bedrijfContent.contact && state.bedrijfContent.contact.email) || sess.bedrijfsnaam;
   const expiresStr = sess.expires_at ? new Date(sess.expires_at).toLocaleString('nl-BE', {dateStyle:'long', timeStyle:'short'}) : '–';
   body.innerHTML = `
     <div class="s27-settings-grid">
@@ -1830,6 +1842,11 @@ function renderInstellingenTab(){
           <label class="s27-notif-opt"><input type="radio" name="notif" value="mail" ${prefs.kanaal === 'mail' ? 'checked' : ''}/><div><strong>Alleen e-mail</strong><span>Klassieke updates in je inbox</span></div></label>
           <label class="s27-notif-opt"><input type="radio" name="notif" value="whatsapp" ${prefs.kanaal === 'whatsapp' ? 'checked' : ''}/><div><strong>Alleen WhatsApp</strong><span>Snel, direct, op je telefoon</span></div></label>
           <label class="s27-notif-opt"><input type="radio" name="notif" value="beide" ${prefs.kanaal === 'beide' || !prefs.kanaal ? 'checked' : ''}/><div><strong>Beide kanalen</strong><span>Niets missen — aanbevolen</span></div></label>
+        </div>
+        <div class="s27-notif-targets">
+          <div class="s27-notif-target"><span>📱 WhatsApp naar</span><strong>${waGsm ? esc(waGsm) : 'geen gsm ingesteld'}</strong></div>
+          <div class="s27-notif-target"><span>✉️ E-mail naar</span><strong>${esc(waEmail || '—')}</strong></div>
+          <p class="s27-notif-target-hint">Klopt dit niet? Pas je gsm/e-mail aan bij <a href="#" data-goto-tab="bedrijf">Mijn bedrijf → Contactgegevens</a>.</p>
         </div>
         <button class="s27-btn s27-btn-primary" id="s27-save-notif" style="margin-top:14px">Voorkeuren opslaan</button>
         <p class="s27-settings-status" id="s27-notif-status" style="display:none"></p>
@@ -2872,12 +2889,42 @@ async function submitFeedbackV2(){
   const deliverables = detail.deliverables || parseDeliverablesFromProj(proj);
   const stateLabel = $('s27-fb-state'); const submit = $('s27-fb-submit');
   submit.disabled = true; submit.textContent = 'Versturen…'; stateLabel.textContent = 'Bezig…';
+
+  // v3-A FIX: upload feedback-bestanden ECHT naar de taak via chat-attachment (uploadTaskAttachment).
+  // De feedbackV2-scenario doet enkel subtaak+comment, geen attachment-upload.
+  let uploadCount = 0;
+  if(ENDPOINTS.chatAttachment && !state.demoMode){
+    for(let i = 0; i < deliverables.length; i++){
+      const files = (state.fbState[i] && state.fbState[i].files) || [];
+      for(const f of files){
+        try {
+          const r = await api(ENDPOINTS.chatAttachment, {
+            task_id: proj.task_id,
+            bedrijf_id: state.session.bedrijf_id,
+            session_token: state.session.session_token,
+            klant_naam: state.session.bedrijfsnaam,
+            filename: f.filename,
+            data: f.data,
+            comment_text: 'Feedback-bestand bij "' + (deliverables[i].label || ('deliverable ' + (i+1))) + '"'
+          });
+          if(r.ok && r.data && r.data.ok) uploadCount++;
+        } catch(e){ console.warn('[Studio 27] feedback-attachment faalde:', f.filename, e); }
+      }
+    }
+  }
+
   const payload = {
     task_id: proj.task_id,
     bedrijf_id: state.session.bedrijf_id,
     session_token: state.session.session_token,
     klant_naam: state.session.bedrijfsnaam,
-    deliverables: deliverables.map((d, i) => Object.assign({}, d, state.fbState[i] || {})),
+    // strip de base64-data uit deliverables (bestanden zijn al geüpload); behoud metadata
+    deliverables: deliverables.map((d, i) => {
+      const st = Object.assign({}, state.fbState[i] || {});
+      if(st.files) st.files = st.files.map(f => ({ filename:f.filename, size:f.size }));
+      return Object.assign({}, d, st);
+    }),
+    aantal_bestanden: uploadCount,
     algemene_opmerking: ($('s27-fb-general') || {}).value || ''
   };
   if(ENDPOINTS.feedbackV2){

@@ -429,6 +429,13 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-btn-danger { background:#fef2f2; color:#991b1b; border:1.5px solid #fecaca; }
 .s27-btn-danger:hover { background:#fee2e2; }
 .s27-coming-list { font-family:var(--font-body); font-size:13px; color:var(--s27-ink-3); margin:0; padding-left:20px; line-height:1.65; }
+/* Notif targets (v3-C — toon waar WhatsApp/mail heen gaat) */
+.s27-notif-targets { margin-top:14px; padding:12px 14px; background:var(--s27-paper-2); border-radius:var(--r-sm); display:flex; flex-direction:column; gap:6px; }
+.s27-notif-target { display:flex; justify-content:space-between; align-items:center; gap:10px; font-family:var(--font-body); font-size:13px; }
+.s27-notif-target span { color:var(--s27-ink-3); }
+.s27-notif-target strong { font-family:var(--font-display); font-weight:800; color:var(--s27-ink); }
+.s27-notif-target-hint { font-family:var(--font-body); font-size:11.5px; color:var(--s27-ink-3); margin:4px 0 0; }
+.s27-notif-target-hint a { color:var(--s27-blue-ink); font-weight:700; }
 
 /* ============ GOEDGEKEURD ARCHIEF TAB (v2 Fase 26) ============ */
 .s27-archive-intro h3 { font-family:var(--font-display); font-size:18px; font-weight:900; color:var(--s27-ink); margin:0 0 4px; letter-spacing:-0.015em; }
