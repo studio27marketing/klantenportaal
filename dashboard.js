@@ -855,8 +855,85 @@ function renderCategoryItem(item, cat){
   </div>`;
 }
 function renderGoedgekeurdTab(){
-  renderPlaceholderTab('s27-goedgekeurd-body', 'Goedgekeurde projecten (binnenkort)',
-    'Alle deliverables van projecten die we voor jou hebben afgerond, gesorteerd in de tijd. Links blijven altijd beschikbaar.');
+  const body = $('s27-goedgekeurd-body');
+  if(!body) return;
+  const dash = state.dashboard || {};
+  // Combineer 2 bronnen: actieve projecten met status goedgekeurd + historie_3mnd
+  const goedgekeurdActief = (dash.actieve_projecten || []).filter(p => {
+    const s = (p.status || '').toLowerCase().replace(/\s+/g,'_');
+    return s === 'goedgekeurd' || s === 'done';
+  }).map(p => ({
+    task_id: p.task_id,
+    naam: p.naam,
+    discipline: p.discipline,
+    afgerond_op: p.opleverdatum || '',
+    deliverables: p.deliverables || []
+  }));
+  const historie = (dash.historie_3mnd || []).map(p => ({
+    task_id: p.task_id,
+    naam: p.naam,
+    discipline: p.discipline,
+    afgerond_op: p.afgerond_op || '',
+    deliverables: p.deliverables || []
+  }));
+  // Dedupe op task_id (actief wint)
+  const seen = new Set();
+  const all = [...goedgekeurdActief, ...historie].filter(p => {
+    if(seen.has(p.task_id)) return false;
+    seen.add(p.task_id);
+    return true;
+  });
+  // Sort recent eerst
+  all.sort((a,b) => {
+    const da = a.afgerond_op ? new Date(a.afgerond_op).getTime() : 0;
+    const db = b.afgerond_op ? new Date(b.afgerond_op).getTime() : 0;
+    return db - da;
+  });
+  if(!all.length){
+    body.innerHTML = '<div class="s27-empty">' +
+      '<div class="s27-empty-icon"><svg width="22" height="22"><use href="#s27p-check"/></svg></div>' +
+      '<div class="s27-empty-title">Nog geen afgeronde projecten</div>' +
+      '<p class="s27-empty-sub">Zodra je eerste project is opgeleverd, vind je hier alle deliverables — voor altijd bewaard, klik en download.</p>' +
+    '</div>';
+    return;
+  }
+  // Groepeer per jaar voor archief-look
+  const byYear = {};
+  all.forEach(p => {
+    const year = p.afgerond_op ? new Date(p.afgerond_op).getFullYear() : 'Onbekend';
+    if(!byYear[year]) byYear[year] = [];
+    byYear[year].push(p);
+  });
+  const years = Object.keys(byYear).sort((a,b) => Number(b)-Number(a));
+  let html = '<div class="s27-archive-intro"><h3>Archief — alle opgeleverde projecten</h3>' +
+    '<p>Klik op een project om deliverables te zien. Alle links blijven werkend, ook na 3 maanden.</p></div>';
+  years.forEach(y => {
+    html += '<div class="s27-archive-year"><h4>' + esc(y) + ' <span class="s27-badge s27-badge-muted">' + byYear[y].length + '</span></h4>' +
+      '<div class="s27-archive-list">' + byYear[y].map(renderArchiveCard).join('') + '</div></div>';
+  });
+  body.innerHTML = html;
+}
+
+function renderArchiveCard(p){
+  const dLabel = p.afgerond_op ? new Date(p.afgerond_op).toLocaleDateString('nl-BE', {day:'2-digit', month:'short', year:'numeric'}) : '–';
+  const discAccent = DISCIPLINES[p.discipline] && DISCIPLINES[p.discipline].accent || '#3083DC';
+  const discLabel = DISCIPLINES[p.discipline] && DISCIPLINES[p.discipline].label || (p.discipline||'').replace(/_/g, ' ');
+  const dels = Array.isArray(p.deliverables) ? p.deliverables : [];
+  return '<details class="s27-archive-card">' +
+    '<summary>' +
+      '<div class="s27-archive-card-head">' +
+        '<span class="s27-archive-disc" style="--accent:' + discAccent + '">' + esc(discLabel) + '</span>' +
+        '<strong>' + esc(p.naam || 'Onbenoemd project') + '</strong>' +
+      '</div>' +
+      '<span class="s27-archive-date">' + esc(dLabel) + '</span>' +
+      '<svg class="s27-archive-chevron" width="14" height="14" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+    '</summary>' +
+    '<div class="s27-archive-body">' +
+      (dels.length
+        ? '<div class="s27-archive-dels">' + dels.map(d => '<a href="' + esc(d.url||'#') + '" target="_blank" rel="noopener" class="s27-archive-del"><svg width="13" height="13"><use href="#s27p-link"/></svg>' + esc(d.label || d.type || 'Deliverable') + '</a>').join('') + '</div>'
+        : '<p class="s27-archive-empty">Geen deliverables-links geregistreerd in ClickUp. Mail <a href="mailto:ilke@studio27.be">ilke@studio27.be</a> als je de bestanden nodig hebt.</p>') +
+    '</div>' +
+  '</details>';
 }
 function renderNieuwTab(){
   renderPlaceholderTab('s27-nieuw-body', 'Nieuw project aanmelden (binnenkort)',
