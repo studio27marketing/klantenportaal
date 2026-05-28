@@ -170,6 +170,16 @@ String-escape in waarde: `replace(replace(replace(x; "\\\\"; "\\\\\\\\"); "\\\""
 - GET endpoint werkt wel: `2.body.description`, `2.body.attachments`, `2.body.comments` etc.
 - Workaround voor POST: gebruik typed module `clickup:createTaskInList` voor expliciete output mapping, OF accepteer "created" sentinel en sla task_id over.
 
+### 2.1.5 google-calendar:makeApiCall — body MOET string zijn + url-prefix (May 2026)
+- `getFreeBusyInformation` native module geeft bundle-index (`{{4}}` = `4`) ipv data → onbruikbaar voor multi-calendar passthrough.
+- `google-calendar:makeApiCall` werkt WEL maar:
+  - **url is relatief aan `https://www.googleapis.com/calendar`** → dus `/v3/freeBusy` (NIET `/freeBusy`, NIET `/calendar/v3/freeBusy`).
+  - **body MOET een JSON-STRING zijn**, GEEN object! Object-body → `[400] Bad Request`. String-body met escaped quotes werkt: `"body": "{\"timeMin\":\"{{2.timeMin}}\",...}"`.
+  - timeMin/timeMax: `{{formatDate(addHours(now;48); "YYYY-MM-DDTHH:mm:ssZ")}}` (de `Z` token = `+02:00`, geldig RFC3339).
+- FreeBusy response: `4.body.calendars` = object keyed by email → `{"ilke@studio27.be":{"busy":[{start,end}]}}`. Serialiseer met `json:TransformToJSON` (object: `{{4.body.calendars}}`).
+- Connectie 3640456 (vincent) heeft domain-wide freebusy toegang tot ilke@ + arne@ → geen extra sharing nodig.
+- Endpoint: meeting-availability-gcal (5945987). Frontend computeFreeSlots() berekent 90-min slots, subtract busy-overlap (absolute ms-vergelijking, tz-agnostisch).
+
 ### 2.1.4 clickup:makeApiCall PUT met body — STILLE FAIL (May 2026, kritiek!)
 - Scenario `bedrijf-update-voorkeuren` gebruikte `clickup:makeApiCall` met PUT + body `{"description":"..."}` naar `/v2/task/{id}`.
 - **Symptoom**: scenario rapporteert `ok:true` + `operations:3` + status SUCCESS, maar ClickUp description wordt **NIET** bijgewerkt.

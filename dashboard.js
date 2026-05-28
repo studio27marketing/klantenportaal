@@ -25,6 +25,7 @@ const ENDPOINTS = {
   directMessage:     'https://hook.eu1.make.com/s7g32st1esmxxarw0k35ej3j8hthdr2b',
   chatAttachment:    'https://hook.eu1.make.com/fxaqt9waonf63moiloj1bnm28w1kduj6',
   bedrijfContact:    'https://hook.eu1.make.com/459dayjdq34xgkt9bcbv8g1nxd9r9ubs',
+  meetingAvailability:'https://hook.eu1.make.com/s4tuw763p9x4dc7o8n1h9sm48vhs77rb',
   // Bestaand werkend booking-systeem (read-only hergebruik via CORS *)
   shootAvailability: 'https://hook.eu1.make.com/c1aekp5r567tqvgvp4e2a4juu3npanap'
 };
@@ -466,9 +467,9 @@ function renderProjectCompact(p){
    Make scenario bedrijf-direct-message maakt taak in Strategie-lijst.
    ================================================================= */
 const DM_RECIPIENTS = [
-  { id:'ilke',    naam:'Ilke Meeusen',      rol:'Account manager — projectopvolging' },
-  { id:'arne',    naam:'Arne Goetschalckx', rol:'Sales — offertes & opstart' },
-  { id:'vincent', naam:'Vincent Verleije',  rol:'Zaakvoerder — strategie' }
+  { id:'ilke',    naam:'Ilke Meeusen',      rol:'Accountmanager' },
+  { id:'arne',    naam:'Arne Goetschalckx', rol:'Zaakvoerder' },
+  { id:'vincent', naam:'Vincent Verleije',  rol:'Zaakvoerder' }
 ];
 
 const DM_PRESETS = {
@@ -1560,8 +1561,8 @@ const PROJECT_SUB_QUESTIONS = {
 
 // Wie krijgt welke offerte? Arne default (offertes), Ilke (opstart bestaande klant), Vincent (zaakvoerder)
 const PROJECT_CONTACT_OPTIONS = [
-  { id:'arne',    naam:'Arne Goetschalckx', email:'arne@studio27.be',    rol:'Sales — offertes & nieuwe projecten' },
-  { id:'ilke',    naam:'Ilke Meeusen',      email:'ilke@studio27.be',    rol:'Account manager — bestaande klanten / opstart' },
+  { id:'arne',    naam:'Arne Goetschalckx', email:'arne@studio27.be',    rol:'Zaakvoerder — offertes & nieuwe projecten' },
+  { id:'ilke',    naam:'Ilke Meeusen',      email:'ilke@studio27.be',    rol:'Accountmanager — bestaande klanten / opstart' },
   { id:'vincent', naam:'Vincent Verleije',  email:'vincent@studio27.be', rol:'Zaakvoerder — strategie & grote trajecten' }
 ];
 
@@ -2083,78 +2084,83 @@ function wireBookingButton(externalBookingUrl){
   btn.addEventListener('click', () => loadMeetingSlots(externalBookingUrl));
 }
 
+let _meetingAvailCache = null;
 async function loadMeetingSlots(externalBookingUrl){
   const box = $('s27-book-slots');
   if(!box) return;
   box.hidden = false;
-  box.innerHTML = '<div class="s27-loading" style="padding:18px">Eerstvolgende vrije momenten zoeken…</div>';
+  box.innerHTML = '<div class="s27-loading" style="padding:18px">Echte agenda\'s checken…</div>';
   try {
-    if(!_shootDataCache){
-      const r = await fetch(ENDPOINTS.shootAvailability, { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
-      _shootDataCache = await r.json();
+    if(!_meetingAvailCache){
+      const res = await api(ENDPOINTS.meetingAvailability, { session_token: state.session.session_token });
+      _meetingAvailCache = (res.ok && res.data) ? res.data : { calendars:{}, hosts:[] };
     }
-    box.innerHTML = renderMeetingSlots(_shootDataCache);
-    // Wire location toggle — updates BOTH oude .s27-book-slot en nieuwe .s27-book-slot-time
+    box.innerHTML = renderMeetingSlots(_meetingAvailCache);
+    // Wire location toggle — updates slot onderwerp met online/op-locatie
     document.querySelectorAll('input[name="s27-meet-loc"]').forEach(r => {
       r.addEventListener('change', () => {
         const loc = document.querySelector('input[name="s27-meet-loc"]:checked');
         if(!loc) return;
-        document.querySelectorAll('.s27-book-slot, .s27-book-slot-time').forEach(slot => {
+        document.querySelectorAll('.s27-book-slot-time').forEach(slot => {
           if(slot.dataset.dmOnderwerpBase) slot.dataset.dmOnderwerp = slot.dataset.dmOnderwerpBase + ' — ' + loc.value;
         });
       });
     });
   } catch(err){
+    console.error('[Studio 27] meeting availability failed:', err);
     box.innerHTML = '<div class="s27-form-error">Beschikbaarheid kon niet opgehaald worden — <a href="#" data-dm="meeting" data-dm-onderwerp="Meeting-aanvraag (beschikbaarheid kon niet laden)">stuur een vraag</a>.</div>';
   }
 }
 
-function renderMeetingSlots(data){
-  const teamHosts = [
-    { id:48338421, naam:'Ilke Meeusen',      rol:'Account manager — projectopvolging' },
-    { id:8714037,  naam:'Vincent Verleije',  rol:'Zaakvoerder — strategie' },
-    { id:54513254, naam:'Arne Goetschalckx', rol:'Sales — nieuwe projecten' }
-  ];
-  // v2.2 #70: 90-min meeting slots in office hours, geen last-minute
-  const SLOT_TEMPLATES = [
-    { tijd: '10:00 – 11:30', startHour: 10 },
-    { tijd: '14:00 – 15:30', startHour: 14 }
-  ];
-  const allBusy = (data.shoots || []).concat(data.shoots_27m || []).concat(data.vakantie || []);
+// v2.2 #72: bouw 90-min vrije slots uit echte Google Calendar busy-blokken
+function computeFreeSlots(busyBlocks){
+  // busyBlocks: [{start, end}] in ISO (UTC). Genereer kandidaat-slots 10:00 + 14:00 lokale tijd,
+  // vanaf +48u tot +14 dagen, werkdagen, en filter wat overlapt met busy.
+  const SLOT_HOURS = [10, 14]; // lokale starttijden
+  const DURATION_MIN = 90;
+  const busy = (busyBlocks || []).map(b => ({ s: new Date(b.start).getTime(), e: new Date(b.end).getTime() })).filter(b => b.s && b.e);
   const now = Date.now();
-  const startMs = now + (48 * 3600000); // +48u (geen vandaag/morgen)
-  const horizonMs = now + (14 * 86400000);
-  const bezetByHost = {};
-  teamHosts.forEach(h => bezetByHost[h.id] = new Set());
-  allBusy.forEach(t => {
-    const due = parseInt(t.due_date || t.start_date, 10);
-    if(!due || due < now || due > horizonMs) return;
-    const day = new Date(due).toISOString().slice(0,10);
-    (t.assignees || []).forEach(a => {
-      if(bezetByHost[a.id]) bezetByHost[a.id].add(day);
-    });
-  });
-  // Per host: bouw lijst van {dag, tijd, ts} slots (voor 4 dagen)
-  const slotsByHost = teamHosts.map(h => {
-    const slots = [];
-    for(let d = Math.ceil(startMs / 86400000) * 86400000; d <= horizonMs && slots.length < 6; d += 86400000){
-      const dt = new Date(d);
-      const dow = dt.getDay();
-      if(dow === 0 || dow === 6) continue;
-      const dayKey = dt.toISOString().slice(0,10);
-      if(bezetByHost[h.id].has(dayKey)) continue;
-      SLOT_TEMPLATES.forEach(tpl => {
-        if(slots.length >= 6) return;
-        const slotDate = new Date(d);
-        slotDate.setHours(tpl.startHour, 0, 0, 0);
-        slots.push({ dag: dayKey, tijd: tpl.tijd, dateLabel: slotDate.toLocaleDateString('nl-BE',{weekday:'short',day:'2-digit',month:'short'}), dateLong: slotDate.toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'long'}) });
+  const startMs = now + 48 * 3600000;
+  const slots = [];
+  for(let dayOffset = 0; dayOffset <= 16 && slots.length < 6; dayOffset++){
+    const day = new Date(now + dayOffset * 86400000);
+    const dow = day.getDay();
+    if(dow === 0 || dow === 6) continue; // weekend
+    for(const h of SLOT_HOURS){
+      if(slots.length >= 6) break;
+      const slotStart = new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, 0, 0, 0);
+      const slotStartMs = slotStart.getTime();
+      const slotEndMs = slotStartMs + DURATION_MIN * 60000;
+      if(slotStartMs < startMs) continue; // geen last-minute
+      // overlap check
+      const overlaps = busy.some(b => slotStartMs < b.e && slotEndMs > b.s);
+      if(overlaps) continue;
+      slots.push({
+        startMs: slotStartMs,
+        tijd: slotStart.toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'}) + ' – ' + new Date(slotEndMs).toLocaleTimeString('nl-BE', {hour:'2-digit', minute:'2-digit'}),
+        dateLabel: slotStart.toLocaleDateString('nl-BE', {weekday:'short', day:'2-digit', month:'short'}),
+        dateLong: slotStart.toLocaleDateString('nl-BE', {weekday:'long', day:'numeric', month:'long'})
       });
     }
-    return { ...h, slots };
+  }
+  return slots;
+}
+
+function renderMeetingSlots(data){
+  const calendars = data.calendars || {};
+  const hosts = (data.hosts && data.hosts.length) ? data.hosts : [
+    { key:'ilke', email:'ilke@studio27.be', naam:'Ilke Meeusen', rol:'Accountmanager' },
+    { key:'arne', email:'arne@studio27.be', naam:'Arne Goetschalckx', rol:'Zaakvoerder' }
+  ];
+  // Per host: echte busy-blokken uit Google Calendar → 90-min vrije slots
+  const slotsByHost = hosts.map(h => {
+    const cal = calendars[h.email] || {};
+    const busy = cal.busy || [];
+    return { ...h, slots: computeFreeSlots(busy) };
   });
   return '<div class="s27-book-head">' +
     '<div><strong>📅 Eerstvolgende vrije momenten (1u30 meeting)</strong>' +
-    '<span>Vanaf overmorgen — kies eerst je locatie-voorkeur, dan een tijdslot</span></div>' +
+    '<span>Live uit onze agenda — kies eerst je locatie-voorkeur, dan een tijdslot</span></div>' +
     '<button type="button" class="s27-book-close" id="s27-book-close" aria-label="Sluiten">×</button>' +
     '</div>' +
     '<div class="s27-meet-locchoice">' +
@@ -2162,9 +2168,7 @@ function renderMeetingSlots(data){
       '<label class="s27-meet-locopt"><input type="radio" name="s27-meet-loc" value="bij Studio 27"/><div><strong>🏢 Bij Studio 27</strong><span>Geel — koffie staat klaar</span></div></label>' +
     '</div>' +
     '<div class="s27-book-grid">' +
-      slotsByHost.map(h => {
-        const ontvKey = h.id === 48338421 ? 'ilke' : (h.id === 8714037 ? 'vincent' : 'arne');
-        return `
+      slotsByHost.map(h => `
         <div class="s27-book-host">
           <div class="s27-book-host-head">
             <strong>${esc(h.naam)}</strong>
@@ -2173,7 +2177,7 @@ function renderMeetingSlots(data){
           ${h.slots.length
             ? '<div class="s27-book-slot-list">' + h.slots.map(s => {
                 const baseSubject = 'Meeting-aanvraag met ' + h.naam + ' op ' + s.dateLong + ' om ' + s.tijd;
-                return `<button type="button" class="s27-book-slot-time" data-dm="meeting" data-dm-ontvanger="${esc(ontvKey)}" data-dm-onderwerp="${esc(baseSubject + ' — online')}" data-dm-onderwerp-base="${esc(baseSubject)}" data-dm-placeholder="Bespreekonderwerp: &#10;Eventuele opmerkingen: ">
+                return `<button type="button" class="s27-book-slot-time" data-dm="meeting" data-dm-ontvanger="${esc(h.key)}" data-dm-onderwerp="${esc(baseSubject + ' — online')}" data-dm-onderwerp-base="${esc(baseSubject)}" data-dm-placeholder="Bespreekonderwerp: &#10;Eventuele opmerkingen: ">
                   <span class="s27-book-slot-date">${esc(s.dateLabel)}</span>
                   <span class="s27-book-slot-time-val">${esc(s.tijd)}</span>
                 </button>`;
@@ -2181,9 +2185,9 @@ function renderMeetingSlots(data){
             : '<p class="s27-book-empty">Volgeboekt komende 2 weken — probeer een andere collega</p>'
           }
         </div>
-      `;}).join('') +
+      `).join('') +
     '</div>' +
-    '<p class="s27-book-fallback">Of <a href="#" data-dm="meeting" data-dm-onderwerp="Meeting-aanvraag (vrij voorstel)">stuur ons een vrij voorstel</a>. Na bevestiging maken we een Google Calendar invite aan.</p>';
+    '<p class="s27-book-fallback">Of <a href="#" data-dm="meeting" data-dm-onderwerp="Meeting-aanvraag (vrij voorstel)">stuur ons een vrij voorstel</a>. Na bevestiging ontvang je een Google Calendar invite.</p>';
 }
 
 // Globale handler voor sluiten van booking slots
@@ -2274,7 +2278,10 @@ async function openProjectDetail(taskId, openOnTab){
               datum: t.datum ? new Date(parseInt(t.datum, 10)).toISOString() : '',
               link: t.url || ''
             })) : [],
-            deliverables: r.data.deliverables || [],
+            deliverables: (Array.isArray(r.data.deliverables) && r.data.deliverables.length) ? r.data.deliverables : parseDeliverablesRaw(r.data.deliverables_raw),
+            deliverables_raw: r.data.deliverables_raw || '',
+            feedback_link: r.data.feedback_link || '',
+            budget: r.data.budget || '',
             project_status: r.data.status || '',
             project_url: r.data.url || ''
           };
@@ -2818,13 +2825,29 @@ function renderFeedbackV2Tab(proj, detail){
 }
 
 function parseDeliverablesFromProj(proj){
-  // Stub: mock voor MVP — voor demo Ads project. Echte deliverables uit ClickUp komen in v4 via Project Detail endpoint extension.
-  const taskId = proj.task_id;
-  if(taskId === '86ca0hp3f') return [
-    { label:'Vimeo edit v1',     url:'https://vimeo.com/example/edit-v1',          type:'vimeo' },
-    { label:'Square + 9:16 cuts', url:'https://drive.google.com/example/cuts',     type:'drive' }
-  ];
+  // v2.2 #71: deliverables komen nu uit project-detail-v2 (Bestanden custom field).
+  // Deze fallback parseert eventueel het detail dat al in state zit.
+  const detail = state.activeProjectDetail;
+  if(detail && detail.deliverables_raw) return parseDeliverablesRaw(detail.deliverables_raw);
   return [];
+}
+
+// v2.2 #71: parse de "Bestanden" custom-field tekst (URLs gescheiden door spaties/newlines) naar deliverable-objecten
+function parseDeliverablesRaw(raw){
+  if(!raw || typeof raw !== 'string') return [];
+  const urls = raw.match(/https?:\/\/[^\s]+/g) || [];
+  return urls.map(url => {
+    const u = url.replace(/[).,;]+$/, ''); // trailing leestekens weg
+    let type = 'bestand', label = 'Deliverable';
+    if(/youtube\.com|youtu\.be/i.test(u)) { type = 'youtube'; label = 'Video (YouTube)'; }
+    else if(/vimeo\.com/i.test(u))        { type = 'vimeo'; label = 'Video (Vimeo)'; }
+    else if(/picflow\.com/i.test(u))      { type = 'picflow'; label = 'Foto-album (Picflow)'; }
+    else if(/figma\.com/i.test(u))        { type = 'figma'; label = 'Ontwerp (Figma)'; }
+    else if(/webflow\.io|\.webflow\./i.test(u)) { type = 'webflow'; label = 'Website preview'; }
+    else if(/drive\.google|docs\.google/i.test(u)) { type = 'drive'; label = 'Drive bestand'; }
+    else { try { label = new URL(u).hostname.replace(/^www\./,''); } catch(e){} }
+    return { label, url: u, type };
+  });
 }
 
 function renderFeedbackDeliverable(d, i){
