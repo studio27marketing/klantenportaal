@@ -69,8 +69,15 @@ Alle 6 productie-kritieke v2-scenarios nu volgens 0.1-0.4 patterns:
 | chat-list-comments       | 5942511 | ✅ 401 | makeApiCall GET | ✅ robust |
 | chat-post                | 5942504 | ✅ 401 | postATaskComment | ✅ robust |
 | bedrijf-meetings-list    | 5943499 | ✅ 401 | makeApiCall GET | ✅ robust |
-| feedback-v2-submit       | 5942527 | ❌ TODO | makeApiCall PUT (bug!) | ⚠️ broken, low prio |
-| new-project-intake       | 5942536 | ❌ TODO | ? | ⚠️ untested |
+| feedback-v2-submit       | 5942527 | ✅ 401 | createTaskInListAdvanced + editATaskAdvanced + postATaskComment | ✅ robust |
+| new-project-intake       | 5942536 | ✅ 401 | createTaskInListAdvanced | ✅ robust |
+
+**ALLE 8 v2-scenarios nu uniform robust** (28 mei 2026, alle getest met curl):
+- 6 lees/schrijf-endpoints voor live dashboard (content, voorkeuren, upload, chat-list, chat-post, meetings)
+- 2 schrijf-endpoints voor feedback-flow + project-intake
+- Geen `makeApiCall` PUT/POST meer in productie-paden — alleen native modules
+- Session validatie consistent overal (TST-DEMO check, in productie via Make Data Store)
+- Frontend `api()` auto-detecteert 401 → handleSessionExpired() met banner + redirect
 
 Frontend `api()` in dashboard.js detecteert HTTP 401 → triggert `handleSessionExpired()` met visuele banner + auto-redirect naar login. Bescherming tegen infinite loops via `state._sessionExpiredHandled` flag.
 
