@@ -404,6 +404,7 @@ function renderProjectCompact(p){
   const statusKey = (p.status || 'in_progress').toLowerCase().replace(/\s+/g,'_');
   const statusLabel = p.status_label || STATUS_LABELS[statusKey] || p.status || 'In productie';
   const needsFeedback = statusKey === 'doorgestuurd' || p.feedback_link;
+  const eta = computeETA(p);
   return '<div class="s27-projc" data-task-id="' + esc(p.task_id || '') + '" tabindex="0" role="button" aria-label="' + esc(p.naam) + '">' +
     '<div class="s27-projc-main">' +
       '<div class="s27-projc-name">' + esc(p.naam || 'Project') + '</div>' +
@@ -412,6 +413,7 @@ function renderProjectCompact(p){
         (p.type ? '<span>· ' + esc(p.type) + '</span>' : '') +
         (p.laatst_geupdatet ? '<span>· ' + esc(fmtRelTime(p.laatst_geupdatet)) + '</span>' : '') +
       '</div>' +
+      (eta.label ? '<div class="s27-projc-eta" data-urgency="' + esc(eta.urgency) + '">' + eta.icon + ' ' + esc(eta.label) + '</div>' : '') +
     '</div>' +
     '<div class="s27-projc-right">' +
       (needsFeedback ? '<span class="s27-projc-flag">🔔 Wacht op jou</span>' : '') +
@@ -419,6 +421,52 @@ function renderProjectCompact(p){
       '<span class="s27-projc-arrow">→</span>' +
     '</div>' +
   '</div>';
+}
+
+/* =================================================================
+   SMART ETA — transparante "wanneer?"-uitleg per project
+   ================================================================= */
+function computeETA(p){
+  if(!p) return { label:'', urgency:'low', icon:'⏱️' };
+  const statusKey = (p.status || '').toLowerCase().replace(/\s+/g,'_');
+  const now = Date.now();
+  const dueMs = p.opleverdatum ? new Date(p.opleverdatum).getTime() : 0;
+  const updMs = p.laatst_geupdatet ? new Date(p.laatst_geupdatet).getTime() : 0;
+  const daysToDue = dueMs > 0 ? Math.ceil((dueMs - now) / 86400000) : null;
+  const daysSinceUpdate = updMs > 0 ? Math.floor((now - updMs) / 86400000) : null;
+
+  // Klant moet iets doen
+  if(statusKey === 'doorgestuurd' || p.feedback_link){
+    return { label:'Wachtend op jouw feedback', urgency:'high', icon:'⏳' };
+  }
+  // On hold
+  if(statusKey === 'on_hold'){
+    return { label:'Tijdelijk gepauzeerd', urgency:'low', icon:'⏸️' };
+  }
+  // Klaar / opgeleverd
+  if(statusKey === 'done' || statusKey === 'goedgekeurd'){
+    return { label:'Opgeleverd', urgency:'low', icon:'✅' };
+  }
+  // Achterstand: due date verstreken
+  if(daysToDue !== null && daysToDue < 0){
+    return { label:'Loopt achter — we kijken hieraan', urgency:'high', icon:'⚠️' };
+  }
+  // Bijna klaar: <=3 dagen tot due
+  if(daysToDue !== null && daysToDue <= 3 && daysToDue >= 0){
+    return { label:'Bijna klaar — ' + (daysToDue === 0 ? 'vandaag' : daysToDue === 1 ? 'morgen' : 'binnen ' + daysToDue + ' dagen'), urgency:'medium', icon:'🚀' };
+  }
+  // Op planning: 4-30 dagen
+  if(daysToDue !== null && daysToDue <= 30){
+    return { label:'Op planning — klaar ' + fmtDate(p.opleverdatum), urgency:'low', icon:'📅' };
+  }
+  // Geen due date maar wel updates → in productie
+  if(daysSinceUpdate !== null && daysSinceUpdate <= 7){
+    return { label:'Actief in productie', urgency:'low', icon:'🛠️' };
+  }
+  if(daysSinceUpdate !== null && daysSinceUpdate > 14){
+    return { label:'Sluimerend — neem contact op als je wil bijsturen', urgency:'medium', icon:'💤' };
+  }
+  return { label:'In productie', urgency:'low', icon:'🛠️' };
 }
 
 function renderMiniMeeting(m){
@@ -1312,6 +1360,104 @@ async function openProjectDetail(taskId, openOnTab){
   detail.comments = (chat.comments || detail.comments || []);
   state.activeProjectDetail = detail;
   renderProjectView(proj, detail, needsFeedback);
+}
+
+function renderProjectView(proj, detail, needsFeedback){
+  const fsView = $('s27-tab-project');
+  if(!fsView){ console.warn('[Studio 27] Project view container niet gevonden'); return; }
+  const discipline = DISCIPLINES[proj.discipline] || {};
+  const accent = discipline.accent || '#3083DC';
+  const discLabel = discipline.label || (proj.discipline||'').replace(/_/g, ' ');
+  const statusKey = (proj.status || '').toLowerCase().replace(/\s+/g,'_');
+  const statusLabel = proj.status_label || STATUS_LABELS[statusKey] || proj.status || '';
+  const eta = computeETA(proj);
+  const rightTabs = [];
+  if(needsFeedback) rightTabs.push({id:'feedback', label:'Geef feedback', icon:'s27p-spark', flag:true});
+  rightTabs.push({id:'chat', label:'Chat', icon:'s27p-mail', badge:(detail.comments||[]).length || null});
+  const activeRight = state.projectViewTab && rightTabs.some(t => t.id === state.projectViewTab) ? state.projectViewTab : rightTabs[0].id;
+
+  fsView.innerHTML = `
+    <div class="s27-pv-head">
+      <button class="s27-pv-back" id="s27-pv-back-btn"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M5 12h14M13 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Terug naar projecten</button>
+      <div class="s27-pv-titlerow">
+        <div style="flex:1; min-width:0">
+          <span class="s27-pv-disc" style="--accent:${accent}">${esc(discLabel)}</span>
+          <h2 class="s27-pv-title">${esc(proj.naam || 'Project')}</h2>
+          <div class="s27-pv-meta">
+            ${proj.opleverdatum ? `<span>📅 ${esc(fmtDate(proj.opleverdatum))}</span>` : ''}
+            ${proj.type ? `<span>· ${esc(proj.type)}</span>` : ''}
+            ${proj.laatst_geupdatet ? `<span>· laatst geüpdatet ${esc(fmtRelTime(proj.laatst_geupdatet))}</span>` : ''}
+          </div>
+          ${eta.label ? `<div class="s27-pv-eta" data-urgency="${esc(eta.urgency)}">${eta.icon} ${esc(eta.label)}</div>` : ''}
+        </div>
+        <div class="s27-pv-status-col">
+          ${statusLabel ? `<span class="s27-projc-status" data-status="${esc(statusKey)}">${esc(statusLabel)}</span>` : ''}
+          ${detail.project_url ? `<a class="s27-pv-clickup" href="${esc(detail.project_url)}" target="_blank" rel="noopener"><svg width="12" height="12"><use href="#s27p-link"/></svg> Open in ClickUp</a>` : ''}
+        </div>
+      </div>
+    </div>
+    <div class="s27-pv-grid">
+      <div class="s27-pv-left">
+        <h3 class="s27-pv-section-title">Overzicht & tijdlijn</h3>
+        ${renderOverzichtTab(proj, detail)}
+      </div>
+      <aside class="s27-pv-right">
+        <div class="s27-pv-tabs" role="tablist">
+          ${rightTabs.map(t => `<button class="s27-pv-tab${t.flag ? ' s27-pv-tab-flag' : ''}${t.id === activeRight ? ' is-active' : ''}" data-pvtab="${t.id}" role="tab" aria-selected="${t.id === activeRight}"><svg width="13" height="13" viewBox="0 0 24 24"><use href="#${t.icon}"/></svg> ${esc(t.label)}${t.badge ? `<span class="s27-pv-tab-badge">${t.badge}</span>` : ''}</button>`).join('')}
+        </div>
+        <div class="s27-pv-tabbody" id="s27-pv-tabbody"></div>
+      </aside>
+    </div>
+  `;
+  state.projectViewTab = activeRight;
+  renderProjectViewSideTab(activeRight);
+
+  // Wire up handlers
+  const back = $('s27-pv-back-btn');
+  if(back) back.addEventListener('click', exitProjectView);
+  document.querySelectorAll('.s27-pv-tab[data-pvtab]').forEach(b => {
+    b.addEventListener('click', () => {
+      state.projectViewTab = b.dataset.pvtab;
+      document.querySelectorAll('.s27-pv-tab').forEach(x => {
+        const isActive = x.dataset.pvtab === state.projectViewTab;
+        x.classList.toggle('is-active', isActive);
+        x.setAttribute('aria-selected', isActive);
+      });
+      renderProjectViewSideTab(state.projectViewTab);
+    });
+  });
+}
+
+function renderProjectViewSideTab(tabId){
+  const proj = state.activeProject;
+  const detail = state.activeProjectDetail || {};
+  const body = $('s27-pv-tabbody');
+  if(!body) return;
+  if(tabId === 'chat'){
+    body.innerHTML = renderChatTab(proj, detail);
+    attachChatHandlers();
+  } else if(tabId === 'feedback'){
+    body.innerHTML = renderFeedbackV2Tab(proj, detail);
+    attachFeedbackV2Handlers();
+  }
+}
+
+function exitProjectView(){
+  // Verberg fullscreen, toon normale tabs terug
+  const fsView = $('s27-tab-project');
+  if(fsView){ fsView.hidden = true; fsView.innerHTML = ''; }
+  state.viewMode = 'dashboard';
+  state.activeProject = null;
+  state.activeProjectDetail = null;
+  if(location.hash.startsWith('#/project/')){
+    history.pushState('', document.title, window.location.pathname + window.location.search);
+  }
+  // Toon de actieve tab opnieuw
+  const activeTab = state.activeTab || 'home';
+  document.querySelectorAll('.s27-tabview').forEach(v => {
+    if(v.id === 's27-tab-project') return;
+    v.hidden = v.id !== ('s27-tab-' + activeTab);
+  });
 }
 
 function renderProjectModal(proj, detail, needsFeedback){
