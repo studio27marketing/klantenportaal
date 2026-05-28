@@ -758,14 +758,18 @@ function renderInstellingenTab(){
 /* =================================================================
    PROJECT DETAIL MODAL
    ================================================================= */
-async function openProjectDetail(taskId){
+async function openProjectDetail(taskId, openOnTab){
   if(!taskId) return;
   const modal = $('s27-modal');
   const proj = state.dashboard.actieve_projecten.find(p => p.task_id === taskId);
   if(!proj) return;
+  state.activeProject = proj;
   const meta = discMeta(proj.discipline);
+  const stKey = (proj.status||'').toLowerCase().replace(/\s+/g,'_');
+  const needsFeedback = stKey === 'doorgestuurd' || proj.feedback_link;
+  state.projectModalTab = openOnTab || (needsFeedback ? 'feedback' : 'overzicht');
   $('s27-modal-title').textContent = proj.naam || 'Project';
-  $('s27-modal-sub').textContent = meta.label + ' · ' + (proj.status_label || STATUS_LABELS[(proj.status||'').toLowerCase()] || 'In productie');
+  $('s27-modal-sub').textContent = meta.label + ' · ' + (proj.status_label || STATUS_LABELS[stKey] || 'In productie');
   $('s27-modal-body').innerHTML = '<div class="s27-loading">Detail laden</div>';
   $('s27-modal-foot').innerHTML = '';
   modal.classList.add('open');
@@ -775,55 +779,294 @@ async function openProjectDetail(taskId){
     detail = getDemoDetail(taskId, proj);
   } else {
     const res = await api(ENDPOINTS.projectDetail, { task_id: taskId, bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token });
-    if(!res.ok || !res.data || res.data.error){
-      $('s27-modal-body').innerHTML = '<div class="s27-error">Kon dit project niet laden. Mail naar <a href="mailto:ilke@studio27.be">ilke@studio27.be</a> als dit blijft gebeuren.</div>';
-      return;
-    }
-    detail = res.data;
+    detail = (res.ok && res.data && !res.data.error) ? res.data : { beschrijving:'', taken:[], comments:[], deliverables:[] };
   }
-  renderProjectDetail(proj, detail);
+  state.activeProjectDetail = detail;
+  renderProjectModal(proj, detail, needsFeedback);
 }
 
-function renderProjectDetail(proj, detail){
-  const taken = detail.taken || detail.subtasks || [];
-  const comments = detail.comments || [];
+function renderProjectModal(proj, detail, needsFeedback){
+  const tabs = [
+    { id:'overzicht', label:'Overzicht', icon:'s27p-spark' },
+    { id:'chat',      label:'Chat',      icon:'s27p-mail',  badge: (detail.comments||[]).length || null },
+  ];
+  if(needsFeedback) tabs.push({ id:'feedback', label:'Geef feedback', icon:'s27p-spark', flag:true });
 
-  const timelineHtml = taken.length ? `<div class="s27-tline">${taken.map(t => {
-    const stKey = (t.status || 'to_do').toLowerCase().replace(/\s+/g,'_');
-    const stLabel = STATUS_LABELS[stKey] || t.status || 'Gepland';
-    return `<div class="s27-tline-item" data-state="${esc(stKey)}">
-      <div class="s27-tline-name">${esc(t.naam)}</div>
-      <div class="s27-tline-meta">${esc(stLabel)}${t.datum ? ' · ' + esc(fmtDate(t.datum)) : ''}${t.update ? ' · ' + esc(t.update) : ''}</div>
-      ${t.link ? `<a class="s27-tline-link" href="${esc(t.link)}" target="_blank" rel="noopener"><svg width="11" height="11"><use href="#s27p-link"/></svg> Open</a>` : ''}
-    </div>`;
-  }).join('')}</div>` : '';
+  const tabsHtml = '<div class="s27-modaltabs" role="tablist">' + tabs.map(t =>
+    '<button class="s27-modaltab' + (t.flag ? ' s27-modaltab-flag' : '') + '" data-modaltab="' + t.id + '" role="tab" aria-selected="' + (state.projectModalTab === t.id ? 'true' : 'false') + '">' +
+      '<svg><use href="#' + t.icon + '"/></svg><span>' + esc(t.label) + '</span>' +
+      (t.badge ? '<span class="s27-modaltab-badge">' + t.badge + '</span>' : '') +
+    '</button>'
+  ).join('') + '</div>';
 
-  const commentsHtml = comments.length ? `
-    <h3 style="font-family:var(--font-display);font-size:13px;font-weight:800;color:var(--s27-ink);margin:24px 0 12px;letter-spacing:0.02em;text-transform:uppercase">Laatste updates van het team</h3>
-    <div style="display:flex;flex-direction:column;gap:10px">
-      ${comments.slice(0,5).map(c => `<div style="padding:12px 14px;background:var(--s27-paper-2);border-left:3px solid var(--s27-blue);border-radius:8px">
-        <div style="font-family:var(--font-display);font-size:11px;font-weight:700;color:var(--s27-ink-3);margin-bottom:4px">${esc(c.auteur||'Studio 27')} · ${esc(fmtRelTime(c.datum))}</div>
-        <div style="font-family:var(--font-body);font-size:13px;color:var(--s27-ink-2);line-height:1.5;white-space:pre-wrap">${esc(c.tekst||'')}</div>
-      </div>`).join('')}
-    </div>
-  ` : '';
+  $('s27-modal-body').innerHTML = tabsHtml + '<div id="s27-modaltab-content"></div>';
+  renderProjectModalTab(state.projectModalTab);
 
-  $('s27-modal-body').innerHTML = `
-    ${detail.beschrijving ? `<p style="font-family:var(--font-body);font-size:14px;color:var(--s27-ink-2);line-height:1.6;margin:0 0 22px">${esc(detail.beschrijving)}</p>` : ''}
-    <h3 style="font-family:var(--font-display);font-size:13px;font-weight:800;color:var(--s27-ink);margin:0 0 12px;letter-spacing:0.02em;text-transform:uppercase">Tijdlijn</h3>
-    ${timelineHtml || '<p style="font-family:var(--font-body);font-size:13px;color:var(--s27-ink-3)">Tijdlijn wordt binnenkort zichtbaar.</p>'}
-    ${commentsHtml}
-  `;
-
-  const stKey = (proj.status||'').toLowerCase().replace(/\s+/g,'_');
-  const needsFeedback = stKey === 'doorgestuurd' || proj.feedback_link;
-  $('s27-modal-foot').innerHTML = `
-    ${needsFeedback ? `<a href="${esc(proj.feedback_link || (FEEDBACK_BASE_URL + '?taskId=' + proj.task_id))}" target="_blank" rel="noopener" class="s27-btn" style="text-decoration:none">Geef nu je feedback</a>` : ''}
-    <button type="button" class="s27-btn" style="background:var(--s27-paper);color:var(--s27-ink);border:1.5px solid var(--s27-line)" id="s27-modal-cancel">Sluiten</button>
-  `;
+  $('s27-modal-foot').innerHTML = '<button type="button" class="s27-btn" style="background:var(--s27-paper);color:var(--s27-ink);border:1.5px solid var(--s27-line)" id="s27-modal-cancel">Sluiten</button>';
   const cancel = $('s27-modal-cancel');
   if(cancel) cancel.addEventListener('click', closeModal);
+
+  document.querySelectorAll('.s27-modaltab[data-modaltab]').forEach(b => {
+    b.addEventListener('click', () => {
+      state.projectModalTab = b.dataset.modaltab;
+      document.querySelectorAll('.s27-modaltab').forEach(x => x.setAttribute('aria-selected', x.dataset.modaltab === state.projectModalTab ? 'true' : 'false'));
+      renderProjectModalTab(state.projectModalTab);
+    });
+  });
 }
+
+function renderProjectModalTab(tabId){
+  const proj = state.activeProject; const detail = state.activeProjectDetail || {};
+  const c = $('s27-modaltab-content'); if(!c) return;
+  if(tabId === 'overzicht') c.innerHTML = renderOverzichtTab(proj, detail);
+  if(tabId === 'chat')      { c.innerHTML = renderChatTab(proj, detail); attachChatHandlers(); }
+  if(tabId === 'feedback')  { c.innerHTML = renderFeedbackV2Tab(proj, detail); attachFeedbackV2Handlers(); }
+}
+
+function renderOverzichtTab(proj, detail){
+  const taken = detail.taken || detail.subtasks || [];
+  const timelineHtml = taken.length ? '<div class="s27-tline">' + taken.map(t => {
+    const stKey = (t.status || 'to_do').toLowerCase().replace(/\s+/g,'_');
+    const stLabel = STATUS_LABELS[stKey] || t.status || 'Gepland';
+    return '<div class="s27-tline-item" data-state="' + esc(stKey) + '">' +
+      '<div class="s27-tline-name">' + esc(t.naam) + '</div>' +
+      '<div class="s27-tline-meta">' + esc(stLabel) + (t.datum ? ' · ' + esc(fmtDate(t.datum)) : '') + (t.update ? ' · ' + esc(t.update) : '') + '</div>' +
+      (t.link ? '<a class="s27-tline-link" href="' + esc(t.link) + '" target="_blank" rel="noopener"><svg width="11" height="11"><use href="#s27p-link"/></svg> Open</a>' : '') +
+    '</div>';
+  }).join('') + '</div>' : '<p style="font-family:var(--font-body);font-size:13px;color:var(--s27-ink-3)">Tijdlijn wordt binnenkort zichtbaar.</p>';
+  return (detail.beschrijving ? '<p class="s27-modal-desc">' + esc(detail.beschrijving) + '</p>' : '') +
+    '<h3 class="s27-modal-h3">Tijdlijn</h3>' + timelineHtml;
+}
+
+function renderChatTab(proj, detail){
+  const comments = detail.comments || [];
+  const thread = comments.length
+    ? '<div class="s27-chat-thread">' + comments.map(renderChatMessage).join('') + '</div>'
+    : '<div class="s27-empty"><div class="s27-empty-icon"><svg width="22" height="22"><use href="#s27p-mail"/></svg></div><div class="s27-empty-title">Nog geen berichten</div><p class="s27-empty-sub">Start het gesprek met je team. Antwoorden komen hier direct te staan.</p></div>';
+  return thread +
+    '<div class="s27-chat-compose">' +
+      '<textarea id="s27-chat-input" placeholder="Typ je bericht voor het team…"></textarea>' +
+      '<div class="s27-chat-actions">' +
+        '<label class="s27-chat-attach" for="s27-chat-file">' +
+          '<svg width="14" height="14"><use href="#s27p-upload"/></svg> Bestand toevoegen' +
+        '</label>' +
+        '<input id="s27-chat-file" type="file" multiple style="display:none">' +
+        '<button class="s27-btn s27-btn-sm" id="s27-chat-send">Versturen</button>' +
+      '</div>' +
+      '<ul id="s27-chat-files" class="s27-chat-files"></ul>' +
+    '</div>';
+}
+
+function renderChatMessage(c){
+  const isKlant = c.is_klant === true || (c.tekst || '').startsWith('💬 [Klant');
+  const side = isKlant ? 'klant' : 'team';
+  const cleanText = (c.tekst || '').replace(/^💬 \[Klant: [^\]]+\]\s*/, '').trim();
+  const atts = (c.attachments || []).map(a => '<a class="s27-chat-att" href="' + esc(a.url || '#') + '" target="_blank" rel="noopener">📎 ' + esc(a.filename || 'bestand') + '</a>').join('');
+  return '<div class="s27-chat-msg s27-chat-msg-' + side + '">' +
+    '<div class="s27-chat-head"><strong>' + esc(c.auteur || 'Studio 27') + '</strong><span>' + esc(fmtRelTime(c.datum)) + '</span></div>' +
+    '<div class="s27-chat-body">' + esc(cleanText).replace(/\n/g,'<br>') + '</div>' +
+    (atts ? '<div class="s27-chat-atts">' + atts + '</div>' : '') +
+  '</div>';
+}
+
+function attachChatHandlers(){
+  const send = $('s27-chat-send');
+  const input = $('s27-chat-input');
+  const fileInput = $('s27-chat-file');
+  const filesList = $('s27-chat-files');
+  const pending = [];
+  if(fileInput){
+    fileInput.addEventListener('change', async e => {
+      for(const f of Array.from(e.target.files || [])){
+        if(f.size > MAX_FILE_BYTES){ alert(f.name + ' is te groot (max 5 MB)'); continue; }
+        const b64 = await fileToBase64(f);
+        pending.push({ filename:f.name, data:b64, type:f.type, size:f.size });
+        const li = document.createElement('li');
+        li.innerHTML = '<span>📎 ' + esc(f.name) + '</span>';
+        filesList.appendChild(li);
+      }
+      fileInput.value = '';
+    });
+  }
+  if(send){
+    send.addEventListener('click', async () => {
+      const text = (input.value || '').trim();
+      if(!text && !pending.length){ input.focus(); return; }
+      send.disabled = true; send.textContent = 'Versturen…';
+      const url = ENDPOINTS.chatPost;
+      if(url){
+        await api(url, {
+          task_id: state.activeProject.task_id,
+          bedrijf_id: state.session.bedrijf_id,
+          session_token: state.session.session_token,
+          klant_naam: state.session.bedrijfsnaam,
+          comment_text: text,
+          attachments: pending
+        });
+      } else {
+        await new Promise(r => setTimeout(r, 600)); // mock
+      }
+      send.disabled = false; send.textContent = 'Versturen';
+      input.value = '';
+      filesList.innerHTML = '';
+      pending.length = 0;
+      // Optimistisch toevoegen aan thread
+      const newMsg = { auteur:state.session.bedrijfsnaam, is_klant:true, tekst:text, datum:new Date().toISOString(), attachments:[] };
+      state.activeProjectDetail.comments = (state.activeProjectDetail.comments || []).concat([newMsg]);
+      renderProjectModalTab('chat');
+    });
+  }
+}
+
+function renderFeedbackV2Tab(proj, detail){
+  const deliverables = detail.deliverables || parseDeliverablesFromProj(proj);
+  const intro = '<div class="s27-fb-intro">' +
+    '<strong>Klaar voor review.</strong> Voor elk onderdeel kies je: ✅ <em>Goedgekeurd</em> of 💬 <em>Feedback gegeven</em>. ' +
+    'Bij feedback kies je waar je het hebt achtergelaten (Vimeo, Picflow, Webflow comments, tekst hieronder, of upload). ' +
+    'Bevestig onderaan zodat we direct verder kunnen.' +
+    '</div>';
+  if(!deliverables.length){
+    return intro + '<div class="s27-empty"><div class="s27-empty-title">Geen deliverables gevonden</div><p class="s27-empty-sub">Mail naar ilke@studio27.be om dit te laten oplossen.</p></div>';
+  }
+  return intro +
+    '<div class="s27-fb-list">' +
+      deliverables.map((d,i) => renderFeedbackDeliverable(d,i)).join('') +
+    '</div>' +
+    '<div class="s27-fb-general">' +
+      '<label>Extra algemene opmerking (optioneel)</label>' +
+      '<textarea id="s27-fb-general" placeholder="Iets dat over alles gaat? Zet het hier."></textarea>' +
+    '</div>' +
+    '<div class="s27-fb-foot">' +
+      '<span class="s27-fb-state" id="s27-fb-state"></span>' +
+      '<button class="s27-btn" id="s27-fb-submit" disabled>Bevestig mijn feedback</button>' +
+    '</div>';
+}
+
+function parseDeliverablesFromProj(proj){
+  // Stub: mock voor MVP — voor demo Ads project. Echte deliverables uit ClickUp komen in v4 via Project Detail endpoint extension.
+  const taskId = proj.task_id;
+  if(taskId === '86ca0hp3f') return [
+    { label:'Vimeo edit v1',     url:'https://vimeo.com/example/edit-v1',          type:'vimeo' },
+    { label:'Square + 9:16 cuts', url:'https://drive.google.com/example/cuts',     type:'drive' }
+  ];
+  return [];
+}
+
+function renderFeedbackDeliverable(d, i){
+  const typeLabel = ({vimeo:'Video op Vimeo', picflow:'Foto-album op Picflow', webflow:'Website preview', drive:'Drive folder', figma:'Figma ontwerp'})[d.type] || 'Bestand';
+  return '<div class="s27-fb-item" data-idx="' + i + '">' +
+    '<div class="s27-fb-item-head">' +
+      '<div><span class="s27-fb-num">' + (i+1) + '</span> ' + esc(d.label) + '</div>' +
+      '<span class="s27-fb-type">' + esc(typeLabel) + '</span>' +
+    '</div>' +
+    '<a class="s27-fb-open" href="' + esc(d.url) + '" target="_blank" rel="noopener">Open ' + esc(typeLabel) + ' →</a>' +
+    '<div class="s27-fb-choice">' +
+      '<button class="s27-fb-btn s27-fb-approve" data-choice="goedgekeurd" data-idx="' + i + '"><span class="dot"></span>✅ Goedgekeurd</button>' +
+      '<button class="s27-fb-btn s27-fb-fb" data-choice="feedback" data-idx="' + i + '"><span class="dot"></span>💬 Feedback gegeven</button>' +
+    '</div>' +
+    '<div class="s27-fb-panel" hidden>' +
+      '<label class="s27-fb-label">Via welke weg gaf je feedback?</label>' +
+      '<div class="s27-fb-channels">' +
+        ['vimeo','picflow','webflow','figma','drive','tekst'].map(ch =>
+          '<label><input type="checkbox" data-channel="' + ch + '" data-idx="' + i + '"> ' + ch.charAt(0).toUpperCase()+ch.slice(1) + (ch==='tekst' ? ' (hieronder)' : ' comments') + '</label>'
+        ).join('') +
+      '</div>' +
+      '<label class="s27-fb-label">Of typ hier je feedback</label>' +
+      '<textarea class="s27-fb-text" data-idx="' + i + '" placeholder="Beschrijf wat je anders wil zien…"></textarea>' +
+      '<label class="s27-fb-attach"><svg width="13" height="13"><use href="#s27p-upload"/></svg> Bestanden toevoegen<input type="file" multiple data-idx="' + i + '" style="display:none"></label>' +
+      '<ul class="s27-fb-files" data-idx="' + i + '"></ul>' +
+    '</div>' +
+  '</div>';
+}
+
+function attachFeedbackV2Handlers(){
+  if(!state.fbState) state.fbState = {};
+  // Choice buttons
+  document.querySelectorAll('.s27-fb-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      const idx = b.dataset.idx; const choice = b.dataset.choice;
+      state.fbState[idx] = Object.assign(state.fbState[idx] || {}, { choice });
+      const item = b.closest('.s27-fb-item');
+      item.querySelectorAll('.s27-fb-btn').forEach(x => x.classList.toggle('selected', x.dataset.choice === choice));
+      item.classList.toggle('s27-fb-item-feedback', choice === 'feedback');
+      item.classList.toggle('s27-fb-item-approved', choice === 'goedgekeurd');
+      const panel = item.querySelector('.s27-fb-panel'); if(panel) panel.hidden = choice !== 'feedback';
+      updateFeedbackSubmitState();
+    });
+  });
+  // Channels
+  document.querySelectorAll('input[data-channel]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const idx = cb.dataset.idx; const ch = cb.dataset.channel;
+      state.fbState[idx] = state.fbState[idx] || {};
+      state.fbState[idx].channels = state.fbState[idx].channels || {};
+      state.fbState[idx].channels[ch] = cb.checked;
+    });
+  });
+  // Tekstvelden
+  document.querySelectorAll('.s27-fb-text').forEach(ta => {
+    ta.addEventListener('input', () => {
+      const idx = ta.dataset.idx;
+      state.fbState[idx] = state.fbState[idx] || {};
+      state.fbState[idx].tekst = ta.value;
+    });
+  });
+  // Files per item
+  document.querySelectorAll('.s27-fb-attach input[type=file]').forEach(inp => {
+    inp.addEventListener('change', async e => {
+      const idx = inp.dataset.idx;
+      state.fbState[idx] = state.fbState[idx] || {};
+      state.fbState[idx].files = state.fbState[idx].files || [];
+      const list = document.querySelector('.s27-fb-files[data-idx="' + idx + '"]');
+      for(const f of Array.from(e.target.files || [])){
+        if(f.size > MAX_FILE_BYTES){ alert(f.name + ' te groot'); continue; }
+        const b64 = await fileToBase64(f);
+        state.fbState[idx].files.push({ filename:f.name, data:b64, type:f.type, size:f.size });
+        const li = document.createElement('li'); li.textContent = '📎 ' + f.name; list.appendChild(li);
+      }
+      e.target.value = '';
+    });
+  });
+  // Submit
+  const submit = $('s27-fb-submit');
+  if(submit) submit.addEventListener('click', submitFeedbackV2);
+}
+
+function updateFeedbackSubmitState(){
+  const proj = state.activeProject; const detail = state.activeProjectDetail || {};
+  const deliverables = detail.deliverables || parseDeliverablesFromProj(proj);
+  const allChosen = deliverables.every((_, i) => (state.fbState[i] || {}).choice);
+  const btn = $('s27-fb-submit'); if(btn) btn.disabled = !allChosen;
+}
+
+async function submitFeedbackV2(){
+  const proj = state.activeProject; const detail = state.activeProjectDetail || {};
+  const deliverables = detail.deliverables || parseDeliverablesFromProj(proj);
+  const stateLabel = $('s27-fb-state'); const submit = $('s27-fb-submit');
+  submit.disabled = true; submit.textContent = 'Versturen…'; stateLabel.textContent = 'Bezig…';
+  const payload = {
+    task_id: proj.task_id,
+    bedrijf_id: state.session.bedrijf_id,
+    session_token: state.session.session_token,
+    klant_naam: state.session.bedrijfsnaam,
+    deliverables: deliverables.map((d, i) => Object.assign({}, d, state.fbState[i] || {})),
+    algemene_opmerking: ($('s27-fb-general') || {}).value || ''
+  };
+  if(ENDPOINTS.feedbackV2){
+    await api(ENDPOINTS.feedbackV2, payload);
+  } else {
+    await new Promise(r => setTimeout(r, 800)); // mock
+  }
+  const allApproved = deliverables.every((_,i) => (state.fbState[i] || {}).choice === 'goedgekeurd');
+  $('s27-modal-body').innerHTML = '<div class="s27-success" style="min-height:240px"><svg class="s27-success-check" viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" fill="#12AC4E" opacity="0.12"/><circle cx="60" cy="60" r="40" fill="#12AC4E"/><path d="M42 60 L54 72 L78 48" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>' +
+    '<h2 class="s27-success-h2">' + (allApproved ? 'Bedankt — alles staat op <span style="color:var(--s27-green-ink)">groen</span>!' : 'Bedankt voor de <span style="color:var(--s27-blue-ink)">feedback</span>!') + '</h2>' +
+    '<p class="s27-success-p">' + (allApproved ? 'Top dat alles in orde is — we ronden de taak nu af.' : 'We nemen je feedback mee. Je hoort van ons met de aangepaste versie.') + '</p>' +
+  '</div>';
+  $('s27-modal-foot').innerHTML = '<button type="button" class="s27-btn" id="s27-modal-cancel">Sluiten</button>';
+  const cl = $('s27-modal-cancel'); if(cl) cl.addEventListener('click', closeModal);
+  state.fbState = {};
+}
+
 function closeModal(){ $('s27-modal').classList.remove('open'); }
 
 /* =================================================================

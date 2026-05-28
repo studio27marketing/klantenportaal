@@ -119,6 +119,77 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-tabview { animation:s27fadeIn .3s var(--ease-out) backwards; }
 .s27-tabview[hidden] { display:none !important; }
 
+/* ============ PROJECT MODAL TABS (v2 Fase 3 + 4) ============ */
+.s27-modaltabs { display:flex; gap:4px; border-bottom:1px solid var(--s27-line); margin:-4px 0 20px; overflow-x:auto; scrollbar-width:none; }
+.s27-modaltabs::-webkit-scrollbar { display:none; }
+.s27-modaltab { background:none; border:none; padding:11px 16px 9px; cursor:pointer; font-family:var(--font-display); font-size:13px; font-weight:700; color:var(--s27-ink-3); display:inline-flex; align-items:center; gap:8px; border-bottom:3px solid transparent; transition:all .15s var(--ease-out); white-space:nowrap; letter-spacing:0.01em; position:relative; }
+.s27-modaltab svg { width:14px; height:14px; }
+.s27-modaltab:hover { color:var(--s27-ink); }
+.s27-modaltab[aria-selected="true"] { color:var(--s27-blue-ink); border-bottom-color:var(--s27-blue); }
+.s27-modaltab[aria-selected="true"] svg { color:var(--s27-blue); }
+.s27-modaltab-flag { color:var(--s27-orange-ink); }
+.s27-modaltab-flag::before { content:''; width:6px; height:6px; border-radius:50%; background:var(--s27-orange); display:inline-block; animation:s27pulse 1.5s ease-in-out infinite; }
+.s27-modaltab-flag[aria-selected="true"] { color:var(--s27-orange-ink); border-bottom-color:var(--s27-orange); }
+.s27-modaltab-badge { background:var(--s27-blue-soft); color:var(--s27-blue-ink); font-size:10px; padding:2px 7px; border-radius:var(--r-pill); font-weight:800; }
+.s27-modal-desc { font-family:var(--font-body); font-size:14px; color:var(--s27-ink-2); line-height:1.6; margin:0 0 22px; }
+.s27-modal-h3 { font-family:var(--font-display); font-size:13px; font-weight:800; color:var(--s27-ink); margin:0 0 12px; letter-spacing:0.02em; text-transform:uppercase; }
+
+/* ============ CHAT THREAD (v2 Fase 3) ============ */
+.s27-chat-thread { display:flex; flex-direction:column; gap:12px; margin-bottom:18px; max-height:380px; overflow-y:auto; padding-right:4px; }
+.s27-chat-msg { padding:11px 14px; border-radius:14px; max-width:88%; }
+.s27-chat-msg-team  { background:var(--s27-paper-2); border-left:3px solid var(--s27-blue); align-self:flex-start; }
+.s27-chat-msg-klant { background:var(--s27-blue-soft); border-right:3px solid var(--s27-blue); align-self:flex-end; }
+.s27-chat-head { display:flex; gap:8px; align-items:baseline; font-family:var(--font-display); font-size:11px; font-weight:700; color:var(--s27-ink-3); margin-bottom:4px; }
+.s27-chat-head strong { color:var(--s27-ink-2); font-weight:800; }
+.s27-chat-body { font-family:var(--font-body); font-size:13px; color:var(--s27-ink-2); line-height:1.5; white-space:pre-wrap; }
+.s27-chat-atts { margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; }
+.s27-chat-att { font-family:var(--font-display); font-size:11px; font-weight:700; padding:4px 10px; border-radius:var(--r-pill); background:rgba(255,255,255,0.7); color:var(--s27-ink-2); text-decoration:none; border:1px solid var(--s27-line); }
+.s27-chat-att:hover { background:var(--s27-paper); color:var(--s27-blue-ink); }
+.s27-chat-compose { border-top:1px solid var(--s27-line); padding-top:14px; }
+.s27-chat-compose textarea { width:100%; padding:11px 14px; border:1.5px solid var(--s27-line); border-radius:var(--r-md); font-family:var(--font-body); font-size:14px; min-height:80px; resize:vertical; background:var(--s27-paper); color:var(--s27-ink); line-height:1.5; box-sizing:border-box; }
+.s27-chat-compose textarea:focus { outline:none; border-color:var(--s27-blue); box-shadow:var(--sh-focus); }
+.s27-chat-actions { display:flex; justify-content:space-between; gap:10px; margin-top:10px; align-items:center; }
+.s27-chat-attach { display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border:1.5px solid var(--s27-line); border-radius:var(--r-pill); cursor:pointer; font-family:var(--font-display); font-size:12px; font-weight:700; color:var(--s27-ink-2); background:var(--s27-paper); }
+.s27-chat-attach:hover { border-color:var(--s27-blue); color:var(--s27-blue-ink); }
+.s27-chat-files { list-style:none; padding:0; margin:8px 0 0; display:flex; flex-direction:column; gap:4px; font-family:var(--font-body); font-size:12px; color:var(--s27-ink-3); }
+
+/* ============ FEEDBACK WIDGET V2 (v2 Fase 4) ============ */
+.s27-fb-intro { padding:14px 16px; background:var(--s27-orange-soft); color:var(--s27-orange-ink); border-radius:var(--r-md); font-family:var(--font-body); font-size:13px; line-height:1.55; margin-bottom:18px; border-left:3px solid var(--s27-orange); }
+.s27-fb-intro strong { font-family:var(--font-display); font-weight:800; }
+.s27-fb-intro em { font-style:normal; font-weight:700; }
+.s27-fb-list { display:flex; flex-direction:column; gap:14px; margin-bottom:18px; }
+.s27-fb-item { background:var(--s27-paper); border:1.5px solid var(--s27-line); border-radius:var(--r-lg); padding:16px 18px; transition:border-color .2s; }
+.s27-fb-item-approved { border-left:4px solid var(--s27-green); }
+.s27-fb-item-feedback { border-left:4px solid var(--s27-orange); }
+.s27-fb-item-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:6px; flex-wrap:wrap; }
+.s27-fb-item-head > div:first-child { font-family:var(--font-display); font-size:14px; font-weight:800; color:var(--s27-ink); display:flex; align-items:center; gap:8px; }
+.s27-fb-num { width:24px; height:24px; border-radius:8px; background:var(--s27-blue-soft); color:var(--s27-blue-ink); display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:900; }
+.s27-fb-type { font-family:var(--font-display); font-size:10px; font-weight:800; padding:3px 8px; border-radius:var(--r-pill); background:var(--s27-paper-3); color:var(--s27-ink-3); letter-spacing:0.04em; text-transform:uppercase; }
+.s27-fb-open { display:inline-block; font-family:var(--font-display); font-size:12px; font-weight:700; color:var(--s27-blue-ink); margin:6px 0 12px; text-decoration:underline; }
+.s27-fb-choice { display:flex; gap:8px; flex-wrap:wrap; }
+.s27-fb-btn { padding:10px 16px; border:1.5px solid var(--s27-line); border-radius:var(--r-pill); background:var(--s27-paper); cursor:pointer; font-family:var(--font-display); font-size:12px; font-weight:700; color:var(--s27-ink); display:inline-flex; align-items:center; gap:6px; transition:all .15s var(--ease-out); }
+.s27-fb-btn:hover { transform:translateY(-1px); }
+.s27-fb-btn .dot { width:8px; height:8px; border-radius:50%; background:var(--s27-line); }
+.s27-fb-approve.selected { background:var(--s27-green); color:#fff; border-color:var(--s27-green); }
+.s27-fb-approve.selected .dot { background:#fff; }
+.s27-fb-fb.selected { background:var(--s27-orange); color:#fff; border-color:var(--s27-orange); }
+.s27-fb-fb.selected .dot { background:#fff; }
+.s27-fb-panel { margin-top:14px; padding:14px; background:var(--s27-paper-2); border-radius:var(--r-md); }
+.s27-fb-label { display:block; font-family:var(--font-display); font-size:11px; font-weight:800; color:var(--s27-ink-2); margin:6px 0 8px; letter-spacing:0.04em; text-transform:uppercase; }
+.s27-fb-channels { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:10px; }
+.s27-fb-channels label { display:inline-flex; align-items:center; gap:6px; font-family:var(--font-body); font-size:13px; color:var(--s27-ink-2); cursor:pointer; }
+.s27-fb-channels input { accent-color:var(--s27-blue); width:15px; height:15px; cursor:pointer; }
+.s27-fb-text { width:100%; padding:11px 14px; border:1.5px solid var(--s27-line); border-radius:var(--r-md); font-family:var(--font-body); font-size:13px; min-height:70px; resize:vertical; box-sizing:border-box; }
+.s27-fb-text:focus { outline:none; border-color:var(--s27-orange); box-shadow:0 0 0 3px rgba(246,97,49,0.18); }
+.s27-fb-attach { display:inline-flex; align-items:center; gap:6px; margin-top:8px; padding:7px 14px; border:1.5px dashed var(--s27-orange); border-radius:var(--r-pill); cursor:pointer; font-family:var(--font-display); font-size:11px; font-weight:700; color:var(--s27-orange-ink); background:var(--s27-orange-soft); }
+.s27-fb-files { list-style:none; padding:0; margin:8px 0 0; font-family:var(--font-body); font-size:12px; color:var(--s27-ink-3); }
+.s27-fb-general { background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:var(--r-md); padding:14px 16px; margin-bottom:18px; }
+.s27-fb-general label { display:block; font-family:var(--font-display); font-size:11px; font-weight:800; color:var(--s27-ink-2); margin-bottom:8px; letter-spacing:0.04em; text-transform:uppercase; }
+.s27-fb-general textarea { width:100%; padding:11px 14px; border:1.5px solid var(--s27-line); border-radius:var(--r-md); font-family:var(--font-body); font-size:13px; min-height:60px; resize:vertical; box-sizing:border-box; }
+.s27-fb-foot { display:flex; justify-content:space-between; align-items:center; gap:12px; padding-top:14px; border-top:1px solid var(--s27-line); }
+.s27-fb-state { font-family:var(--font-display); font-size:12px; font-weight:700; color:var(--s27-ink-3); }
+.s27-fb-foot .s27-btn { width:auto; padding:12px 24px; font-size:13px; }
+
 /* ============ MIJN BEDRIJF — HUISSTIJL SYSTEEM (v2 Fase 2) ============ */
 .s27-voorkeuren { background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:var(--r-lg); padding:18px 20px; box-shadow:var(--sh-sm); }
 .s27-voorkeuren textarea { width:100%; padding:14px 16px; border:1.5px solid var(--s27-line); border-radius:var(--r-md); font-size:14px; font-family:var(--font-body); background:var(--s27-paper-2); color:var(--s27-ink); min-height:110px; resize:vertical; line-height:1.5; box-sizing:border-box; transition:border-color .15s, box-shadow .15s; }
