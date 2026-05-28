@@ -1050,16 +1050,23 @@ async function renderBedrijfTab(){
   }
   cats = cats || { logos:[], fonts:[], kleuren:[], brand_pdfs:[], fotos:[], overig:[] };
 
-  // v2.2 #45 fix: Make scenario double-encodes \n + \" — decode terug naar echte chars
-  const fullVoorkeuren = decodeMakeString(data.algemene_voorkeuren || '').replace(/<[^>]+>/g,'').trim();
-  // v2.2 #52: parse vrije tekst + gestructureerde data (JSON na separator)
-  const parsed = parseBedrijfVoorkeuren(fullVoorkeuren);
-  const voorkeurenTekst = parsed.tekst;
-  const merkkleuren = parsed.kleuren || { primary:'', secondary:'', accent:'', tekst:'' };
-  const fontGebruik = parsed.fontGebruik || '';
+  // Voorkeuren = platte tekst (geen ---STRUCTURED--- blob meer; server stript die ook)
+  const voorkeurenTekst = decodeMakeString(data.algemene_voorkeuren || '').replace(/<[^>]+>/g,'').replace(/---STRUCTURED---[\s\S]*/,'').trim();
 
-  // Contactgegevens: parse uit description-blob OR session
-  const savedContact = parsed.contact || {};
+  // v2.2 #74: contact = ClickUp company fields (btw/email/website) + lokaal bewaarde persoonsvelden
+  const localC = loadContactCache();
+  const c = {
+    voornaam:   localC.voornaam || '',
+    achternaam: localC.achternaam || '',
+    gsm:        localC.gsm || '',
+    email:      localC.email || data.facturatie_email || '',
+    btw:        localC.btw || data.btw || '',
+    adres:      localC.adres || '',
+    website:    localC.website || data.website || ''
+  };
+  const rf = (label, name, val, ph) =>
+    `<div class="s27-form-field s27-readfield"><span class="s27-readlabel">${esc(label)}</span><div class="s27-readvalue">${val ? esc(val) : '—'}</div><input type="text" name="${name}" value="${esc(val||'')}" placeholder="${esc(ph||'')}" hidden/></div>`;
+
   body.innerHTML = `
     <div class="s27-section">
       <div class="s27-section-head">
@@ -1071,15 +1078,16 @@ async function renderBedrijfTab(){
       </div>
       <div class="s27-contactform s27-contactform-readonly" id="s27-contactform" data-edit-mode="off">
         <div class="s27-form-row">
-          <div class="s27-form-field s27-readfield"><span class="s27-readlabel">Voornaam</span><div class="s27-readvalue">${esc(savedContact.voornaam || (state.session && state.session.bedrijfsnaam ? state.session.bedrijfsnaam.split(' ')[0] : '—'))}</div><input type="text" name="voornaam" value="${esc(savedContact.voornaam || '')}" placeholder="Bv. Vincent" hidden/></div>
-          <div class="s27-form-field s27-readfield"><span class="s27-readlabel">Achternaam</span><div class="s27-readvalue">${esc(savedContact.achternaam || '—')}</div><input type="text" name="achternaam" value="${esc(savedContact.achternaam || '')}" placeholder="Bv. Verleije" hidden/></div>
+          ${rf('Voornaam','voornaam',c.voornaam,'Bv. Vincent')}
+          ${rf('Achternaam','achternaam',c.achternaam,'Bv. Verleije')}
         </div>
         <div class="s27-form-row">
-          <div class="s27-form-field s27-readfield"><span class="s27-readlabel">GSM</span><div class="s27-readvalue">${esc(savedContact.gsm || '—')}</div><input type="tel" name="gsm" value="${esc(savedContact.gsm || '')}" placeholder="+32 4xx xx xx xx" hidden/></div>
-          <div class="s27-form-field s27-readfield"><span class="s27-readlabel">E-mail</span><div class="s27-readvalue">${esc(savedContact.email || (data._raw_email || '—'))}</div><input type="email" name="email" value="${esc(savedContact.email || '')}" placeholder="naam@bedrijf.be" hidden/></div>
+          ${rf('GSM','gsm',c.gsm,'+32 4xx xx xx xx')}
+          ${rf('E-mail','email',c.email,'naam@bedrijf.be')}
         </div>
-        <div class="s27-form-field s27-readfield"><span class="s27-readlabel">BTW-nummer</span><div class="s27-readvalue">${esc(savedContact.btw || (data._raw_btw || '—'))}</div><input type="text" name="btw" value="${esc(savedContact.btw || '')}" placeholder="BE0xxx.xxx.xxx" hidden/></div>
-        <div class="s27-form-field s27-readfield"><span class="s27-readlabel">Bedrijfsadres (factuur-adres)</span><div class="s27-readvalue">${esc(savedContact.adres || '—')}</div><input type="text" name="adres" value="${esc(savedContact.adres || '')}" placeholder="Straat nummer, postcode stad" hidden/></div>
+        ${rf('BTW-nummer','btw',c.btw,'BE0xxx.xxx.xxx')}
+        ${rf('Bedrijfsadres (factuur-adres)','adres',c.adres,'Straat nummer, postcode stad')}
+        ${rf('Website','website',c.website,'https://...')}
         <div class="s27-contactform-foot" id="s27-contactform-foot" hidden>
           <span class="s27-contactform-state" id="s27-contactform-state"></span>
           <button class="s27-btn s27-btn-ghost s27-btn-sm" id="s27-contactform-cancel">Annuleer</button>
@@ -1107,30 +1115,9 @@ async function renderBedrijfTab(){
     <div class="s27-section">
       <div class="s27-section-head">
         <div>
-          <h2 class="s27-section-title">Merk-kleuren <small style="font-weight:400;color:var(--s27-ink-3);font-size:13px">— hex codes voor AI-assets</small></h2>
-          <p class="s27-section-sub">Vul de hex-codes in. Onze designers én onze AI gebruiken deze automatisch voor templates, social media en presentaties.</p>
-        </div>
-      </div>
-      <div class="s27-kleuren-grid" id="s27-kleuren-grid">
-        ${renderKleurInput('primary', 'Primaire kleur', 'De hoofdkleur van je merk', merkkleuren.primary || '')}
-        ${renderKleurInput('secondary', 'Secundair', 'Steunkleur', merkkleuren.secondary || '')}
-        ${renderKleurInput('accent', 'Accent', 'Opvallend, voor CTAs of highlights', merkkleuren.accent || '')}
-        ${renderKleurInput('tekst', 'Tekst-kleur', 'Voor body-tekst', merkkleuren.tekst || '')}
-      </div>
-    </div>
-
-    <div class="s27-section">
-      <div class="s27-section-head">
-        <div>
           <h2 class="s27-section-title">Huisstijl-bibliotheek</h2>
-          <p class="s27-section-sub">Logo's, fonts, kleurpaletten, brand-PDFs en foto's — alles op één plek. Sleep bestanden in het kader hieronder of klik om te uploaden.</p>
+          <p class="s27-section-sub">Logo's, fonts, kleurpaletten, brand-PDFs, foto's… alles op één plek. Sleep bestanden in het kader of klik om te uploaden — wij en jij kunnen hier downloaden.</p>
         </div>
-      </div>
-      <div class="s27-fontuse">
-        <label>
-          <span><strong>Welke fonts gebruik je voor wat?</strong> Bv. "Inter voor headings, Open Sans voor body, Caveat voor accenten."</span>
-          <input type="text" id="s27-fontuse-input" value="${esc(fontGebruik)}" placeholder="Inter voor headings, Open Sans voor body…"/>
-        </label>
       </div>
       <div class="s27-uploadzone" id="s27-drop-bedrijf" data-category="overig">
         <input id="s27-up-input-bedrijf" type="file" multiple style="display:none">
@@ -1145,19 +1132,18 @@ async function renderBedrijfTab(){
         ${renderFilesFlat(data.attachments || [])}
       </div>
     </div>
-
-    <div class="s27-section">
-      <div class="s27-section-head">
-        <div>
-          <h2 class="s27-section-title">Snel bestand toevoegen</h2>
-          <p class="s27-section-sub">Of klik op een specifieke categorie hierboven om gericht toe te voegen.</p>
-        </div>
-      </div>
-      ${renderUploadZone('bedrijf', 'overig')}
-    </div>
   `;
 
   attachBedrijfHandlers();
+}
+
+// v2.2 #74: lokale contact-cache per bedrijf (persoonsvelden die niet op Bedrijven-task staan)
+function loadContactCache(){
+  try { return JSON.parse(localStorage.getItem('s27_contact_' + (state.session && state.session.bedrijf_id)) || '{}'); }
+  catch(e){ return {}; }
+}
+function saveContactCache(obj){
+  try { localStorage.setItem('s27_contact_' + (state.session && state.session.bedrijf_id), JSON.stringify(obj)); } catch(e){}
 }
 
 function renderCategoryCard(cat, items){
@@ -1245,70 +1231,30 @@ function renderUploadZone(scope, category){
 }
 
 function attachBedrijfHandlers(){
-  // Voorkeuren editor + gestructureerde data (kleuren + fontGebruik)
+  // Voorkeuren editor — PLATTE TEKST (geen blob meer, #75)
   const ta = $('s27-voorkeuren-input');
   const btn = $('s27-voorkeuren-save');
   const stateLabel = $('s27-voorkeuren-state');
-  const fontInput = $('s27-fontuse-input');
 
-  const enableSave = () => { btn.disabled = false; if(stateLabel) stateLabel.textContent = 'Niet opgeslagen'; };
-
-  if(ta){
-    ta.addEventListener('input', enableSave);
-  }
-  if(fontInput){
-    fontInput.addEventListener('input', enableSave);
-  }
-  // Kleur inputs sync — color picker ↔ hex text
-  document.querySelectorAll('[data-kleur-id]').forEach(picker => {
-    picker.addEventListener('input', () => {
-      const id = picker.dataset.kleurId;
-      const hex = document.querySelector(`[data-kleur-hex="${id}"]`);
-      if(hex) hex.value = picker.value.toUpperCase();
-      const preview = picker.closest('.s27-kleur-field').querySelector('.s27-kleur-preview');
-      if(preview){ preview.style.background = picker.value; preview.style.backgroundImage = ''; }
-      enableSave();
-    });
-  });
-  document.querySelectorAll('[data-kleur-hex]').forEach(hex => {
-    hex.addEventListener('input', () => {
-      const id = hex.dataset.kleurHex;
-      const picker = document.querySelector(`[data-kleur-id="${id}"]`);
-      if(/^#[0-9a-fA-F]{6}$/.test(hex.value)){
-        if(picker) picker.value = hex.value;
-        const preview = hex.closest('.s27-kleur-field').querySelector('.s27-kleur-preview');
-        if(preview){ preview.style.background = hex.value; preview.style.backgroundImage = ''; }
-      }
-      enableSave();
-    });
-  });
-
-  if(btn){
+  if(ta && btn){
+    ta.addEventListener('input', () => { btn.disabled = false; if(stateLabel) stateLabel.textContent = 'Niet opgeslagen'; });
     btn.addEventListener('click', async () => {
       btn.disabled = true; btn.textContent = 'Bezig…';
       if(stateLabel) stateLabel.textContent = 'Bezig met opslaan…';
-      // Verzamel gestructureerde data
-      const kleuren = {};
-      document.querySelectorAll('[data-kleur-hex]').forEach(hex => {
-        kleuren[hex.dataset.kleurHex] = hex.value || '';
-      });
-      const fontGebruik = fontInput ? fontInput.value : '';
-      // v2.2 #60: behoud bestaande contact info in serialize
-      const existingContact = (state.bedrijfContent && parseBedrijfVoorkeuren(decodeMakeString(state.bedrijfContent.algemene_voorkeuren || '')).contact) || {};
-      const combined = serializeBedrijfVoorkeuren(ta ? ta.value : '', kleuren, fontGebruik, existingContact);
+      const plain = ta.value.trim();
       if(ENDPOINTS.bedrijfVoorkeuren && !state.demoMode){
-        await api(ENDPOINTS.bedrijfVoorkeuren, { bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token, voorkeuren: combined });
-        if(state.bedrijfContent) state.bedrijfContent.algemene_voorkeuren = combined;
+        await api(ENDPOINTS.bedrijfVoorkeuren, { bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token, voorkeuren: plain });
+        if(state.bedrijfContent) state.bedrijfContent.algemene_voorkeuren = plain;
       } else {
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 400));
       }
       btn.textContent = 'Opslaan';
-      if(stateLabel) stateLabel.textContent = '✓ Opgeslagen (voorkeuren + kleuren + fonts)';
-      setTimeout(() => { if(stateLabel) stateLabel.textContent = ''; }, 3000);
+      if(stateLabel) stateLabel.textContent = '✓ Opgeslagen';
+      setTimeout(() => { if(stateLabel) stateLabel.textContent = ''; }, 2500);
     });
   }
 
-  // v2.2 #67: contact form edit-modus (read-only by default → Bewerken → invoer → save terug read-only)
+  // Contact form edit-modus (read-only default, #67/#74)
   const contactForm = $('s27-contactform');
   const contactEditBtn = $('s27-contact-edit-btn');
   const contactSave = $('s27-contactform-save');
@@ -1329,46 +1275,34 @@ function attachBedrijfHandlers(){
     if(contactFoot) contactFoot.hidden = !on;
     if(contactEditBtn) contactEditBtn.hidden = on;
   }
-
   if(contactEditBtn) contactEditBtn.addEventListener('click', () => toggleEditMode(true));
-  if(contactCancel) contactCancel.addEventListener('click', () => toggleEditMode(false));
+  if(contactCancel) contactCancel.addEventListener('click', () => { renderBedrijfTab(); });
 
   if(contactForm && contactSave){
     contactSave.addEventListener('click', async () => {
       contactSave.disabled = true; contactSave.textContent = 'Versturen…';
       if(contactState) contactState.textContent = 'Bezig…';
+      const get = n => { const el = contactForm.querySelector('[name="'+n+'"]'); return el ? el.value.trim() : ''; };
       const payload = {
         bedrijf_id: state.session.bedrijf_id,
         session_token: state.session.session_token,
         klant_naam: state.session.bedrijfsnaam,
-        voornaam: contactForm.querySelector('[name="voornaam"]').value.trim(),
-        achternaam: contactForm.querySelector('[name="achternaam"]').value.trim(),
-        gsm: contactForm.querySelector('[name="gsm"]').value.trim(),
-        email: contactForm.querySelector('[name="email"]').value.trim(),
-        btw: contactForm.querySelector('[name="btw"]').value.trim(),
-        adres: contactForm.querySelector('[name="adres"]').value.trim()
+        voornaam: get('voornaam'), achternaam: get('achternaam'), gsm: get('gsm'),
+        email: get('email'), btw: get('btw'), adres: get('adres'), website: get('website')
       };
       try {
-        // 1. Stuur audit-comment via bedrijfContact endpoint
+        // Persist lokaal (client ziet eigen wijziging direct) + stuur naar team via bedrijfContact
+        saveContactCache({ voornaam:payload.voornaam, achternaam:payload.achternaam, gsm:payload.gsm, email:payload.email, btw:payload.btw, adres:payload.adres, website:payload.website });
         if(ENDPOINTS.bedrijfContact && !state.demoMode){
           await api(ENDPOINTS.bedrijfContact, payload);
         }
-        // 2. Bewaar lokaal in voorkeuren-blob zodat het zichtbaar blijft voor klant
-        const parsedNow = parseBedrijfVoorkeuren(decodeMakeString((state.bedrijfContent && state.bedrijfContent.algemene_voorkeuren) || ''));
-        const updatedContact = { voornaam: payload.voornaam, achternaam: payload.achternaam, gsm: payload.gsm, email: payload.email, btw: payload.btw, adres: payload.adres };
-        const combined = serializeBedrijfVoorkeuren(parsedNow.tekst, parsedNow.kleuren, parsedNow.fontGebruik, updatedContact);
-        if(ENDPOINTS.bedrijfVoorkeuren && !state.demoMode){
-          await api(ENDPOINTS.bedrijfVoorkeuren, { bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token, voorkeuren: combined });
-          if(state.bedrijfContent) state.bedrijfContent.algemene_voorkeuren = combined;
-        }
         if(contactState) contactState.textContent = '✓ Opgeslagen — Ilke en Arne werken het binnen 24u bij';
-        // Update read-only values met nieuwe data, ga terug naar read mode
         contactForm.querySelectorAll('.s27-readfield').forEach(field => {
           const input = field.querySelector('input');
           const readValue = field.querySelector('.s27-readvalue');
           if(input && readValue) readValue.textContent = input.value || '—';
         });
-        setTimeout(() => toggleEditMode(false), 1000);
+        setTimeout(() => toggleEditMode(false), 900);
       } catch(err){
         console.error('[Studio 27] contact save failed:', err);
         if(contactState) contactState.textContent = 'Iets ging mis — probeer opnieuw';
@@ -1378,19 +1312,14 @@ function attachBedrijfHandlers(){
     });
   }
 
-  // Category cards → openen modal of inline expand
-  document.querySelectorAll('.s27-catcard[data-category]').forEach(card => {
-    card.addEventListener('click', () => openCategoryModal(card.dataset.category));
-  });
-
-  // Generic upload zone in bedrijf-tab
+  // Upload zone (één enkele, #68/#75)
   const drop = $('s27-drop-bedrijf');
   const input = $('s27-up-input-bedrijf');
-  if(input) input.addEventListener('change', e => handleFiles(e.target.files, 'bedrijf', drop.dataset.category || 'overig'));
+  if(input) input.addEventListener('change', e => handleFiles(e.target.files, 'bedrijf', 'overig'));
   if(drop){
     ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('dragover'); }));
     ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('dragover'); }));
-    drop.addEventListener('drop', e => handleFiles(e.dataTransfer.files, 'bedrijf', drop.dataset.category || 'overig'));
+    drop.addEventListener('drop', e => handleFiles(e.dataTransfer.files, 'bedrijf', 'overig'));
   }
 }
 
