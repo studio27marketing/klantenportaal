@@ -482,8 +482,26 @@ function renderUploadZone(){
   </div>`;
 }
 
+const TEAM_PHOTOS = {
+  'ilke meeusen':       'https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/6901f37c53ba7dde08b1b67d_Ilke1.webp',
+  'arne goetschalckx':  'https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/6901f59fb2e09fb90990219e_Arne1.webp',
+  'vincent verleije':   'https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/690461794835cbd36d6b5504_Vincent1.webp',
+  'bjorn borgers':      'https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/690213e0b51b9994b2004649_Bjorn1.webp',
+  'guus van den heuvel':'https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/690212a2b6375b61606b5e93_Guus1.webp',
+  'ines permentiers':   'https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/690213ee2448e852bd82586d_Ines1.webp',
+  'anouk de hoon':      'https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/69046d5be50f353389303b75_Anouk1.webp',
+  'griet beyens':       'https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/69a97f8cea8b957932ac841b_Griet1.webp',
+  'johanna augustyns':  'https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/6901f9323e951d8eeba050a4_Johanna1.webp',
+  'klaas vanhove':      'https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/69020f1ff19e3a4db9b97ffa_Klaas1.webp',
+  'danique bosch':      'https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/69020f14e0e331cd429f9c36_Danique1.webp',
+  'lara hooyberghs':    'https://cdn.prod.website-files.com/6836e01bc97620980f99aacc/6901f371b8bc70f2c4403146_Lara1.webp'
+};
+function teamPhotoFor(name){ return TEAM_PHOTOS[(name||'').toLowerCase().trim()] || null; }
+
 function renderContact(c){
   const initials = getInitials(c.am_naam);
+  // Use team photo if available (fallback if Make-scenario didn't supply foto_url)
+  if(!c.am_foto_url) c.am_foto_url = teamPhotoFor(c.am_naam);
   return `<div class="s27-contact">
     <div class="s27-contact-avatar">${c.am_foto_url ? `<img src="${esc(c.am_foto_url)}" alt="${esc(c.am_naam)}">` : esc(initials)}</div>
     <div class="s27-contact-body">
