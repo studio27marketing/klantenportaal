@@ -288,7 +288,15 @@ Of `getADocument` voor een bestaand document (output.pricing.tables[].items[]).
 **LIVE & GETEST (28/5): pandadoc-pricelist 5946435** — hook `uw2974b7b2yurygsgcn2i97x4lh9h86e`.
 Body: `{session_token, template?}` (default template = Adverteren HQRvZ...). Antwoord: `{ok, template_id, sections:[{name,total,items:[{name,description,price,qty,sku}]}]}`.
 Gebruikt `pricing.quotes[1].sections` (IML 1-indexed → eerste quote). Gewired in 3-staps nieuw-project formulier stap 2 (`renderPriceSections`).
-⚠️ Alleen Adverteren-template bekend. Andere disciplines → frontend toont nette "prijs op maat"-fallback tot Vincent de template-IDs aanlevert (ochtendlijst).
+⚠️ ONDERZOCHT 29/5: er zijn GEEN per-discipline templates. `/public/v1/templates` lijst → enkel generieke offerte-templates; alleen HQRvZ3 heeft een echte prijssectie (Adverteren). "27 automations"-template = leeg ("Lorem ipsum €0"). Andere disciplines → frontend "prijs op maat"-fallback tot Vincent een PandaDoc pricing-table per discipline maakt.
+
+### GA4 — connectie-gebonden (geen generieke property-call) — ONDERZOCHT 29/5
+Module `google-analytics-4:generateAnalyticsReports` heeft GEEN property-veld in mapper/parameters (enkel `__IMTCONN__`). De property zit vast aan de connectie. Studio27 GA4-conn = **5733283**. Elke klant = eigen connectie + scenario (bv 5097721 studio_27_be heeft input:[] = property hardcoded). Generiek GA4-by-property kan dus NIET zonder per-klant OAuth-connectie (niet aanmaakbaar door agent). Metricool (4579451, input bedrijf_id) + SE Ranking (4574434, input website_url) zijn WEL generiek → bruikbaar voor Performance Dashboard.
+
+### hooks_create — `data` wrapper verplicht
+Een gateway-webhook hook aanmaken: `hooks_create({typeName:"gateway-webhook", name, teamId, data:{headers:false, method:false, stringify:false}})`. De headers/method/stringify MOETEN in `data` (niet top-level), anders "Missing value of required parameter".
+
+### ClickUp custom fields — API kan ze NIET aanmaken (enkel UI).
 ⚠️ CSS-les: een class met `display:flex/grid` overschrijft het `[hidden]`-attribuut → forceer `[hidden]{display:none!important}` voor toggle-divs (`.s27-pt-sub` bug, fixed).
 
 ## 13. CONTACTPERSOON-RESOLUTIE (Bedrijven → Contact-taak)

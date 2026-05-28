@@ -1,50 +1,44 @@
 # ☀️ Ochtendlijst — input/acties nodig van Vincent
 
-_Laatst bijgewerkt: 29 mei 2026. Alles hieronder is geblokkeerd op iets dat ik niet zelf kan/mag doen. Zodra jij dit aanlevert, kan ik verder._
+_Laatst bijgewerkt: 29 mei 2026. Ik heb autonoom alles gedaan wat kon. Hieronder enkel wat écht extern geblokkeerd is (jouw beslissing, credentials, of een ClickUp-UI-actie die de API niet kan)._
 
 ---
 
-## ✅ Wat al LIVE staat (deze sessie, getest)
-1. **AI Status Bot** — chatbubbel rechtsonder in het portaal. Beantwoordt projectvragen, escaleert automatisch naar de juiste persoon (Ilke=spoed, Arne=sales, Vincent=klacht) via een ClickUp-taak. Live + 6× getest.
-2. **Nieuw-project formulier in 3 stappen** — (1) type+wens → (2) échte PandaDoc-prijsindicatie → (3) keuze: gedetailleerde offerte+gesprek óf direct bevestigen & opstart/shoot inplannen. Live + 2× volledig getest.
-3. **Auto-Status-Comments** (backend) — AI schrijft automatisch een warme klant-comment bij statuswijziging. Werkt + getest (zie punt 2 hieronder voor de trigger).
-4. Eerdere feedback: feedback-bestand-upload, contactpersoon-data uit gekoppelde taak, GSM-herhaling bij notificaties → alle live.
+## ✅ Deze sessie LIVE gezet + getest (geen actie nodig)
+1. **AI Status Bot** — chatbubbel, beantwoordt projectvragen, escaleert (Ilke/Arne/Vincent). Live.
+2. **Nieuw-project formulier in 3 stappen** — type → échte PandaDoc-prijsindicatie → offerte/gesprek óf direct bevestigen + opstart/shoot inplannen. Live.
+3. **Auto-Status-Comments** — AI schrijft klant-comment bij statuswijziging (backend werkt, getest). Zie punt 2 hieronder.
+4. **QA-sweep: 4 bugs gefixt** — mailto-verwijzingen weg (nu portaal-DM), project-view footer-positie, contactgegevens-knoppen verborgen in read-only (globale `[hidden]`-fix), `#s27p-check`-icoon toegevoegd.
+5. **DM-pronoun** — "ziet het in **zijn/haar** planning" nu correct per persoon. (was: altijd "haar")
 
 ---
 
-## 🔴 Nodig van jou
+## 🔴 Écht geblokkeerd — jouw input/actie
 
-### 1. PandaDoc template-IDs per discipline  _(blokkeert: echte prijzen in nieuw-project stap 2)_
-Ik heb alleen het **Adverteren**-template (`HQRvZ3sdrEm2GcuNsdP2Uf`). Voor de andere disciplines toont stap 2 nu een nette "prijs op maat"-fallback. Stuur me per discipline het PandaDoc-template-ID (of de template-naam, dan zoek ik het op):
-- Webdesign, Branding/huisstijl, Social media, SEO+GEO, Opleiding, Video+Fotografie, AI & automatisatie.
-→ Daarna tonen ALLE disciplines automatisch hun echte prijslijst.
+### 1. PandaDoc-prijzen voor andere disciplines dan Adverteren
+**Onderzocht:** er zijn géén per-discipline PandaDoc-templates. Het enige echte prijsblok dat bestaat is de **Adverteren**-sectie (opstart €500 / Google €300 / Meta €350 / Meta+Google €550). De "27 automations"-template is leeg ("Lorem ipsum €0").
+→ Wil je echte prijzen tonen voor Webdesign/Branding/Social/SEO/Opleiding/Video in stap 2? Dan moet je in PandaDoc een **prijstabel (pricing table)** toevoegen per discipline (in een template). Geef me daarna het template-ID en ik koppel het in 2 min. Tot dan toont het portaal netjes "prijs op maat".
 
-### 2. ClickUp-automation voor Auto-Status-Comments  _(blokkeert: automatische klant-comments)_
-De webhook werkt (`hook.eu1.make.com/ujqtpor1whyi9lb2wfkhq52b4ilaexyd`, body `{task_id, status}`).
-**Jij beslist** of je dit aanzet (de comments zijn **klant-zichtbaar**!). Zo ja: maak in ClickUp een automation op de klant-lijsten: _"when status changes → call webhook"_ met task_id + nieuwe status in de body. Wil je dat ik dit als Make 'Watch Tasks'-trigger bouw i.p.v. ClickUp-automation? Zeg het en ik scope het eerst op een testlijst.
+### 2. Auto-Status-Comments AAN zetten _(feature is klaar, enkel de schakelaar is van jou)_
+De comments zijn **klant-zichtbaar**, dus dit is bewust jouw keuze. Webhook: `hook.eu1.make.com/ujqtpor1whyi9lb2wfkhq52b4ilaexyd`, body `{task_id, status}`.
+→ Maak in ClickUp een automation op de klant-lijsten: _"when status changes → call webhook"_. (±2 min.) Of zeg het en ik bouw een Make 'Watch Tasks'-trigger — dan scope ik die eerst op een testlijst zodat er niks per ongeluk naar een echte klant gaat.
 
-### 3. Performance Dashboard (jouw #1) — 3 beslissingen  _(blokkeert: de hele tab)_
-Goed nieuws: Metricool (per `bedrijf_id`) en SE Ranking (per `website_url`) zijn al generiek aanroepbaar. **Maar:**
-- a) **GA4 zit per klant hardcoded** in aparte scenario's (geen generieke "haal GA4 voor property X"-call). Keuze: (i) ik bouw één generiek GA4-scenario dat de property-ID uit het Bedrijven-veld leest, óf (ii) we mappen per klant het bestaande GA4-scenario. Wat heeft jouw voorkeur?
-- b) **Een echte testklant met data** — TEST CLIENT BV heeft geen GA4/Metricool/Ads. Welke klant mag ik als testcase gebruiken (incl. toestemming)?
-- c) **Google/Meta Ads** — welke rapportage-scenario's mag ik koppelen? (Ik zag `s4754589` e.a.)
-→ Met a+b+c bouw ik de volledige tab met grafieken in Studio27-stijl.
+### 3. Performance Dashboard (jouw #1) — 3 dingen
+**Onderzocht:** Metricool (per `bedrijf_id`) en SE Ranking (per `website_url`) zijn al generiek klaar. **GA4 niet:** de GA4-module heeft géén property-veld — de property zit vást aan de connectie, dus elke klant heeft een eigen GA4-connectie + scenario nodig. Ik kan geen Google-connecties aanmaken (vereist jouw login/OAuth).
+→ Nodig:
+- a) **Een ClickUp-veld** op Bedrijven om per klant te koppelen aan hun GA4-scenario (de API kan geen velden maken → jij in de UI), of bevestig dat ik per klant het bestaande GA4-scenario hard mag mappen.
+- b) **Een echte testklant met data** + toestemming (TEST CLIENT BV is leeg).
+- c) Welke **Google/Meta Ads**-rapportagescenario's ik mag koppelen.
 
-### 4. Twilio WhatsApp-credentials  _(blokkeert: WhatsApp-notificaties, Feature 2A)_
-De `whatsapp-notify`-scenario staat klaar als placeholder. Nodig: een Twilio-connection in Make (Account SID + Auth Token + WhatsApp-sender). Mail/portaal-notificaties werken al; enkel WhatsApp wacht hierop.
+### 4. Twilio-credentials voor WhatsApp-notificaties
+Mail/portaal-notificaties werken; WhatsApp wacht op een Twilio-connectie in Make (SID + token + sender). Account aanmaken kan ik niet voor jou.
 
-### 5. Goedkeuring nieuwe ClickUp custom fields  _(blokkeert: Features 2A/3/5)_
-Ik wil deze velden op de **Bedrijven**-taak toevoegen (zeg OK, dan doe ik het):
-- `Notificatie-voorkeur` (dropdown: mail/whatsapp/beide) — nu enkel in browser opgeslagen.
-- `Health Score` (number 0-100) + `Health-notitie` (Feature 5).
-- `Concurrenten` (tekst, domeinen) + `Trendscout-historie` (Feature 3).
+### 5. ClickUp custom fields aanmaken (UI — API kan dit niet)
+Voor: `Notificatie-voorkeur` (mail/whatsapp/beide), `Health Score` (0-100), `Concurrenten` (domeinen). Zodra ze bestaan, koppel ik de opslag + de bijbehorende features.
 
-### 6. Health Score & Capacity Planning — scope-input  _(Features 5 & 6, intern)_
-- **Health Score**: welke signalen wegen mee (omzet, openstaande feedback, reactietijd, NPS…)? Heb ik boekhoud-data nodig en zo ja, waar?
-- **Capacity Planning**: op basis waarvan voorspellen (team-uren in ClickUp, geplande shoots…)? Graag een korte definitie.
+### 6. Health Score & Capacity Planning — korte scope
+Welke signalen wegen mee (omzet/feedback/reactietijd…)? Heb ik boekhoud-data nodig? Eén alinea volstaat en ik bouw een v1.
 
 ---
 
-## 🟡 Kleine polish (mag ik zelf, lage prio)
-- DM-bevestiging zegt _"…ziet het direct in **haar** planning"_ ook voor Arne/Vincent (mannelijk). Cosmetisch; fix ik bij volgende ronde.
-- Een paar TEST-offertetaken + 1 escalatie-taak + 1 auto-comment aangemaakt tijdens het testen op TEST CLIENT BV (verwacht, mag weg wanneer je wil).
+_Niets hierboven houdt het portaal tegen — alles wat live staat werkt volledig. Dit zijn enkel de volgende stappen die jouw beslissing of een externe sleutel vragen._
