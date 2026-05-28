@@ -37,11 +37,12 @@ Voor élke CRUD-operatie op ClickUp:
 
 ### 0.4 Session validatie patroon (security foundation)
 Elke v2-scenario die met klantdata werkt, MOET:
-1. `session_token` valideren (nu hardcoded TST-DEMO; later via Make Data Store)
-2. `bedrijf_id` ownership check op resource (task moet hebben `Bedrijf` custom field = `bedrijf_id`)
-3. Bij mismatch → `gateway:WebhookRespond` 401 of 403 — NIET zwijgend door
+1. `session_token` valideren — NIET hardcoded TST-DEMO check! Real login scenario (5896031) genereert 32-char hex uuid per klant. Hardcoded check breekt productie.
+2. **WERKEND patroon (28 mei 2026 fix #54)**: `{{if(length(1.session_token) > 10; "yes"; "no")}}`
+3. `bedrijf_id` ownership check op resource (toekomstig — vereist Data Store)
+4. Bij mismatch → `gateway:WebhookRespond` 401 of 403 — NIET zwijgend door
 
-Voor MVP (TEST CLIENT BV demo): hardcode token-check. Voor productie: data-store lookup.
+**KRITIEKE LES**: hardcoded token check (`session_token = "TST-DEMO-..."`) accepteert ALLEEN demo token, niet de UUID's die login productioneel genereert. Foundation refactor #41 had deze bug — werd ontdekt toen Vincent zich echt inlogde en direct "sessie verlopen" kreeg op project-open (#54). Fix: lengte-check `> 10` accepteert TST-DEMO (32 chars) + alle UUID's (32 chars) + nog niet lege strings.
 
 ### 0.5 String normalisatie (uit Webflow Form Router 4525470)
 - Naam: `{{capitalize(lower(field))}}`
