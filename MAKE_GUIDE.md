@@ -297,6 +297,12 @@ Module `google-analytics-4:generateAnalyticsReports` heeft GEEN property-veld in
 Een gateway-webhook hook aanmaken: `hooks_create({typeName:"gateway-webhook", name, teamId, data:{headers:false, method:false, stringify:false}})`. De headers/method/stringify MOETEN in `data` (niet top-level), anders "Missing value of required parameter".
 
 ### ClickUp custom fields — API kan ze NIET aanmaken (enkel UI).
+
+### Huisstijl-bestanden veld-test (29/5) — attachment-veld vs text-veld
+Bedrijven-lijst velden getest op TEST CLIENT BV (86c9yv1wy):
+- **V1 `a0e871bc-da12-46ac-844c-68d132229df8`** (type `attachment`): NIET via API te zetten. JSON-value → "Invalid Attachment Field"; add/rem → "Resource not found". Attachment-velden vereisen een multipart file-upload naar een apart endpoint en hebben (net als gewone bijlagen) GEEN delete via API. → ongeschikt voor portaal-beheer (toevoegen/verwijderen door klant). Wel bruikbaar voor team-curatie in ClickUp-UI + read-only weergave in portaal.
+- **V2 `ccb3c70c-8c08-41db-af84-ad78879ecdc8`** (type `text` = long text): VOLLEDIG via API beheerbaar. Schrijven (2-regel lijst) ✓, herschrijven/wissen ✓, lezen via GET task ✓. → DE keuze voor de portaal-bibliotheek (toevoegen + verwijderen + lezen). Formaat dat ik beheer: `bestandsnaam | url | door | datum` per regel.
+Conclusie: portaal-beheerde bestandenlijst = TEXT-veld (V2). Blob blijft als ClickUp-bijlage of Drive; V2 is de bron van waarheid voor wat de klant ziet.
 ⚠️ CSS-les: een class met `display:flex/grid` overschrijft het `[hidden]`-attribuut → forceer `[hidden]{display:none!important}` voor toggle-divs (`.s27-pt-sub` bug, fixed).
 
 ## 13. CONTACTPERSOON-RESOLUTIE (Bedrijven → Contact-taak)
