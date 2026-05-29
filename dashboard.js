@@ -365,66 +365,108 @@ function normaliseDashboard(d){
 /* =================================================================
    RENDER DASHBOARD
    ================================================================= */
+// v3.1: Dashboard-tab = HUB/overzichtspagina. Projectenlijst verhuist naar de Projecten-tab.
 function renderDashboard(d){
-  // Persoonlijke compacte begroeting in hero (1 regel)
   const greetingName = firstNameFromCompany(d.klant && d.klant.bedrijfsnaam);
   const heroTitle = $('s27-hero-title');
-  if(heroTitle) heroTitle.innerHTML = '<span class="greeting">Hey ' + esc(greetingName) + ',</span><span class="s27-hero-subline">Hier zijn jouw lopende projecten.</span>';
-  // v2 Fase 32: tutorial bij eerste bezoek
-  if(!localStorage.getItem('s27_tour_completed')){
-    setTimeout(() => showWelcomeTour(true), 400);
-  }
-  // Help-knop in header injecteren als nog niet bestaat
+  if(heroTitle) heroTitle.innerHTML = '<span class="greeting">Hey ' + esc(greetingName) + ',</span><span class="s27-hero-subline">Welkom in je portaal — hier volg en regel je alles.</span>';
+  if(!localStorage.getItem('s27_tour_completed')){ setTimeout(() => showWelcomeTour(true), 400); }
   injectHelpButton();
-  // Verberg verbose hero-lead voor compacter overzicht
   const heroLead = document.querySelector('#s27-tab-dashboard .s27-hero-lead'); if(heroLead) heroLead.style.display = 'none';
   const heroTag  = document.querySelector('#s27-tab-dashboard .s27-hero-tag');  if(heroTag) heroTag.style.display = 'none';
+  renderHubBody(d);
+  renderProjecten();   // pre-render zodat tabwissel instant is
+  const upd = $('s27-updated'); if(upd) upd.textContent = 'Bijgewerkt om ' + new Date().toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'});
+}
 
-  const body = $('s27-dash-body');
-  const allProjecten = d.actieve_projecten || [];
-  const filtered = allProjecten.filter(p => matchesStatusFilter(p, state.statusFilter));
-  const projectenByDisc = groupBy(filtered, p => p.discipline);
+function isAfgerondStatus(p){
+  const s = (p.status || '').toLowerCase().replace(/\s+/g,'_');
+  return s === 'goedgekeurd' || s === 'done' || s === 'klaar_voor_facturatie' || s === 'gefactureerd';
+}
+
+function renderHubBody(d){
+  const body = $('s27-dash-body'); if(!body) return;
+  const all = d.actieve_projecten || [];
+  const lopend = all.filter(p => !isAfgerondStatus(p)).length;
+  const wacht = all.filter(p => matchesStatusFilter(p, 'wacht_feedback')).length;
   const meetings = d.aankomende_meetings || [];
+  const projMeta = lopend + ' lopend' + (wacht ? ' · ' + wacht + ' wacht op jou' : '');
+  body.innerHTML =
+    '<button type="button" class="s27-hub-bot" data-bot-open="1">' +
+      '<span class="s27-hub-bot-ic">✦</span>' +
+      '<span class="s27-hub-bot-txt"><strong>Vraag het de assistent</strong><span>Hoever staat een project? Wanneer is iets klaar? Stel je vraag — je krijgt meteen antwoord.</span></span>' +
+      '<span class="s27-hub-bot-cta">Open chat →</span>' +
+    '</button>' +
+    '<div class="s27-hub-grid">' +
+      hubCard('projecten','s27p-inbox','#3083DC','Projecten', projMeta, 'Volg je lopende én opgeleverde projecten, geef feedback en chat per project.') +
+      hubCard('__perf','s27p-spark','#9441DB','Statistieken','Binnenkort','Je advertentie- en websiteresultaten in één oogopslag.', true) +
+      hubCard('meetings','s27p-cal','#12AC4E','Meetings', (meetings.length ? meetings.length + ' gepland' : 'Plan een meeting'), 'Bekijk je agenda en plan zelf een nieuw overleg in.') +
+      hubCard('bedrijf','s27p-brand','#F66131','Mijn bedrijf','Huisstijl & gegevens','Logo, fonts, contactgegevens en voorkeuren — altijd up-to-date.') +
+      hubCard('nieuw','s27p-upload','#F8C028','Nieuw project','Start hier','Vertel je idee en krijg meteen een prijsindicatie op maat.') +
+      hubCard('instellingen','s27p-user','#6B5B6B','Instellingen','Notificaties','Kies hoe je updates krijgt en beheer je gegevens.') +
+    '</div>' +
+    '<div class="s27-meetings-mini">' +
+      '<div class="s27-meetings-mini-head"><strong>Aankomende meetings</strong>' +
+      (meetings.length ? '<button class="s27-mini-cta" data-go-tab="meetings">Alle ' + meetings.length + ' bekijken →</button>' : '') + '</div>' +
+      (meetings.length ? '<div class="s27-meetings-mini-list">' + meetings.slice(0,2).map(renderMiniMeeting).join('') + '</div>' : '<p class="s27-meetings-mini-empty">Geen meetings gepland.</p>') +
+    '</div>' +
+    '<div class="s27-home-contact" id="contact">' + renderContact(d.contact || {}) + '</div>';
+  // Handlers
+  body.querySelectorAll('[data-hub-card]').forEach(el => el.addEventListener('click', () => {
+    const t = el.dataset.hubCard;
+    if(t === '__perf') return;        // coming soon, niet klikbaar
+    switchTab(t);
+  }));
+  body.querySelectorAll('[data-go-tab]').forEach(el => el.addEventListener('click', e => { e.stopPropagation(); switchTab(el.dataset.goTab); }));
+  const botBtn = body.querySelector('[data-bot-open]');
+  if(botBtn) botBtn.addEventListener('click', () => { if(typeof toggleStatusBot === 'function') toggleStatusBot(true); });
+}
 
-  // Count per filter voor chip badges
+function hubCard(tab, icon, accent, title, meta, desc, soon){
+  return '<button type="button" class="s27-hub-card' + (soon ? ' is-soon' : '') + '" data-hub-card="' + esc(tab) + '" style="--accent:' + accent + '">' +
+    '<span class="s27-hub-card-ic"><svg width="20" height="20" viewBox="0 0 24 24"><use href="#' + icon + '"/></svg></span>' +
+    '<span class="s27-hub-card-title">' + esc(title) + (soon ? '<span class="s27-hub-soon">binnenkort</span>' : '') + '</span>' +
+    '<span class="s27-hub-card-meta">' + esc(meta) + '</span>' +
+    '<span class="s27-hub-card-desc">' + esc(desc) + '</span>' +
+  '</button>';
+}
+
+// v3.1: Projecten-tab — de volledige lijst + filters. "Opgeleverd" toont het archief.
+function renderProjecten(){
+  const body = $('s27-projecten-body'); if(!body) return;
+  const d = state.dashboard;
+  if(!d){ body.innerHTML = '<div class="s27-loading">Projecten laden</div>'; return; }
+  const allProjecten = d.actieve_projecten || [];
+
+  // Tellingen per filter (opgeleverd = archief-telling)
   const counts = {};
-  STATUS_FILTERS.forEach(f => { counts[f.id] = allProjecten.filter(p => matchesStatusFilter(p, f.id)).length; });
+  STATUS_FILTERS.forEach(f => {
+    counts[f.id] = (f.id === 'opgeleverd') ? getOpgeleverdProjects(d).length : allProjecten.filter(p => matchesStatusFilter(p, f.id)).length;
+  });
 
-  // Default uitklappen: als <= 4 disciplines, alles open; anders alleen waar projecten met "wacht op feedback" zijn + eerste discipline
-  if(!state.expandedDisciplines){
-    state.expandedDisciplines = {};
-    const disciplineKeys = Object.keys(projectenByDisc);
-    if(disciplineKeys.length <= 4){
-      disciplineKeys.forEach(k => state.expandedDisciplines[k] = true);
-    } else {
-      // Open disciplines die feedback nodig hebben
-      disciplineKeys.forEach(k => {
-        const hasWaiting = projectenByDisc[k].some(p => (p.status||'').toLowerCase() === 'doorgestuurd');
-        state.expandedDisciplines[k] = hasWaiting;
-      });
-      // Als geen enkele open, open de eerste
-      if(!Object.values(state.expandedDisciplines).some(Boolean)) state.expandedDisciplines[disciplineKeys[0]] = true;
+  let listHtml;
+  if(state.statusFilter === 'opgeleverd'){
+    listHtml = renderOpgeleverdArchive(d);
+  } else {
+    const filtered = allProjecten.filter(p => matchesStatusFilter(p, state.statusFilter));
+    const projectenByDisc = groupBy(filtered, p => p.discipline);
+    // Default uitklappen
+    if(!state.expandedDisciplines){
+      state.expandedDisciplines = {};
+      const keys = Object.keys(projectenByDisc);
+      if(keys.length <= 4){ keys.forEach(k => state.expandedDisciplines[k] = true); }
+      else {
+        keys.forEach(k => { state.expandedDisciplines[k] = projectenByDisc[k].some(p => (p.status||'').toLowerCase() === 'doorgestuurd'); });
+        if(!Object.values(state.expandedDisciplines).some(Boolean)) state.expandedDisciplines[keys[0]] = true;
+      }
     }
+    listHtml = renderDisciplinesAccordion(projectenByDisc);
   }
 
-  body.innerHTML = `
-    <div class="s27-home-filterhead">
-      <div class="s27-home-filterhead-label">Filter op status</div>
-      ${renderFilterBar(counts)}
-    </div>
-    ${renderDisciplinesAccordion(projectenByDisc)}
-    <div class="s27-meetings-mini">
-      <div class="s27-meetings-mini-head">
-        <strong>Aankomende meetings</strong>
-        ${meetings.length ? '<button class="s27-mini-cta" data-go-tab="meetings">Alle ' + meetings.length + ' bekijken →</button>' : ''}
-      </div>
-      ${meetings.length ? '<div class="s27-meetings-mini-list">' + meetings.slice(0,2).map(renderMiniMeeting).join('') + '</div>' : '<p class="s27-meetings-mini-empty">Geen meetings gepland.</p>'}
-    </div>
-    <div class="s27-home-contact" id="contact">${renderContact(d.contact || {})}</div>
-  `;
-
-  attachDashboardHandlers();
-  $('s27-updated').textContent = 'Bijgewerkt om ' + new Date().toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'});
+  body.innerHTML =
+    '<div class="s27-home-filterhead"><div class="s27-home-filterhead-label">Filter op status</div>' + renderFilterBar(counts) + '</div>' +
+    listHtml;
+  attachProjectenHandlers();
 }
 
 function renderDisciplinesAccordion(grouped){
@@ -935,30 +977,24 @@ function renderContact(c){
 /* =================================================================
    DASHBOARD HANDLERS
    ================================================================= */
-function attachDashboardHandlers(){
-  // project klik (zowel compact als oude variant)
-  document.querySelectorAll('.s27-projc, .s27-proj').forEach(el => {
+function attachProjectenHandlers(){
+  const scope = $('s27-projecten-body') || document;
+  // project klik
+  scope.querySelectorAll('.s27-projc, .s27-proj').forEach(el => {
     el.addEventListener('click', () => openProjectDetail(el.dataset.taskId));
     el.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openProjectDetail(el.dataset.taskId); } });
   });
-  // status filter chips
-  document.querySelectorAll('.s27-chip[data-filter]').forEach(el => {
-    el.addEventListener('click', () => {
-      state.statusFilter = el.dataset.filter;
-      if(state.dashboard) renderDashboard(state.dashboard);
-    });
+  // status filter chips → her-render de projectenlijst
+  scope.querySelectorAll('.s27-chip[data-filter]').forEach(el => {
+    el.addEventListener('click', () => { state.statusFilter = el.dataset.filter; renderProjecten(); });
   });
   // accordion uitklap
-  document.querySelectorAll('[data-disc-toggle]').forEach(el => {
+  scope.querySelectorAll('[data-disc-toggle]').forEach(el => {
     el.addEventListener('click', () => {
       const k = el.dataset.discToggle;
       state.expandedDisciplines[k] = !state.expandedDisciplines[k];
-      if(state.dashboard) renderDashboard(state.dashboard);
+      renderProjecten();
     });
-  });
-  // mini cta naar andere tab
-  document.querySelectorAll('[data-go-tab]').forEach(el => {
-    el.addEventListener('click', () => switchTab(el.dataset.goTab));
   });
 }
 
@@ -980,8 +1016,8 @@ function switchTab(tabId){
     v.hidden = (v.id !== 's27-tab-' + tabId);
   });
   // Lazy-render placeholder tabs
+  if(tabId === 'projecten')    renderProjecten();
   if(tabId === 'bedrijf')      renderBedrijfTab();
-  if(tabId === 'goedgekeurd')  renderGoedgekeurdTab();
   if(tabId === 'nieuw')        renderNieuwTab();
   if(tabId === 'instellingen') renderInstellingenTab();
   if(tabId === 'meetings')     renderMeetingsTab();
@@ -1390,64 +1426,48 @@ function renderCategoryItem(item, cat){
     </div>
   </div>`;
 }
-function renderGoedgekeurdTab(){
-  const body = $('s27-goedgekeurd-body');
-  if(!body) return;
-  const dash = state.dashboard || {};
-  // Combineer 2 bronnen: actieve projecten met status goedgekeurd + historie_3mnd
-  const goedgekeurdActief = (dash.actieve_projecten || []).filter(p => {
-    const s = (p.status || '').toLowerCase().replace(/\s+/g,'_');
-    return s === 'goedgekeurd' || s === 'done';
-  }).map(p => ({
-    task_id: p.task_id,
-    naam: p.naam,
-    discipline: p.discipline,
-    afgerond_op: p.opleverdatum || '',
-    deliverables: p.deliverables || []
+// v3.1: opgeleverde/goedgekeurde projecten (archief) — bron voor de "Opgeleverd"-filter in Projecten.
+function getOpgeleverdProjects(dash){
+  dash = dash || state.dashboard || {};
+  const goedgekeurdActief = (dash.actieve_projecten || []).filter(isAfgerondStatus).map(p => ({
+    task_id: p.task_id, naam: p.naam, discipline: p.discipline,
+    afgerond_op: p.opleverdatum || '', deliverables: p.deliverables || []
   }));
   const historie = (dash.historie_3mnd || []).map(p => ({
-    task_id: p.task_id,
-    naam: p.naam,
-    discipline: p.discipline,
-    afgerond_op: p.afgerond_op || '',
-    deliverables: p.deliverables || []
+    task_id: p.task_id, naam: p.naam, discipline: p.discipline,
+    afgerond_op: p.afgerond_op || '', deliverables: p.deliverables || []
   }));
-  // Dedupe op task_id (actief wint)
   const seen = new Set();
   const all = [...goedgekeurdActief, ...historie].filter(p => {
-    if(seen.has(p.task_id)) return false;
-    seen.add(p.task_id);
-    return true;
+    if(!p.task_id || seen.has(p.task_id)) return p.task_id ? false : true;
+    seen.add(p.task_id); return true;
   });
-  // Sort recent eerst
-  all.sort((a,b) => {
-    const da = a.afgerond_op ? new Date(a.afgerond_op).getTime() : 0;
-    const db = b.afgerond_op ? new Date(b.afgerond_op).getTime() : 0;
-    return db - da;
-  });
+  all.sort((a,b) => (b.afgerond_op ? new Date(b.afgerond_op).getTime() : 0) - (a.afgerond_op ? new Date(a.afgerond_op).getTime() : 0));
+  return all;
+}
+
+function renderOpgeleverdArchive(dash){
+  const all = getOpgeleverdProjects(dash);
   if(!all.length){
-    body.innerHTML = '<div class="s27-empty">' +
+    return '<div class="s27-empty">' +
       '<div class="s27-empty-icon"><svg width="22" height="22"><use href="#s27p-check"/></svg></div>' +
-      '<div class="s27-empty-title">Nog geen afgeronde projecten</div>' +
+      '<div class="s27-empty-title">Nog geen opgeleverde projecten</div>' +
       '<p class="s27-empty-sub">Zodra je eerste project is opgeleverd, vind je hier alle deliverables — voor altijd bewaard, klik en download.</p>' +
     '</div>';
-    return;
   }
-  // Groepeer per jaar voor archief-look
   const byYear = {};
   all.forEach(p => {
     const year = p.afgerond_op ? new Date(p.afgerond_op).getFullYear() : 'Onbekend';
-    if(!byYear[year]) byYear[year] = [];
-    byYear[year].push(p);
+    (byYear[year] = byYear[year] || []).push(p);
   });
   const years = Object.keys(byYear).sort((a,b) => Number(b)-Number(a));
-  let html = '<div class="s27-archive-intro"><h3>Archief — alle opgeleverde projecten</h3>' +
-    '<p>Klik op een project om deliverables te zien. Alle links blijven werkend, ook na 3 maanden.</p></div>';
+  let html = '<div class="s27-archive-intro"><h3>Opgeleverde projecten</h3>' +
+    '<p>Klik op een project om de deliverables te zien. Alle links blijven werkend.</p></div>';
   years.forEach(y => {
     html += '<div class="s27-archive-year"><h4>' + esc(y) + ' <span class="s27-badge s27-badge-muted">' + byYear[y].length + '</span></h4>' +
       '<div class="s27-archive-list">' + byYear[y].map(renderArchiveCard).join('') + '</div></div>';
   });
-  body.innerHTML = html;
+  return html;
 }
 
 function renderArchiveCard(p){
@@ -2569,7 +2589,8 @@ function renderProjectView(proj, detail, needsFeedback){
       </div>
 
       <div class="s27-pv-section s27-pv-section-chat">
-        <h3 class="s27-pv-section-title">💬 Chat met het team ${commentCount ? `<span class="s27-pv-tab-badge" style="margin-left:8px">${commentCount}</span>` : ''}</h3>
+        <h3 class="s27-pv-section-title">💬 Chat over dit project ${commentCount ? `<span class="s27-pv-tab-badge" style="margin-left:8px">${commentCount}</span>` : ''}</h3>
+        <p class="s27-pv-chat-hint">Dit gesprek gaat specifiek over <strong>${esc(proj.naam || 'dit project')}</strong> — je praat hier rechtstreeks met het team dat eraan werkt. Een algemene vraag of snel een antwoord nodig? Gebruik de <strong>✦ assistent</strong> rechtsonder.</p>
         <div id="s27-pv-chatbox" class="s27-pv-chatbox"></div>
       </div>
     </div>

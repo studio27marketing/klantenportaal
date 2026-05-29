@@ -72,14 +72,14 @@
         <button class="s27-tab" data-tab="dashboard" role="tab" aria-selected="true">
           <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-spark"/></svg><span>Dashboard</span>
         </button>
+        <button class="s27-tab" data-tab="projecten" role="tab" aria-selected="false">
+          <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-inbox"/></svg><span>Projecten</span>
+        </button>
         <button class="s27-tab" data-tab="meetings" role="tab" aria-selected="false">
           <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-cal"/></svg><span>Meetings</span>
         </button>
         <button class="s27-tab" data-tab="bedrijf" role="tab" aria-selected="false">
           <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-brand"/></svg><span>Mijn bedrijf</span>
-        </button>
-        <button class="s27-tab" data-tab="goedgekeurd" role="tab" aria-selected="false">
-          <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-spark"/></svg><span>Goedgekeurd</span>
         </button>
         <button class="s27-tab" data-tab="nieuw" role="tab" aria-selected="false">
           <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-upload"/></svg><span>Nieuw project</span>
@@ -93,11 +93,19 @@
     <div class="s27-wrap">
       <div id="s27-tab-dashboard" class="s27-tabview" role="tabpanel">
         <div class="s27-hero" id="s27-hero">
-          <span class="s27-hero-tag">Jouw Studio 27 dashboard</span>
-          <h1 id="s27-hero-title">Alles wat we voor jou <span class="accent">aan het doen</span> zijn</h1>
-          <p class="s27-hero-lead">Eén plek voor jouw lopende projecten, meetings, deliverables en feedback. Altijd actueel — geen gemiste mailtjes meer.</p>
+          <span class="s27-hero-tag">Welkom</span>
+          <h1 id="s27-hero-title">Welkom in jouw portaal</h1>
         </div>
-        <div id="s27-dash-body"><div class="s27-loading">Dashboard laden</div></div>
+        <div id="s27-dash-body"><div class="s27-loading">Laden…</div></div>
+      </div>
+
+      <div id="s27-tab-projecten" class="s27-tabview" role="tabpanel" hidden>
+        <div class="s27-hero">
+          <span class="s27-hero-tag">Projecten</span>
+          <h1>Al jouw <span class="accent">projecten</span></h1>
+          <p class="s27-hero-lead">Filter op status en klik door voor details, feedback en chat per project.</p>
+        </div>
+        <div id="s27-projecten-body"><div class="s27-loading">Projecten laden</div></div>
       </div>
 
       <div id="s27-tab-bedrijf" class="s27-tabview" role="tabpanel" hidden>
@@ -107,15 +115,6 @@
           <p class="s27-hero-lead">Logo, fonts, brand-bestanden, algemene voorkeuren — alles op één plek. Wat hier staat geldt voor àl jouw projecten.</p>
         </div>
         <div id="s27-bedrijf-body"><div class="s27-loading">Binnenkort beschikbaar</div></div>
-      </div>
-
-      <div id="s27-tab-goedgekeurd" class="s27-tabview" role="tabpanel" hidden>
-        <div class="s27-hero">
-          <span class="s27-hero-tag">Archief</span>
-          <h1>Alles wat we voor jou <span class="accent">opgeleverd</span> hebben</h1>
-          <p class="s27-hero-lead">Alle goedgekeurde projecten en deliverable-links, gesorteerd in de tijd. Links blijven altijd beschikbaar.</p>
-        </div>
-        <div id="s27-goedgekeurd-body"><div class="s27-loading">Binnenkort beschikbaar</div></div>
       </div>
 
       <div id="s27-tab-nieuw" class="s27-tabview" role="tabpanel" hidden>

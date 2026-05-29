@@ -1006,3 +1006,31 @@ body { margin:0; background:var(--s27-paper-2); }
   .s27-wiz-label { display:none; }
   .s27-wiz-sep { width:18px; }
 }
+
+/* ============ DASHBOARD HUB (v3.1) ============ */
+.s27-hub-bot { display:flex; align-items:center; gap:16px; width:100%; text-align:left; padding:18px 22px; margin:0 0 22px; border:none; border-radius:var(--r-lg); cursor:pointer; color:#fff; background:linear-gradient(120deg, var(--s27-purple) 0%, var(--s27-orange) 100%); box-shadow:0 10px 30px rgba(148,65,219,0.32); transition:transform .2s var(--ease-out), box-shadow .2s; }
+.s27-hub-bot:hover { transform:translateY(-2px); box-shadow:0 14px 36px rgba(148,65,219,0.4); }
+.s27-hub-bot-ic { width:46px; height:46px; flex-shrink:0; border-radius:50%; background:rgba(255,255,255,0.22); display:flex; align-items:center; justify-content:center; font-size:22px; }
+.s27-hub-bot-txt { flex:1; min-width:0; line-height:1.4; }
+.s27-hub-bot-txt strong { display:block; font-family:var(--font-display); font-size:16px; font-weight:800; }
+.s27-hub-bot-txt span { display:block; font-size:13px; opacity:0.92; }
+.s27-hub-bot-cta { flex-shrink:0; font-family:var(--font-display); font-size:13px; font-weight:800; background:rgba(255,255,255,0.2); padding:9px 15px; border-radius:var(--r-pill); white-space:nowrap; }
+@media (max-width:560px){ .s27-hub-bot-cta { display:none; } }
+
+.s27-hub-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(248px, 1fr)); gap:14px; margin-bottom:30px; }
+.s27-hub-card { display:flex; flex-direction:column; align-items:flex-start; gap:5px; text-align:left; padding:20px 18px; background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:var(--r-md); cursor:pointer; transition:transform .18s var(--ease-out), box-shadow .18s, border-color .18s; position:relative; overflow:hidden; font-family:var(--font-body); }
+.s27-hub-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--accent, var(--s27-blue)); opacity:0; transition:opacity .18s; }
+.s27-hub-card:hover { transform:translateY(-3px); box-shadow:var(--sh-md); border-color:var(--accent, var(--s27-blue)); }
+.s27-hub-card:hover::before { opacity:1; }
+.s27-hub-card-ic { width:42px; height:42px; border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--accent, var(--s27-blue)); background:color-mix(in srgb, var(--accent, var(--s27-blue)) 12%, transparent); margin-bottom:8px; }
+.s27-hub-card-title { font-family:var(--font-display); font-size:16px; font-weight:800; color:var(--s27-ink); display:flex; align-items:center; gap:8px; }
+.s27-hub-soon { font-family:var(--font-display); font-size:9px; font-weight:800; letter-spacing:0.05em; text-transform:uppercase; color:var(--s27-purple-ink); background:var(--s27-purple-soft); padding:2px 7px; border-radius:var(--r-pill); }
+.s27-hub-card-meta { font-family:var(--font-display); font-size:12px; font-weight:700; color:var(--accent, var(--s27-blue)); }
+.s27-hub-card-desc { font-size:13px; color:var(--s27-ink-3); line-height:1.5; margin-top:2px; }
+.s27-hub-card.is-soon { cursor:default; opacity:0.72; }
+.s27-hub-card.is-soon:hover { transform:none; box-shadow:none; border-color:var(--s27-line); }
+.s27-hub-card.is-soon:hover::before { opacity:0; }
+
+/* Chat-hint in project-view (onderscheid team-chat vs AI-bot) */
+.s27-pv-chat-hint { font-size:12.5px; line-height:1.5; color:var(--s27-ink-3); background:var(--s27-blue-faint); border:1px solid var(--s27-blue-soft); border-radius:var(--r-sm); padding:9px 12px; margin:0 0 12px; }
+.s27-pv-chat-hint strong { color:var(--s27-ink-2); font-weight:800; }
