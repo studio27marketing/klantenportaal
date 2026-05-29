@@ -338,6 +338,32 @@ function handleLogout(){
   showLogin();
 }
 
+// v3.1: harde cache-reset. Wist alle opslag + browsercaches, logt uit en forceert een
+// verse herlaad met ?nocache=1 (loader gebruikt dan een timestamp-cache-bust → verse assets).
+// Lost op dat je na navigeren nog een oude dashboard-versie ziet.
+function forceCacheClearAndReload(){
+  // 1. Alle lokale opslag wissen
+  try { localStorage.clear(); } catch(e){}
+  try { sessionStorage.clear(); } catch(e){}
+  // 2. Cache Storage API legen (verse CDN-assets)
+  try { if(window.caches && caches.keys) caches.keys().then(function(ks){ ks.forEach(function(k){ caches.delete(k); }); }); } catch(e){}
+  // 3. Eventuele service workers afmelden
+  try {
+    if(navigator.serviceWorker && navigator.serviceWorker.getRegistrations)
+      navigator.serviceWorker.getRegistrations().then(function(rs){ rs.forEach(function(r){ r.unregister(); }); });
+  } catch(e){}
+  // 4. Sessie in geheugen weg
+  state.session = null;
+  try { showSettingsStatus('s27-notif-status', 'Cache gewist — portaal wordt vers herladen, log zo opnieuw in…', 'info'); } catch(e){}
+  // 5. Harde herlaad met nocache → loader haalt verse dashboard-assets, geen sessie → login
+  setTimeout(function(){
+    try {
+      var fresh = location.origin + location.pathname + '?nocache=1&_=' + Date.now();
+      location.replace(fresh);
+    } catch(e){ location.reload(); }
+  }, 700);
+}
+
 /* =================================================================
    DASHBOARD LOAD
    ================================================================= */
@@ -2199,9 +2225,10 @@ function renderInstellingenTab(){
           <dt>Sessie geldig tot</dt><dd>${esc(expiresStr)}</dd>
         </dl>
         <div class="s27-settings-actions">
-          <button class="s27-btn s27-btn-ghost" id="s27-clear-cache">Wis lokale cache</button>
+          <button class="s27-btn s27-btn-ghost" id="s27-clear-cache">Cache wissen &amp; vers herladen</button>
           <button class="s27-btn s27-btn-danger" id="s27-logout-btn">Uitloggen</button>
         </div>
+        <p class="s27-settings-hint">Zie je een oude versie? "Cache wissen" leegt alles, logt je uit en haalt het portaal volledig vers op.</p>
       </section>
 
       <section class="s27-settings-card s27-settings-card-muted">
@@ -2220,8 +2247,8 @@ function renderInstellingenTab(){
   if(saveBtn) saveBtn.addEventListener('click', saveNotifPrefs);
   const clearBtn = $('s27-clear-cache');
   if(clearBtn) clearBtn.addEventListener('click', () => {
-    try { localStorage.clear(); } catch(e){}
-    showSettingsStatus('s27-notif-status', 'Lokale cache gewist. Login opnieuw om vers te starten.', 'info');
+    if(!confirm('Cache wissen, uitloggen en het portaal vers herladen?\n\nJe moet daarna opnieuw inloggen.')) return;
+    forceCacheClearAndReload();
   });
   const logoutBtn = $('s27-logout-btn');
   if(logoutBtn) logoutBtn.addEventListener('click', () => {

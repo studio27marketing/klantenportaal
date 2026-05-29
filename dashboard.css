@@ -1046,3 +1046,6 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-doorlopend-group-head .s27-acc-title { font-family:var(--font-display); font-size:14px; font-weight:800; color:var(--s27-ink); }
 .s27-doorlopend-group-head .s27-acc-count { margin-left:auto; font-family:var(--font-display); font-size:12px; font-weight:800; color:var(--s27-ink-3); background:var(--s27-paper-3); padding:2px 9px; border-radius:var(--r-pill); }
 .s27-doorlopend-group-head .s27-acc-icon { color:var(--s27-orange-ink); }
+
+/* Settings-hint onder de cache/sessie-knoppen */
+.s27-settings-hint { font-size:12px; line-height:1.5; color:var(--s27-ink-4); margin:10px 0 0; }
