@@ -2652,6 +2652,13 @@ function renderProjectView(proj, detail, needsFeedback){
   const statusLabel = proj.status_label || STATUS_LABELS[statusKey] || proj.status || '';
   const eta = computeETA(proj);
   const commentCount = (detail.comments || []).length;
+  // v3.1: chat ENKEL bij actieve statussen. Op afgeronde/doorgestuurde taken krijgt het team
+  // geen melding en reageert het niet → chat verbergen. (to do / in progress / on hold = open)
+  const stForChat = statusKey || 'in_progress';
+  const chatAllowed = (stForChat === 'to_do' || stForChat === 'in_progress' || stForChat === 'on_hold');
+  const chatClosedNote = needsFeedback
+    ? 'Reageren doe je via het <strong>feedback-paneel hiernaast</strong> — daar geef je per onderdeel goedkeuring of opmerkingen door.'
+    : 'Dit project is afgerond, dus de chat is gesloten — ons team volgt afgeronde taken niet meer op. Heb je nog een vraag? Gebruik de <strong>✦ assistent</strong> rechtsonder of <a href="#" data-dm="vraag" data-dm-onderwerp="Vraag over ' + esc(proj.naam || 'afgerond project') + '">stuur een bericht</a>.';
 
   // v2.2 fix #51b: 1-kolom layout. Chat ALTIJD direct zichtbaar onder overzicht.
   // Feedback (indien nodig) bovenaan als prominente actie-banner — opent feedback panel.
@@ -2691,34 +2698,35 @@ function renderProjectView(proj, detail, needsFeedback){
       </div>
 
       <div class="s27-pv-section s27-pv-section-chat">
-        <h3 class="s27-pv-section-title">💬 Chat over dit project ${commentCount ? `<span class="s27-pv-tab-badge" style="margin-left:8px">${commentCount}</span>` : ''}</h3>
-        <p class="s27-pv-chat-hint">Dit gesprek gaat specifiek over <strong>${esc(proj.naam || 'dit project')}</strong> — je praat hier rechtstreeks met het team dat eraan werkt. Een algemene vraag of snel een antwoord nodig? Gebruik de <strong>✦ assistent</strong> rechtsonder.</p>
-        <div id="s27-pv-chatbox" class="s27-pv-chatbox"></div>
+        ${chatAllowed ? `
+          <h3 class="s27-pv-section-title">💬 Chat over dit project ${commentCount ? `<span class="s27-pv-tab-badge" style="margin-left:8px">${commentCount}</span>` : ''}</h3>
+          <p class="s27-pv-chat-hint">Dit gesprek gaat specifiek over <strong>${esc(proj.naam || 'dit project')}</strong> — je praat hier rechtstreeks met het team dat eraan werkt. Een algemene vraag of snel een antwoord nodig? Gebruik de <strong>✦ assistent</strong> rechtsonder.</p>
+          <div id="s27-pv-chatbox" class="s27-pv-chatbox"></div>
+        ` : `
+          <h3 class="s27-pv-section-title">💬 Chat gesloten</h3>
+          <div class="s27-pv-chat-closed">${chatClosedNote}</div>
+        `}
       </div>
     </div>
   `;
 
-  // Render chat in box (altijd zichtbaar)
-  console.log('[Studio 27] renderProjectView: project=', proj.task_id, 'comments=', (detail.comments || []).length, 'needsFeedback=', needsFeedback);
-  try {
-    const chatBox = $('s27-pv-chatbox');
-    if(!chatBox){
-      console.error('[Studio 27] #s27-pv-chatbox container niet gevonden in DOM');
-    } else {
-      chatBox.innerHTML = renderChatTab(proj, detail);
-      attachChatHandlers();
-      // Auto-scroll naar nieuwste (onderkant) zoals WhatsApp/Slack
-      setTimeout(() => {
-        const thread = $('s27-chat-thread');
-        if(thread) thread.scrollTop = thread.scrollHeight;
-      }, 30);
-      // Start polling voor real-time updates
-      startChatPolling(proj.task_id);
+  // v3.1: chat enkel renderen + pollen wanneer toegestaan (open status). Anders: gesloten-note al getoond.
+  if(chatAllowed){
+    try {
+      const chatBox = $('s27-pv-chatbox');
+      if(chatBox){
+        chatBox.innerHTML = renderChatTab(proj, detail);
+        attachChatHandlers();
+        setTimeout(() => { const thread = $('s27-chat-thread'); if(thread) thread.scrollTop = thread.scrollHeight; }, 30);
+        startChatPolling(proj.task_id);
+      }
+    } catch(e){
+      console.error('[Studio 27] Chat render failed:', e);
+      const chatBox = $('s27-pv-chatbox');
+      if(chatBox) chatBox.innerHTML = '<div class="s27-form-error">Chat kon niet geladen worden (' + esc(String(e && e.message || e)) + '). <a href="#" data-dm="vraag" data-dm-onderwerp="Chat in dashboard werkt niet">Stuur ons een bericht</a>.</div>';
     }
-  } catch(e){
-    console.error('[Studio 27] Chat render failed:', e);
-    const chatBox = $('s27-pv-chatbox');
-    if(chatBox) chatBox.innerHTML = '<div class="s27-form-error">Chat kon niet geladen worden (' + esc(String(e && e.message || e)) + '). <a href="#" data-dm="vraag" data-dm-onderwerp="Chat in dashboard werkt niet">Stuur ons een bericht</a>.</div>';
+  } else {
+    stopChatPolling();   // geen polling op gesloten chat
   }
 
   // Wire up handlers
@@ -3405,7 +3413,8 @@ function getDemoData(){
       { task_id:'demo-soc-1', naam:'Social media juni 2026',         discipline:'social',    status:'in_progress', opleverdatum:'2026-06-01', voortgang_pct:60, type:'Retainer maandelijks', laatst_geupdatet: new Date(Date.now()-3600000*12).toISOString() },
       { task_id:'demo-ads-1', naam:'Google Ads + Meta zomercampagne',discipline:'ads',       status:'in_progress', opleverdatum:'2026-06-01', voortgang_pct:50, type:'Performance', laatst_geupdatet: new Date(Date.now()-3600000*36).toISOString() },
       { task_id:'demo-seo-1', naam:'SEO/GEO optimalisatie',          discipline:'seo',       status:'in_progress', type:'Doorlopend traject', laatst_geupdatet: new Date(Date.now()-3600000*20).toISOString() },
-      { task_id:'demo-opl-1', naam:'Opleiding social media beheer',  discipline:'opleiding', status:'in_progress', opleverdatum:'2026-06-18', type:'1-op-1 sessie', laatst_geupdatet: new Date(Date.now()-3600000*30).toISOString() }
+      { task_id:'demo-opl-1', naam:'Opleiding social media beheer',  discipline:'opleiding', status:'in_progress', opleverdatum:'2026-06-18', type:'1-op-1 sessie', laatst_geupdatet: new Date(Date.now()-3600000*30).toISOString() },
+      { task_id:'demo-str-1', naam:'Strategie kick-off traject',     discipline:'strategie', status:'klaar voor facturatie', opleverdatum:'2026-05-20', type:'Strategiesessie', laatst_geupdatet: new Date(Date.now()-86400000*6).toISOString() }
     ],
     historie_3mnd: [
       { task_id:'demo-h1', naam:'Aftermovie teamevent maart', discipline:'video_fotografie', afgerond_op:'2026-04-12', deliverables:[ { label:'Vimeo final', url:'https://vimeo.com/example' }, { label:'Drive', url:'https://drive.google.com/example' } ] },

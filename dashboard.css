@@ -1049,3 +1049,8 @@ body { margin:0; background:var(--s27-paper-2); }
 
 /* Settings-hint onder de cache/sessie-knoppen */
 .s27-settings-hint { font-size:12px; line-height:1.5; color:var(--s27-ink-4); margin:10px 0 0; }
+
+/* Gesloten chat (afgerond/doorgestuurd project) */
+.s27-pv-chat-closed { font-size:13.5px; line-height:1.55; color:var(--s27-ink-3); background:var(--s27-paper-2); border:1px dashed var(--s27-line); border-radius:var(--r-md); padding:16px 18px; }
+.s27-pv-chat-closed strong { color:var(--s27-ink-2); font-weight:800; }
+.s27-pv-chat-closed a { color:var(--s27-blue-ink); font-weight:700; }
