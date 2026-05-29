@@ -298,6 +298,9 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-readfield { display:flex; flex-direction:column; gap:4px; }
 .s27-readlabel { font-family:var(--font-display); font-size:11.5px; font-weight:700; color:var(--s27-ink-3); letter-spacing:0.04em; text-transform:uppercase; }
 .s27-readvalue { font-family:var(--font-body); font-size:14px; color:var(--s27-ink); padding:2px 0; min-height:22px; }
+/* v3.1-7 — info-tooltip badge (bv. PO-nummer uitleg bij facturatie-opmerkingen) */
+.s27-info { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; margin-left:4px; font-size:11px; line-height:1; color:var(--s27-blue-ink); background:var(--s27-blue,#eef2ff); border-radius:50%; cursor:help; vertical-align:middle; text-transform:none; font-weight:700; }
+.s27-info:hover, .s27-info:focus { background:var(--s27-blue-ink,#3b5bdb); color:#fff; outline:none; }
 .s27-contactform-readonly .s27-form-field input { display:none; }
 /* Section-head met edit-knop rechts */
 .s27-section-head { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; margin-bottom:14px; }

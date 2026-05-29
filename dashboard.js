@@ -35,7 +35,9 @@ const ENDPOINTS = {
   // v3.1-6 — Huisstijl-bibliotheek op Google Drive (s27-drive). list/upload/delete via service-account.
   huisstijlList:     'https://hook.eu1.make.com/v3z3t67otw7d96s37qciedt3uykimiru',
   huisstijlUpload:   'https://hook.eu1.make.com/3eqyxbkejfhyz8w2kl62lp1lsxwfr2d0',
-  huisstijlDelete:   'https://hook.eu1.make.com/irpo6iemme6qpfe75rr83brkj7ybftsd'
+  huisstijlDelete:   'https://hook.eu1.make.com/irpo6iemme6qpfe75rr83brkj7ybftsd',
+  // v3.1-7 — Facturatiegegevens opslaan (schrijft direct naar Bedrijven-taak custom fields)
+  facturatieSave:    'https://hook.eu1.make.com/41635fjyidjts4hlixkgxcsmo6apoe02'
 };
 
 /* =================================================================
@@ -1247,13 +1249,38 @@ async function renderBedrijfTab(){
           ${rf('GSM','gsm',c.gsm,'+32 4xx xx xx xx')}
           ${rf('E-mail','email',c.email,'naam@bedrijf.be')}
         </div>
-        ${rf('BTW-nummer','btw',c.btw,'BE0xxx.xxx.xxx')}
         ${rf('Bedrijfsadres (factuur-adres)','adres',c.adres,'Straat nummer, postcode stad')}
         ${rf('Website','website',c.website,'https://...')}
         <div class="s27-contactform-foot" id="s27-contactform-foot" hidden>
           <span class="s27-contactform-state" id="s27-contactform-state"></span>
           <button class="s27-btn s27-btn-ghost s27-btn-sm" id="s27-contactform-cancel">Annuleer</button>
           <button class="s27-btn s27-btn-sm s27-btn-primary" id="s27-contactform-save">Wijzigingen opslaan</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="s27-section">
+      <div class="s27-section-head">
+        <div>
+          <h2 class="s27-section-title">Facturatiegegevens</h2>
+          <p class="s27-section-sub">Deze gegevens gebruiken we voor je facturen. Pas je iets aan? Dan verwerken Ilke en Arne het in onze administratie.</p>
+        </div>
+        <button class="s27-btn s27-btn-ghost s27-btn-sm" id="s27-factuur-edit-btn">✏️ Bewerken</button>
+      </div>
+      <div class="s27-contactform s27-contactform-readonly" id="s27-factuurform" data-edit-mode="off">
+        <div class="s27-form-row">
+          <div class="s27-form-field s27-readfield"><span class="s27-readlabel">Ondernemingsnummer / BTW</span><div class="s27-readvalue">${data.btw ? esc(data.btw) : '—'}</div><input type="text" name="ondernemingsnummer" value="${esc(data.btw||'')}" placeholder="BE0xxx.xxx.xxx" hidden/></div>
+          <div class="s27-form-field s27-readfield"><span class="s27-readlabel">Facturatie-e-mail</span><div class="s27-readvalue">${data.facturatie_email ? esc(data.facturatie_email) : '—'}</div><input type="email" name="facturatie_email" value="${esc(data.facturatie_email||'')}" placeholder="facturen@bedrijf.be" hidden/></div>
+        </div>
+        <div class="s27-form-field s27-readfield">
+          <span class="s27-readlabel">Facturatie-opmerkingen <span class="s27-info" tabindex="0" title="Bv. een PO-nummer dat verplicht op elke factuur moet, een vaste referentie, kostenplaats of afdeling.">&#9432;</span></span>
+          <div class="s27-readvalue">${data.facturatie_opmerkingen ? esc(data.facturatie_opmerkingen) : '—'}</div>
+          <input type="text" name="facturatie_opmerkingen" value="${esc(data.facturatie_opmerkingen||'')}" placeholder="Bv. PO-nummer PO-2026-001 vermelden op elke factuur" hidden/>
+        </div>
+        <div class="s27-contactform-foot" id="s27-factuurform-foot" hidden>
+          <span class="s27-contactform-state" id="s27-factuurform-state"></span>
+          <button class="s27-btn s27-btn-ghost s27-btn-sm" id="s27-factuurform-cancel">Annuleer</button>
+          <button class="s27-btn s27-btn-sm s27-btn-primary" id="s27-factuurform-save">Wijzigingen opslaan</button>
         </div>
       </div>
     </div>
@@ -1556,6 +1583,66 @@ function attachBedrijfHandlers(){
       }
       contactSave.disabled = false; contactSave.textContent = 'Wijzigingen opslaan';
       setTimeout(() => { if(contactState) contactState.textContent = ''; }, 4000);
+    });
+  }
+
+  // v3.1-7 — Facturatiegegevens edit/save (schrijft direct naar Bedrijven-taak)
+  const factuurForm = $('s27-factuurform');
+  const factuurEditBtn = $('s27-factuur-edit-btn');
+  const factuurSave = $('s27-factuurform-save');
+  const factuurCancel = $('s27-factuurform-cancel');
+  const factuurFoot = $('s27-factuurform-foot');
+  const factuurState = $('s27-factuurform-state');
+  function toggleFactuurEdit(on){
+    if(!factuurForm) return;
+    factuurForm.dataset.editMode = on ? 'on' : 'off';
+    factuurForm.classList.toggle('s27-contactform-readonly', !on);
+    factuurForm.querySelectorAll('.s27-readfield').forEach(field => {
+      const readValue = field.querySelector('.s27-readvalue');
+      const input = field.querySelector('input');
+      if(readValue) readValue.hidden = on;
+      if(input) input.hidden = !on;
+    });
+    if(factuurFoot) factuurFoot.hidden = !on;
+    if(factuurEditBtn) factuurEditBtn.hidden = on;
+  }
+  if(factuurEditBtn) factuurEditBtn.addEventListener('click', () => toggleFactuurEdit(true));
+  if(factuurCancel) factuurCancel.addEventListener('click', () => { renderBedrijfTab(); });
+  if(factuurForm && factuurSave){
+    factuurSave.addEventListener('click', async () => {
+      factuurSave.disabled = true; factuurSave.textContent = 'Opslaan…';
+      if(factuurState) factuurState.textContent = 'Bezig…';
+      const get = n => { const el = factuurForm.querySelector('[name="'+n+'"]'); return el ? el.value.trim() : ''; };
+      const payload = {
+        bedrijf_id: state.session.bedrijf_id,
+        session_token: state.session.session_token,
+        klant_naam: state.session.bedrijfsnaam,
+        ondernemingsnummer: get('ondernemingsnummer'),
+        facturatie_email: get('facturatie_email'),
+        facturatie_opmerkingen: get('facturatie_opmerkingen')
+      };
+      try {
+        if(ENDPOINTS.facturatieSave && !state.demoMode){
+          await api(ENDPOINTS.facturatieSave, payload);
+        } else { await new Promise(r => setTimeout(r, 400)); }
+        if(state.bedrijfContent){
+          state.bedrijfContent.btw = payload.ondernemingsnummer;
+          state.bedrijfContent.facturatie_email = payload.facturatie_email;
+          state.bedrijfContent.facturatie_opmerkingen = payload.facturatie_opmerkingen;
+        }
+        factuurForm.querySelectorAll('.s27-readfield').forEach(field => {
+          const input = field.querySelector('input');
+          const readValue = field.querySelector('.s27-readvalue');
+          if(input && readValue) readValue.textContent = input.value || '—';
+        });
+        if(factuurState) factuurState.textContent = '✓ Opgeslagen — Ilke en Arne werken het bij';
+        setTimeout(() => toggleFactuurEdit(false), 900);
+      } catch(err){
+        console.error('[Studio 27] facturatie save failed:', err);
+        if(factuurState) factuurState.textContent = 'Iets ging mis — probeer opnieuw';
+      }
+      factuurSave.disabled = false; factuurSave.textContent = 'Wijzigingen opslaan';
+      setTimeout(() => { if(factuurState) factuurState.textContent = ''; }, 4000);
     });
   }
 
