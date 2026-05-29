@@ -325,6 +325,10 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-filecard-meta { font-family:var(--font-body); font-size:11.5px; color:var(--s27-ink-3); margin-top:1px; }
 .s27-filecard-dl { display:inline-flex; align-items:center; gap:5px; font-family:var(--font-display); font-size:12px; font-weight:700; color:var(--s27-blue-ink); text-decoration:none; padding:6px 11px; border:1.5px solid var(--s27-line); border-radius:var(--r-pill); transition:all .15s; flex-shrink:0; }
 .s27-filecard-dl:hover { background:var(--s27-blue); color:#fff; border-color:var(--s27-blue); }
+/* v3.1-6 — verwijder-knop in huisstijl-bibliotheek */
+.s27-filecard-del { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:32px; height:32px; padding:0; margin-left:2px; background:transparent; color:var(--s27-ink-3); border:1.5px solid var(--s27-line); border-radius:var(--r-pill); cursor:pointer; transition:all .15s; }
+.s27-filecard-del:hover { background:#fef2f2; color:#dc2626; border-color:#fecaca; }
+.s27-filecard-del svg { display:block; }
 .s27-files-empty { text-align:center; padding:40px 18px; color:var(--s27-ink-3); }
 .s27-files-empty-icon { font-size:42px; line-height:1; margin-bottom:10px; }
 .s27-files-empty strong { font-family:var(--font-display); font-size:14px; font-weight:800; color:var(--s27-ink); display:block; margin-bottom:5px; }

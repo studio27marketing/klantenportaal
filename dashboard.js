@@ -31,7 +31,11 @@ const ENDPOINTS = {
   // v3 — PandaDoc prijslijst (scenario 5946435). Stap 2 nieuw-project: kostprijs-detail.
   pandadocPricelist: 'https://hook.eu1.make.com/uw2974b7b2yurygsgcn2i97x4lh9h86e',
   // Bestaand werkend booking-systeem (read-only hergebruik via CORS *)
-  shootAvailability: 'https://hook.eu1.make.com/c1aekp5r567tqvgvp4e2a4juu3npanap'
+  shootAvailability: 'https://hook.eu1.make.com/c1aekp5r567tqvgvp4e2a4juu3npanap',
+  // v3.1-6 — Huisstijl-bibliotheek op Google Drive (s27-drive). list/upload/delete via service-account.
+  huisstijlList:     'https://hook.eu1.make.com/v3z3t67otw7d96s37qciedt3uykimiru',
+  huisstijlUpload:   'https://hook.eu1.make.com/3eqyxbkejfhyz8w2kl62lp1lsxwfr2d0',
+  huisstijlDelete:   'https://hook.eu1.make.com/irpo6iemme6qpfe75rr83brkj7ybftsd'
 };
 
 /* =================================================================
@@ -1287,12 +1291,13 @@ async function renderBedrijfTab(){
         <ul id="s27-up-list-bedrijf" class="s27-upload-list"></ul>
       </div>
       <div class="s27-files-flat" id="s27-files-flat">
-        ${renderFilesFlat(data.attachments || [])}
+        <div class="s27-loading">Bibliotheek laden</div>
       </div>
     </div>
   `;
 
   attachBedrijfHandlers();
+  loadHuisstijlFiles();
 }
 
 // v2.2 #74: lokale contact-cache per bedrijf (persoonsvelden die niet op Bedrijven-task staan)
@@ -1356,11 +1361,95 @@ function renderFileCard(a){
   </div>`;
 }
 
+// v3.1-6 — Huisstijl-bibliotheek staat nu op Google Drive (s27-drive, per-bedrijf map).
+// list/upload/delete via service-account scenarios. De klant kan toevoegen + (zacht) verwijderen.
+async function loadHuisstijlFiles(){
+  const container = $('s27-files-flat');
+  if(state.demoMode || !ENDPOINTS.huisstijlList){
+    state.huisstijlFiles = getMockHuisstijlFiles();
+    if(container) container.innerHTML = renderDriveFilesFlat(state.huisstijlFiles);
+    return;
+  }
+  try {
+    const res = await api(ENDPOINTS.huisstijlList, { bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token });
+    state.huisstijlFiles = (res.ok && res.data && Array.isArray(res.data.files)) ? res.data.files : [];
+  } catch(e){
+    state.huisstijlFiles = [];
+  }
+  if(container) container.innerHTML = renderDriveFilesFlat(state.huisstijlFiles);
+}
+
 function refreshFilesFlat(){
-  if(!state.bedrijfContent) return;
   const container = $('s27-files-flat');
   if(!container) return;
-  container.innerHTML = renderFilesFlat(state.bedrijfContent.attachments || []);
+  container.innerHTML = renderDriveFilesFlat(state.huisstijlFiles || []);
+}
+
+function renderDriveFilesFlat(files){
+  files = (files || []).slice(); // server levert al nieuwste-eerst
+  if(!files.length){
+    return '<div class="s27-files-empty"><div class="s27-files-empty-icon">📁</div><strong>Nog geen bestanden</strong><p>Upload je eerste huisstijl-bestand hierboven. Alles wat je hier zet, bewaren we veilig in jouw eigen map op onze Drive.</p></div>';
+  }
+  return files.map(renderDriveFileCard).join('');
+}
+
+function renderDriveFileCard(f){
+  const fname = (f.name || 'bestand').replace(/^\[[A-Z]+\]\s*/, ''); // strip oude [CAT] prefix
+  const ext = (fname.split('.').pop() || '').toLowerCase();
+  const ico = ext === 'pdf' ? '📄' : (['jpg','jpeg','png','gif','webp','heic','svg'].includes(ext) ? '🖼️' : (['mp4','mov','avi','webm'].includes(ext) ? '🎬' : (['ai','psd','eps','indd'].includes(ext) ? '🎨' : (['ttf','otf','woff','woff2'].includes(ext) ? '🔤' : (['zip','rar','7z'].includes(ext) ? '🗜️' : '📎')))));
+  const ts = f.modified ? new Date(f.modified).getTime() : 0;
+  const dateStr = ts ? new Date(ts).toLocaleDateString('nl-BE', {day:'2-digit', month:'short', year:'numeric'}) : '';
+  const sizeStr = f.size ? bytes(parseInt(f.size, 10)) : '';
+  const meta = [dateStr, sizeStr].filter(Boolean).join(' · ');
+  return `<div class="s27-filecard" data-file-id="${esc(f.id)}">
+    <div class="s27-filecard-ico">${ico}</div>
+    <div class="s27-filecard-body">
+      <div class="s27-filecard-name">${esc(fname)}</div>
+      <div class="s27-filecard-meta">${esc(meta)}</div>
+    </div>
+    <a class="s27-filecard-dl" href="${esc(f.url || '#')}" target="_blank" rel="noopener" title="Open ${esc(fname)}">
+      <svg width="14" height="14" viewBox="0 0 24 24"><path fill="currentColor" d="M5 20h14v-2H5v2zM12 2v12l4-4 1.4 1.4L12 17l-5.4-5.6L8 10l4 4V2h0z"/></svg>
+      Open
+    </a>
+    <button type="button" class="s27-filecard-del" data-file-id="${esc(f.id)}" data-file-name="${esc(fname)}" title="Verwijder ${esc(fname)}" aria-label="Verwijder ${esc(fname)}">
+      <svg width="15" height="15" viewBox="0 0 24 24"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+    </button>
+  </div>`;
+}
+
+async function handleHuisstijlDelete(fileId, fileName){
+  if(!fileId) return;
+  const ok = window.confirm('"' + fileName + '" verwijderen uit je huisstijl-bibliotheek?\n\nHet bestand gaat naar de prullenbak — indien nodig kunnen we het nog herstellen.');
+  if(!ok) return;
+  const sel = (window.CSS && CSS.escape) ? CSS.escape(fileId) : fileId;
+  const card = document.querySelector('.s27-filecard[data-file-id="' + sel + '"]');
+  if(card){ card.style.opacity = '0.45'; card.style.pointerEvents = 'none'; }
+  if(state.demoMode || !ENDPOINTS.huisstijlDelete){
+    state.huisstijlFiles = (state.huisstijlFiles || []).filter(f => f.id !== fileId);
+    refreshFilesFlat();
+    return;
+  }
+  try {
+    const res = await api(ENDPOINTS.huisstijlDelete, { bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token, file_id: fileId });
+    if(res.ok && res.data && res.data.ok){
+      state.huisstijlFiles = (state.huisstijlFiles || []).filter(f => f.id !== fileId);
+      refreshFilesFlat();
+    } else {
+      if(card){ card.style.opacity = ''; card.style.pointerEvents = ''; }
+      alert((res.data && res.data.message) || 'Verwijderen lukte niet — probeer het zo nog eens.');
+    }
+  } catch(e){
+    if(card){ card.style.opacity = ''; card.style.pointerEvents = ''; }
+    alert('Verwijderen lukte niet — probeer het zo nog eens.');
+  }
+}
+
+function getMockHuisstijlFiles(){
+  return [
+    { id:'demo1', name:'logo-primair.svg', url:'#', mime:'image/svg+xml', size:24576, modified:'2026-05-20T10:00:00Z' },
+    { id:'demo2', name:'brandbook-2026.pdf', url:'#', mime:'application/pdf', size:3145728, modified:'2026-05-18T14:30:00Z' },
+    { id:'demo3', name:'kleurpalet.png', url:'#', mime:'image/png', size:102400, modified:'2026-05-15T09:12:00Z' }
+  ];
 }
 
 function renderFilePreviewTiny(item, cat){
@@ -1478,6 +1567,15 @@ function attachBedrijfHandlers(){
     ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('dragover'); }));
     ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('dragover'); }));
     drop.addEventListener('drop', e => handleFiles(e.dataTransfer.files, 'bedrijf', 'overig'));
+  }
+
+  // v3.1-6 — gedelegeerde 🗑-handler op de bibliotheek-lijst (overleeft re-renders van innerHTML)
+  const filesFlat = $('s27-files-flat');
+  if(filesFlat){
+    filesFlat.addEventListener('click', e => {
+      const del = e.target.closest('.s27-filecard-del');
+      if(del){ e.preventDefault(); handleHuisstijlDelete(del.dataset.fileId, del.dataset.fileName || 'dit bestand'); }
+    });
   }
 }
 
@@ -3331,38 +3429,46 @@ async function handleFiles(fileList, scope, category){
     const li = addUploadRow(f.name, 'uploading', bytes(f.size), listId);
     try {
       const b64 = await fileToBase64(f);
-      // Voeg categorie prefix toe aan filename voor server-side categorisering
-      const catLabel = ({logos:'LOGO',fonts:'FONT',kleuren:'KLEUR',brand_pdfs:'BRAND',fotos:'FOTO',overig:'OVERIG'})[category] || 'OVERIG';
-      const filenameWithCat = scope === 'bedrijf' ? '[' + catLabel + '] ' + f.name : f.name;
-      // v2.1 — scope bedrijf gaat naar nieuw bedrijfUpload endpoint (native uploadTaskAttachment)
-      // scope algemeen blijft v1 uploadAlg (Drive integratie)
-      const endpoint = (scope === 'bedrijf' && ENDPOINTS.bedrijfUpload) ? ENDPOINTS.bedrijfUpload : ENDPOINTS.uploadAlg;
-      const res = await api(endpoint, {
-        bedrijf_id: state.session.bedrijf_id,
-        session_token: state.session.session_token,
-        filename: filenameWithCat,
-        size: f.size,
-        type: f.type,
-        data: b64,
-        klant_naam: state.session.bedrijfsnaam,
-        categorie: category,
-        scope: scope
-      });
-      if(res.ok && (!res.data || !res.data.error)){
-        updateUploadRow(li, 'done', 'Geüpload ✓');
-        // v2.2 #59 + #68: surgical flat-list update zonder hele tab re-render
-        if(scope === 'bedrijf' && state.bedrijfContent){
-          if(!Array.isArray(state.bedrijfContent.attachments)) state.bedrijfContent.attachments = [];
-          state.bedrijfContent.attachments.push({
-            filename: filenameWithCat,
-            url: (res.data && res.data.url) || '',
-            uploaded_by: 'klant',
-            uploaded_at: String(Date.now()),
-            size: f.size
+      if(scope === 'bedrijf'){
+        // v3.1-6 — huisstijl-bibliotheek staat op Google Drive (s27-drive, per-bedrijf map)
+        const res = await api(ENDPOINTS.huisstijlUpload, {
+          bedrijf_id: state.session.bedrijf_id,
+          session_token: state.session.session_token,
+          filename: f.name,
+          file_data: b64
+        });
+        if(res.ok && res.data && res.data.ok && res.data.file){
+          updateUploadRow(li, 'done', 'Geüpload ✓');
+          if(!Array.isArray(state.huisstijlFiles)) state.huisstijlFiles = [];
+          state.huisstijlFiles.unshift({
+            id: res.data.file.id,
+            name: res.data.file.name || f.name,
+            url: res.data.file.url || '',
+            mime: f.type || '',
+            size: f.size,
+            modified: new Date().toISOString()
           });
           refreshFilesFlat();
+        } else {
+          updateUploadRow(li, 'error', 'Mislukt');
         }
-      } else updateUploadRow(li, 'error', 'Mislukt');
+      } else {
+        // scope algemeen → bestaand uploadAlg (Drive integratie op projecttaak)
+        const res = await api(ENDPOINTS.uploadAlg, {
+          bedrijf_id: state.session.bedrijf_id,
+          session_token: state.session.session_token,
+          filename: f.name,
+          size: f.size,
+          type: f.type,
+          data: b64,
+          klant_naam: state.session.bedrijfsnaam,
+          categorie: category,
+          scope: scope
+        });
+        if(res.ok && (!res.data || !res.data.error)){
+          updateUploadRow(li, 'done', 'Geüpload ✓');
+        } else updateUploadRow(li, 'error', 'Mislukt');
+      }
     } catch(e){ updateUploadRow(li, 'error', 'Mislukt'); }
   }
   const inputId = scope === 'bedrijf' ? 's27-up-input-bedrijf' : 's27-up-input';
