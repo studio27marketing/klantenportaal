@@ -385,3 +385,30 @@ ClickUp universele Productie-statussen (uit Masterplan v9):
 - [ ] Login is hardcoded voor TEST CLIENT BV — needs Iterator pattern voor productie
 - [ ] Geen security: session_token niet gevalideerd in Dashboard Feed
 - [ ] Feedback-flow nog niet getest van dashboard naar feedback-widget
+
+## 11. Google Drive via Make — KRITIEKE learnings (v3.1-6 huisstijl-bibliotheek)
+
+**Module `google-drive:makeApiCall` v4** is de betrouwbaarste route voor list/create/delete:
+- **URL-prefix valkuil:** de module prepend ZELF `/drive` aan de basis-URL. Gebruik dus `/v3/files`, NIET `/drive/v3/files` (anders 404 op `/drive/drive/v3/files`).
+- **Response-body is een geparsed object:** `{{2.body.files}}` werkt direct (geen ParseJSON nodig). `length(2.body.files)`, `2.body.files[1].id` (Make = 1-indexed).
+- **Shared-drive params (verplicht bij elke call):** `supportsAllDrives=true`, `includeItemsFromAllDrives=true`, `corpora=drive`, `driveId=<sharedDriveId>`. Zonder deze vindt de query niets in een shared drive.
+- **Folder aanmaken = makeApiCall POST**, NIET de typed `createAFolder`. De typed `createAFolder` met `destination:"share"` NEGEERT `parentId` en dumpt in een willekeurige default shared drive. Correct: `POST /v3/files?supportsAllDrives=true` met body `{"name":"...","mimeType":"application/vnd.google-apps.folder","parents":["<parentId>"]}` + header `Content-Type: application/json`. → folder belandt exact in de juiste parent + driveId.
+- **Upload = typed `google-drive:uploadAFile`** werkt WEL correct: `folderId` wordt gerespecteerd (`destination:"share"`, `data:{{toBinary(1.file_data;"base64")}}`, `filename`).
+- **Verwijderen = soft-delete (prullenbak), recoverable:** `PATCH /v3/files/{id}?supportsAllDrives=true` body `{"trashed":true}`. NIET hard DELETE.
+- **Security bij delete:** eerst `GET /v3/files/{id}?fields=parents` en check `contains(body.parents; hs_folder_id)` vóór trashen, zodat een klant geen vreemde Drive-bestanden kan verwijderen via een gespoofte file_id.
+
+**s27-drive:** ID `0AKAHMRq7JrrEUk9PVA` (door Vincent aangemaakt). Service-account conn **5375021** (arne@studio27.be, full `auth/drive`) kan hier schrijven. LET OP: shared drive `0ALNzKQo49OgOUk9PVA` bevat oude ad-hoc test-folders die per ongeluk daar belandden — los van de productiestructuur.
+
+**Structuur per bedrijf:** s27-drive → `<Bedrijfsnaam>` (company-folder) → `Huisstijl` (subfolder). De `Drive-map` URL-customfield (`0a0781cc-a10a-4949-82b9-ab099956214a`) op de Bedrijven-taak wijst naar de COMPANY-folder. Huisstijl-subfolder per call afgeleid via search. Company-folder-ID uit de URL: `replace(first(split(replace(url;"https://drive.google.com/drive/folders/";"");"?"));"/";"")`.
+
+**Productie-scenario's (folder 348572):** `5952504` list (hook 3131778), `5952637` upload (hook 3131779), `5952651` delete (hook 3131780).
+
+**TODO nieuwe klanten:** alleen TEST CLIENT BV (86c9yv1wy) heeft nu een Drive-map + structuur. Productie-uitrol: onboarding (bv. scenario `5896022 Nieuwe Klant Drive Creator`) moet per nieuwe klant company-folder + Huisstijl-subfolder in s27-drive aanmaken via makeApiCall-POST + Drive-map-URL wegschrijven.
+
+## 12. ClickUp custom fields via Make — schrijven (v3.1-7 facturatie)
+
+- **Custom field zetten:** `clickup:makeApiCall` v2, `POST /v2/task/{taskId}/field/{fieldId}` met body `{"value":"..."}` + header `Content-Type: application/json`. Werkt voor short_text, email, url. (Attachment-velden NIET — zie #52.)
+- **Geen `and()`/`or()` functie in Make-formules!** `if(a; if(b; x; y); y)` nesten i.p.v. `and(a;b)`. (Kostte een `DataError: Function 'and' not found`.)
+- **Bedrijven-taak facturatie-velden:** Ondernemingsnummer/BTW `034f4443-5b50-4176-8c91-0b6d60e5870e`, Facturatie-email `9613b4aa-2285-485b-80a6-d1d34a96884c`, Facturatie-opmerkingen `36d11828-4199-4373-81db-e72f960cf902`.
+- Scenario `5952882` bedrijf-facturatie-save (hook 3131981): schrijft de 3 velden + audit-comment @ilke @arne. `bedrijf-content-get` (5942494) geeft nu ook `facturatie_opmerkingen` terug.
+- **Per-project afwijking** (afwijkend BTW/extra opmerking) hoort in het PROJECTTAAK-veld "Facturatie opmerking" `42a0fd8e` — gekoppeld aan de approval-pop-up (pairt met #88).
