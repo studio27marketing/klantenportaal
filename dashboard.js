@@ -37,7 +37,9 @@ const ENDPOINTS = {
   huisstijlUpload:   'https://hook.eu1.make.com/3eqyxbkejfhyz8w2kl62lp1lsxwfr2d0',
   huisstijlDelete:   'https://hook.eu1.make.com/irpo6iemme6qpfe75rr83brkj7ybftsd',
   // v3.1-7 — Facturatiegegevens opslaan (schrijft direct naar Bedrijven-taak custom fields)
-  facturatieSave:    'https://hook.eu1.make.com/41635fjyidjts4hlixkgxcsmo6apoe02'
+  facturatieSave:    'https://hook.eu1.make.com/41635fjyidjts4hlixkgxcsmo6apoe02',
+  // v3.1-7 deel B — Per-project facturatie-bevestiging bij goedkeuring (schrijft naar projecttaak-veld 42a0fd8e)
+  projectFacturatieSave: 'https://hook.eu1.make.com/cmqf97ej6aewxokt9g23tbff6gxg7frm'
 };
 
 /* =================================================================
@@ -3484,13 +3486,80 @@ async function submitFeedbackV2(){
     await new Promise(r => setTimeout(r, 800)); // mock
   }
   const allApproved = deliverables.every((_,i) => (state.fbState[i] || {}).choice === 'goedgekeurd');
+  state.fbState = {};
+  // v3.1-7 deel B: bij volledige goedkeuring van een DELIVERABLE-project → facturatiegegevens bevestigen.
+  // Enkel webdesign/branding/video/strategie/automation — NIET doorlopend (social/ads/seo) of opleidingen.
+  if(allApproved && disciplineCategory(proj.discipline) === 'deliverable'){
+    try { await showFactuurConfirmStep(proj); } catch(e){ console.warn('[Studio 27] facturatie-stap overgeslagen:', e); }
+  }
+  showFeedbackSuccess(allApproved);
+}
+
+// v3.1-7 deel B — feedback-successcherm (apart zodat de facturatie-stap ervóór kan komen)
+function showFeedbackSuccess(allApproved){
+  const modal = $('s27-modal');
+  const title = $('s27-modal-title'); if(title) title.textContent = allApproved ? 'Goedgekeurd' : 'Feedback ontvangen';
+  const sub = $('s27-modal-sub'); if(sub) sub.textContent = '';
   $('s27-modal-body').innerHTML = '<div class="s27-success" style="min-height:240px"><svg class="s27-success-check" viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" fill="#12AC4E" opacity="0.12"/><circle cx="60" cy="60" r="40" fill="#12AC4E"/><path d="M42 60 L54 72 L78 48" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>' +
     '<h2 class="s27-success-h2">' + (allApproved ? 'Bedankt — alles staat op <span style="color:var(--s27-green-ink)">groen</span>!' : 'Bedankt voor de <span style="color:var(--s27-blue-ink)">feedback</span>!') + '</h2>' +
     '<p class="s27-success-p">' + (allApproved ? 'Top dat alles in orde is — we ronden de taak nu af.' : 'We nemen je feedback mee. Je hoort van ons met de aangepaste versie.') + '</p>' +
   '</div>';
   $('s27-modal-foot').innerHTML = '<button type="button" class="s27-btn" id="s27-modal-cancel">Sluiten</button>';
   const cl = $('s27-modal-cancel'); if(cl) cl.addEventListener('click', closeModal);
-  state.fbState = {};
+  if(modal) modal.classList.add('open');
+}
+
+// v3.1-7 deel B — facturatie-bevestiging als modal-stap; resolve't wanneer klant bevestigt of overslaat
+function showFactuurConfirmStep(proj){
+  return new Promise(async (resolve) => {
+    let bc = state.bedrijfContent;
+    if(!bc && !state.demoMode && ENDPOINTS.bedrijfContent){
+      try {
+        const r = await api(ENDPOINTS.bedrijfContent, { bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token });
+        if(r.ok && r.data) bc = r.data;
+      } catch(e){}
+    }
+    bc = bc || {};
+    const btw = esc(bc.btw || '');
+    const mail = esc(bc.facturatie_email || '');
+    const modal = $('s27-modal');
+    const title = $('s27-modal-title'); if(title) title.textContent = 'Facturatiegegevens bevestigen';
+    const sub = $('s27-modal-sub'); if(sub) sub.textContent = 'Even checken vóór we factureren';
+    $('s27-modal-body').innerHTML =
+      '<div class="s27-factuurcheck">' +
+        '<p class="s27-factuurcheck-lead">Top dat alles goedgekeurd is! 🎉 We factureren straks <strong>' + esc(proj.naam || 'dit project') + '</strong>. Kloppen onderstaande gegevens voor <em>dit project</em>? Pas aan indien nodig — anders bevestig je gewoon.</p>' +
+        '<div class="s27-form-field"><label class="s27-readlabel" for="s27-fc-btw">Ondernemingsnummer / BTW</label><input id="s27-fc-btw" type="text" value="' + btw + '" placeholder="BE0xxx.xxx.xxx"></div>' +
+        '<div class="s27-form-field"><label class="s27-readlabel" for="s27-fc-mail">Facturatie-e-mail</label><input id="s27-fc-mail" type="email" value="' + mail + '" placeholder="facturen@bedrijf.be"></div>' +
+        '<div class="s27-form-field"><label class="s27-readlabel" for="s27-fc-opm">Extra opmerking voor dit project <span class="s27-info" tabindex="0" title="Bv. een PO-nummer, aparte referentie of afwijkend facturatie-adres specifiek voor dit project.">&#9432;</span></label><input id="s27-fc-opm" type="text" placeholder="Bv. PO-nummer PO-2026-044"></div>' +
+        '<p class="s27-factuurcheck-note">We tonen hier geen bedragen — die staan in je offerte. Wijzigingen gelden enkel voor dit project; je algemene gegevens blijven ongewijzigd.</p>' +
+      '</div>';
+    $('s27-modal-foot').innerHTML =
+      '<button type="button" class="s27-btn s27-btn-ghost" id="s27-fc-skip">Overslaan</button>' +
+      '<button type="button" class="s27-btn s27-btn-primary" id="s27-fc-confirm">Bevestigen</button>';
+    if(modal) modal.classList.add('open');
+    let done = false;
+    const finish = () => { if(done) return; done = true; resolve(); };
+    const skip = $('s27-fc-skip'); if(skip) skip.addEventListener('click', finish);
+    const conf = $('s27-fc-confirm');
+    if(conf) conf.addEventListener('click', async () => {
+      conf.disabled = true; conf.textContent = 'Bevestigen…';
+      const payload = {
+        task_id: proj.task_id,
+        bedrijf_id: state.session.bedrijf_id,
+        session_token: state.session.session_token,
+        klant_naam: state.session.bedrijfsnaam,
+        project_naam: proj.naam || '',
+        ondernemingsnummer: (($('s27-fc-btw') || {}).value || '').trim(),
+        facturatie_email: (($('s27-fc-mail') || {}).value || '').trim(),
+        opmerking: (($('s27-fc-opm') || {}).value || '').trim()
+      };
+      try {
+        if(ENDPOINTS.projectFacturatieSave && !state.demoMode) await api(ENDPOINTS.projectFacturatieSave, payload);
+        else await new Promise(r => setTimeout(r, 300));
+      } catch(e){ console.warn('[Studio 27] project-facturatie-save faalde:', e); }
+      finish();
+    });
+  });
 }
 
 function closeModal(){ $('s27-modal').classList.remove('open'); }

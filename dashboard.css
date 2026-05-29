@@ -301,6 +301,13 @@ body { margin:0; background:var(--s27-paper-2); }
 /* v3.1-7 — info-tooltip badge (bv. PO-nummer uitleg bij facturatie-opmerkingen) */
 .s27-info { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; margin-left:4px; font-size:11px; line-height:1; color:var(--s27-blue-ink); background:var(--s27-blue,#eef2ff); border-radius:50%; cursor:help; vertical-align:middle; text-transform:none; font-weight:700; }
 .s27-info:hover, .s27-info:focus { background:var(--s27-blue-ink,#3b5bdb); color:#fff; outline:none; }
+/* v3.1-7 deel B — facturatie-bevestiging modal-stap */
+.s27-factuurcheck { display:flex; flex-direction:column; gap:14px; }
+.s27-factuurcheck-lead { font-family:var(--font-body); font-size:14px; color:var(--s27-ink); line-height:1.5; margin:0; }
+.s27-factuurcheck .s27-form-field { display:flex; flex-direction:column; gap:5px; }
+.s27-factuurcheck .s27-form-field input { font-family:var(--font-body); font-size:14px; padding:10px 12px; border:1.5px solid var(--s27-line); border-radius:var(--r-sm); background:#fff; color:var(--s27-ink); }
+.s27-factuurcheck .s27-form-field input:focus { border-color:var(--s27-blue); outline:none; }
+.s27-factuurcheck-note { font-family:var(--font-body); font-size:12px; color:var(--s27-ink-3); line-height:1.45; margin:2px 0 0; padding-top:10px; border-top:1px solid var(--s27-line); }
 .s27-contactform-readonly .s27-form-field input { display:none; }
 /* Section-head met edit-knop rechts */
 .s27-section-head { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; margin-bottom:14px; }
