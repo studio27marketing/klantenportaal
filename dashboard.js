@@ -73,6 +73,9 @@ function categoryFromFilename(name){
 function getMockBedrijfContent(){
   return {
     algemene_voorkeuren: '',
+    btw: 'BE0123.456.789',
+    facturatie_email: 'facturen@testclient.be',
+    facturatie_opmerkingen: 'PO-nummer PO-2026-001 vermelden op elke factuur',
     categorieen: {
       logos: [], fonts: [], kleuren: [], brand_pdfs: [], fotos: [], overig: []
     }
