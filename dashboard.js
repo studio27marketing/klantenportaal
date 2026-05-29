@@ -89,6 +89,16 @@ const DISCIPLINES = [
   { id:'automation',       label:'Automations',        icon:'s27p-auto' },
   { id:'strategie',        label:'Strategie',          icon:'s27p-strat' }
 ];
+
+// v3.1-5: project-categorie bepaalt in welke tab een project hoort.
+// deliverable = feedback/goedgekeurd-flow (Projecten-tab). doorlopend = retainer, werkt anders (Doorlopend-tab). opleiding = eigen tab.
+const DISC_CATEGORY = {
+  webdesign:'deliverable', branding:'deliverable', video_fotografie:'deliverable', strategie:'deliverable', automation:'deliverable',
+  social:'doorlopend', ads:'doorlopend', seo:'doorlopend',
+  opleiding:'opleiding'
+};
+function disciplineCategory(disc){ return DISC_CATEGORY[disc] || 'deliverable'; }
+function projectsInCategory(d, cat){ return ((d && d.actieve_projecten) || []).filter(p => disciplineCategory(p.discipline) === cat); }
 const STATUS_LABELS = {
   'to_do':'Te plannen', 'in_progress':'In productie', 'doorgestuurd':'Klaar voor review',
   'goedgekeurd':'Goedgekeurd', 'done':'Afgerond', 'on_hold':'On hold',
@@ -386,25 +396,30 @@ function isAfgerondStatus(p){
 
 function renderHubBody(d){
   const body = $('s27-dash-body'); if(!body) return;
-  const all = d.actieve_projecten || [];
-  const lopend = all.filter(p => !isAfgerondStatus(p)).length;
-  const wacht = all.filter(p => matchesStatusFilter(p, 'wacht_feedback')).length;
+  const deliverable = projectsInCategory(d, 'deliverable');
+  const lopend = deliverable.filter(p => !isAfgerondStatus(p)).length;
+  const wacht = deliverable.filter(p => matchesStatusFilter(p, 'wacht_feedback')).length;
+  const doorlopendCount = projectsInCategory(d, 'doorlopend').length;
+  const opleidingCount = projectsInCategory(d, 'opleiding').length;
   const meetings = d.aankomende_meetings || [];
-  const projMeta = lopend + ' lopend' + (wacht ? ' · ' + wacht + ' wacht op jou' : '');
+  const projMeta = (lopend ? lopend + ' lopend' : 'Geen lopende') + (wacht ? ' · ' + wacht + ' wacht op jou' : '');
+  const grid = [
+    hubCard('projecten','s27p-inbox','#3083DC','Projecten', projMeta, 'Website, branding, video & strategie — geef feedback en keur opleveringen goed.'),
+    hubCard('doorlopend','s27p-soc','#F66131','Doorlopend', (doorlopendCount ? doorlopendCount + ' actief' : 'Geen actief'), 'Social, advertenties en SEO/GEO — trajecten die continu lopen.'),
+    hubCard('opleidingen','s27p-opl','#12AC4E','Opleidingen', (opleidingCount ? opleidingCount + ' lopend' : 'Geen lopende'), 'Je opleidingen en workshops bij Studio 27 — planning en materiaal.'),
+    hubCard('__perf','s27p-spark','#9441DB','Statistieken','Binnenkort','Je advertentie- en websiteresultaten in één oogopslag.', true),
+    hubCard('meetings','s27p-cal','#3083DC','Meetings', (meetings.length ? meetings.length + ' gepland' : 'Plan een meeting'), 'Bekijk je agenda en plan zelf een nieuw overleg in.'),
+    hubCard('bedrijf','s27p-brand','#9441DB','Mijn bedrijf','Huisstijl & gegevens','Logo, fonts, contactgegevens en voorkeuren — altijd up-to-date.'),
+    hubCard('nieuw','s27p-upload','#F8C028','Nieuw project','Start hier','Vertel je idee en krijg meteen een prijsindicatie op maat.'),
+    hubCard('instellingen','s27p-user','#6B5B6B','Instellingen','Notificaties','Kies hoe je updates krijgt en beheer je gegevens.')
+  ].join('');
   body.innerHTML =
     '<button type="button" class="s27-hub-bot" data-bot-open="1">' +
       '<span class="s27-hub-bot-ic">✦</span>' +
       '<span class="s27-hub-bot-txt"><strong>Vraag het de assistent</strong><span>Hoever staat een project? Wanneer is iets klaar? Stel je vraag — je krijgt meteen antwoord.</span></span>' +
       '<span class="s27-hub-bot-cta">Open chat →</span>' +
     '</button>' +
-    '<div class="s27-hub-grid">' +
-      hubCard('projecten','s27p-inbox','#3083DC','Projecten', projMeta, 'Volg je lopende én opgeleverde projecten, geef feedback en chat per project.') +
-      hubCard('__perf','s27p-spark','#9441DB','Statistieken','Binnenkort','Je advertentie- en websiteresultaten in één oogopslag.', true) +
-      hubCard('meetings','s27p-cal','#12AC4E','Meetings', (meetings.length ? meetings.length + ' gepland' : 'Plan een meeting'), 'Bekijk je agenda en plan zelf een nieuw overleg in.') +
-      hubCard('bedrijf','s27p-brand','#F66131','Mijn bedrijf','Huisstijl & gegevens','Logo, fonts, contactgegevens en voorkeuren — altijd up-to-date.') +
-      hubCard('nieuw','s27p-upload','#F8C028','Nieuw project','Start hier','Vertel je idee en krijg meteen een prijsindicatie op maat.') +
-      hubCard('instellingen','s27p-user','#6B5B6B','Instellingen','Notificaties','Kies hoe je updates krijgt en beheer je gegevens.') +
-    '</div>' +
+    '<div class="s27-hub-grid">' + grid + '</div>' +
     '<div class="s27-meetings-mini">' +
       '<div class="s27-meetings-mini-head"><strong>Aankomende meetings</strong>' +
       (meetings.length ? '<button class="s27-mini-cta" data-go-tab="meetings">Alle ' + meetings.length + ' bekijken →</button>' : '') + '</div>' +
@@ -436,7 +451,8 @@ function renderProjecten(){
   const body = $('s27-projecten-body'); if(!body) return;
   const d = state.dashboard;
   if(!d){ body.innerHTML = '<div class="s27-loading">Projecten laden</div>'; return; }
-  const allProjecten = d.actieve_projecten || [];
+  // v3.1-5: enkel deliverable-disciplines (web, branding, video, strategie). Doorlopend + opleiding hebben eigen tab.
+  const allProjecten = projectsInCategory(d, 'deliverable');
 
   // Tellingen per filter (opgeleverd = archief-telling)
   const counts = {};
@@ -998,6 +1014,63 @@ function attachProjectenHandlers(){
   });
 }
 
+// v3.1-5: DOORLOPENDE projecten (social/ads/seo) — retainer, geen feedback/goedgekeurd-flow.
+function renderDoorlopend(){
+  const body = $('s27-doorlopend-body'); if(!body) return;
+  const d = state.dashboard;
+  if(!d){ body.innerHTML = '<div class="s27-loading">Laden…</div>'; return; }
+  const projs = projectsInCategory(d, 'doorlopend');
+  const intro = '<div class="s27-doorlopend-intro">' +
+    '<span class="s27-doorlopend-intro-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.22-8.56"/><polyline points="21 4 21 9 16 9"/></svg></span>' +
+    '<div><strong>Doorlopende trajecten</strong><p>Social media, advertenties en SEO/GEO lopen continu — geen losse opleveringen, maar maandelijkse opvolging. De gedetailleerde resultaten komen in <em>Statistieken</em> (binnenkort).</p></div></div>';
+  if(!projs.length){
+    body.innerHTML = intro + '<div class="s27-empty"><div class="s27-empty-title">Nog geen doorlopende trajecten</div><p class="s27-empty-sub">Zodra een social-, ads- of SEO/GEO-traject loopt, vind je het hier terug.</p></div>';
+    return;
+  }
+  const byDisc = groupBy(projs, p => p.discipline);
+  let html = intro + '<div class="s27-acc-list">';
+  Object.keys(byDisc).forEach(key => {
+    const meta = discMeta(key);
+    html += '<div class="s27-doorlopend-group">' +
+      '<div class="s27-doorlopend-group-head"><span class="s27-acc-icon"><svg width="16" height="16" viewBox="0 0 24 24"><use href="#' + meta.icon + '"/></svg></span>' +
+        '<span class="s27-acc-title">' + esc(meta.label) + '</span><span class="s27-acc-count">' + byDisc[key].length + '</span></div>' +
+      '<div class="s27-acc-body">' + byDisc[key].map(renderDoorlopendCard).join('') + '</div></div>';
+  });
+  html += '</div>';
+  body.innerHTML = html;
+  body.querySelectorAll('.s27-projc').forEach(el => {
+    el.addEventListener('click', () => openProjectDetail(el.dataset.taskId));
+    el.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); openProjectDetail(el.dataset.taskId); } });
+  });
+}
+
+function renderDoorlopendCard(p){
+  const statusKey = (p.status || 'in_progress').toLowerCase().replace(/\s+/g,'_');
+  const statusLabel = p.status_label || STATUS_LABELS[statusKey] || p.status || 'Loopt';
+  return '<div class="s27-projc" data-task-id="' + esc(p.task_id || '') + '" tabindex="0" role="button" aria-label="' + esc(p.naam) + '">' +
+    '<div class="s27-projc-main"><div class="s27-projc-name">' + esc(p.naam || 'Traject') + '</div>' +
+      '<div class="s27-projc-meta"><span>🔄 Loopt continu</span>' + (p.laatst_geupdatet ? '<span>· ' + esc(fmtRelTime(p.laatst_geupdatet)) + '</span>' : '') + '</div></div>' +
+    '<div class="s27-projc-right"><span class="s27-projc-status" data-status="' + esc(statusKey) + '">' + esc(statusLabel) + '</span><span class="s27-projc-arrow">→</span></div></div>';
+}
+
+// v3.1-5: OPLEIDINGEN — eigen tab.
+function renderOpleidingen(){
+  const body = $('s27-opleidingen-body'); if(!body) return;
+  const d = state.dashboard;
+  if(!d){ body.innerHTML = '<div class="s27-loading">Laden…</div>'; return; }
+  const projs = projectsInCategory(d, 'opleiding');
+  if(!projs.length){
+    body.innerHTML = '<div class="s27-empty"><div class="s27-empty-icon"><svg width="22" height="22"><use href="#s27p-opl"/></svg></div>' +
+      '<div class="s27-empty-title">Nog geen opleidingen</div><p class="s27-empty-sub">Zodra je een opleiding of workshop bij Studio 27 volgt, vind je hier de planning en het materiaal terug.</p></div>';
+    return;
+  }
+  body.innerHTML = '<div class="s27-acc-list"><div class="s27-acc-body">' + projs.map(renderProjectCompact).join('') + '</div></div>';
+  body.querySelectorAll('.s27-projc').forEach(el => {
+    el.addEventListener('click', () => openProjectDetail(el.dataset.taskId));
+    el.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); openProjectDetail(el.dataset.taskId); } });
+  });
+}
+
 // v3-C: global handler — links met data-goto-tab springen naar een tab
 document.addEventListener('click', e => {
   const t = e.target.closest && e.target.closest('[data-goto-tab]');
@@ -1017,6 +1090,8 @@ function switchTab(tabId){
   });
   // Lazy-render placeholder tabs
   if(tabId === 'projecten')    renderProjecten();
+  if(tabId === 'doorlopend')   renderDoorlopend();
+  if(tabId === 'opleidingen')  renderOpleidingen();
   if(tabId === 'bedrijf')      renderBedrijfTab();
   if(tabId === 'nieuw')        renderNieuwTab();
   if(tabId === 'instellingen') renderInstellingenTab();
@@ -1429,11 +1504,11 @@ function renderCategoryItem(item, cat){
 // v3.1: opgeleverde/goedgekeurde projecten (archief) — bron voor de "Opgeleverd"-filter in Projecten.
 function getOpgeleverdProjects(dash){
   dash = dash || state.dashboard || {};
-  const goedgekeurdActief = (dash.actieve_projecten || []).filter(isAfgerondStatus).map(p => ({
+  const goedgekeurdActief = (dash.actieve_projecten || []).filter(p => isAfgerondStatus(p) && disciplineCategory(p.discipline) === 'deliverable').map(p => ({
     task_id: p.task_id, naam: p.naam, discipline: p.discipline,
     afgerond_op: p.opleverdatum || '', deliverables: p.deliverables || []
   }));
-  const historie = (dash.historie_3mnd || []).map(p => ({
+  const historie = (dash.historie_3mnd || []).filter(p => disciplineCategory(p.discipline) === 'deliverable').map(p => ({
     task_id: p.task_id, naam: p.naam, discipline: p.discipline,
     afgerond_op: p.afgerond_op || '', deliverables: p.deliverables || []
   }));
@@ -3301,7 +3376,9 @@ function getDemoData(){
       { task_id:'demo-web-2', naam:'Landingspagina voorjaarscampagne', discipline:'webdesign', status:'doorgestuurd', opleverdatum:'2026-06-08', voortgang_pct:90, type:'Landing page', laatst_geupdatet: new Date(Date.now()-3600000*1).toISOString(), feedback_link:'https://studio27.be/design-feedback?taskId=demo-web-2' },
       { task_id:'demo-brd-1', naam:'Brand refresh logo + kleuren',  discipline:'branding',  status:'in_progress', opleverdatum:'2026-06-20', voortgang_pct:35, type:'Brand identity', laatst_geupdatet: new Date(Date.now()-3600000*48).toISOString() },
       { task_id:'demo-soc-1', naam:'Social media juni 2026',         discipline:'social',    status:'in_progress', opleverdatum:'2026-06-01', voortgang_pct:60, type:'Retainer maandelijks', laatst_geupdatet: new Date(Date.now()-3600000*12).toISOString() },
-      { task_id:'demo-ads-1', naam:'Google Ads + Meta zomercampagne',discipline:'ads',       status:'in_progress', opleverdatum:'2026-06-01', voortgang_pct:50, type:'Performance', laatst_geupdatet: new Date(Date.now()-3600000*36).toISOString() }
+      { task_id:'demo-ads-1', naam:'Google Ads + Meta zomercampagne',discipline:'ads',       status:'in_progress', opleverdatum:'2026-06-01', voortgang_pct:50, type:'Performance', laatst_geupdatet: new Date(Date.now()-3600000*36).toISOString() },
+      { task_id:'demo-seo-1', naam:'SEO/GEO optimalisatie',          discipline:'seo',       status:'in_progress', type:'Doorlopend traject', laatst_geupdatet: new Date(Date.now()-3600000*20).toISOString() },
+      { task_id:'demo-opl-1', naam:'Opleiding social media beheer',  discipline:'opleiding', status:'in_progress', opleverdatum:'2026-06-18', type:'1-op-1 sessie', laatst_geupdatet: new Date(Date.now()-3600000*30).toISOString() }
     ],
     historie_3mnd: [
       { task_id:'demo-h1', naam:'Aftermovie teamevent maart', discipline:'video_fotografie', afgerond_op:'2026-04-12', deliverables:[ { label:'Vimeo final', url:'https://vimeo.com/example' }, { label:'Drive', url:'https://drive.google.com/example' } ] },
