@@ -308,6 +308,19 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-factuurcheck .s27-form-field input { font-family:var(--font-body); font-size:14px; padding:10px 12px; border:1.5px solid var(--s27-line); border-radius:var(--r-sm); background:#fff; color:var(--s27-ink); }
 .s27-factuurcheck .s27-form-field input:focus { border-color:var(--s27-blue); outline:none; }
 .s27-factuurcheck-note { font-family:var(--font-body); font-size:12px; color:var(--s27-ink-3); line-height:1.45; margin:2px 0 0; padding-top:10px; border-top:1px solid var(--s27-line); }
+/* v3.1-7 — facturatie per project (rijen op Facturatie-tab) */
+.s27-factuurprojects { display:flex; flex-direction:column; gap:10px; }
+.s27-fpr { border:1px solid var(--s27-line); border-radius:var(--r-sm); background:var(--s27-paper); overflow:hidden; }
+.s27-fpr-head { display:flex; align-items:center; gap:12px; padding:12px 16px; }
+.s27-fpr-disc { flex-shrink:0; font-family:var(--font-display); font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; color:var(--accent,#3083dc); background:color-mix(in srgb, var(--accent,#3083dc) 12%, #fff); padding:3px 9px; border-radius:var(--r-pill); }
+.s27-fpr-name { flex:1; min-width:0; font-family:var(--font-display); font-size:14px; font-weight:800; color:var(--s27-ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.s27-fpr-badge { flex-shrink:0; font-family:var(--font-display); font-size:11.5px; font-weight:700; color:var(--s27-green-ink,#12772f); background:#e6f6ec; padding:3px 9px; border-radius:var(--r-pill); }
+.s27-fpr-editor { padding:0 16px 16px; display:flex; flex-direction:column; gap:12px; border-top:1px solid var(--s27-line); padding-top:14px; }
+.s27-fpr-editor .s27-form-field { display:flex; flex-direction:column; gap:5px; }
+.s27-fpr-editor input { font-family:var(--font-body); font-size:14px; padding:10px 12px; border:1.5px solid var(--s27-line); border-radius:var(--r-sm); background:#fff; color:var(--s27-ink); }
+.s27-fpr-editor input:focus { border-color:var(--s27-blue); outline:none; }
+.s27-fpr-foot { display:flex; align-items:center; justify-content:flex-end; gap:10px; }
+.s27-fpr-state { margin-right:auto; font-family:var(--font-body); font-size:12.5px; color:var(--s27-ink-3); }
 .s27-contactform-readonly .s27-form-field input { display:none; }
 /* Section-head met edit-knop rechts */
 .s27-section-head { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; margin-bottom:14px; }

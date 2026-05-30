@@ -1130,6 +1130,7 @@ function switchTab(tabId){
   if(tabId === 'doorlopend')   renderDoorlopend();
   if(tabId === 'opleidingen')  renderOpleidingen();
   if(tabId === 'bedrijf')      renderBedrijfTab();
+  if(tabId === 'facturatie')   renderFacturatieTab();
   if(tabId === 'nieuw')        renderNieuwTab();
   if(tabId === 'instellingen') renderInstellingenTab();
   if(tabId === 'meetings')     renderMeetingsTab();
@@ -1260,32 +1261,6 @@ async function renderBedrijfTab(){
           <span class="s27-contactform-state" id="s27-contactform-state"></span>
           <button class="s27-btn s27-btn-ghost s27-btn-sm" id="s27-contactform-cancel">Annuleer</button>
           <button class="s27-btn s27-btn-sm s27-btn-primary" id="s27-contactform-save">Wijzigingen opslaan</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="s27-section">
-      <div class="s27-section-head">
-        <div>
-          <h2 class="s27-section-title">Facturatiegegevens</h2>
-          <p class="s27-section-sub">Deze gegevens gebruiken we voor je facturen. Pas je iets aan? Dan verwerken Ilke en Arne het in onze administratie.</p>
-        </div>
-        <button class="s27-btn s27-btn-ghost s27-btn-sm" id="s27-factuur-edit-btn">✏️ Bewerken</button>
-      </div>
-      <div class="s27-contactform s27-contactform-readonly" id="s27-factuurform" data-edit-mode="off">
-        <div class="s27-form-row">
-          <div class="s27-form-field s27-readfield"><span class="s27-readlabel">Ondernemingsnummer / BTW</span><div class="s27-readvalue">${data.btw ? esc(data.btw) : '—'}</div><input type="text" name="ondernemingsnummer" value="${esc(data.btw||'')}" placeholder="BE0xxx.xxx.xxx" hidden/></div>
-          <div class="s27-form-field s27-readfield"><span class="s27-readlabel">Facturatie-e-mail</span><div class="s27-readvalue">${data.facturatie_email ? esc(data.facturatie_email) : '—'}</div><input type="email" name="facturatie_email" value="${esc(data.facturatie_email||'')}" placeholder="facturen@bedrijf.be" hidden/></div>
-        </div>
-        <div class="s27-form-field s27-readfield">
-          <span class="s27-readlabel">Facturatie-opmerkingen <span class="s27-info" tabindex="0" title="Bv. een PO-nummer dat verplicht op elke factuur moet, een vaste referentie, kostenplaats of afdeling.">&#9432;</span></span>
-          <div class="s27-readvalue">${data.facturatie_opmerkingen ? esc(data.facturatie_opmerkingen) : '—'}</div>
-          <input type="text" name="facturatie_opmerkingen" value="${esc(data.facturatie_opmerkingen||'')}" placeholder="Bv. PO-nummer PO-2026-001 vermelden op elke factuur" hidden/>
-        </div>
-        <div class="s27-contactform-foot" id="s27-factuurform-foot" hidden>
-          <span class="s27-contactform-state" id="s27-factuurform-state"></span>
-          <button class="s27-btn s27-btn-ghost s27-btn-sm" id="s27-factuurform-cancel">Annuleer</button>
-          <button class="s27-btn s27-btn-sm s27-btn-primary" id="s27-factuurform-save">Wijzigingen opslaan</button>
         </div>
       </div>
     </div>
@@ -1484,6 +1459,208 @@ function getMockHuisstijlFiles(){
   ];
 }
 
+/* =================================================================
+   FACTURATIE-TABBLAD (v3.1-7) — bedrijfsbrede gegevens + per-project bevestiging
+   ================================================================= */
+async function renderFacturatieTab(){
+  const body = $('s27-facturatie-body');
+  if(!body) return;
+  body.innerHTML = '<div class="s27-loading">Facturatie laden</div>';
+  let data;
+  if(state.demoMode || !ENDPOINTS.bedrijfContent){
+    data = getMockBedrijfContent();
+  } else {
+    const res = await api(ENDPOINTS.bedrijfContent, { bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token });
+    data = (res.ok && res.data && !res.data.error) ? res.data : getMockBedrijfContent();
+  }
+  state.bedrijfContent = data;
+
+  const projs = ((state.dashboard && state.dashboard.actieve_projecten) || []).filter(p => disciplineCategory(p.discipline) === 'deliverable');
+  const confirmed = loadFactuurConfirmCache();
+
+  body.innerHTML = `
+    <div class="s27-section">
+      <div class="s27-section-head">
+        <div>
+          <h2 class="s27-section-title">Algemene facturatiegegevens</h2>
+          <p class="s27-section-sub">Deze gegevens gebruiken we standaard voor àl je facturen. Pas je iets aan? Dan verwerken Ilke en Arne het in onze administratie.</p>
+        </div>
+        <button class="s27-btn s27-btn-ghost s27-btn-sm" id="s27-factuur-edit-btn">✏️ Bewerken</button>
+      </div>
+      <div class="s27-contactform s27-contactform-readonly" id="s27-factuurform" data-edit-mode="off">
+        <div class="s27-form-row">
+          <div class="s27-form-field s27-readfield"><span class="s27-readlabel">Ondernemingsnummer / BTW</span><div class="s27-readvalue">${data.btw ? esc(data.btw) : '—'}</div><input type="text" name="ondernemingsnummer" value="${esc(data.btw||'')}" placeholder="BE0xxx.xxx.xxx" hidden/></div>
+          <div class="s27-form-field s27-readfield"><span class="s27-readlabel">Facturatie-e-mail</span><div class="s27-readvalue">${data.facturatie_email ? esc(data.facturatie_email) : '—'}</div><input type="email" name="facturatie_email" value="${esc(data.facturatie_email||'')}" placeholder="facturen@bedrijf.be" hidden/></div>
+        </div>
+        <div class="s27-form-field s27-readfield">
+          <span class="s27-readlabel">Facturatie-opmerkingen <span class="s27-info" tabindex="0" title="Bv. een PO-nummer dat verplicht op elke factuur moet, een vaste referentie, kostenplaats of afdeling.">&#9432;</span></span>
+          <div class="s27-readvalue">${data.facturatie_opmerkingen ? esc(data.facturatie_opmerkingen) : '—'}</div>
+          <input type="text" name="facturatie_opmerkingen" value="${esc(data.facturatie_opmerkingen||'')}" placeholder="Bv. PO-nummer PO-2026-001 vermelden op elke factuur" hidden/>
+        </div>
+        <div class="s27-contactform-foot" id="s27-factuurform-foot" hidden>
+          <span class="s27-contactform-state" id="s27-factuurform-state"></span>
+          <button class="s27-btn s27-btn-ghost s27-btn-sm" id="s27-factuurform-cancel">Annuleer</button>
+          <button class="s27-btn s27-btn-sm s27-btn-primary" id="s27-factuurform-save">Wijzigingen opslaan</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="s27-section">
+      <div class="s27-section-head">
+        <div>
+          <h2 class="s27-section-title">Facturatie per project</h2>
+          <p class="s27-section-sub">Wijkt de facturatie voor een specifiek project af (ander BTW-nummer, PO-nummer, aparte referentie)? Bevestig of pas het hier aan — enkel voor dat project. Doorlopende trajecten (social, ads, SEO) staan hier niet tussen.</p>
+        </div>
+      </div>
+      <div class="s27-factuurprojects" id="s27-factuurprojects">
+        ${projs.length ? projs.map(p => renderFactuurProjectRow(p, confirmed[p.task_id])).join('') : '<div class="s27-files-empty"><div class="s27-files-empty-icon">🧾</div><strong>Nog geen projecten om te factureren</strong><p>Zodra je een project hebt dat we factureren, verschijnt het hier.</p></div>'}
+      </div>
+    </div>
+  `;
+  wireFacturatieForm();
+  attachFactuurProjectHandlers();
+
+  // deep-link vanuit de goedkeuring-pop-up: open meteen de juiste project-rij
+  if(state.facturatiePendingProject){
+    const pid = state.facturatiePendingProject; state.facturatiePendingProject = null;
+    const sel = (window.CSS && CSS.escape) ? CSS.escape(pid) : pid;
+    const row = document.querySelector('.s27-fpr[data-task-id="' + sel + '"]');
+    if(row){ const btn = row.querySelector('.s27-fpr-toggle'); if(btn) btn.click(); setTimeout(() => row.scrollIntoView({ behavior:'smooth', block:'center' }), 60); }
+  }
+}
+
+function renderFactuurProjectRow(p, isConfirmed){
+  const di = getDisciplineInfo(p.discipline);
+  const bc = state.bedrijfContent || {};
+  return `<div class="s27-fpr" data-task-id="${esc(p.task_id)}">
+    <div class="s27-fpr-head">
+      <span class="s27-fpr-disc" style="--accent:${di.accent}">${esc(di.label)}</span>
+      <div class="s27-fpr-name">${esc(p.naam || 'Project')}</div>
+      ${isConfirmed ? '<span class="s27-fpr-badge">✓ Bevestigd</span>' : ''}
+      <button type="button" class="s27-btn s27-btn-ghost s27-btn-sm s27-fpr-toggle">${isConfirmed ? 'Aanpassen' : 'Bevestig facturatie'}</button>
+    </div>
+    <div class="s27-fpr-editor" hidden>
+      <div class="s27-form-row">
+        <div class="s27-form-field"><label class="s27-readlabel">Ondernemingsnummer / BTW</label><input type="text" name="ondernemingsnummer" value="${esc(bc.btw||'')}" placeholder="BE0xxx.xxx.xxx"></div>
+        <div class="s27-form-field"><label class="s27-readlabel">Facturatie-e-mail</label><input type="email" name="facturatie_email" value="${esc(bc.facturatie_email||'')}" placeholder="facturen@bedrijf.be"></div>
+      </div>
+      <div class="s27-form-field"><label class="s27-readlabel">Opmerking voor dit project <span class="s27-info" tabindex="0" title="Bv. een PO-nummer, aparte referentie of afwijkend facturatie-adres specifiek voor dit project.">&#9432;</span></label><input type="text" name="opmerking" placeholder="Bv. PO-nummer PO-2026-044"></div>
+      <p class="s27-factuurcheck-note">Wijzigingen gelden enkel voor dit project; je algemene gegevens blijven ongewijzigd.</p>
+      <div class="s27-fpr-foot">
+        <span class="s27-fpr-state"></span>
+        <button type="button" class="s27-btn s27-btn-ghost s27-btn-sm s27-fpr-cancel">Annuleer</button>
+        <button type="button" class="s27-btn s27-btn-sm s27-btn-primary s27-fpr-save">Bevestigen</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function attachFactuurProjectHandlers(){
+  document.querySelectorAll('.s27-fpr').forEach(row => {
+    const toggle = row.querySelector('.s27-fpr-toggle');
+    const editor = row.querySelector('.s27-fpr-editor');
+    const cancel = row.querySelector('.s27-fpr-cancel');
+    const save = row.querySelector('.s27-fpr-save');
+    const stateEl = row.querySelector('.s27-fpr-state');
+    if(toggle && editor) toggle.addEventListener('click', () => { editor.hidden = !editor.hidden; });
+    if(cancel && editor) cancel.addEventListener('click', () => { editor.hidden = true; });
+    if(save) save.addEventListener('click', async () => {
+      save.disabled = true; save.textContent = 'Bevestigen…'; if(stateEl) stateEl.textContent = 'Bezig…';
+      const get = n => { const el = row.querySelector('[name="'+n+'"]'); return el ? el.value.trim() : ''; };
+      const payload = {
+        task_id: row.dataset.taskId,
+        bedrijf_id: state.session.bedrijf_id,
+        session_token: state.session.session_token,
+        klant_naam: state.session.bedrijfsnaam,
+        project_naam: ((row.querySelector('.s27-fpr-name') || {}).textContent || '').trim(),
+        ondernemingsnummer: get('ondernemingsnummer'),
+        facturatie_email: get('facturatie_email'),
+        opmerking: get('opmerking')
+      };
+      try {
+        if(ENDPOINTS.projectFacturatieSave && !state.demoMode) await api(ENDPOINTS.projectFacturatieSave, payload);
+        else await new Promise(r => setTimeout(r, 300));
+        markFactuurConfirmed(payload.task_id);
+        if(stateEl) stateEl.textContent = '✓ Bevestigd';
+        setTimeout(() => renderFacturatieTab(), 700);
+      } catch(err){
+        console.error('[Studio 27] project-facturatie save failed:', err);
+        if(stateEl) stateEl.textContent = 'Iets ging mis — probeer opnieuw';
+        save.disabled = false; save.textContent = 'Bevestigen';
+      }
+    });
+  });
+}
+
+// Company-brede facturatie-form (verplaatst uit Mijn bedrijf naar Facturatie-tab)
+function wireFacturatieForm(){
+  const factuurForm = $('s27-factuurform');
+  const factuurEditBtn = $('s27-factuur-edit-btn');
+  const factuurSave = $('s27-factuurform-save');
+  const factuurCancel = $('s27-factuurform-cancel');
+  const factuurFoot = $('s27-factuurform-foot');
+  const factuurState = $('s27-factuurform-state');
+  function toggleFactuurEdit(on){
+    if(!factuurForm) return;
+    factuurForm.dataset.editMode = on ? 'on' : 'off';
+    factuurForm.classList.toggle('s27-contactform-readonly', !on);
+    factuurForm.querySelectorAll('.s27-readfield').forEach(field => {
+      const readValue = field.querySelector('.s27-readvalue');
+      const input = field.querySelector('input');
+      if(readValue) readValue.hidden = on;
+      if(input) input.hidden = !on;
+    });
+    if(factuurFoot) factuurFoot.hidden = !on;
+    if(factuurEditBtn) factuurEditBtn.hidden = on;
+  }
+  if(factuurEditBtn) factuurEditBtn.addEventListener('click', () => toggleFactuurEdit(true));
+  if(factuurCancel) factuurCancel.addEventListener('click', () => { renderFacturatieTab(); });
+  if(factuurForm && factuurSave){
+    factuurSave.addEventListener('click', async () => {
+      factuurSave.disabled = true; factuurSave.textContent = 'Opslaan…';
+      if(factuurState) factuurState.textContent = 'Bezig…';
+      const get = n => { const el = factuurForm.querySelector('[name="'+n+'"]'); return el ? el.value.trim() : ''; };
+      const payload = {
+        bedrijf_id: state.session.bedrijf_id,
+        session_token: state.session.session_token,
+        klant_naam: state.session.bedrijfsnaam,
+        ondernemingsnummer: get('ondernemingsnummer'),
+        facturatie_email: get('facturatie_email'),
+        facturatie_opmerkingen: get('facturatie_opmerkingen')
+      };
+      try {
+        if(ENDPOINTS.facturatieSave && !state.demoMode){ await api(ENDPOINTS.facturatieSave, payload); }
+        else { await new Promise(r => setTimeout(r, 400)); }
+        if(state.bedrijfContent){
+          state.bedrijfContent.btw = payload.ondernemingsnummer;
+          state.bedrijfContent.facturatie_email = payload.facturatie_email;
+          state.bedrijfContent.facturatie_opmerkingen = payload.facturatie_opmerkingen;
+        }
+        factuurForm.querySelectorAll('.s27-readfield').forEach(field => {
+          const input = field.querySelector('input');
+          const readValue = field.querySelector('.s27-readvalue');
+          if(input && readValue) readValue.textContent = input.value || '—';
+        });
+        if(factuurState) factuurState.textContent = '✓ Opgeslagen — Ilke en Arne werken het bij';
+        setTimeout(() => toggleFactuurEdit(false), 900);
+      } catch(err){
+        console.error('[Studio 27] facturatie save failed:', err);
+        if(factuurState) factuurState.textContent = 'Iets ging mis — probeer opnieuw';
+      }
+      factuurSave.disabled = false; factuurSave.textContent = 'Wijzigingen opslaan';
+      setTimeout(() => { if(factuurState) factuurState.textContent = ''; }, 4000);
+    });
+  }
+}
+
+function loadFactuurConfirmCache(){
+  try { return JSON.parse(localStorage.getItem('s27_factuur_confirm_' + (state.session && state.session.bedrijf_id)) || '{}'); }
+  catch(e){ return {}; }
+}
+function markFactuurConfirmed(taskId){
+  try { const c = loadFactuurConfirmCache(); c[taskId] = true; localStorage.setItem('s27_factuur_confirm_' + (state.session && state.session.bedrijf_id), JSON.stringify(c)); } catch(e){}
+}
+
 function renderFilePreviewTiny(item, cat){
   const fn = item.filename || item.name || '';
   const ext = (fn.split('.').pop() || '').toLowerCase();
@@ -1588,66 +1765,6 @@ function attachBedrijfHandlers(){
       }
       contactSave.disabled = false; contactSave.textContent = 'Wijzigingen opslaan';
       setTimeout(() => { if(contactState) contactState.textContent = ''; }, 4000);
-    });
-  }
-
-  // v3.1-7 — Facturatiegegevens edit/save (schrijft direct naar Bedrijven-taak)
-  const factuurForm = $('s27-factuurform');
-  const factuurEditBtn = $('s27-factuur-edit-btn');
-  const factuurSave = $('s27-factuurform-save');
-  const factuurCancel = $('s27-factuurform-cancel');
-  const factuurFoot = $('s27-factuurform-foot');
-  const factuurState = $('s27-factuurform-state');
-  function toggleFactuurEdit(on){
-    if(!factuurForm) return;
-    factuurForm.dataset.editMode = on ? 'on' : 'off';
-    factuurForm.classList.toggle('s27-contactform-readonly', !on);
-    factuurForm.querySelectorAll('.s27-readfield').forEach(field => {
-      const readValue = field.querySelector('.s27-readvalue');
-      const input = field.querySelector('input');
-      if(readValue) readValue.hidden = on;
-      if(input) input.hidden = !on;
-    });
-    if(factuurFoot) factuurFoot.hidden = !on;
-    if(factuurEditBtn) factuurEditBtn.hidden = on;
-  }
-  if(factuurEditBtn) factuurEditBtn.addEventListener('click', () => toggleFactuurEdit(true));
-  if(factuurCancel) factuurCancel.addEventListener('click', () => { renderBedrijfTab(); });
-  if(factuurForm && factuurSave){
-    factuurSave.addEventListener('click', async () => {
-      factuurSave.disabled = true; factuurSave.textContent = 'Opslaan…';
-      if(factuurState) factuurState.textContent = 'Bezig…';
-      const get = n => { const el = factuurForm.querySelector('[name="'+n+'"]'); return el ? el.value.trim() : ''; };
-      const payload = {
-        bedrijf_id: state.session.bedrijf_id,
-        session_token: state.session.session_token,
-        klant_naam: state.session.bedrijfsnaam,
-        ondernemingsnummer: get('ondernemingsnummer'),
-        facturatie_email: get('facturatie_email'),
-        facturatie_opmerkingen: get('facturatie_opmerkingen')
-      };
-      try {
-        if(ENDPOINTS.facturatieSave && !state.demoMode){
-          await api(ENDPOINTS.facturatieSave, payload);
-        } else { await new Promise(r => setTimeout(r, 400)); }
-        if(state.bedrijfContent){
-          state.bedrijfContent.btw = payload.ondernemingsnummer;
-          state.bedrijfContent.facturatie_email = payload.facturatie_email;
-          state.bedrijfContent.facturatie_opmerkingen = payload.facturatie_opmerkingen;
-        }
-        factuurForm.querySelectorAll('.s27-readfield').forEach(field => {
-          const input = field.querySelector('input');
-          const readValue = field.querySelector('.s27-readvalue');
-          if(input && readValue) readValue.textContent = input.value || '—';
-        });
-        if(factuurState) factuurState.textContent = '✓ Opgeslagen — Ilke en Arne werken het bij';
-        setTimeout(() => toggleFactuurEdit(false), 900);
-      } catch(err){
-        console.error('[Studio 27] facturatie save failed:', err);
-        if(factuurState) factuurState.textContent = 'Iets ging mis — probeer opnieuw';
-      }
-      factuurSave.disabled = false; factuurSave.textContent = 'Wijzigingen opslaan';
-      setTimeout(() => { if(factuurState) factuurState.textContent = ''; }, 4000);
     });
   }
 
@@ -3490,7 +3607,9 @@ async function submitFeedbackV2(){
   // v3.1-7 deel B: bij volledige goedkeuring van een DELIVERABLE-project → facturatiegegevens bevestigen.
   // Enkel webdesign/branding/video/strategie/automation — NIET doorlopend (social/ads/seo) of opleidingen.
   if(allApproved && disciplineCategory(proj.discipline) === 'deliverable'){
-    try { await showFactuurConfirmStep(proj); } catch(e){ console.warn('[Studio 27] facturatie-stap overgeslagen:', e); }
+    let choice = 'later';
+    try { choice = await showFactuurConfirmStep(proj); } catch(e){ console.warn('[Studio 27] facturatie-stap overgeslagen:', e); }
+    if(choice === 'goto') return; // klant navigeerde naar Facturatie-tab → geen success-modal tonen
   }
   showFeedbackSuccess(allApproved);
 }
@@ -3509,55 +3628,34 @@ function showFeedbackSuccess(allApproved){
   if(modal) modal.classList.add('open');
 }
 
-// v3.1-7 deel B — facturatie-bevestiging als modal-stap; resolve't wanneer klant bevestigt of overslaat
+// v3.1-7 — na volledige goedkeuring van een deliverable-project: korte melding die naar het
+// Facturatie-tabblad linkt (het echte bevestigen/aanpassen gebeurt daar, niet meer in een pop-up form).
+// Resolve't met 'goto' (klant ging naar de tab) of 'later'.
 function showFactuurConfirmStep(proj){
-  return new Promise(async (resolve) => {
-    let bc = state.bedrijfContent;
-    if(!bc && !state.demoMode && ENDPOINTS.bedrijfContent){
-      try {
-        const r = await api(ENDPOINTS.bedrijfContent, { bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token });
-        if(r.ok && r.data) bc = r.data;
-      } catch(e){}
-    }
-    bc = bc || {};
-    const btw = esc(bc.btw || '');
-    const mail = esc(bc.facturatie_email || '');
+  return new Promise((resolve) => {
     const modal = $('s27-modal');
-    const title = $('s27-modal-title'); if(title) title.textContent = 'Facturatiegegevens bevestigen';
-    const sub = $('s27-modal-sub'); if(sub) sub.textContent = 'Even checken vóór we factureren';
+    const title = $('s27-modal-title'); if(title) title.textContent = 'Project goedgekeurd 🎉';
+    const sub = $('s27-modal-sub'); if(sub) sub.textContent = '';
     $('s27-modal-body').innerHTML =
       '<div class="s27-factuurcheck">' +
-        '<p class="s27-factuurcheck-lead">Top dat alles goedgekeurd is! 🎉 We factureren straks <strong>' + esc(proj.naam || 'dit project') + '</strong>. Kloppen onderstaande gegevens voor <em>dit project</em>? Pas aan indien nodig — anders bevestig je gewoon.</p>' +
-        '<div class="s27-form-field"><label class="s27-readlabel" for="s27-fc-btw">Ondernemingsnummer / BTW</label><input id="s27-fc-btw" type="text" value="' + btw + '" placeholder="BE0xxx.xxx.xxx"></div>' +
-        '<div class="s27-form-field"><label class="s27-readlabel" for="s27-fc-mail">Facturatie-e-mail</label><input id="s27-fc-mail" type="email" value="' + mail + '" placeholder="facturen@bedrijf.be"></div>' +
-        '<div class="s27-form-field"><label class="s27-readlabel" for="s27-fc-opm">Extra opmerking voor dit project <span class="s27-info" tabindex="0" title="Bv. een PO-nummer, aparte referentie of afwijkend facturatie-adres specifiek voor dit project.">&#9432;</span></label><input id="s27-fc-opm" type="text" placeholder="Bv. PO-nummer PO-2026-044"></div>' +
-        '<p class="s27-factuurcheck-note">We tonen hier geen bedragen — die staan in je offerte. Wijzigingen gelden enkel voor dit project; je algemene gegevens blijven ongewijzigd.</p>' +
+        '<p class="s27-factuurcheck-lead">Top dat alles goedgekeurd is! We factureren straks <strong>' + esc(proj.naam || 'dit project') + '</strong>. Wil je de facturatiegegevens voor dit project nog even nakijken of bevestigen?</p>' +
+        '<p class="s27-factuurcheck-note">Het volledige overzicht — algemeen én per project — vind je onder het tabblad <strong>Facturatie</strong>. We tonen daar geen bedragen; die staan in je offerte.</p>' +
       '</div>';
     $('s27-modal-foot').innerHTML =
-      '<button type="button" class="s27-btn s27-btn-ghost" id="s27-fc-skip">Overslaan</button>' +
-      '<button type="button" class="s27-btn s27-btn-primary" id="s27-fc-confirm">Bevestigen</button>';
+      '<button type="button" class="s27-btn s27-btn-ghost" id="s27-fc-later">Later</button>' +
+      '<button type="button" class="s27-btn s27-btn-primary" id="s27-fc-goto">Naar facturatie-overzicht →</button>';
     if(modal) modal.classList.add('open');
     let done = false;
-    const finish = () => { if(done) return; done = true; resolve(); };
-    const skip = $('s27-fc-skip'); if(skip) skip.addEventListener('click', finish);
-    const conf = $('s27-fc-confirm');
-    if(conf) conf.addEventListener('click', async () => {
-      conf.disabled = true; conf.textContent = 'Bevestigen…';
-      const payload = {
-        task_id: proj.task_id,
-        bedrijf_id: state.session.bedrijf_id,
-        session_token: state.session.session_token,
-        klant_naam: state.session.bedrijfsnaam,
-        project_naam: proj.naam || '',
-        ondernemingsnummer: (($('s27-fc-btw') || {}).value || '').trim(),
-        facturatie_email: (($('s27-fc-mail') || {}).value || '').trim(),
-        opmerking: (($('s27-fc-opm') || {}).value || '').trim()
-      };
-      try {
-        if(ENDPOINTS.projectFacturatieSave && !state.demoMode) await api(ENDPOINTS.projectFacturatieSave, payload);
-        else await new Promise(r => setTimeout(r, 300));
-      } catch(e){ console.warn('[Studio 27] project-facturatie-save faalde:', e); }
-      finish();
+    const later = $('s27-fc-later');
+    if(later) later.addEventListener('click', () => { if(done) return; done = true; resolve('later'); });
+    const goNow = $('s27-fc-goto');
+    if(goNow) goNow.addEventListener('click', () => {
+      if(done) return; done = true;
+      state.facturatiePendingProject = proj.task_id;
+      closeModal();
+      try { exitProjectView(); } catch(e){}
+      switchTab('facturatie');
+      resolve('goto');
     });
   });
 }
