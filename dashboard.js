@@ -1157,7 +1157,9 @@ function renderPlaceholderTab(bodyId, title, body){
    s27fetch-app). Het rapport zelf rendert in een iframe (performance-report.html,
    de standalone engine) zodat de zware Chart.js-render geïsoleerd blijft van de SPA.
    ================================================================= */
-const _perfState = { reports: [], activeTaskId: null, listenerBound: false };
+const _perfState = { reports: [], activeTaskId: null, listenerBound: false, loadTimer: null, loaded: false };
+// Bump bij elke performance-report.html-wijziging → forceert verse CDN-fetch (omzeilt stale/404-edgecache)
+const PERF_ENGINE_VER = '20260530a';
 
 // Basis-URL waar de portal-assets staan (raw.githack in productie, lokaal bij _bottest)
 function s27AssetBase(){
@@ -1281,10 +1283,25 @@ function perfSelect(taskId){
   const frame = $('s27-perf-frame');
   const loader = $('s27-perf-frame-loader');
   if(!frame) return;
-  if(loader) loader.style.display = 'flex';
+  if(loader){ loader.style.display = 'flex'; loader.innerHTML = '<span class="s27-spin"></span><span>Rapport laden…</span>'; }
   frame.style.height = '640px';
-  const engineUrl = s27AssetBase() + '/performance-report.html?data=' + encodeURIComponent(buildPerfDataUrl(taskId));
-  frame.onload = () => { if(loader) loader.style.display = 'none'; };
+  _perfState.loaded = false;
+  if(_perfState.loadTimer) clearTimeout(_perfState.loadTimer);
+  const engineUrl = s27AssetBase() + '/performance-report.html?_v=' + PERF_ENGINE_VER + '&data=' + encodeURIComponent(buildPerfDataUrl(taskId));
+  frame.onload = () => { _perfState.loaded = true; if(_perfState.loadTimer) clearTimeout(_perfState.loadTimer); if(loader) loader.style.display = 'none'; };
+  // Fallback als de iframe-HTML zelf niet laadt (bv. CDN-hapering): toon retry i.p.v. eindeloze spinner
+  _perfState.loadTimer = setTimeout(() => {
+    if(_perfState.loaded || !loader) return;
+    loader.innerHTML =
+      '<div style="text-align:center;padding:0 20px">' +
+        '<div style="font-size:26px;margin-bottom:8px">⚠️</div>' +
+        '<div style="font-family:var(--font-display);font-weight:800;color:var(--s27-ink);margin-bottom:6px">Het rapport laadt traag</div>' +
+        '<p style="font-family:var(--font-body);font-size:13px;color:var(--s27-ink-3);max-width:340px;margin:0 auto 14px;line-height:1.5">Soms heeft de server even een momentje nodig. Probeer het zo opnieuw.</p>' +
+        '<button class="s27-btn s27-btn-sm s27-btn-primary" id="s27-perf-retry" style="width:auto">Opnieuw proberen</button>' +
+      '</div>';
+    const rb = document.getElementById('s27-perf-retry');
+    if(rb) rb.addEventListener('click', () => perfSelect(taskId));
+  }, 15000);
   frame.src = engineUrl;
 }
 
