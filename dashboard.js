@@ -1216,6 +1216,7 @@ function perfDisciplineMeta(disc){
 
 function getMockPerformanceReports(){
   return [
+    { task_id:'86ca0hp3f', naam:'Advertenties — TEST CLIENT BV', discipline:'ads', bestand:'TEST CLIENT BV - advertenties2026-04-012026-04-30.json' },
     { task_id:'86ca0hp13', naam:'Social media — TEST CLIENT BV', discipline:'social', bestand:'Sporta Kampen (vzw)2026-02-252026-03-31.json' }
   ];
 }
