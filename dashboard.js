@@ -448,7 +448,7 @@ function renderHubBody(d){
     hubCard('projecten','s27p-inbox','#3083DC','Projecten', projMeta, 'Website, branding, video & strategie — geef feedback en keur opleveringen goed.'),
     hubCard('doorlopend','s27p-soc','#F66131','Doorlopend', (doorlopendCount ? doorlopendCount + ' actief' : 'Geen actief'), 'Social, advertenties en SEO/GEO — trajecten die continu lopen.'),
     hubCard('opleidingen','s27p-opl','#12AC4E','Opleidingen', (opleidingCount ? opleidingCount + ' lopend' : 'Geen lopende'), 'Je opleidingen en workshops bij Studio 27 — planning en materiaal.'),
-    hubCard('__perf','s27p-spark','#9441DB','Statistieken','Binnenkort','Je advertentie- en websiteresultaten in één oogopslag.', true),
+    hubCard('performance','s27p-chart','#9441DB','Performance','Bekijk je cijfers','Je advertentie- en social-resultaten, helder gevisualiseerd.'),
     hubCard('meetings','s27p-cal','#3083DC','Meetings', (meetings.length ? meetings.length + ' gepland' : 'Plan een meeting'), 'Bekijk je agenda en plan zelf een nieuw overleg in.'),
     hubCard('bedrijf','s27p-brand','#9441DB','Mijn bedrijf','Huisstijl & gegevens','Logo, fonts, contactgegevens en voorkeuren — altijd up-to-date.'),
     hubCard('nieuw','s27p-upload','#F8C028','Nieuw project','Start hier','Vertel je idee en krijg meteen een prijsindicatie op maat.'),
@@ -470,7 +470,6 @@ function renderHubBody(d){
   // Handlers
   body.querySelectorAll('[data-hub-card]').forEach(el => el.addEventListener('click', () => {
     const t = el.dataset.hubCard;
-    if(t === '__perf') return;        // coming soon, niet klikbaar
     switchTab(t);
   }));
   body.querySelectorAll('[data-go-tab]').forEach(el => el.addEventListener('click', e => { e.stopPropagation(); switchTab(el.dataset.goTab); }));
@@ -1063,7 +1062,7 @@ function renderDoorlopend(){
   const projs = projectsInCategory(d, 'doorlopend');
   const intro = '<div class="s27-doorlopend-intro">' +
     '<span class="s27-doorlopend-intro-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.22-8.56"/><polyline points="21 4 21 9 16 9"/></svg></span>' +
-    '<div><strong>Doorlopende trajecten</strong><p>Social media, advertenties en SEO/GEO lopen continu — geen losse opleveringen, maar maandelijkse opvolging. De gedetailleerde resultaten komen in <em>Statistieken</em> (binnenkort).</p></div></div>';
+    '<div><strong>Doorlopende trajecten</strong><p>Social media, advertenties en SEO/GEO lopen continu — geen losse opleveringen, maar maandelijkse opvolging. De gedetailleerde cijfers van je advertenties en social vind je in <em>Performance</em>.</p></div></div>';
   if(!projs.length){
     body.innerHTML = intro + '<div class="s27-empty"><div class="s27-empty-title">Nog geen doorlopende trajecten</div><p class="s27-empty-sub">Zodra een social-, ads- of SEO/GEO-traject loopt, vind je het hier terug.</p></div>';
     return;
