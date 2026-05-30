@@ -36,6 +36,8 @@ const ENDPOINTS = {
   huisstijlList:     'https://hook.eu1.make.com/v3z3t67otw7d96s37qciedt3uykimiru',
   huisstijlUpload:   'https://hook.eu1.make.com/3eqyxbkejfhyz8w2kl62lp1lsxwfr2d0',
   huisstijlDelete:   'https://hook.eu1.make.com/irpo6iemme6qpfe75rr83brkj7ybftsd',
+  // v3.1-6 — find-or-create Drive-structuur (nieuwe klanten krijgen automatisch een map + Huisstijl-submap)
+  driveEnsure:       'https://hook.eu1.make.com/cy5n1y0377ovy2yso5f4dev1n792u71k',
   // v3.1-7 — Facturatiegegevens opslaan (schrijft direct naar Bedrijven-taak custom fields)
   facturatieSave:    'https://hook.eu1.make.com/41635fjyidjts4hlixkgxcsmo6apoe02',
   // v3.1-7 deel B — Per-project facturatie-bevestiging bij goedkeuring (schrijft naar projecttaak-veld 42a0fd8e)
@@ -1376,6 +1378,10 @@ async function loadHuisstijlFiles(){
     state.huisstijlFiles = getMockHuisstijlFiles();
     if(container) container.innerHTML = renderDriveFilesFlat(state.huisstijlFiles);
     return;
+  }
+  // v3.1-6 — zorg dat de Drive-structuur bestaat (idempotent; nieuwe klanten krijgen automatisch hun map)
+  if(ENDPOINTS.driveEnsure){
+    try { await api(ENDPOINTS.driveEnsure, { bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token }); } catch(e){}
   }
   try {
     const res = await api(ENDPOINTS.huisstijlList, { bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token });
