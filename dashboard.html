@@ -21,6 +21,7 @@
   <symbol id="s27p-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></symbol>
   <symbol id="s27p-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
   <symbol id="s27p-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></symbol>
+  <symbol id="s27p-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="21" x2="21" y2="21"/><rect x="5" y="11" width="3.5" height="7" rx="0.6"/><rect x="10.25" y="7" width="3.5" height="11" rx="0.6"/><rect x="15.5" y="3" width="3.5" height="15" rx="0.6"/></symbol>
 </defs></svg>
 
 <div id="s27-portal" class="s27-portal">
@@ -78,6 +79,9 @@
         <button class="s27-tab" data-tab="doorlopend" role="tab" aria-selected="false">
           <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-soc"/></svg><span>Doorlopend</span>
         </button>
+        <button class="s27-tab" data-tab="performance" role="tab" aria-selected="false">
+          <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-chart"/></svg><span>Performance</span>
+        </button>
         <button class="s27-tab" data-tab="opleidingen" role="tab" aria-selected="false">
           <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-opl"/></svg><span>Opleidingen</span>
         </button>
@@ -124,6 +128,15 @@
           <p class="s27-hero-lead">Social media, advertenties en SEO/GEO — trajecten die continu lopen, met maandelijkse opvolging.</p>
         </div>
         <div id="s27-doorlopend-body"><div class="s27-loading">Laden…</div></div>
+      </div>
+
+      <div id="s27-tab-performance" class="s27-tabview" role="tabpanel" hidden>
+        <div class="s27-hero">
+          <span class="s27-hero-tag">Performance</span>
+          <h1>Jouw <span class="accent">resultaten</span> in cijfers</h1>
+          <p class="s27-hero-lead">De maandelijkse cijfers van je advertenties en social — bereik, klikken, kosten en evolutie. Helder gevisualiseerd, telkens vergeleken met de vorige periode.</p>
+        </div>
+        <div id="s27-performance-body"><div class="s27-loading">Performance laden</div></div>
       </div>
 
       <div id="s27-tab-opleidingen" class="s27-tabview" role="tabpanel" hidden>

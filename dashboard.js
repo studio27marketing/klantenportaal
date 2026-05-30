@@ -41,7 +41,9 @@ const ENDPOINTS = {
   // v3.1-7 — Facturatiegegevens opslaan (schrijft direct naar Bedrijven-taak custom fields)
   facturatieSave:    'https://hook.eu1.make.com/41635fjyidjts4hlixkgxcsmo6apoe02',
   // v3.1-7 deel B — Per-project facturatie-bevestiging bij goedkeuring (schrijft naar projecttaak-veld 42a0fd8e)
-  projectFacturatieSave: 'https://hook.eu1.make.com/cmqf97ej6aewxokt9g23tbff6gxg7frm'
+  projectFacturatieSave: 'https://hook.eu1.make.com/cmqf97ej6aewxokt9g23tbff6gxg7frm',
+  // v3 Feature 1 — Performance Dashboard. mode=list → rapporten per bedrijf; mode=data&task_id=… → volledige rapport-JSON (via custom s27fetch-app, gzip-proof). Scenario 5964345.
+  performance:       'https://hook.eu1.make.com/chmsfitxr12m8cpjp4x3fb8ru1nqr7gg'
 };
 
 /* =================================================================
@@ -1130,6 +1132,7 @@ function switchTab(tabId){
   // Lazy-render placeholder tabs
   if(tabId === 'projecten')    renderProjecten();
   if(tabId === 'doorlopend')   renderDoorlopend();
+  if(tabId === 'performance')  renderPerformanceTab();
   if(tabId === 'opleidingen')  renderOpleidingen();
   if(tabId === 'bedrijf')      renderBedrijfTab();
   if(tabId === 'facturatie')   renderFacturatieTab();
@@ -1148,6 +1151,156 @@ function renderPlaceholderTab(bodyId, title, body){
     '<p class="s27-empty-sub">' + body + '</p>' +
   '</div>';
 }
+/* =================================================================
+   PERFORMANCE DASHBOARD (v3 Feature 1, #84)
+   mode=list → rapporten per bedrijf (task_id, naam, discipline, bestand)
+   mode=data&task_id → volledige rapport-JSON (1.6MB, gzip-proof via custom
+   s27fetch-app). Het rapport zelf rendert in een iframe (performance-report.html,
+   de standalone engine) zodat de zware Chart.js-render geïsoleerd blijft van de SPA.
+   ================================================================= */
+const _perfState = { reports: [], activeTaskId: null, listenerBound: false };
+
+// Basis-URL waar de portal-assets staan (raw.githack in productie, lokaal bij _bottest)
+function s27AssetBase(){
+  let src = '';
+  const tagged = document.querySelector('script[data-s27-portal-js]');
+  if(tagged && tagged.src) src = tagged.src;
+  if(!src){
+    const all = document.querySelectorAll('script[src]');
+    for(const sc of all){ if(/dashboard\.js(\?|$)/.test(sc.src)){ src = sc.src; break; } }
+  }
+  if(src) return src.split('?')[0].replace(/\/dashboard\.js.*$/, '');
+  return 'https://raw.githack.com/studio27marketing/klantenportaal/main';
+}
+
+// mode=data URL die de iframe-engine ophaalt (GET met query-params + CORS *)
+function buildPerfDataUrl(taskId){
+  const tok = (state.session && state.session.session_token) || '';
+  const bid = (state.session && state.session.bedrijf_id) || '';
+  // In demomodus heeft de sessie geen geldige token → val terug op de publieke demo-token
+  const realTok = (state.demoMode || tok === 'demo' || tok.length <= 10) ? 'DEMOSESSIONTOKEN1234567890' : tok;
+  return ENDPOINTS.performance + '?mode=data'
+    + '&task_id='       + encodeURIComponent(taskId)
+    + '&session_token=' + encodeURIComponent(realTok)
+    + '&bedrijf_id='    + encodeURIComponent(bid);
+}
+
+// Periode uit de bestandsnaam halen: "<client>2026-02-252026-03-31.json" → {start,end}
+function parsePerfPeriod(bestand){
+  const m = String(bestand||'').match(/(\d{4}-\d{2}-\d{2})(\d{4}-\d{2}-\d{2})\.json/i);
+  return m ? { start:m[1], end:m[2] } : null;
+}
+const _PERF_MND = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
+const _PERF_MND_VOL = ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
+function _perfDayLabel(iso){
+  const d = (iso||'').split('-'); if(d.length<3) return iso||'';
+  return parseInt(d[2],10) + ' ' + (_PERF_MND[parseInt(d[1],10)-1] || '');
+}
+function formatPerfPeriod(p){
+  if(!p) return 'Rapportperiode';
+  const jaar = (p.end||'').split('-')[0] || '';
+  return _perfDayLabel(p.start) + ' – ' + _perfDayLabel(p.end) + ' ' + jaar;
+}
+// Maand-titel voor een rapport (de eindmaand bepaalt 'de maand')
+function perfMonthTitle(p){
+  if(!p) return 'Rapport';
+  const parts = (p.end||'').split('-'); if(parts.length<3) return 'Rapport';
+  const m = _PERF_MND_VOL[parseInt(parts[1],10)-1] || '';
+  return (m ? m.charAt(0).toUpperCase()+m.slice(1) : 'Rapport') + ' ' + parts[0];
+}
+function perfDisciplineMeta(disc){
+  if(disc === 'social') return { label:'Social media', icon:'s27p-soc', accent:'#9441DB' };
+  return { label:'Advertenties', icon:'s27p-ads', accent:'#F66131' };
+}
+
+function getMockPerformanceReports(){
+  return [
+    { task_id:'86ca0hp13', naam:'Social media — TEST CLIENT BV', discipline:'social', bestand:'Sporta Kampen (vzw)2026-02-252026-03-31.json' }
+  ];
+}
+
+async function renderPerformanceTab(){
+  const body = $('s27-performance-body');
+  if(!body) return;
+  body.innerHTML = '<div class="s27-loading">Performance laden</div>';
+
+  let reports = [];
+  if(state.demoMode){
+    reports = getMockPerformanceReports();
+  } else {
+    const res = await api(ENDPOINTS.performance, { mode:'list', bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token });
+    if(res.ok && res.data && Array.isArray(res.data.reports)) reports = res.data.reports;
+  }
+
+  // Nieuwste eerst (einddatum uit bestandsnaam)
+  reports.sort((a,b) => {
+    const pa = parsePerfPeriod(a.bestand), pb = parsePerfPeriod(b.bestand);
+    return (pb && pb.end ? pb.end : '').localeCompare(pa && pa.end ? pa.end : '');
+  });
+  _perfState.reports = reports;
+
+  if(!reports.length){
+    body.innerHTML = ''
+      + '<div class="s27-perf-empty">'
+      +   '<div class="s27-perf-empty-icon"><svg width="26" height="26" viewBox="0 0 24 24"><use href="#s27p-chart"/></svg></div>'
+      +   '<strong>Nog geen performance-rapporten</strong>'
+      +   '<p>Zodra er advertenties of social media voor je lopen bij Studio 27, verschijnt hier elke maand automatisch een helder rapport met al je cijfers.</p>'
+      + '</div>';
+    return;
+  }
+
+  const chips = reports.map((r, i) => {
+    const p = parsePerfPeriod(r.bestand);
+    const meta = perfDisciplineMeta(r.discipline);
+    return ''
+      + '<button class="s27-perf-chip" data-task-id="' + esc(r.task_id) + '" data-idx="' + i + '" style="--chip:' + meta.accent + '">'
+      +   '<span class="s27-perf-chip-ic"><svg width="15" height="15" viewBox="0 0 24 24"><use href="#' + meta.icon + '"/></svg></span>'
+      +   '<span class="s27-perf-chip-txt"><strong>' + esc(perfMonthTitle(p)) + '</strong><small>' + esc(meta.label) + ' · ' + esc(formatPerfPeriod(p)) + '</small></span>'
+      + '</button>';
+  }).join('');
+
+  body.innerHTML = ''
+    + (reports.length > 1
+        ? '<div class="s27-perf-selector"><span class="s27-perf-selector-lbl">Kies een rapport</span><div class="s27-perf-chips">' + chips + '</div></div>'
+        : '')
+    + '<div class="s27-perf-frame-wrap">'
+    +   '<div class="s27-perf-frame-loader" id="s27-perf-frame-loader"><span class="s27-spin"></span><span>Rapport laden…</span></div>'
+    +   '<iframe id="s27-perf-frame" class="s27-perf-frame" title="Performance-rapport" loading="lazy" referrerpolicy="no-referrer"></iframe>'
+    + '</div>';
+
+  bindPerfHeightListener();
+  perfSelect(reports[0].task_id, 0);
+
+  body.querySelectorAll('.s27-perf-chip').forEach(btn => {
+    btn.addEventListener('click', () => perfSelect(btn.dataset.taskId, parseInt(btn.dataset.idx,10)));
+  });
+}
+
+function perfSelect(taskId){
+  _perfState.activeTaskId = taskId;
+  document.querySelectorAll('.s27-perf-chip').forEach(b => b.classList.toggle('is-active', b.dataset.taskId === taskId));
+  const frame = $('s27-perf-frame');
+  const loader = $('s27-perf-frame-loader');
+  if(!frame) return;
+  if(loader) loader.style.display = 'flex';
+  frame.style.height = '640px';
+  const engineUrl = s27AssetBase() + '/performance-report.html?data=' + encodeURIComponent(buildPerfDataUrl(taskId));
+  frame.onload = () => { if(loader) loader.style.display = 'none'; };
+  frame.src = engineUrl;
+}
+
+function bindPerfHeightListener(){
+  if(_perfState.listenerBound) return;
+  _perfState.listenerBound = true;
+  window.addEventListener('message', ev => {
+    const d = ev && ev.data;
+    if(d && d.s27perf && d.height){
+      const fr = $('s27-perf-frame');
+      if(fr) fr.style.height = Math.max(600, Math.min(20000, d.height + 40)) + 'px';
+    }
+  });
+}
+
 /* =================================================================
    GESTRUCTUREERDE HUISSTIJL-DATA (v2.2 #52)
    Voorkeuren-string format:

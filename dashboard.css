@@ -1081,3 +1081,28 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-pv-chat-closed { font-size:13.5px; line-height:1.55; color:var(--s27-ink-3); background:var(--s27-paper-2); border:1px dashed var(--s27-line); border-radius:var(--r-md); padding:16px 18px; }
 .s27-pv-chat-closed strong { color:var(--s27-ink-2); font-weight:800; }
 .s27-pv-chat-closed a { color:var(--s27-blue-ink); font-weight:700; }
+
+/* =================================================================
+   PERFORMANCE DASHBOARD (v3 Feature 1, #84)
+   ================================================================= */
+.s27-perf-empty { text-align:center; padding:48px 28px; background:var(--s27-paper); border:1px dashed var(--s27-line); border-radius:var(--r-lg); max-width:560px; margin:0 auto; }
+.s27-perf-empty-icon { width:56px; height:56px; margin:0 auto 14px; background:var(--s27-paper-3); border-radius:50%; display:inline-flex; align-items:center; justify-content:center; color:var(--s27-ink-3); }
+.s27-perf-empty strong { display:block; font-family:var(--font-display); font-size:16px; font-weight:800; color:var(--s27-ink); margin-bottom:8px; }
+.s27-perf-empty p { font-family:var(--font-body); font-size:13.5px; color:var(--s27-ink-3); line-height:1.55; margin:0; }
+
+.s27-perf-selector { margin-bottom:18px; }
+.s27-perf-selector-lbl { display:block; font-family:var(--font-display); font-size:11px; font-weight:800; letter-spacing:0.06em; text-transform:uppercase; color:var(--s27-ink-3); margin-bottom:10px; }
+.s27-perf-chips { display:flex; gap:10px; flex-wrap:wrap; }
+.s27-perf-chip { display:inline-flex; align-items:center; gap:10px; padding:10px 16px 10px 12px; background:var(--s27-paper); border:1.5px solid var(--s27-line); border-radius:var(--r-md); cursor:pointer; text-align:left; transition:all .15s var(--ease-out); }
+.s27-perf-chip:hover { border-color:var(--chip,var(--s27-ink-3)); transform:translateY(-1px); }
+.s27-perf-chip.is-active { border-color:var(--chip,var(--s27-blue)); box-shadow:0 0 0 3px color-mix(in srgb, var(--chip,#3083DC) 14%, transparent); }
+.s27-perf-chip-ic { width:30px; height:30px; flex-shrink:0; border-radius:9px; display:inline-flex; align-items:center; justify-content:center; color:#fff; background:var(--chip,var(--s27-blue)); }
+.s27-perf-chip-txt { display:flex; flex-direction:column; gap:1px; }
+.s27-perf-chip-txt strong { font-family:var(--font-display); font-size:13px; font-weight:800; color:var(--s27-ink); line-height:1.15; }
+.s27-perf-chip-txt small { font-family:var(--font-body); font-size:11.5px; color:var(--s27-ink-3); }
+
+.s27-perf-frame-wrap { position:relative; background:var(--s27-paper-2); border:1px solid var(--s27-line); border-radius:var(--r-lg); overflow:hidden; min-height:560px; }
+.s27-perf-frame { width:100%; height:640px; border:0; display:block; background:var(--s27-paper-2); transition:height .25s ease; }
+.s27-perf-frame-loader { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:var(--s27-paper-2); color:var(--s27-ink-3); font-family:var(--font-display); font-size:13px; font-weight:700; z-index:2; }
+.s27-spin { width:34px; height:34px; border:4px solid var(--s27-paper-3); border-top-color:var(--s27-blue,#3083DC); border-radius:50%; animation:s27spin .8s linear infinite; }
+@keyframes s27spin { to { transform:rotate(360deg); } }
