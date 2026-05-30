@@ -3065,6 +3065,7 @@ async function openProjectDetail(taskId, openOnTab){
             deliverables: (Array.isArray(r.data.deliverables) && r.data.deliverables.length) ? r.data.deliverables : parseDeliverablesRaw(r.data.deliverables_raw),
             deliverables_raw: r.data.deliverables_raw || '',
             feedback_link: r.data.feedback_link || '',
+            feedback_status: r.data.feedback_status || '',
             budget: r.data.budget || '',
             project_status: r.data.status || '',
             project_url: r.data.url || ''
@@ -3087,7 +3088,7 @@ async function openProjectDetail(taskId, openOnTab){
   detail.comments = (chat && chat.comments) || detail.comments || [];
   state.activeProjectDetail = detail;
   try {
-    renderProjectView(proj, detail, needsFeedback);
+    renderProjectView(proj, detail, feedbackRoundState(proj, detail));
   } catch(err){
     console.error('[Studio 27] renderProjectView crashed:', err, '\nproj=', proj, '\ndetail=', detail);
     const fsView = $('s27-tab-project');
@@ -3125,9 +3126,12 @@ function getDisciplineInfo(disc){
   };
 }
 
-function renderProjectView(proj, detail, needsFeedback){
+function renderProjectView(proj, detail, roundState){
   const fsView = $('s27-tab-project');
   if(!fsView){ console.warn('[Studio 27] Project view container niet gevonden'); return; }
+  // #88 feedback-ronde: 'active' | 'submitted' | 'approved' | 'none' (backwards-compat met oude bool)
+  if(typeof roundState !== 'string') roundState = roundState ? 'active' : 'none';
+  const needsFeedback = roundState === 'active';
   const discipline = getDisciplineInfo(proj.discipline);
   const accent = discipline.accent;
   const discLabel = discipline.label;
@@ -3139,9 +3143,10 @@ function renderProjectView(proj, detail, needsFeedback){
   // geen melding en reageert het niet → chat verbergen. (to do / in progress / on hold = open)
   const stForChat = statusKey || 'in_progress';
   const chatAllowed = (stForChat === 'to_do' || stForChat === 'in_progress' || stForChat === 'on_hold');
-  const chatClosedNote = needsFeedback
-    ? 'Reageren doe je via het <strong>feedback-paneel hiernaast</strong> — daar geef je per onderdeel goedkeuring of opmerkingen door.'
-    : 'Dit project is afgerond, dus de chat is gesloten — ons team volgt afgeronde taken niet meer op. Heb je nog een vraag? Gebruik de <strong>✦ assistent</strong> rechtsonder of <a href="#" data-dm="vraag" data-dm-onderwerp="Vraag over ' + esc(proj.naam || 'afgerond project') + '">stuur een bericht</a>.';
+  const chatClosedNote =
+    roundState === 'active'    ? 'Reageren doe je via het <strong>feedback-paneel hiernaast</strong> — daar geef je per onderdeel goedkeuring of opmerkingen door.' :
+    roundState === 'submitted' ? 'Je feedback is verstuurd — we verwerken die en sturen je de aangepaste versie. Een tussentijdse vraag? Gebruik de <strong>✦ assistent</strong> rechtsonder.' :
+    'Dit project is afgerond, dus de chat is gesloten — ons team volgt afgeronde taken niet meer op. Heb je nog een vraag? Gebruik de <strong>✦ assistent</strong> rechtsonder of <a href="#" data-dm="vraag" data-dm-onderwerp="Vraag over ' + esc(proj.naam || 'afgerond project') + '">stuur een bericht</a>.';
 
   // v2.2 fix #51b: 1-kolom layout. Chat ALTIJD direct zichtbaar onder overzicht.
   // Feedback (indien nodig) bovenaan als prominente actie-banner — opent feedback panel.
@@ -3167,12 +3172,15 @@ function renderProjectView(proj, detail, needsFeedback){
 
     <div class="s27-pv-twocol">
       <div class="s27-pv-leftcol">
-        ${needsFeedback ? `
+        ${roundState === 'active' ? `
           <div class="s27-pv-section s27-pv-section-fb">
             <h3 class="s27-pv-section-title">🔔 Dit project wacht op jouw feedback</h3>
             <p class="s27-pv-fb-lead">Bekijk de deliverables hieronder en geef per onderdeel aan of het goedgekeurd is of feedback nodig heeft.</p>
             <div id="s27-pv-fbbox"></div>
           </div>
+        ` : ''}
+        ${(roundState === 'submitted' || roundState === 'approved') ? `
+          <div class="s27-pv-section s27-pv-section-fb">${renderFeedbackReadonly(proj, detail, roundState)}</div>
         ` : ''}
         <div class="s27-pv-section">
           <h3 class="s27-pv-section-title">📋 Projectomschrijving</h3>
@@ -3593,6 +3601,81 @@ function attachChatHandlers(){
   });
 }
 
+/* =================================================================
+   FEEDBACK-RONDE LOGICA (v3.1-4 #88)
+   Een deliverable doorloopt feedbackrondes. Per ronde:
+   - status 'doorgestuurd' + nog niet ingediend → ACTIEF (klant geeft feedback)
+   - status 'doorgestuurd' + al ingediend       → INGEDIEND (read-only, "we verwerken het")
+   - status 'goedgekeurd'                        → GOEDGEKEURD (read-only, afgerond)
+   Bron-of-truth voor "al ingediend": server-veld detail.feedback_status === 'Ontvangen'.
+   Fallback: lokale lock per device (localStorage), die vervalt zodra de taak ná het
+   indienen opnieuw is geüpdatet (= team leverde een nieuwe versie → nieuwe ronde).
+   ================================================================= */
+const FB_LOCK_KEY = 's27_fb_rondes';
+function _fbLockAll(){ try { return JSON.parse(localStorage.getItem(FB_LOCK_KEY) || '{}') || {}; } catch(e){ return {}; } }
+function setFbLock(taskId){
+  if(!taskId) return;
+  const all = _fbLockAll();
+  all[taskId] = { at: Date.now() };
+  try { localStorage.setItem(FB_LOCK_KEY, JSON.stringify(all)); } catch(e){}
+}
+function clearFbLock(taskId){
+  const all = _fbLockAll();
+  if(all[taskId]){ delete all[taskId]; try { localStorage.setItem(FB_LOCK_KEY, JSON.stringify(all)); } catch(e){} }
+}
+function projUpdatedMs(proj){
+  const t = proj && proj.laatst_geupdatet;
+  if(!t) return 0;
+  if(typeof t === 'number') return t;
+  const ms = Date.parse(t); return isNaN(ms) ? 0 : ms;
+}
+function hasFreshFbLock(proj){
+  const rec = _fbLockAll()[proj && proj.task_id];
+  if(!rec) return false;
+  // Lock vervalt als de taak ná het indienen duidelijk opnieuw is geüpdatet (team leverde nieuwe versie).
+  // 5 min marge: het indienen zelf (comment op de taak) bumpt 'laatst_geupdatet' ook.
+  const upd = projUpdatedMs(proj);
+  if(upd && rec.at && upd > rec.at + 5 * 60 * 1000){ clearFbLock(proj.task_id); return false; }
+  return true;
+}
+// 'active' | 'submitted' | 'approved' | 'none'
+function feedbackRoundState(proj, detail){
+  const st = (proj.status || '').toLowerCase().replace(/\s+/g, '_');
+  if(st === 'goedgekeurd') return 'approved';
+  const isReview = st === 'doorgestuurd' || proj.feedback_link;
+  if(!isReview) return 'none';
+  const fb = String((detail && detail.feedback_status) || '').toLowerCase();
+  if(fb === 'ontvangen' || fb === 'auto-goedgekeurd') return 'submitted';
+  if(hasFreshFbLock(proj)) return 'submitted';
+  return 'active';
+}
+
+// Read-only weergave voor een ingediende of goedgekeurde ronde
+function renderFeedbackReadonly(proj, detail, mode){
+  const deliverables = (detail && detail.deliverables) || parseDeliverablesFromProj(proj);
+  const approved = mode === 'approved';
+  const head =
+    '<div class="s27-fb-ro-head' + (approved ? ' s27-fb-ro-ok' : '') + '">' +
+      '<span class="s27-fb-ro-ic">' + (approved ? '✅' : '📨') + '</span>' +
+      '<div>' +
+        '<strong>' + (approved ? 'Dit project is goedgekeurd' : 'Je feedback voor deze ronde is verstuurd') + '</strong>' +
+        '<p>' + (approved
+          ? 'Bedankt — alles staat op groen. Je hoeft hier niets meer te doen.'
+          : 'We verwerken je opmerkingen en sturen je binnenkort de aangepaste versie. Zodra die klaar is, kan je hier opnieuw feedback geven.') +
+        '</p>' +
+      '</div>' +
+    '</div>';
+  const list = deliverables.length
+    ? '<div class="s27-fb-ro-list"><span class="s27-fb-ro-label">' + (approved ? 'Wat je goedkeurde' : 'Wat je beoordeelde') + '</span>' +
+        deliverables.map(d => {
+          const tl = ({vimeo:'Video op Vimeo', picflow:'Foto-album op Picflow', webflow:'Website preview', drive:'Drive folder', figma:'Figma ontwerp'})[d.type] || 'Bestand';
+          return '<a class="s27-fb-ro-item" href="' + esc(d.url) + '" target="_blank" rel="noopener"><span>' + esc(d.label) + '</span><small>' + esc(tl) + ' →</small></a>';
+        }).join('') +
+      '</div>'
+    : '';
+  return '<div class="s27-fb-ro">' + head + list + '</div>';
+}
+
 function renderFeedbackV2Tab(proj, detail){
   const deliverables = detail.deliverables || parseDeliverablesFromProj(proj);
   const intro = '<div class="s27-fb-intro">' +
@@ -3780,6 +3863,15 @@ async function submitFeedbackV2(){
   }
   const allApproved = deliverables.every((_,i) => (state.fbState[i] || {}).choice === 'goedgekeurd');
   state.fbState = {};
+  // #88 feedback-ronde: vergrendel deze ronde meteen (read-only) zodat de klant niet dubbel indient.
+  // De onderliggende project-view herrendert read-only; de success-modal komt eroverheen.
+  setFbLock(proj.task_id);
+  if(state.activeProjectDetail) state.activeProjectDetail.feedback_status = 'Ontvangen';
+  try {
+    if(state.viewMode === 'project' && state.activeProject && state.activeProject.task_id === proj.task_id){
+      renderProjectView(proj, state.activeProjectDetail || detail, allApproved ? 'approved' : 'submitted');
+    }
+  } catch(e){ console.warn('[Studio 27] herrender na feedback faalde:', e); }
   // v3.1-7 deel B: bij volledige goedkeuring van een DELIVERABLE-project → facturatiegegevens bevestigen.
   // Enkel webdesign/branding/video/strategie/automation — NIET doorlopend (social/ads/seo) of opleidingen.
   if(allApproved && disciplineCategory(proj.discipline) === 'deliverable'){
@@ -3948,6 +4040,7 @@ function getDemoData(){
       { task_id:'demo-vid-2', naam:'Productfotografie najaarscampagne', discipline:'video_fotografie', status:'in_progress', opleverdatum:'2026-06-15', voortgang_pct:40, type:'Productfoto', laatst_geupdatet: new Date(Date.now()-3600000*26).toISOString() },
       { task_id:'demo-web-1', naam:'Rebuild website testclient.be', discipline:'webdesign', status:'in_progress', opleverdatum:'2026-07-01', voortgang_pct:55, type:'Webflow rebuild', laatst_geupdatet: new Date(Date.now()-3600000*8).toISOString() },
       { task_id:'demo-web-2', naam:'Landingspagina voorjaarscampagne', discipline:'webdesign', status:'doorgestuurd', opleverdatum:'2026-06-08', voortgang_pct:90, type:'Landing page', laatst_geupdatet: new Date(Date.now()-3600000*1).toISOString(), feedback_link:'https://studio27.be/design-feedback?taskId=demo-web-2' },
+      { task_id:'demo-web-3', naam:'Nieuwsbrief-template mei', discipline:'webdesign', status:'goedgekeurd', opleverdatum:'2026-05-20', voortgang_pct:100, type:'E-mail template', laatst_geupdatet: new Date(Date.now()-3600000*72).toISOString() },
       { task_id:'demo-brd-1', naam:'Brand refresh logo + kleuren',  discipline:'branding',  status:'in_progress', opleverdatum:'2026-06-20', voortgang_pct:35, type:'Brand identity', laatst_geupdatet: new Date(Date.now()-3600000*48).toISOString() },
       { task_id:'demo-soc-1', naam:'Social media juni 2026',         discipline:'social',    status:'in_progress', opleverdatum:'2026-06-01', voortgang_pct:60, type:'Retainer maandelijks', laatst_geupdatet: new Date(Date.now()-3600000*12).toISOString() },
       { task_id:'demo-ads-1', naam:'Google Ads + Meta zomercampagne',discipline:'ads',       status:'in_progress', opleverdatum:'2026-06-01', voortgang_pct:50, type:'Performance', laatst_geupdatet: new Date(Date.now()-3600000*36).toISOString() },

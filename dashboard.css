@@ -1106,3 +1106,19 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-perf-frame-loader { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:var(--s27-paper-2); color:var(--s27-ink-3); font-family:var(--font-display); font-size:13px; font-weight:700; z-index:2; }
 .s27-spin { width:34px; height:34px; border:4px solid var(--s27-paper-3); border-top-color:var(--s27-blue,#3083DC); border-radius:50%; animation:s27spin .8s linear infinite; }
 @keyframes s27spin { to { transform:rotate(360deg); } }
+
+/* =================================================================
+   FEEDBACK-RONDE read-only (v3.1-4 #88)
+   ================================================================= */
+.s27-fb-ro { background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:var(--r-lg); overflow:hidden; }
+.s27-fb-ro-head { display:flex; gap:14px; align-items:flex-start; padding:18px 20px; background:var(--s27-blue-soft); }
+.s27-fb-ro-head.s27-fb-ro-ok { background:var(--s27-green-soft, rgba(18,172,78,0.12)); }
+.s27-fb-ro-ic { font-size:22px; line-height:1; flex-shrink:0; }
+.s27-fb-ro-head strong { display:block; font-family:var(--font-display); font-size:15px; font-weight:800; color:var(--s27-ink); margin-bottom:3px; }
+.s27-fb-ro-head p { font-family:var(--font-body); font-size:13px; color:var(--s27-ink-2); line-height:1.5; margin:0; }
+.s27-fb-ro-list { padding:14px 20px 18px; display:flex; flex-direction:column; gap:8px; }
+.s27-fb-ro-label { font-family:var(--font-display); font-size:11px; font-weight:800; letter-spacing:0.06em; text-transform:uppercase; color:var(--s27-ink-3); }
+.s27-fb-ro-item { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 14px; border:1px solid var(--s27-line); border-radius:var(--r-md); text-decoration:none; transition:border-color .15s; }
+.s27-fb-ro-item:hover { border-color:var(--s27-ink-3); }
+.s27-fb-ro-item span { font-family:var(--font-display); font-size:13px; font-weight:700; color:var(--s27-ink); }
+.s27-fb-ro-item small { font-family:var(--font-body); font-size:12px; color:var(--s27-ink-3); white-space:nowrap; }
