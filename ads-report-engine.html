@@ -656,7 +656,7 @@ const TC = totals('current'), TP = totals('previous');
 document.getElementById('topClient').innerHTML = (DATA.client||'').replace(/\s*\(vzw\)/,'')+'<small>Advertentierapportage</small>';
 document.getElementById('topUpdated').textContent = 'Periode t.e.m. '+dmonth(DATA.period.end);
 document.getElementById('heroLead').innerHTML =
-  `Een overzicht van <b>${DATA.client.replace(/\s*\(vzw\)/,'')}</b> over <b>4 platformen</b> en <b>${DATA.campaigns.length} campagnes</b>. `+
+  `Een overzicht van <b>${DATA.client.replace(/\s*\(vzw\)/,'')}</b> over <b>${PLAT_ORDER.length} platform${PLAT_ORDER.length===1?'':'en'}</b> en <b>${DATA.campaigns.length} campagne${DATA.campaigns.length===1?'':'s'}</b>. `+
   `In deze periode werd <b>${eur2(TC.spend)}</b> geïnvesteerd, goed voor <b>${compact(TC.impressions)}</b> vertoningen en <b>${int(TC.clicks)}</b> klikken.`;
 document.getElementById('heroPeriods').innerHTML =
   `<div class="s27-period-chip"><span>Deze periode</span><b>${fmtDate(DATA.period.start)} – ${fmtDate(DATA.period.end)}</b></div>`+
