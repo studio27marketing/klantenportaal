@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio 27 portaal — v2 lokale test</title>
+</head>
+<body>
+<!--
+  LOKALE TEST van de geïntegreerde widget mét Firebase-login (AUTH v2).
+  Laadt de LOKALE dashboard.css/html/js (branch auth-v2-integration) en forceert AUTH_V2.
+  Draaien op een authorized domain (localhost), bv.:
+      cd klantendashboard && python3 -m http.server 8000
+      → http://localhost:8000/portal-v2-local.html
+  Raakt productie NIET (productie laadt dashboard.js van de CDN @main).
+-->
+<div id="s27-portal-mount"></div>
+<script>
+  // Forceer de v2-auth-flow voor deze lokale test (dashboard.js leest deze vlag bij load).
+  try { localStorage.setItem('s27_auth_v2', '1'); } catch (e) {}
+</script>
+<script>
+(function () {
+  var BASE = './'; // lokale bestanden naast deze HTML
+  // 1. CSS
+  var link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = BASE + 'dashboard.css';
+  document.head.appendChild(link);
+  // 2. HTML-markup ophalen + injecteren, dan dashboard.js laden met het data-attribuut
+  //    (zodat dashboard.js auth.js relatief — dus lokaal — importeert).
+  fetch(BASE + 'dashboard.html')
+    .then(function (r) { return r.text(); })
+    .then(function (html) {
+      document.getElementById('s27-portal-mount').innerHTML = html;
+      var s = document.createElement('script');
+      s.src = BASE + 'dashboard.js';
+      s.setAttribute('data-s27-portal-js', '1');
+      document.body.appendChild(s);
+    })
+    .catch(function (err) {
+      document.getElementById('s27-portal-mount').innerHTML =
+        '<p style="font-family:system-ui;color:#991b1b;padding:40px;text-align:center">Kon dashboard.html niet laden (' + err.message + '). Draai je een lokale server in de klantendashboard-map?</p>';
+    });
+})();
+</script>
+</body>
+</html>
