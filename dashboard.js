@@ -435,6 +435,67 @@ function isAfgerondStatus(p){
   return s === 'goedgekeurd' || s === 'done' || s === 'klaar_voor_facturatie' || s === 'gefactureerd';
 }
 
+/* =================================================================
+   COCKPIT — centrale "Te doen"-actiehub (v3.2-1 #92)
+   Bundelt alle openstaande klantacties bovenaan de homepage:
+   feedback geven · shoot inplannen · facturatie bevestigen.
+   ================================================================= */
+function collectCockpitActions(d){
+  const projs = (d && d.actieve_projecten) || [];
+  const factuurDone = loadFactuurConfirmCache();
+  const actions = [];
+  projs.forEach(p => {
+    const st = (p.status || '').toLowerCase().replace(/\s+/g, '_');
+    const cat = disciplineCategory(p.discipline);
+    // 1) Feedback geven — status doorgestuurd, ronde nog actief (niet al ingediend)
+    if((st === 'doorgestuurd' || p.feedback_link) && !hasFreshFbLock(p)){
+      actions.push({ type:'feedback', icon:'🔔', accent:'#F66131', label:'Geef je feedback', sub: p.naam || 'Project', cta:'Feedback geven', proj:p });
+    }
+    // 2) Shoot inplannen — video/fotografie-deliverable die nog ingepland moet worden (te plannen)
+    if(cat === 'deliverable' && p.discipline === 'video_fotografie' && st === 'to_do' && !p.shoot_gepland){
+      actions.push({ type:'shoot', icon:'📸', accent:'#9441DB', label:'Plan je shoot in', sub: p.naam || 'Shoot', cta:'Shoot inplannen', proj:p });
+    }
+    // 3) Facturatie bevestigen — opgeleverde deliverable die je nog niet bevestigde
+    if(cat === 'deliverable' && isAfgerondStatus(p) && !factuurDone[p.task_id]){
+      actions.push({ type:'facturatie', icon:'🧾', accent:'#12AC4E', label:'Bevestig de facturatie', sub: p.naam || 'Project', cta:'Facturatie nakijken', proj:p });
+    }
+  });
+  return actions;
+}
+
+function renderCockpitActions(d){
+  const actions = collectCockpitActions(d);
+  state.cockpitActions = actions;
+  if(!actions.length){
+    return '<div class="s27-cockpit s27-cockpit-clear">' +
+      '<div class="s27-cockpit-clear-ic">✅</div>' +
+      '<div><strong>Alles is in orde</strong><p>Je hebt nu niets openstaan. Zodra er iets jouw aandacht vraagt — feedback, een shoot of een bevestiging — verschijnt het hier bovenaan.</p></div>' +
+    '</div>';
+  }
+  return '<div class="s27-cockpit">' +
+    '<div class="s27-cockpit-head"><span class="s27-cockpit-tag">Te doen</span><h2>Dit vraagt jouw aandacht</h2><p>' + actions.length + ' ' + (actions.length === 1 ? 'actie' : 'acties') + ' — telkens één klik.</p></div>' +
+    '<div class="s27-cockpit-list">' +
+      actions.map((a, i) =>
+        '<button type="button" class="s27-cockpit-card" data-cockpit-idx="' + i + '" style="--accent:' + a.accent + '">' +
+          '<span class="s27-cockpit-ic">' + a.icon + '</span>' +
+          '<span class="s27-cockpit-txt"><strong>' + esc(a.label) + '</strong><small>' + esc(a.sub) + '</small></span>' +
+          '<span class="s27-cockpit-cta">' + esc(a.cta) + ' →</span>' +
+        '</button>'
+      ).join('') +
+    '</div>' +
+  '</div>';
+}
+
+function handleCockpitAction(a){
+  if(!a) return;
+  if(a.type === 'feedback' || a.type === 'shoot'){
+    if(a.proj && a.proj.task_id) openProjectDetail(a.proj.task_id, a.type === 'feedback' ? 'feedback' : 'overzicht');
+  } else if(a.type === 'facturatie'){
+    state.facturatiePendingProject = a.proj && a.proj.task_id;
+    switchTab('facturatie');
+  }
+}
+
 function renderHubBody(d){
   const body = $('s27-dash-body'); if(!body) return;
   const deliverable = projectsInCategory(d, 'deliverable');
@@ -455,6 +516,7 @@ function renderHubBody(d){
     hubCard('instellingen','s27p-user','#6B5B6B','Instellingen','Notificaties','Kies hoe je updates krijgt en beheer je gegevens.')
   ].join('');
   body.innerHTML =
+    renderCockpitActions(d) +
     '<button type="button" class="s27-hub-bot" data-bot-open="1">' +
       '<span class="s27-hub-bot-ic">✦</span>' +
       '<span class="s27-hub-bot-txt"><strong>Vraag het de assistent</strong><span>Hoever staat een project? Wanneer is iets klaar? Stel je vraag — je krijgt meteen antwoord.</span></span>' +
@@ -473,6 +535,7 @@ function renderHubBody(d){
     switchTab(t);
   }));
   body.querySelectorAll('[data-go-tab]').forEach(el => el.addEventListener('click', e => { e.stopPropagation(); switchTab(el.dataset.goTab); }));
+  body.querySelectorAll('[data-cockpit-idx]').forEach(el => el.addEventListener('click', () => handleCockpitAction((state.cockpitActions || [])[parseInt(el.dataset.cockpitIdx, 10)])));
   const botBtn = body.querySelector('[data-bot-open]');
   if(botBtn) botBtn.addEventListener('click', () => { if(typeof toggleStatusBot === 'function') toggleStatusBot(true); });
 }
@@ -4038,6 +4101,7 @@ function getDemoData(){
     actieve_projecten: [
       { task_id:'demo-vid-1', naam:'Bedrijfsvideo employer branding', discipline:'video_fotografie', status:'doorgestuurd', opleverdatum:'2026-06-04', voortgang_pct:75, type:'Corporate video', laatst_geupdatet: new Date(Date.now()-3600000*4).toISOString(), feedback_link:'https://studio27.be/video-feedback?taskId=demo-vid-1' },
       { task_id:'demo-vid-2', naam:'Productfotografie najaarscampagne', discipline:'video_fotografie', status:'in_progress', opleverdatum:'2026-06-15', voortgang_pct:40, type:'Productfoto', laatst_geupdatet: new Date(Date.now()-3600000*26).toISOString() },
+      { task_id:'demo-vid-3', naam:'Reels-shoot zomercampagne', discipline:'video_fotografie', status:'to_do', opleverdatum:'2026-06-25', voortgang_pct:0, type:'Reels shoot', laatst_geupdatet: new Date(Date.now()-3600000*5).toISOString() },
       { task_id:'demo-web-1', naam:'Rebuild website testclient.be', discipline:'webdesign', status:'in_progress', opleverdatum:'2026-07-01', voortgang_pct:55, type:'Webflow rebuild', laatst_geupdatet: new Date(Date.now()-3600000*8).toISOString() },
       { task_id:'demo-web-2', naam:'Landingspagina voorjaarscampagne', discipline:'webdesign', status:'doorgestuurd', opleverdatum:'2026-06-08', voortgang_pct:90, type:'Landing page', laatst_geupdatet: new Date(Date.now()-3600000*1).toISOString(), feedback_link:'https://studio27.be/design-feedback?taskId=demo-web-2' },
       { task_id:'demo-web-3', naam:'Nieuwsbrief-template mei', discipline:'webdesign', status:'goedgekeurd', opleverdatum:'2026-05-20', voortgang_pct:100, type:'E-mail template', laatst_geupdatet: new Date(Date.now()-3600000*72).toISOString() },

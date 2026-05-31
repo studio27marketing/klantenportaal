@@ -1122,3 +1122,26 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-fb-ro-item:hover { border-color:var(--s27-ink-3); }
 .s27-fb-ro-item span { font-family:var(--font-display); font-size:13px; font-weight:700; color:var(--s27-ink); }
 .s27-fb-ro-item small { font-family:var(--font-body); font-size:12px; color:var(--s27-ink-3); white-space:nowrap; }
+
+/* =================================================================
+   COCKPIT — "Te doen"-actiehub (v3.2-1 #92)
+   ================================================================= */
+.s27-cockpit { background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:var(--r-lg); padding:22px 24px; margin-bottom:22px; box-shadow:0 6px 20px rgba(35,15,35,0.04); }
+.s27-cockpit-head { margin-bottom:16px; }
+.s27-cockpit-tag { display:inline-block; font-family:var(--font-display); font-size:11px; font-weight:800; letter-spacing:0.06em; text-transform:uppercase; color:var(--s27-orange-ink); background:var(--s27-orange-soft); padding:5px 12px; border-radius:var(--r-pill); margin-bottom:10px; }
+.s27-cockpit-head h2 { font-family:var(--font-display); font-size:21px; font-weight:900; letter-spacing:-0.01em; color:var(--s27-ink); margin:0 0 3px; }
+.s27-cockpit-head p { font-family:var(--font-body); font-size:13.5px; color:var(--s27-ink-3); margin:0; }
+.s27-cockpit-list { display:flex; flex-direction:column; gap:10px; }
+.s27-cockpit-card { display:flex; align-items:center; gap:14px; width:100%; text-align:left; padding:14px 16px; background:var(--s27-paper-2); border:1.5px solid var(--s27-line); border-left:4px solid var(--accent,#3083DC); border-radius:var(--r-md); cursor:pointer; transition:all .15s var(--ease-out); }
+.s27-cockpit-card:hover { background:var(--s27-paper); border-color:var(--accent,#3083DC); transform:translateX(2px); box-shadow:0 4px 14px rgba(35,15,35,0.06); }
+.s27-cockpit-ic { font-size:22px; line-height:1; flex-shrink:0; width:42px; height:42px; display:inline-flex; align-items:center; justify-content:center; background:color-mix(in srgb, var(--accent,#3083DC) 12%, transparent); border-radius:11px; }
+.s27-cockpit-txt { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.s27-cockpit-txt strong { font-family:var(--font-display); font-size:14.5px; font-weight:800; color:var(--s27-ink); }
+.s27-cockpit-txt small { font-family:var(--font-body); font-size:12.5px; color:var(--s27-ink-3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.s27-cockpit-cta { flex-shrink:0; font-family:var(--font-display); font-size:12px; font-weight:800; color:var(--accent,#3083DC); white-space:nowrap; }
+@media (max-width:600px){ .s27-cockpit-cta { display:none; } }
+
+.s27-cockpit-clear { display:flex; align-items:center; gap:16px; background:var(--s27-green-soft, rgba(18,172,78,0.10)); border:1px solid color-mix(in srgb, var(--s27-green,#12AC4E) 25%, transparent); border-radius:var(--r-lg); padding:20px 24px; margin-bottom:22px; }
+.s27-cockpit-clear-ic { font-size:30px; line-height:1; flex-shrink:0; }
+.s27-cockpit-clear strong { display:block; font-family:var(--font-display); font-size:16px; font-weight:800; color:var(--s27-ink); margin-bottom:3px; }
+.s27-cockpit-clear p { font-family:var(--font-body); font-size:13px; color:var(--s27-ink-2); line-height:1.5; margin:0; }
