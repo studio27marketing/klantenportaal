@@ -511,9 +511,9 @@ function renderHubBody(d){
     hubCard('opleidingen','s27p-opl','#12AC4E','Opleidingen', (opleidingCount ? opleidingCount + ' lopend' : 'Geen lopende'), 'Je opleidingen en workshops bij Studio 27 — planning en materiaal.'),
     hubCard('performance','s27p-chart','#9441DB','Performance','Bekijk je cijfers','Je advertentie- en social-resultaten, helder gevisualiseerd.'),
     hubCard('meetings','s27p-cal','#3083DC','Meetings', (meetings.length ? meetings.length + ' gepland' : 'Plan een meeting'), 'Bekijk je agenda en plan zelf een nieuw overleg in.'),
-    hubCard('bedrijf','s27p-brand','#9441DB','Mijn bedrijf','Huisstijl & gegevens','Logo, fonts, contactgegevens en voorkeuren — altijd up-to-date.'),
+    hubCard('bedrijf','s27p-brand','#9441DB','Huisstijl & bestanden','Merkbestanden','Logo\'s, fonts, kleuren en brand-PDFs — alles op één plek, altijd up-to-date.'),
     hubCard('nieuw','s27p-upload','#F8C028','Nieuw project','Start hier','Vertel je idee en krijg meteen een prijsindicatie op maat.'),
-    hubCard('instellingen','s27p-user','#6B5B6B','Instellingen','Notificaties','Kies hoe je updates krijgt en beheer je gegevens.')
+    hubCard('instellingen','s27p-user','#6B5B6B','Instellingen','Gegevens & notificaties','Je contactgegevens, voorkeuren, notificaties en wachtwoord — allemaal hier.')
   ].join('');
   body.innerHTML =
     renderCockpitActions(d) +
@@ -1481,49 +1481,6 @@ async function renderBedrijfTab(){
     <div class="s27-section">
       <div class="s27-section-head">
         <div>
-          <h2 class="s27-section-title">Contactgegevens</h2>
-          <p class="s27-section-sub">Deze gegevens gebruiken we voor offertes, facturen en projectcommunicatie. Klik op "Bewerken" om iets aan te passen.</p>
-        </div>
-        <button class="s27-btn s27-btn-ghost s27-btn-sm" id="s27-contact-edit-btn">✏️ Bewerken</button>
-      </div>
-      <div class="s27-contactform s27-contactform-readonly" id="s27-contactform" data-edit-mode="off">
-        <div class="s27-form-row">
-          ${rf('Voornaam','voornaam',c.voornaam,'Bv. Vincent')}
-          ${rf('Achternaam','achternaam',c.achternaam,'Bv. Verleije')}
-        </div>
-        <div class="s27-form-row">
-          ${rf('GSM','gsm',c.gsm,'+32 4xx xx xx xx')}
-          ${rf('E-mail','email',c.email,'naam@bedrijf.be')}
-        </div>
-        ${rf('Bedrijfsadres (factuur-adres)','adres',c.adres,'Straat nummer, postcode stad')}
-        ${rf('Website','website',c.website,'https://...')}
-        <div class="s27-contactform-foot" id="s27-contactform-foot" hidden>
-          <span class="s27-contactform-state" id="s27-contactform-state"></span>
-          <button class="s27-btn s27-btn-ghost s27-btn-sm" id="s27-contactform-cancel">Annuleer</button>
-          <button class="s27-btn s27-btn-sm s27-btn-primary" id="s27-contactform-save">Wijzigingen opslaan</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="s27-section">
-      <div class="s27-section-head">
-        <div>
-          <h2 class="s27-section-title">Algemene voorkeuren</h2>
-          <p class="s27-section-sub">Wat moeten we zeker (niet) doen voor jouw merk? Wat hier staat zien al onze teamleden voor elk project.</p>
-        </div>
-      </div>
-      <div class="s27-voorkeuren">
-        <textarea id="s27-voorkeuren-input" placeholder="Bv. We houden van minimalistische typografie. Geen stockfoto's. Onze kleur is altijd warm. Vermijd: gradients, drop shadows…">${esc(voorkeurenTekst)}</textarea>
-        <div class="s27-voorkeuren-foot">
-          <span class="s27-voorkeuren-state" id="s27-voorkeuren-state"></span>
-          <button class="s27-btn s27-btn-sm" id="s27-voorkeuren-save" disabled>Opslaan</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="s27-section">
-      <div class="s27-section-head">
-        <div>
           <h2 class="s27-section-title">Huisstijl-bibliotheek</h2>
           <p class="s27-section-sub">Logo's, fonts, kleurpaletten, brand-PDFs, foto's… alles op één plek. Sleep bestanden in het kader of klik om te uploaden — wij en jij kunnen hier downloaden.</p>
         </div>
@@ -1976,7 +1933,7 @@ function attachBedrijfHandlers(){
     if(contactEditBtn) contactEditBtn.hidden = on;
   }
   if(contactEditBtn) contactEditBtn.addEventListener('click', () => toggleEditMode(true));
-  if(contactCancel) contactCancel.addEventListener('click', () => { renderBedrijfTab(); });
+  if(contactCancel) contactCancel.addEventListener('click', () => { renderInstellingenTab(); });
 
   if(contactForm && contactSave){
     contactSave.addEventListener('click', async () => {
@@ -2723,18 +2680,77 @@ async function submitNieuwProject(e){
     if(btn){ btn.disabled = false; btn.textContent = intentie==='direct_start'?'Bevestigen & inplannen':'Aanvraag versturen'; }
   }
 }
-function renderInstellingenTab(){
+async function renderInstellingenTab(){
   const body = $('s27-instellingen-body');
   if(!body) return;
+  // v3.2: contactgegevens + voorkeuren wonen nu hier → bedrijfContent ophalen indien nog niet geladen
+  let data = state.bedrijfContent;
+  if(!data){
+    if(state.demoMode || !ENDPOINTS.bedrijfContent){ data = getMockBedrijfContent(); }
+    else {
+      body.innerHTML = '<div class="s27-loading">Instellingen laden</div>';
+      const res = await api(ENDPOINTS.bedrijfContent, { bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token });
+      data = (res.ok && res.data && !res.data.error) ? res.data : getMockBedrijfContent();
+    }
+    state.bedrijfContent = data;
+  }
   const sess = state.session || {};
   const dash = state.dashboard || {};
   const contact = dash.contact || {};
   const prefs = loadNotifPrefs();
   const contactC = loadContactCache();
-  const waGsm = contactC.gsm || (state.bedrijfContent && state.bedrijfContent.contact && state.bedrijfContent.contact.gsm) || '';
-  const waEmail = contactC.email || (state.bedrijfContent && state.bedrijfContent.contact && state.bedrijfContent.contact.email) || sess.bedrijfsnaam;
+  const cc = data.contact || {};
+  const c = {
+    voornaam:   contactC.voornaam || cc.voornaam || '',
+    achternaam: contactC.achternaam || cc.achternaam || '',
+    gsm:        contactC.gsm || cc.gsm || '',
+    email:      contactC.email || cc.email || data.facturatie_email || '',
+    btw:        contactC.btw || data.btw || '',
+    adres:      contactC.adres || '',
+    website:    contactC.website || data.website || ''
+  };
+  const rf = (label, name, val, ph) =>
+    `<div class="s27-form-field s27-readfield"><span class="s27-readlabel">${esc(label)}</span><div class="s27-readvalue">${val ? esc(val) : '—'}</div><input type="text" name="${name}" value="${esc(val||'')}" placeholder="${esc(ph||'')}" hidden/></div>`;
+  const voorkeurenTekst = decodeMakeString(data.algemene_voorkeuren || '').replace(/<[^>]+>/g,'').replace(/---STRUCTURED---[\s\S]*/,'').trim();
+  const waGsm = c.gsm || '';
+  const waEmail = c.email || sess.bedrijfsnaam;
   const expiresStr = sess.expires_at ? new Date(sess.expires_at).toLocaleString('nl-BE', {dateStyle:'long', timeStyle:'short'}) : '–';
   body.innerHTML = `
+    <div class="s27-section">
+      <div class="s27-section-head">
+        <div>
+          <h2 class="s27-section-title">Contactgegevens</h2>
+          <p class="s27-section-sub">Deze gegevens gebruiken we voor offertes, facturen en projectcommunicatie. Klik op "Bewerken" om iets aan te passen.</p>
+        </div>
+        <button class="s27-btn s27-btn-ghost s27-btn-sm" id="s27-contact-edit-btn">✏️ Bewerken</button>
+      </div>
+      <div class="s27-contactform s27-contactform-readonly" id="s27-contactform" data-edit-mode="off">
+        <div class="s27-form-row">${rf('Voornaam','voornaam',c.voornaam,'Bv. Vincent')}${rf('Achternaam','achternaam',c.achternaam,'Bv. Verleije')}</div>
+        <div class="s27-form-row">${rf('GSM','gsm',c.gsm,'+32 4xx xx xx xx')}${rf('E-mail','email',c.email,'naam@bedrijf.be')}</div>
+        ${rf('Bedrijfsadres (factuur-adres)','adres',c.adres,'Straat nummer, postcode stad')}
+        ${rf('Website','website',c.website,'https://...')}
+        <div class="s27-contactform-foot" id="s27-contactform-foot" hidden>
+          <span class="s27-contactform-state" id="s27-contactform-state"></span>
+          <button class="s27-btn s27-btn-ghost s27-btn-sm" id="s27-contactform-cancel">Annuleer</button>
+          <button class="s27-btn s27-btn-sm s27-btn-primary" id="s27-contactform-save">Wijzigingen opslaan</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="s27-section">
+      <div class="s27-section-head"><div>
+        <h2 class="s27-section-title">Algemene voorkeuren</h2>
+        <p class="s27-section-sub">Wat moeten we zeker (niet) doen voor jouw merk? Wat hier staat zien al onze teamleden voor elk project.</p>
+      </div></div>
+      <div class="s27-voorkeuren">
+        <textarea id="s27-voorkeuren-input" placeholder="Bv. We houden van minimalistische typografie. Geen stockfoto's. Onze kleur is altijd warm. Vermijd: gradients, drop shadows…">${esc(voorkeurenTekst)}</textarea>
+        <div class="s27-voorkeuren-foot">
+          <span class="s27-voorkeuren-state" id="s27-voorkeuren-state"></span>
+          <button class="s27-btn s27-btn-sm" id="s27-voorkeuren-save" disabled>Opslaan</button>
+        </div>
+      </div>
+    </div>
+
     <div class="s27-settings-grid">
       <section class="s27-settings-card">
         <h3 class="s27-settings-title"><svg width="16" height="16"><use href="#s27p-spark"/></svg> Notificatie-voorkeuren</h3>
@@ -2747,10 +2763,17 @@ function renderInstellingenTab(){
         <div class="s27-notif-targets">
           <div class="s27-notif-target"><span>📱 WhatsApp naar</span><strong>${waGsm ? esc(waGsm) : 'geen gsm ingesteld'}</strong></div>
           <div class="s27-notif-target"><span>✉️ E-mail naar</span><strong>${esc(waEmail || '—')}</strong></div>
-          <p class="s27-notif-target-hint">Klopt dit niet? Pas je gsm/e-mail aan bij <a href="#" data-goto-tab="bedrijf">Mijn bedrijf → Contactgegevens</a>.</p>
+          <p class="s27-notif-target-hint">Klopt dit niet? Pas je gsm/e-mail aan hierboven bij <strong>Contactgegevens</strong>.</p>
         </div>
         <button class="s27-btn s27-btn-primary" id="s27-save-notif" style="margin-top:14px">Voorkeuren opslaan</button>
         <p class="s27-settings-status" id="s27-notif-status" style="display:none"></p>
+      </section>
+
+      <section class="s27-settings-card">
+        <h3 class="s27-settings-title"><svg width="16" height="16"><use href="#s27p-lock"/></svg> Wachtwoord</h3>
+        <p class="s27-settings-sub">Reset je toegangscode. Je krijgt meteen een nieuwe code per e-mail${waEmail ? ' op <strong>' + esc(waEmail) + '</strong>' : ' bij je contactpersoon'}. Je huidige code werkt daarna niet meer.</p>
+        <button class="s27-btn s27-btn-ghost" id="s27-reset-pw"><svg width="15" height="15" style="margin-right:6px"><use href="#s27p-lock"/></svg> Wachtwoord resetten</button>
+        <p class="s27-settings-status" id="s27-reset-pw-status" style="display:none"></p>
       </section>
 
       <section class="s27-settings-card">
@@ -2781,19 +2804,11 @@ function renderInstellingenTab(){
         </div>
         <p class="s27-settings-hint">Zie je een oude versie? "Cache wissen" leegt alles, logt je uit en haalt het portaal volledig vers op.</p>
       </section>
-
-      <section class="s27-settings-card s27-settings-card-muted">
-        <h3 class="s27-settings-title">🚧 Binnenkort</h3>
-        <ul class="s27-coming-list">
-          <li>Auto-reminders bij openstaande feedback (mail + WhatsApp)</li>
-          <li>Wachtwoord/PIN ipv login-token</li>
-          <li>Multi-user toegang per bedrijf (collega's uitnodigen)</li>
-          <li>API-koppeling voor jouw eigen tools</li>
-        </ul>
-      </section>
     </div>
   `;
   // Wire up handlers
+  attachBedrijfHandlers(); // contactgegevens-edit + algemene-voorkeuren (null-guarded, wired waar de velden staan)
+  wirePasswordReset();
   const saveBtn = $('s27-save-notif');
   if(saveBtn) saveBtn.addEventListener('click', saveNotifPrefs);
   const clearBtn = $('s27-clear-cache');
@@ -2807,6 +2822,34 @@ function renderInstellingenTab(){
     state.session = null;
     state.viewMode = 'login';
     renderApp();
+  });
+}
+
+// v3.2: wachtwoord/toegangscode resetten → Make genereert nieuwe code, schrijft naar ClickUp en mailt de contactpersoon
+function wirePasswordReset(){
+  const btn = $('s27-reset-pw');
+  if(!btn) return;
+  btn.addEventListener('click', async () => {
+    if(!confirm('Een nieuwe toegangscode aanmaken?\n\nJe huidige code werkt daarna niet meer. De nieuwe code sturen we naar het e-mailadres van je contactpersoon.')) return;
+    const status = $('s27-reset-pw-status');
+    btn.disabled = true; const orig = btn.innerHTML; btn.textContent = 'Bezig…';
+    if(status){ status.style.display = 'block'; status.className = 's27-settings-status'; status.textContent = 'Nieuwe code aanmaken…'; }
+    try {
+      if(state.demoMode || !ENDPOINTS.passwordReset){
+        await new Promise(r => setTimeout(r, 700));
+        if(status) status.textContent = '✓ (demo) In productie sturen we nu een nieuwe code naar je contactpersoon.';
+      } else {
+        const res = await api(ENDPOINTS.passwordReset, { bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token, klant_naam: state.session.bedrijfsnaam });
+        if(res.ok && res.data && res.data.ok){
+          if(status) status.innerHTML = '✓ Gelukt! We hebben een nieuwe code gemaild naar <strong>' + esc(res.data.email || 'je contactpersoon') + '</strong>. Log met je huidige code uit zodra je de nieuwe hebt.';
+        } else {
+          if(status){ status.classList.add('is-error'); status.textContent = (res.data && res.data.message) || '⚠️ Resetten lukte niet. Probeer opnieuw of stuur ons een bericht.'; }
+        }
+      }
+    } catch(e){
+      if(status){ status.classList.add('is-error'); status.textContent = '⚠️ Er ging iets mis (' + (e.message || 'onbekend') + ').'; }
+    }
+    btn.disabled = false; btn.innerHTML = orig;
   });
 }
 
