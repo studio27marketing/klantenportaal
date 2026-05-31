@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Advertentierapportage — Studio 27</title>
+<!--
+  STUDIO 27 — ADVERTENTIERAPPORTAGE v1.0
+  Self-contained embed (Webflow "Embed Code"). Data inline, alleen Chart.js via CDN.
+  Bouw opnieuw via: python3 build.py  (injecteert data.json in dit template)
+-->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800;900&family=Nunito:wght@400;500;600;700;800;900&display=swap');
+
+:root{
+  --s27-blue:#3083DC; --s27-blue-ink:#1F5FA8; --s27-blue-soft:rgba(48,131,220,0.12); --s27-blue-faint:rgba(48,131,220,0.06);
+  --s27-purple:#9441DB; --s27-purple-ink:#6B2BA8; --s27-purple-soft:rgba(148,65,219,0.12);
+  --s27-green:#12AC4E;  --s27-green-ink:#0D8A3F; --s27-green-soft:rgba(18,172,78,0.12);
+  --s27-orange:#F66131; --s27-orange-ink:#C44514; --s27-orange-soft:rgba(246,97,49,0.12);
+  --s27-yellow:#F8C028; --s27-yellow-ink:#B88500; --s27-yellow-soft:rgba(248,192,40,0.18);
+  --s27-pink:#F697CE;   --s27-pink-ink:#C56FA8;  --s27-pink-soft:rgba(246,151,206,0.18);
+  --s27-ink:#230F23; --s27-ink-2:#3A2A3A; --s27-ink-3:#6B5B6B; --s27-ink-4:#9E919E;
+  --s27-paper:#FFFFFF; --s27-paper-2:#FAF7F2; --s27-paper-3:#F1EBE2; --s27-line:#E7DFD3;
+  --font-display:'Montserrat',system-ui,sans-serif; --font-body:'Nunito',system-ui,sans-serif;
+  --r-sm:10px; --r-md:16px; --r-lg:24px; --r-pill:999px;
+  --sh-sm:0 2px 6px rgba(35,15,35,0.06); --sh-md:0 8px 24px rgba(35,15,35,0.10); --sh-lg:0 16px 40px rgba(35,15,35,0.12);
+  --sh-focus:0 0 0 3px rgba(48,131,220,0.28);
+  --ease-out:cubic-bezier(0.22,1,0.36,1);
+}
+*{box-sizing:border-box;}
+body{margin:0; background:var(--s27-paper-2);}
+.s27{font-family:var(--font-body); color:var(--s27-ink); background:var(--s27-paper-2); min-height:100vh; -webkit-font-smoothing:antialiased;}
+.s27 *{box-sizing:border-box;}
+.s27-wrap{max-width:1180px; margin:0 auto; padding:24px 32px 72px;}
+@media(max-width:720px){.s27-wrap{padding:18px 16px 48px;}}
+
+/* TOPBAR */
+.s27-topbar{background:rgba(255,255,255,0.92); border-bottom:1px solid var(--s27-line); backdrop-filter:saturate(180%) blur(10px); position:sticky; top:0; z-index:50;}
+.s27-topbar-inner{max-width:1180px; margin:0 auto; padding:14px 32px; display:flex; align-items:center; justify-content:space-between; gap:16px;}
+@media(max-width:720px){.s27-topbar-inner{padding:12px 16px; flex-wrap:wrap;}}
+.s27-logo{font-family:var(--font-display); font-weight:900; font-size:20px; letter-spacing:-0.02em; color:var(--s27-ink); display:flex; align-items:baseline; gap:3px;}
+.s27-logo .num{color:var(--s27-blue); position:relative;}
+.s27-brandrow{display:flex; align-items:center; gap:14px;}
+.s27-divider{width:1px; height:26px; background:var(--s27-line);}
+.s27-client{font-family:var(--font-display); font-size:13px; font-weight:800; color:var(--s27-ink); line-height:1.2;}
+.s27-client small{display:block; font-size:10px; font-weight:700; color:var(--s27-ink-4); letter-spacing:0.06em; text-transform:uppercase;}
+.s27-updated{font-family:var(--font-display); font-size:11px; font-weight:700; color:var(--s27-ink-3); display:inline-flex; align-items:center; gap:6px;}
+.s27-updated::before{content:''; width:7px; height:7px; border-radius:50%; background:var(--s27-green); animation:s27pulse 2s ease-in-out infinite;}
+@keyframes s27pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.45;transform:scale(.82);}}
+
+/* HERO */
+.s27-hero{margin:32px 0 28px;}
+.s27-tag{display:inline-flex; align-items:center; gap:8px; font-family:var(--font-display); font-size:11px; font-weight:800; color:var(--s27-blue-ink); background:var(--s27-blue-soft); padding:7px 14px; border-radius:var(--r-pill); letter-spacing:0.05em; text-transform:uppercase; margin-bottom:14px;}
+.s27-tag::before{content:''; width:6px; height:6px; background:var(--s27-blue); border-radius:50%;}
+.s27-hero h1{font-family:var(--font-display); font-size:42px; font-weight:900; line-height:1.04; letter-spacing:-0.025em; margin:0 0 12px;}
+.s27-hero h1 .accent{color:var(--s27-blue); position:relative; display:inline-block;}
+.s27-hero h1 .accent::after{content:''; position:absolute; left:-8px; right:-12px; bottom:-10px; height:13px; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 18' fill='none'><path d='M5 10 C 50 2, 100 16, 145 7 S 215 11, 235 5' stroke='%233083DC' stroke-width='6' stroke-linecap='round'/></svg>"); background-repeat:no-repeat; background-size:100% 100%; opacity:.5;}
+@media(max-width:600px){.s27-hero h1{font-size:30px;}}
+.s27-hero-lead{font-size:16px; color:var(--s27-ink-2); margin:0; line-height:1.55; max-width:720px;}
+.s27-hero-lead b{color:var(--s27-ink); font-weight:800;}
+.s27-periods{display:flex; gap:10px; flex-wrap:wrap; margin-top:18px;}
+.s27-period-chip{display:inline-flex; flex-direction:column; gap:1px; background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:var(--r-md); padding:10px 16px; box-shadow:var(--sh-sm);}
+.s27-period-chip span{font-family:var(--font-display); font-size:10px; font-weight:800; letter-spacing:0.05em; text-transform:uppercase; color:var(--s27-ink-4);}
+.s27-period-chip b{font-family:var(--font-display); font-size:14px; font-weight:800; color:var(--s27-ink);}
+.s27-period-chip.is-prev b{color:var(--s27-ink-3);}
+
+/* KPI GRID */
+.s27-kpis{display:grid; grid-template-columns:repeat(6,1fr); gap:14px; margin-bottom:34px;}
+@media(max-width:980px){.s27-kpis{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:560px){.s27-kpis{grid-template-columns:repeat(2,1fr);}}
+.s27-kpi{background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:var(--r-lg); padding:18px 18px 16px; box-shadow:var(--sh-sm); position:relative; overflow:hidden;}
+.s27-kpi::before{content:''; position:absolute; top:0; left:0; width:100%; height:4px; background:var(--s27-blue);}
+.s27-kpi[data-tone=purple]::before{background:var(--s27-purple);}
+.s27-kpi[data-tone=green]::before{background:var(--s27-green);}
+.s27-kpi[data-tone=orange]::before{background:var(--s27-orange);}
+.s27-kpi[data-tone=yellow]::before{background:var(--s27-yellow);}
+.s27-kpi[data-tone=pink]::before{background:var(--s27-pink);}
+.s27-kpi-label{font-family:var(--font-display); font-size:10px; font-weight:800; letter-spacing:0.05em; text-transform:uppercase; color:var(--s27-ink-4); margin-bottom:8px;}
+.s27-kpi-val{font-family:var(--font-display); font-size:26px; font-weight:900; letter-spacing:-0.02em; line-height:1; color:var(--s27-ink);}
+.s27-kpi-val small{font-size:14px; font-weight:800; color:var(--s27-ink-3);}
+.s27-kpi-sub{margin-top:9px; display:flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:var(--s27-ink-3);}
+.s27-delta{display:inline-flex; align-items:center; gap:3px; font-family:var(--font-display); font-weight:800; font-size:11px; padding:2px 7px; border-radius:var(--r-pill);}
+.s27-delta.up{color:var(--s27-green-ink); background:var(--s27-green-soft);}
+.s27-delta.down{color:var(--s27-orange-ink); background:var(--s27-orange-soft);}
+.s27-delta.flat{color:var(--s27-ink-3); background:var(--s27-paper-3);}
+
+/* SECTION */
+.s27-sec{margin-bottom:34px;}
+.s27-sec-head{display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:16px; flex-wrap:wrap;}
+.s27-sec-head h2{font-family:var(--font-display); font-size:21px; font-weight:900; letter-spacing:-0.02em; margin:0; color:var(--s27-ink);}
+.s27-sec-head p{margin:4px 0 0; font-size:13px; color:var(--s27-ink-3); max-width:560px;}
+
+/* CARD */
+.s27-card{background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:var(--r-lg); box-shadow:var(--sh-sm); padding:22px 24px;}
+
+/* CHART CARD */
+.s27-chartcard{padding:0; overflow:hidden;}
+.s27-chart-top{display:flex; align-items:center; justify-content:space-between; gap:14px; padding:18px 22px; border-bottom:1px solid var(--s27-line); flex-wrap:wrap;}
+.s27-tabs{display:inline-flex; background:var(--s27-paper-2); border:1px solid var(--s27-line); border-radius:var(--r-pill); padding:4px; gap:2px;}
+.s27-tab{border:none; background:none; cursor:pointer; font-family:var(--font-display); font-size:12px; font-weight:800; color:var(--s27-ink-3); padding:8px 16px; border-radius:var(--r-pill); transition:all .18s var(--ease-out); white-space:nowrap;}
+.s27-tab:hover{color:var(--s27-ink);}
+.s27-tab.active{background:var(--s27-blue); color:#fff; box-shadow:var(--sh-sm);}
+.s27-metricsel{display:inline-flex; gap:6px; flex-wrap:wrap;}
+.s27-chip{border:1.5px solid var(--s27-line); background:var(--s27-paper); cursor:pointer; font-family:var(--font-display); font-size:11px; font-weight:800; color:var(--s27-ink-2); padding:7px 13px; border-radius:var(--r-pill); transition:all .15s; letter-spacing:0.02em;}
+.s27-chip:hover{border-color:var(--s27-ink-3);}
+.s27-chip.active{background:var(--s27-ink); color:#fff; border-color:var(--s27-ink);}
+.s27-chart-body{padding:18px 22px 8px; position:relative;}
+.s27-chart-panel{display:none;}
+.s27-chart-panel.active{display:block;}
+.s27-canvas-holder{position:relative; height:380px;}
+@media(max-width:600px){.s27-canvas-holder{height:300px;}}
+.s27-legend{display:flex; gap:8px; flex-wrap:wrap; padding:4px 22px 20px;}
+.s27-legbtn{display:inline-flex; align-items:center; gap:7px; border:1.5px solid var(--s27-line); background:var(--s27-paper); cursor:pointer; font-family:var(--font-display); font-size:12px; font-weight:800; color:var(--s27-ink-2); padding:7px 14px; border-radius:var(--r-pill); transition:all .15s;}
+.s27-legbtn .dot{width:11px; height:11px; border-radius:50%;}
+.s27-legbtn.off{opacity:.4; text-decoration:line-through;}
+.s27-chart-note{font-size:12px; color:var(--s27-ink-3); padding:0 22px 20px; line-height:1.5;}
+.s27-chart-note b{color:var(--s27-orange-ink);}
+
+/* PLATFORM CARDS */
+.s27-platgrid{display:grid; grid-template-columns:repeat(2,1fr); gap:16px;}
+@media(max-width:760px){.s27-platgrid{grid-template-columns:1fr;}}
+.s27-plat{background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:var(--r-lg); box-shadow:var(--sh-sm); overflow:hidden;}
+.s27-plat-head{display:flex; align-items:center; gap:13px; padding:18px 20px; border-bottom:1px solid var(--s27-line); position:relative;}
+.s27-plat-head::before{content:''; position:absolute; left:0; top:0; bottom:0; width:5px;}
+.s27-plat[data-p=meta] .s27-plat-head::before{background:var(--s27-blue);}
+.s27-plat[data-p=tiktok] .s27-plat-head::before{background:var(--s27-purple);}
+.s27-plat[data-p=snapchat] .s27-plat-head::before{background:var(--s27-yellow);}
+.s27-plat[data-p=google] .s27-plat-head::before{background:var(--s27-orange);}
+.s27-plat-badge{width:42px; height:42px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-family:var(--font-display); font-weight:900; font-size:17px; color:#fff; flex-shrink:0;}
+.s27-plat[data-p=meta] .s27-plat-badge{background:var(--s27-blue);}
+.s27-plat[data-p=tiktok] .s27-plat-badge{background:var(--s27-purple);}
+.s27-plat[data-p=snapchat] .s27-plat-badge{background:var(--s27-yellow); color:var(--s27-ink);}
+.s27-plat[data-p=google] .s27-plat-badge{background:var(--s27-orange);}
+.s27-plat-title{flex:1; min-width:0;}
+.s27-plat-title b{font-family:var(--font-display); font-size:16px; font-weight:900; color:var(--s27-ink); display:block; line-height:1.1;}
+.s27-plat-title span{font-size:11px; color:var(--s27-ink-4); font-weight:700;}
+.s27-plat-spend{text-align:right;}
+.s27-plat-spend b{font-family:var(--font-display); font-size:18px; font-weight:900; color:var(--s27-ink); display:block; line-height:1;}
+.s27-plat-spend .s27-delta{margin-top:5px;}
+.s27-plat-body{padding:16px 20px 20px; display:grid; grid-template-columns:repeat(3,1fr); gap:14px 10px;}
+.s27-metric b{font-family:var(--font-display); font-size:17px; font-weight:900; color:var(--s27-ink); display:block; line-height:1.05; letter-spacing:-0.01em;}
+.s27-metric span{font-size:10.5px; color:var(--s27-ink-4); font-weight:700; text-transform:uppercase; letter-spacing:0.03em;}
+
+/* TABLE */
+.s27-tablecard{padding:0; overflow:hidden;}
+.s27-tablescroll{overflow-x:auto;}
+table.s27-table{width:100%; border-collapse:collapse; font-size:13px; min-width:680px;}
+.s27-table thead th{font-family:var(--font-display); font-size:10.5px; font-weight:800; letter-spacing:0.04em; text-transform:uppercase; color:var(--s27-ink-4); text-align:right; padding:14px 16px; border-bottom:1.5px solid var(--s27-line); cursor:pointer; user-select:none; white-space:nowrap; background:var(--s27-paper-2);}
+.s27-table thead th:first-child,.s27-table thead th:nth-child(2){text-align:left;}
+.s27-table thead th:hover{color:var(--s27-ink-2);}
+.s27-table thead th .arr{opacity:0; font-size:9px; margin-left:3px;}
+.s27-table thead th.sorted .arr{opacity:1;}
+.s27-table tbody td{padding:13px 16px; border-bottom:1px solid var(--s27-line); text-align:right; color:var(--s27-ink-2); font-weight:700; white-space:nowrap;}
+.s27-table tbody td:first-child,.s27-table tbody td:nth-child(2){text-align:left;}
+.s27-table tbody tr:hover{background:var(--s27-blue-faint);}
+.s27-table tbody tr:last-child td{border-bottom:none;}
+.s27-camp-name{font-weight:800; color:var(--s27-ink); max-width:280px; overflow:hidden; text-overflow:ellipsis;}
+.s27-pbadge{display:inline-flex; align-items:center; gap:6px; font-family:var(--font-display); font-size:11px; font-weight:800; padding:4px 10px; border-radius:var(--r-pill);}
+.s27-pbadge .dot{width:8px; height:8px; border-radius:50%;}
+.s27-pbadge[data-p=meta]{color:var(--s27-blue-ink); background:var(--s27-blue-soft);}
+.s27-pbadge[data-p=tiktok]{color:var(--s27-purple-ink); background:var(--s27-purple-soft);}
+.s27-pbadge[data-p=snapchat]{color:var(--s27-yellow-ink); background:var(--s27-yellow-soft);}
+.s27-pbadge[data-p=google]{color:var(--s27-orange-ink); background:var(--s27-orange-soft);}
+.s27-table tfoot td{padding:14px 16px; border-top:2px solid var(--s27-line); text-align:right; font-family:var(--font-display); font-weight:900; color:var(--s27-ink); background:var(--s27-paper-2);}
+.s27-table tfoot td:first-child{text-align:left;}
+
+/* RESULTATEN */
+.s27-results{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:16px;}
+@media(max-width:860px){.s27-results{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:460px){.s27-results{grid-template-columns:1fr;}}
+.s27-result{background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:var(--r-lg); padding:18px 20px; box-shadow:var(--sh-sm); position:relative; overflow:hidden;}
+.s27-result::before{content:''; position:absolute; left:0; top:0; bottom:0; width:5px;}
+.s27-result[data-p=meta]::before{background:var(--s27-blue);}
+.s27-result[data-p=tiktok]::before{background:var(--s27-purple);}
+.s27-result[data-p=snapchat]::before{background:var(--s27-yellow);}
+.s27-result[data-p=google]::before{background:var(--s27-orange);}
+.s27-result-top{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px;}
+.s27-result-plat{font-family:var(--font-display); font-size:12px; font-weight:800; color:var(--s27-ink-2);}
+.s27-track{font-family:var(--font-display); font-size:9.5px; font-weight:800; letter-spacing:0.04em; text-transform:uppercase; padding:3px 8px; border-radius:var(--r-pill);}
+.s27-track.on{color:var(--s27-green-ink); background:var(--s27-green-soft);}
+.s27-track.off{color:var(--s27-ink-4); background:var(--s27-paper-3);}
+.s27-result-val{font-family:var(--font-display); font-size:30px; font-weight:900; letter-spacing:-0.025em; line-height:1; color:var(--s27-ink);}
+.s27-result-lbl{font-size:12px; color:var(--s27-ink-3); font-weight:700; margin-top:6px;}
+.s27-result-cost{margin-top:10px; padding-top:10px; border-top:1px solid var(--s27-line); font-family:var(--font-display); font-size:13px; font-weight:800; color:var(--s27-ink-2);}
+.s27-result-cost span{color:var(--s27-ink-4); font-weight:700;}
+.s27-callout{display:flex; gap:12px; align-items:flex-start; background:var(--s27-yellow-soft); border:1px solid rgba(248,192,40,0.45); border-radius:var(--r-md); padding:14px 18px; font-size:13px; color:var(--s27-ink-2); line-height:1.55;}
+.s27-callout svg{width:20px; height:20px; flex-shrink:0; color:var(--s27-yellow-ink); margin-top:1px;}
+.s27-callout b{color:var(--s27-ink); font-family:var(--font-display); font-weight:800;}
+
+/* DOELGROEPEN */
+.s27-aud-legend{display:flex; gap:14px; flex-wrap:wrap; padding:2px 22px 18px;}
+.s27-aud-legitem{display:inline-flex; align-items:center; gap:7px; font-family:var(--font-display); font-size:11px; font-weight:800; color:var(--s27-ink-3);}
+.s27-aud-legitem .dot{width:11px; height:11px; border-radius:3px;}
+.s27-aud-canvas{position:relative; height:420px;}
+@media(max-width:600px){.s27-aud-canvas{height:480px;}}
+
+/* TOP ADS filter */
+.s27-filterbar{display:flex; gap:6px; flex-wrap:wrap; padding:18px 22px; border-bottom:1px solid var(--s27-line); align-items:center;}
+.s27-filterbar .lbl{font-family:var(--font-display); font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; color:var(--s27-ink-4); margin-right:4px;}
+
+/* FOOTER / METHODOLOGY */
+.s27-foot{margin-top:40px; border-top:1px solid var(--s27-line); padding-top:24px;}
+.s27-method{background:var(--s27-paper); border:1px dashed var(--s27-line); border-radius:var(--r-md); padding:18px 20px; font-size:12.5px; color:var(--s27-ink-3); line-height:1.6;}
+.s27-method b{color:var(--s27-ink-2); font-family:var(--font-display); font-weight:800;}
+.s27-method ul{margin:8px 0 0; padding-left:18px;}
+.s27-method li{margin-bottom:4px;}
+.s27-footrow{display:flex; align-items:center; justify-content:space-between; gap:14px; margin-top:20px; flex-wrap:wrap;}
+.s27-footrow .s27-logo{font-size:16px;}
+.s27-footrow small{font-size:11px; color:var(--s27-ink-4); font-weight:700;}
+</style>
+</head>
+<body>
+<div class="s27">
+  <!-- TOPBAR -->
+  <div class="s27-topbar">
+    <div class="s27-topbar-inner">
+      <div class="s27-brandrow">
+        <div class="s27-logo">studio<span class="num">27</span></div>
+        <div class="s27-divider"></div>
+        <div class="s27-client" id="topClient">—<small>Advertentierapportage</small></div>
+      </div>
+      <div class="s27-updated" id="topUpdated">Live data</div>
+    </div>
+  </div>
+
+  <div class="s27-wrap">
+    <!-- HERO -->
+    <header class="s27-hero">
+      <div class="s27-tag">Advertentieprestaties · per platform</div>
+      <h1>Hoe presteren je <span class="accent">advertenties</span>?</h1>
+      <p class="s27-hero-lead" id="heroLead">—</p>
+      <div class="s27-periods" id="heroPeriods"></div>
+    </header>
+
+    <!-- KPI GRID -->
+    <section class="s27-kpis" id="kpiGrid"></section>
+
+    <!-- RESULTATEN & CONVERSIES -->
+    <section class="s27-sec">
+      <div class="s27-sec-head">
+        <div>
+          <h2>Wat leverde het op?</h2>
+          <p>Het tastbare resultaat per platform — verkeer naar de website en, waar gemeten, conversies.</p>
+        </div>
+      </div>
+      <div class="s27-results" id="resultsGrid"></div>
+      <div class="s27-callout" id="resultsNote"></div>
+    </section>
+
+    <!-- DYNAMIC CHART -->
+    <section class="s27-sec">
+      <div class="s27-sec-head">
+        <div>
+          <h2>Prestaties in beeld</h2>
+          <p>Vergelijk platformen onderling, volg het dagelijkse verloop of bekijk de verdeling van het budget.</p>
+        </div>
+      </div>
+      <div class="s27-card s27-chartcard">
+        <div class="s27-chart-top">
+          <div class="s27-tabs" id="chartTabs">
+            <button class="s27-tab active" data-view="platform">Per platform</button>
+            <button class="s27-tab" data-view="daily">Dagelijks verloop</button>
+            <button class="s27-tab" data-view="share">Verdeling budget</button>
+          </div>
+          <div class="s27-metricsel" id="metricSel"></div>
+        </div>
+        <div class="s27-chart-body">
+          <div class="s27-chart-panel active" data-panel="platform">
+            <div class="s27-canvas-holder"><canvas id="cPlatform"></canvas></div>
+          </div>
+          <div class="s27-chart-panel" data-panel="daily">
+            <div class="s27-canvas-holder"><canvas id="cDaily"></canvas></div>
+          </div>
+          <div class="s27-chart-panel" data-panel="share">
+            <div class="s27-canvas-holder"><canvas id="cShare"></canvas></div>
+          </div>
+        </div>
+        <div class="s27-legend" id="chartLegend"></div>
+        <div class="s27-chart-note" id="chartNote"></div>
+      </div>
+    </section>
+
+    <!-- PLATFORM DETAIL -->
+    <section class="s27-sec">
+      <div class="s27-sec-head">
+        <div>
+          <h2>Per platform uitgelicht</h2>
+          <p>De kerncijfers per kanaal, met de evolutie van de besteding tegenover de vorige periode.</p>
+        </div>
+      </div>
+      <div class="s27-platgrid" id="platGrid"></div>
+    </section>
+
+    <!-- DOELGROEPEN (META) -->
+    <section class="s27-sec" id="secAudiences">
+      <div class="s27-sec-head">
+        <div>
+          <h2>Welke doelgroep rendeert?</h2>
+          <p>Meta-doelgroepen gerangschikt op landingspagina-weergaven. Toont meteen welke segmenten het meest verkeer opleveren per euro.</p>
+        </div>
+      </div>
+      <div class="s27-card s27-chartcard">
+        <div class="s27-chart-top">
+          <div style="font-family:var(--font-display);font-weight:800;font-size:13px;color:var(--s27-ink-2)">Meta-doelgroepen</div>
+          <div class="s27-metricsel" id="audMetricSel"></div>
+        </div>
+        <div class="s27-chart-body"><div class="s27-aud-canvas"><canvas id="cAud"></canvas></div></div>
+        <div class="s27-aud-legend" id="audLegend"></div>
+        <div class="s27-chart-note" id="audNote"></div>
+      </div>
+    </section>
+
+    <!-- TOP ADVERTENTIES -->
+    <section class="s27-sec" id="secTopAds">
+      <div class="s27-sec-head">
+        <div>
+          <h2>Top advertenties</h2>
+          <p>De best lopende creaties per platform. Filter op kanaal; "Resultaat" is de meest relevante metriek per platform.</p>
+        </div>
+      </div>
+      <div class="s27-card s27-tablecard">
+        <div class="s27-filterbar" id="adFilter"><span class="lbl">Platform</span></div>
+        <div class="s27-tablescroll">
+          <table class="s27-table" id="adTable">
+            <thead><tr>
+              <th data-k="name">Advertentie</th>
+              <th data-k="platform">Platform</th>
+              <th data-k="spend" class="sorted">Besteding <span class="arr">▼</span></th>
+              <th data-k="impressions">Vertoningen <span class="arr">▼</span></th>
+              <th data-k="ctr">CTR <span class="arr">▼</span></th>
+              <th data-k="result">Resultaat <span class="arr">▼</span></th>
+            </tr></thead>
+            <tbody id="adBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- CAMPAIGN TABLE -->
+    <section class="s27-sec">
+      <div class="s27-sec-head">
+        <div>
+          <h2>Alle campagnes</h2>
+          <p>Klik op een kolomkop om te sorteren. Alle 4 platformen samengebracht.</p>
+        </div>
+      </div>
+      <div class="s27-card s27-tablecard">
+        <div class="s27-tablescroll">
+          <table class="s27-table" id="campTable">
+            <thead><tr>
+              <th data-k="platform">Platform <span class="arr">▼</span></th>
+              <th data-k="name">Campagne <span class="arr">▼</span></th>
+              <th data-k="spend" class="sorted">Besteding <span class="arr">▼</span></th>
+              <th data-k="impressions">Vertoningen <span class="arr">▼</span></th>
+              <th data-k="clicks">Klikken <span class="arr">▼</span></th>
+              <th data-k="ctr">CTR <span class="arr">▼</span></th>
+              <th data-k="cpc">CPC <span class="arr">▼</span></th>
+            </tr></thead>
+            <tbody id="campBody"></tbody>
+            <tfoot id="campFoot"></tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="s27-foot">
+      <div class="s27-method">
+        <b>Over deze cijfers</b>
+        <ul id="methodList"></ul>
+      </div>
+      <div class="s27-footrow">
+        <div class="s27-logo">studio<span class="num">27</span></div>
+        <small id="footMeta">—</small>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<script>
+/* RAW_INLINE: geïnjecteerde rauwe JSON (Pattern B). null = haal op via ?data=<URL> (Pattern A). */
+const RAW_INLINE = null;
+
+/* =====================================================================
+   Studio 27 — Ads JSON parser  (browser-port van extract_data.py)
+   buildDataset(raw)  ->  schone DATA in dezelfde vorm als data.json
+   Defensief: ontbrekende platformen/velden -> 0 / weggelaten.
+   ===================================================================== */
+function S27num(x){ if(x===null||x===undefined||x==='') return 0; const n=parseFloat(x); return isFinite(n)?n:0; }
+
+function S27parseField(val){
+  if(val===null||val===undefined) return null;
+  if(typeof val!=='string') return val;
+  const s=val.trim(); if(!s) return null;
+  try{
+    const p=JSON.parse(s);
+    if(p && typeof p==='object' && !Array.isArray(p) && ('body' in p) && ('statusCode' in p)){
+      const b=p.body; return (typeof b==='string') ? S27parseField(b) : b;
+    }
+    return p;
+  }catch(e){}
+  try{ return JSON.parse('['+s+']'); }catch(e){}   // malformed "},{ "-lijst
+  return null;
+}
+
+function S27metaLocalDate(iso){
+  if(!iso) return '';
+  const dt=new Date(iso); if(isNaN(dt.getTime())) return String(iso).slice(0,10);
+  return new Date(dt.getTime()+2*3600*1000).toISOString().slice(0,10);   // UTC->lokaal (CET/CEST veilig)
+}
+
+function S27derived(t){
+  const impr=t.impressions||0, clk=t.clicks||0, sp=t.spend||0;
+  return { ctr: impr? clk/impr*100:0, cpc: clk? sp/clk:0, cpm: impr? sp/impr*1000:0 };
+}
+function S27round(v,d){ const m=Math.pow(10,d||0); return Math.round((v||0)*m)/m; }
+
+function buildDataset(raw){
+  const D = raw || {};
+  const num = S27num;
+  const F = k => S27parseField(D[k]);
+
+  /* ---------- META ---------- */
+  function metaTotals(field){
+    const rows=F(field)||[];
+    const t={spend:0,reach:0,clicks:0,impressions:0,link_clicks:0,landing_page_views:0,engagement:0,video_views:0};
+    rows.forEach(r=>{
+      t.spend+=num(r.spend); t.reach+=num(r.reach); t.clicks+=num(r.clicks); t.impressions+=num(r.impressions);
+      (r.actions||[]).forEach(a=>{
+        if(a.action_type==='link_click') t.link_clicks+=num(a.value);
+        else if(a.action_type==='landing_page_view') t.landing_page_views+=num(a.value);
+        else if(a.action_type==='post_engagement') t.engagement+=num(a.value);
+        else if(a.action_type==='video_view') t.video_views+=num(a.value);
+      });
+    });
+    return t;
+  }
+  function metaDaily(){
+    const rows=F('dag_meta_campaign')||[]; const day={};
+    rows.forEach(r=>{ const d=S27metaLocalDate(r.date_start||'');
+      day[d]=day[d]||{spend:0,clicks:0}; day[d].spend+=num(r.spend); day[d].clicks+=num(r.inline_link_clicks); });
+    return day;
+  }
+  /* ---------- TIKTOK ---------- */
+  function tiktokTotals(field){
+    const rows=F(field)||[];
+    const t={spend:0,reach:0,clicks:0,impressions:0,video_views:0,likes:0,shares:0,comments:0,follows:0,engagements:0,conversions:0};
+    rows.forEach(r=>{ t.spend+=num(r.spend); t.reach+=num(r.reach); t.clicks+=num(r.clicks); t.impressions+=num(r.impressions);
+      t.video_views+=num(r.video_views_p100); t.likes+=num(r.likes); t.shares+=num(r.shares); t.comments+=num(r.comments);
+      t.follows+=num(r.follows); t.engagements+=num(r.engagements); t.conversions+=num(r.conversion); });
+    return t;
+  }
+  /* ---------- SNAPCHAT ---------- */
+  function snapTotals(field){
+    const p=F(field); const t={spend:0,impressions:0,clicks:0,reach:0,video_views:0,video_views_15s:0,conversions:0};
+    if(p && typeof p==='object'){
+      (p.total_stats||[]).forEach(ts=>{
+        const camps=((((ts||{}).total_stat||{}).breakdown_stats||{}).campaign)||[];
+        camps.forEach(c=>{ const s=c.stats||{};
+          t.spend+=num(s.spend)/1e6; t.impressions+=num(s.impressions); t.clicks+=num(s.swipes);
+          t.reach+=num(s.uniques); t.video_views+=num(s.video_views); t.video_views_15s+=num(s.video_views_15s);
+          t.conversions+=num(s.conversion_purchases); });
+      });
+    }
+    return t;
+  }
+  /* ---------- GOOGLE ---------- */
+  function gCost(mt){ return (mt && mt.cost!==undefined && mt.cost!==null) ? num(mt.cost) : num((mt||{}).costMicros)/1e6; }
+  function googleTotals(field){
+    const rows=F(field)||[]; const t={spend:0,clicks:0,impressions:0,conversions:0,phone_calls:0};
+    rows.forEach(r=>{ const mt=r.metrics||{}; t.spend+=gCost(mt); t.clicks+=num(mt.clicks);
+      t.impressions+=num(mt.impressions); t.conversions+=num(mt.conversions); t.phone_calls+=num(mt.phoneCalls); });
+    return t;
+  }
+  function googleDaily(){
+    const rows=F('periode_google_ads_campaign')||[]; const day={};
+    rows.forEach(r=>{ const d=(r.dimensions||{}).date; if(!d) return; const mt=r.metrics||{};
+      day[d]=day[d]||{spend:0,clicks:0,impressions:0,conversions:0};
+      day[d].spend+=gCost(mt); day[d].clicks+=num(mt.clicks); day[d].impressions+=num(mt.impressions); day[d].conversions+=num(mt.conversions); });
+    return day;
+  }
+
+  const PLATFORMS={ meta:{label:'Meta',sub:'Facebook & Instagram'}, tiktok:{label:'TikTok',sub:'TikTok Ads'},
+                    snapchat:{label:'Snapchat',sub:'Snapchat Ads'}, google:{label:'Google Ads',sub:'Search'} };
+  const cur={ meta:metaTotals('periode_meta_campaign'), tiktok:tiktokTotals('periode_tiktok_campaign'),
+              snapchat:snapTotals('periode_snapchat_campaign'), google:googleTotals('periode_google_ads_campaign') };
+  const prev={ meta:metaTotals('vorige_periode_meta_campaign'), tiktok:tiktokTotals('vorige_periode_tiktok_campaign'),
+               snapchat:snapTotals('vorige_periode_snapchat_campaign'), google:googleTotals('vorige_periode_google_ads_campaign') };
+
+  const platforms={};
+  Object.keys(PLATFORMS).forEach(key=>{
+    const c=Object.assign({}, cur[key], S27derived(cur[key]));
+    const p=Object.assign({}, prev[key], S27derived(prev[key]));
+    const roundObj=o=>{ const r={}; Object.keys(o).forEach(k=>r[k]=S27round(o[k],4)); return r; };
+    platforms[key]={ label:PLATFORMS[key].label, sub:PLATFORMS[key].sub,
+      current:roundObj(c), previous:roundObj(p), has_daily:(key==='meta'||key==='google') };
+  });
+
+  /* ---------- DAILY (merge) ---------- */
+  const md=metaDaily(), gd=googleDaily();
+  const start=D.start_date, end=D.end_date;
+  let dates=Object.keys(md).concat(Object.keys(gd));
+  dates=Array.from(new Set(dates)).filter(d=> (!start||d>=start) && (!end||d<=end)).sort();
+  const daily=dates.map(d=>({ date:d,
+    meta:{ spend:S27round((md[d]||{}).spend,2), clicks:S27round((md[d]||{}).clicks,0) },
+    google:{ spend:S27round((gd[d]||{}).spend,2), clicks:S27round((gd[d]||{}).clicks,0),
+             impressions:S27round((gd[d]||{}).impressions,0), conversions:S27round((gd[d]||{}).conversions,0) } }));
+
+  /* ---------- CAMPAGNES ---------- */
+  let campaigns=[];
+  (F('periode_meta_campaign')||[]).forEach(r=>{ const impr=num(r.impressions),clk=num(r.clicks),sp=num(r.spend);
+    campaigns.push({platform:'meta',name:r.campaign_name||'—',spend:S27round(sp,2),impressions:Math.round(impr),clicks:Math.round(clk),
+      reach:Math.round(num(r.reach)),ctr:impr?S27round(clk/impr*100,2):0,cpc:clk?S27round(sp/clk,2):0,conversions:0}); });
+  (F('periode_tiktok_campaign')||[]).forEach(r=>{ const impr=num(r.impressions),clk=num(r.clicks),sp=num(r.spend);
+    campaigns.push({platform:'tiktok',name:r.campaign_name||'—',spend:S27round(sp,2),impressions:Math.round(impr),clicks:Math.round(clk),
+      reach:Math.round(num(r.reach)),ctr:impr?S27round(clk/impr*100,2):0,cpc:clk?S27round(sp/clk,2):0,conversions:Math.round(num(r.conversion))}); });
+  const snapP=F('periode_snapchat_campaign');
+  if(snapP && typeof snapP==='object'){
+    (snapP.total_stats||[]).forEach(ts=>{ ((((ts||{}).total_stat||{}).breakdown_stats||{}).campaign||[]).forEach(c=>{
+      const s=c.stats||{}; const impr=num(s.impressions),clk=num(s.swipes),sp=num(s.spend)/1e6;
+      campaigns.push({platform:'snapchat',name:"Snapchat — campagne",spend:S27round(sp,2),impressions:Math.round(impr),clicks:Math.round(clk),
+        reach:Math.round(num(s.uniques)),ctr:impr?S27round(clk/impr*100,2):0,cpc:clk?S27round(sp/clk,2):0,conversions:Math.round(num(s.conversion_purchases))}); }); });
+  }
+  const gByCamp={};
+  (F('periode_google_ads_campaign')||[]).forEach(r=>{ const nm=(r.dimensions||{}).campaignName||'—'; const mt=r.metrics||{};
+    gByCamp[nm]=gByCamp[nm]||{spend:0,clicks:0,impressions:0,conversions:0};
+    gByCamp[nm].spend+=gCost(mt); gByCamp[nm].clicks+=num(mt.clicks); gByCamp[nm].impressions+=num(mt.impressions); gByCamp[nm].conversions+=num(mt.conversions); });
+  Object.keys(gByCamp).forEach(nm=>{ const v=gByCamp[nm]; const impr=v.impressions,clk=v.clicks,sp=v.spend;
+    campaigns.push({platform:'google',name:nm,spend:S27round(sp,2),impressions:Math.round(impr),clicks:Math.round(clk),
+      reach:0,ctr:impr?S27round(clk/impr*100,2):0,cpc:clk?S27round(sp/clk,2):0,conversions:Math.round(v.conversions)}); });
+  campaigns=campaigns.filter(c=>c.spend>0||c.impressions>0||c.clicks>0).sort((a,b)=>b.spend-a.spend);
+
+  /* ---------- RESULTATEN ---------- */
+  const m=platforms.meta.current, t=platforms.tiktok.current, s=platforms.snapchat.current, g=platforms.google.current;
+  const tkLpv=(F('periode_tiktok_campaign')||[]).reduce((a,r)=>a+num(r.total_landing_page_view),0);
+  const results={ note:"Dit zijn verkeerscampagnes — het hoofddoel is websitebezoek. Conversiemeting (inschrijvingen) staat enkel actief op Google Ads. Voor Meta, TikTok en Snapchat tonen we de dichtstbijzijnde resultaatmetriek (landingspagina-weergaven / swipe-ups).",
+    platforms:{
+      meta:{result:Math.round(m.landing_page_views||0),result_label:'Landingspagina-weergaven',cost:m.landing_page_views?S27round(m.spend/m.landing_page_views,2):0,cost_label:'per weergave',conv_tracked:false},
+      tiktok:{result:Math.round(tkLpv),result_label:'Landingspagina-weergaven',cost:tkLpv?S27round(t.spend/tkLpv,2):0,cost_label:'per weergave',conv_tracked:false},
+      snapchat:{result:Math.round(s.clicks||0),result_label:'Swipe-ups',cost:s.clicks?S27round(s.spend/s.clicks,2):0,cost_label:'per swipe',conv_tracked:false},
+      google:{result:Math.round(g.conversions||0),result_label:'Conversies',cost:g.conversions?S27round(g.spend/g.conversions,2):0,cost_label:'per conversie',conv_tracked:true,extra:'+ '+Math.round(g.phone_calls||0)+' telefoonoproepen'}
+    } };
+
+  /* ---------- DOELGROEPEN (Meta adsets) ---------- */
+  function audCat(name){ const n=(name||'').toLowerCase();
+    if(n.indexOf('websitebezoek')>=0||n.indexOf('retarget')>=0) return 'Retargeting';
+    const ages=['6-9','10-12','13-15','16-18','3-17'];
+    if(ages.some(a=>n.indexOf(a)>=0)){
+      const regio=['antwerpen','limburg','brabant','vlaanderen -','west-','oost-'];
+      if(regio.some(p=>n.indexOf(p)>=0) && n.indexOf('j -')<0) return 'Regio';
+      return 'Leeftijd';
+    }
+    if(['antwerpen','limburg','brabant','west-vlaanderen','oost-vlaanderen'].some(p=>n.indexOf(p)>=0)) return 'Regio';
+    if(['kleuter','tiener','lagere school'].some(k=>n.indexOf(k)>=0)) return 'Type';
+    return 'Overig';
+  }
+  const audMap={};
+  (F('periode_meta_adset')||[]).forEach(a=>{ const nm=a.adset_name||'?';
+    audMap[nm]=audMap[nm]||{spend:0,impressions:0,clicks:0,lpv:0};
+    audMap[nm].spend+=num(a.spend); audMap[nm].impressions+=num(a.impressions); audMap[nm].clicks+=num(a.clicks);
+    (a.actions||[]).forEach(act=>{ if(act.action_type==='landing_page_view') audMap[nm].lpv+=num(act.value); }); });
+  let audiences=Object.keys(audMap).map(nm=>{ const v=audMap[nm];
+    return {name:nm,category:audCat(nm),spend:S27round(v.spend,2),impressions:Math.round(v.impressions),clicks:Math.round(v.clicks),
+      lpv:Math.round(v.lpv),ctr:v.impressions?S27round(v.clicks/v.impressions*100,2):0,cost_per_lpv:v.lpv?S27round(v.spend/v.lpv,2):0}; });
+  audiences=audiences.filter(a=>a.spend>0).sort((a,b)=>b.lpv-a.lpv);
+
+  /* ---------- TOP ADVERTENTIES ---------- */
+  const top_ads=[];
+  const mAgg={};
+  (F('periode_meta_ad')||[]).forEach(a=>{ const nm=a.ad_name||'?'; mAgg[nm]=mAgg[nm]||{spend:0,impressions:0,clicks:0,result:0};
+    mAgg[nm].spend+=num(a.spend); mAgg[nm].impressions+=num(a.impressions); mAgg[nm].clicks+=num(a.clicks);
+    (a.actions||[]).forEach(act=>{ if(act.action_type==='landing_page_view') mAgg[nm].result+=num(act.value); }); });
+  Object.keys(mAgg).map(nm=>({nm,v:mAgg[nm]})).sort((a,b)=>b.v.spend-a.v.spend).slice(0,8).forEach(({nm,v})=>{
+    top_ads.push({platform:'meta',name:nm,spend:S27round(v.spend,2),impressions:Math.round(v.impressions),clicks:Math.round(v.clicks),
+      ctr:v.impressions?S27round(v.clicks/v.impressions*100,2):0,result:Math.round(v.result),result_label:'LP-weergaven'}); });
+  (F('periode_tiktok_ad')||[]).slice().sort((a,b)=>num(b.spend)-num(a.spend)).slice(0,8).forEach(a=>{ const impr=num(a.impressions),clk=num(a.clicks);
+    top_ads.push({platform:'tiktok',name:a.ad_name||'?',spend:S27round(num(a.spend),2),impressions:Math.round(impr),clicks:Math.round(clk),
+      ctr:impr?S27round(clk/impr*100,2):0,result:Math.round(num(a.video_watched_6s)),result_label:'Video 6s+'}); });
+  const snapId2Name={}; const sm=F('snapchat_ad_metadata');
+  if(sm && typeof sm==='object'){ (sm.ads||[]).forEach(a=>{ const ad=a.ad||{}; snapId2Name[ad.id]=ad.name; }); }
+  const snpAd=F('periode_snapchat_ad'); let snapAds=[];
+  if(snpAd && typeof snpAd==='object'){ (snpAd.total_stats||[]).forEach(ts=>{ snapAds=snapAds.concat(((((ts||{}).total_stat||{}).breakdown_stats||{}).ad)||[]); }); }
+  snapAds.slice().sort((a,b)=>num((b.stats||{}).spend)-num((a.stats||{}).spend)).slice(0,8).forEach(a=>{ const st=a.stats||{}; const impr=num(st.impressions),sw=num(st.swipes);
+    top_ads.push({platform:'snapchat',name:snapId2Name[a.id]||'Snap-advertentie',spend:S27round(num(st.spend)/1e6,2),impressions:Math.round(impr),clicks:Math.round(sw),
+      ctr:impr?S27round(sw/impr*100,2):0,result:Math.round(num(st.video_views)),result_label:'Videoweergaven'}); });
+  (F('periode_google_ads_ad')||[]).slice().sort((a,b)=>num(b.metrics_costMicros)-num(a.metrics_costMicros)).slice(0,8).forEach(a=>{ const impr=num(a.metrics_impressions),clk=num(a.metrics_clicks);
+    top_ads.push({platform:'google',name:a.adGroup_name||'?',spend:S27round(num(a.metrics_costMicros)/1e6,2),impressions:Math.round(impr),clicks:Math.round(clk),
+      ctr:impr?S27round(clk/impr*100,2):0,result:Math.round(num(a.metrics_conversions)),result_label:'Conversies'}); });
+
+  return {
+    client: D.client_name || 'Onbekende klant',
+    period: { start: D.start_date, end: D.end_date },
+    previous_period: { start: D.vorige_start_date, end: D.vorige_end_date },
+    platform_colors: { meta:'#3083DC', tiktok:'#9441DB', snapchat:'#F8C028', google:'#F66131' },
+    platforms, daily, campaigns, results, audiences, top_ads
+  };
+}
+
+
+function render(DATA){
+
+
+/* ---------- Helpers ---------- */
+const NL = 'nl-BE';
+const eur = (v,d=0)=>'€ '+Number(v||0).toLocaleString(NL,{minimumFractionDigits:d,maximumFractionDigits:d});
+const eur2 = v=>'€ '+Number(v||0).toLocaleString(NL,{minimumFractionDigits:2,maximumFractionDigits:2});
+const int = v=>Number(v||0).toLocaleString(NL,{maximumFractionDigits:0});
+const pct = v=>Number(v||0).toLocaleString(NL,{minimumFractionDigits:2,maximumFractionDigits:2})+'%';
+function compact(v){
+  v=Number(v||0);
+  if(v>=1e6) return (v/1e6).toLocaleString(NL,{maximumFractionDigits:2})+' mln';
+  if(v>=1e4) return (v/1e3).toLocaleString(NL,{maximumFractionDigits:1})+'k';
+  return int(v);
+}
+function dmonth(iso){ // 2026-03-05 -> 5 mrt
+  const m=['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
+  const [y,mo,d]=iso.split('-'); return parseInt(d)+' '+m[parseInt(mo)-1];
+}
+function fmtDate(iso){
+  const m=['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
+  const [y,mo,d]=iso.split('-'); return parseInt(d)+' '+m[parseInt(mo)-1]+' '+y;
+}
+function deltaPct(cur,prev){ if(!prev) return null; return (cur-prev)/prev*100; }
+/* mode: 'higher-better' (default) | 'lower-better' | 'neutral' (besteding = budgetkeuze, geen waardeoordeel) */
+function deltaHTML(cur,prev,mode){
+  const d=deltaPct(cur,prev);
+  if(d===null||!isFinite(d)) return '<span class="s27-delta flat">nieuw</span>';
+  const up=d>=0;
+  const arrow = Math.abs(d)<0.05?'→':(up?'▲':'▼');
+  let cls='flat';
+  if(mode!=='neutral' && Math.abs(d)>=0.05){ const good = mode==='lower-better' ? !up : up; cls = good?'up':'down'; }
+  return `<span class="s27-delta ${cls}">${arrow} ${Math.abs(d).toLocaleString(NL,{maximumFractionDigits:1})}%</span>`;
+}
+
+const C = DATA.platform_colors;
+// Enkel platformen met activiteit in deze periode tonen (uniform: werkt ook als een klant niet alle kanalen draait)
+const PLAT_ORDER = ['meta','tiktok','snapchat','google'].filter(p=>DATA.platforms&&DATA.platforms[p]&&(((DATA.platforms[p].current||{}).spend||0)>0||((DATA.platforms[p].current||{}).impressions||0)>0));
+const TONE = {meta:'blue',tiktok:'purple',snapchat:'yellow',google:'orange'};
+
+/* ---------- Totals ---------- */
+function totals(period){
+  const t={spend:0,impressions:0,clicks:0,reach:0,conversions:0};
+  PLAT_ORDER.forEach(p=>{
+    const d=DATA.platforms[p][period];
+    t.spend+=d.spend||0; t.impressions+=d.impressions||0; t.clicks+=d.clicks||0;
+    t.reach+=d.reach||0; t.conversions+=d.conversions||0;
+  });
+  t.ctr = t.impressions? t.clicks/t.impressions*100 : 0;
+  t.cpc = t.clicks? t.spend/t.clicks : 0;
+  return t;
+}
+const TC = totals('current'), TP = totals('previous');
+
+/* ---------- Header ---------- */
+document.getElementById('topClient').innerHTML = (DATA.client||'').replace(/\s*\(vzw\)/,'')+'<small>Advertentierapportage</small>';
+document.getElementById('topUpdated').textContent = 'Periode t.e.m. '+dmonth(DATA.period.end);
+document.getElementById('heroLead').innerHTML =
+  `Een overzicht van <b>${DATA.client.replace(/\s*\(vzw\)/,'')}</b> over <b>4 platformen</b> en <b>${DATA.campaigns.length} campagnes</b>. `+
+  `In deze periode werd <b>${eur2(TC.spend)}</b> geïnvesteerd, goed voor <b>${compact(TC.impressions)}</b> vertoningen en <b>${int(TC.clicks)}</b> klikken.`;
+document.getElementById('heroPeriods').innerHTML =
+  `<div class="s27-period-chip"><span>Deze periode</span><b>${fmtDate(DATA.period.start)} – ${fmtDate(DATA.period.end)}</b></div>`+
+  `<div class="s27-period-chip is-prev"><span>Vorige periode (vergelijking)</span><b>${fmtDate(DATA.previous_period.start)} – ${fmtDate(DATA.previous_period.end)}</b></div>`;
+
+/* ---------- KPI grid ---------- */
+const KPIS = [
+  {label:'Totale besteding', tone:'blue',   val:eur2(TC.spend),       cur:TC.spend,       prev:TP.spend,       mode:'neutral'},
+  {label:'Vertoningen',      tone:'purple', val:compact(TC.impressions),cur:TC.impressions, prev:TP.impressions, mode:'higher-better'},
+  {label:'Klikken',          tone:'green',  val:int(TC.clicks),       cur:TC.clicks,      prev:TP.clicks,      mode:'higher-better'},
+  {label:'Bereik (totaal)',  tone:'pink',   val:compact(TC.reach),    cur:TC.reach,       prev:TP.reach,       mode:'higher-better'},
+  {label:'Gem. CTR',         tone:'orange', val:pct(TC.ctr),          cur:TC.ctr,         prev:TP.ctr,         mode:'higher-better'},
+  {label:'Gem. CPC',         tone:'yellow', val:eur2(TC.cpc),         cur:TC.cpc,         prev:TP.cpc,         mode:'lower-better'},
+];
+document.getElementById('kpiGrid').innerHTML = KPIS.map(k=>`
+  <div class="s27-kpi" data-tone="${k.tone}">
+    <div class="s27-kpi-label">${k.label}</div>
+    <div class="s27-kpi-val">${k.val}</div>
+    <div class="s27-kpi-sub">${deltaHTML(k.cur,k.prev,k.mode)} <span>vs. vorige</span></div>
+  </div>`).join('');
+
+/* ---------- Platform cards ---------- */
+function platMetrics(p){
+  const d=DATA.platforms[p].current;
+  const base=[
+    {s:'Vertoningen', b:compact(d.impressions)},
+    {s:'Klikken', b:int(d.clicks)},
+    {s:'Bereik', b: d.reach? compact(d.reach):'—'},
+    {s:'CTR', b:pct(d.ctr)},
+    {s:'CPC', b:eur2(d.cpc)},
+    {s:'CPM', b:eur2(d.cpm)},
+  ];
+  const extra={
+    meta:[{s:'Linkkliks', b:int(d.link_clicks)},{s:'Landingspagina', b:int(d.landing_page_views)},{s:'Videoweergaven', b:compact(d.video_views)}],
+    tiktok:[{s:'Videoweergaven', b:compact(d.video_views)},{s:'Likes', b:int(d.likes)},{s:'Shares', b:int(d.shares)}],
+    snapchat:[{s:'Videoweergaven', b:compact(d.video_views)},{s:'Video 15s+', b:compact(d.video_views_15s)},{s:'Swipes', b:int(d.clicks)}],
+    google:[{s:'Conversies', b:int(d.conversions)},{s:'Telefoonoproepen', b:int(d.phone_calls)},{s:'Klikken', b:int(d.clicks)}],
+  };
+  return base.concat(extra[p]||[]);
+}
+document.getElementById('platGrid').innerHTML = PLAT_ORDER.map(p=>{
+  const pl=DATA.platforms[p]; const d=pl.current;
+  const initials={meta:'Mt',tiktok:'Tk',snapchat:'Sc',google:'G'}[p];
+  return `<div class="s27-plat" data-p="${p}">
+    <div class="s27-plat-head">
+      <div class="s27-plat-badge">${initials}</div>
+      <div class="s27-plat-title"><b>${pl.label}</b><span>${pl.sub}</span></div>
+      <div class="s27-plat-spend"><b>${eur2(d.spend)}</b>${deltaHTML(d.spend,pl.previous.spend,'neutral')}</div>
+    </div>
+    <div class="s27-plat-body">
+      ${platMetrics(p).map(m=>`<div class="s27-metric"><b>${m.b}</b><span>${m.s}</span></div>`).join('')}
+    </div>
+  </div>`;
+}).join('');
+
+/* ---------- Campaign table ---------- */
+let sortK='spend', sortDir=-1;
+function renderTable(){
+  const rows=[...DATA.campaigns].sort((a,b)=>{
+    let x=a[sortK], y=b[sortK];
+    if(typeof x==='string'){ return sortDir*x.localeCompare(y); }
+    return sortDir*((x||0)-(y||0));
+  });
+  const colorDot=p=>`<span class="dot" style="background:${C[p]}"></span>`;
+  document.getElementById('campBody').innerHTML = rows.map(r=>`
+    <tr>
+      <td><span class="s27-pbadge" data-p="${r.platform}">${colorDot(r.platform)}${DATA.platforms[r.platform].label}</span></td>
+      <td><div class="s27-camp-name" title="${r.name.replace(/"/g,'&quot;')}">${r.name}</div></td>
+      <td>${eur2(r.spend)}</td>
+      <td>${int(r.impressions)}</td>
+      <td>${int(r.clicks)}</td>
+      <td>${pct(r.ctr)}</td>
+      <td>${eur2(r.cpc)}</td>
+    </tr>`).join('');
+  document.getElementById('campFoot').innerHTML=`<tr>
+    <td colspan="2">Totaal · ${rows.length} campagnes</td>
+    <td>${eur2(TC.spend)}</td><td>${int(TC.impressions)}</td><td>${int(TC.clicks)}</td>
+    <td>${pct(TC.ctr)}</td><td>${eur2(TC.cpc)}</td></tr>`;
+  document.querySelectorAll('#campTable thead th').forEach(th=>{
+    th.classList.toggle('sorted', th.dataset.k===sortK);
+    const a=th.querySelector('.arr'); if(a) a.textContent= sortDir<0?'▼':'▲';
+  });
+}
+document.querySelectorAll('#campTable thead th').forEach(th=>{
+  th.addEventListener('click',()=>{
+    const k=th.dataset.k;
+    if(k===sortK){ sortDir*=-1; } else { sortK=k; sortDir=(k==='platform'||k==='name')?1:-1; }
+    renderTable();
+  });
+});
+renderTable();
+
+/* ---------- Resultaten ---------- */
+(function(){
+  const R=DATA.results; if(!R) return;
+  document.getElementById('resultsGrid').innerHTML = PLAT_ORDER.map(p=>{
+    const r=R.platforms[p]; if(!r) return '';
+    const track = r.conv_tracked
+      ? '<span class="s27-track on">Conversiemeting actief</span>'
+      : '<span class="s27-track off">Geen conversiemeting</span>';
+    const costVal = r.cost>=100? eur(r.cost) : eur2(r.cost);
+    return `<div class="s27-result" data-p="${p}">
+      <div class="s27-result-top"><span class="s27-result-plat">${DATA.platforms[p].label}</span>${track}</div>
+      <div class="s27-result-val">${int(r.result)}</div>
+      <div class="s27-result-lbl">${r.result_label}</div>
+      <div class="s27-result-cost">${costVal} <span>${r.cost_label}</span>${r.extra?` · <span>${r.extra}</span>`:''}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('resultsNote').innerHTML =
+    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`+
+    `<div>${R.note}</div>`;
+})();
+
+/* ---------- Top advertenties ---------- */
+let adFilter='all', adSortK='spend', adSortDir=-1;
+function renderAdTable(){
+  let rows=DATA.top_ads.filter(a=> adFilter==='all' || a.platform===adFilter);
+  rows=rows.sort((a,b)=>{ let x=a[adSortK],y=b[adSortK];
+    if(typeof x==='string') return adSortDir*x.localeCompare(y);
+    return adSortDir*((x||0)-(y||0)); });
+  const dot=p=>`<span class="dot" style="background:${C[p]}"></span>`;
+  document.getElementById('adBody').innerHTML = rows.map(a=>`
+    <tr>
+      <td><div class="s27-camp-name" title="${a.name.replace(/"/g,'&quot;')}">${a.name}</div></td>
+      <td><span class="s27-pbadge" data-p="${a.platform}">${dot(a.platform)}${DATA.platforms[a.platform].label}</span></td>
+      <td>${eur2(a.spend)}</td>
+      <td>${int(a.impressions)}</td>
+      <td>${pct(a.ctr)}</td>
+      <td>${int(a.result)} <span style="color:var(--s27-ink-4);font-weight:700;font-size:11px">${a.result_label}</span></td>
+    </tr>`).join('');
+  document.querySelectorAll('#adTable thead th').forEach(th=>{
+    th.classList.toggle('sorted', th.dataset.k===adSortK);
+    const ar=th.querySelector('.arr'); if(ar) ar.textContent= adSortDir<0?'▼':'▲';
+  });
+}
+(function(){
+  if(!DATA.top_ads || !DATA.top_ads.length){ const s=document.getElementById('secTopAds'); if(s) s.style.display='none'; return; }
+  const platsIn=['all',...PLAT_ORDER.filter(p=>DATA.top_ads.some(a=>a.platform===p))];
+  const fb=document.getElementById('adFilter');
+  platsIn.forEach(p=>{
+    const b=document.createElement('button');
+    b.className='s27-chip'+(p==='all'?' active':'');
+    b.textContent = p==='all'?'Alle':DATA.platforms[p].label;
+    b.dataset.p=p;
+    b.addEventListener('click',()=>{ adFilter=p; fb.querySelectorAll('.s27-chip').forEach(x=>x.classList.toggle('active',x===b)); renderAdTable(); });
+    fb.appendChild(b);
+  });
+  document.querySelectorAll('#adTable thead th').forEach(th=>th.addEventListener('click',()=>{
+    const k=th.dataset.k;
+    if(k===adSortK) adSortDir*=-1; else { adSortK=k; adSortDir=(k==='name'||k==='platform')?1:-1; }
+    renderAdTable();
+  }));
+  renderAdTable();
+})();
+
+/* ---------- Methodology ---------- */
+document.getElementById('methodList').innerHTML=[
+  `<b>Bron & periode.</b> Cijfers rechtstreeks uit Meta, TikTok, Snapchat & Google Ads voor de periode ${fmtDate(DATA.period.start)} t.e.m. ${fmtDate(DATA.period.end)}.`,
+  `<b>Dagelijks verloop.</b> Dagdata is beschikbaar voor Meta & Google Ads. TikTok & Snapchat rapporteren in deze export enkel periodetotalen — daarom verschijnen die niet in de dagcurve.`,
+  `<b>Klikken.</b> Voor Meta tonen we linkkliks per dag; Snapchat-"klikken" zijn swipe-ups. CTR = klikken ÷ vertoningen, CPC = besteding ÷ klikken.`,
+  `<b>Bereik.</b> Het totale bereik is de som per platform en kan overlappen (eenzelfde persoon kan op meerdere kanalen bereikt zijn). Vertoningen zijn niet-uniek.`,
+  `<b>Vergelijking.</b> Procentuele verschillen zijn t.o.v. de vorige periode (${fmtDate(DATA.previous_period.start)} – ${fmtDate(DATA.previous_period.end)}). Besteding kleurt neutraal — een budgetkeuze, geen waardeoordeel.`,
+  `<b>Campagnes.</b> Campagnes zonder enige activiteit in deze periode (0 besteding én 0 vertoningen) zijn weggelaten uit het overzicht.`,
+].map(t=>`<li>${t}</li>`).join('');
+document.getElementById('footMeta').textContent=`${DATA.client} · rapport gegenereerd door Studio 27`;
+
+/* ================= CHARTS ================= */
+Chart.defaults.font.family="'Nunito',sans-serif";
+Chart.defaults.font.weight='700';
+Chart.defaults.color='#6B5B6B';
+const INK='#230F23', LINE='rgba(231,223,211,0.9)', GRID='rgba(231,223,211,0.6)';
+
+const METRICS={
+  spend:{label:'Besteding', fmt:eur2, axis:v=>'€'+compact(v)},
+  impressions:{label:'Vertoningen', fmt:int, axis:compact},
+  clicks:{label:'Klikken', fmt:int, axis:compact},
+  reach:{label:'Bereik', fmt:int, axis:compact},
+  ctr:{label:'CTR', fmt:pct, axis:v=>v+'%'},
+  cpc:{label:'CPC', fmt:eur2, axis:v=>'€'+v},
+};
+let curMetric='spend', curView='platform';
+const dailyVisible={meta:true, google:true};
+
+/* metric selector chips */
+function renderMetricSel(){
+  const sel=document.getElementById('metricSel');
+  let keys;
+  if(curView==='platform') keys=['spend','impressions','clicks','reach','ctr','cpc'];
+  else if(curView==='daily') keys=['spend','clicks'];
+  else { sel.innerHTML=''; return; }
+  sel.innerHTML=keys.map(k=>`<button class="s27-chip ${k===curMetric?'active':''}" data-m="${k}">${METRICS[k].label}</button>`).join('');
+  sel.querySelectorAll('.s27-chip').forEach(b=>b.addEventListener('click',()=>{
+    curMetric=b.dataset.m; renderMetricSel(); updateCharts();
+  }));
+}
+
+/* PLATFORM grouped bar */
+const platCtx=document.getElementById('cPlatform');
+const chartPlat=new Chart(platCtx,{
+  type:'bar',
+  data:{labels:PLAT_ORDER.map(p=>DATA.platforms[p].label),
+    datasets:[
+      {label:'Deze periode', data:[], backgroundColor:PLAT_ORDER.map(p=>C[p]), borderRadius:8, borderSkipped:false, maxBarThickness:64},
+      {label:'Vorige periode', data:[], backgroundColor:PLAT_ORDER.map(p=>C[p]+'55'), borderRadius:8, borderSkipped:false, maxBarThickness:64},
+    ]},
+  options:{responsive:true, maintainAspectRatio:false,
+    plugins:{legend:{display:true, position:'top', align:'end', labels:{boxWidth:12, boxHeight:12, usePointStyle:true, pointStyle:'circle', font:{family:"'Montserrat'",weight:'800',size:11}}},
+      tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${METRICS[curMetric].fmt(c.raw)}`}, backgroundColor:INK, padding:12, cornerRadius:10, titleFont:{family:"'Montserrat'",weight:'800'}}},
+    scales:{x:{grid:{display:false}, ticks:{font:{family:"'Montserrat'",weight:'800',size:12}, color:INK}},
+      y:{beginAtZero:true, grid:{color:GRID}, ticks:{callback:v=>METRICS[curMetric].axis(v)}}}}
+});
+
+/* DAILY line */
+const dailyLabels=DATA.daily.map(d=>dmonth(d.date));
+const dailyCtx=document.getElementById('cDaily');
+function mkGrad(ctx,color){
+  const g=ctx.createLinearGradient(0,0,0,360);
+  g.addColorStop(0,color+'33'); g.addColorStop(1,color+'00'); return g;
+}
+const chartDaily=new Chart(dailyCtx,{
+  type:'line',
+  data:{labels:dailyLabels, datasets:[
+    {label:'Meta', platform:'meta', data:[], borderColor:C.meta, backgroundColor:mkGrad(dailyCtx.getContext('2d'),C.meta), borderWidth:2.5, tension:0.35, fill:true, pointRadius:0, pointHoverRadius:5, pointHoverBackgroundColor:C.meta, pointHoverBorderColor:'#fff', pointHoverBorderWidth:2},
+    {label:'Google Ads', platform:'google', data:[], borderColor:C.google, backgroundColor:mkGrad(dailyCtx.getContext('2d'),C.google), borderWidth:2.5, tension:0.35, fill:true, pointRadius:0, pointHoverRadius:5, pointHoverBackgroundColor:C.google, pointHoverBorderColor:'#fff', pointHoverBorderWidth:2},
+  ]},
+  options:{responsive:true, maintainAspectRatio:false, interaction:{mode:'index', intersect:false},
+    plugins:{legend:{display:false},
+      tooltip:{backgroundColor:INK, padding:12, cornerRadius:10, titleFont:{family:"'Montserrat'",weight:'800'},
+        callbacks:{title:items=>fmtDate(DATA.daily[items[0].dataIndex].date), label:c=>` ${c.dataset.label}: ${METRICS[curMetric].fmt(c.raw)}`}}},
+    scales:{x:{grid:{display:false}, ticks:{maxRotation:0, autoSkip:true, maxTicksLimit:9, font:{size:11}}},
+      y:{beginAtZero:true, grid:{color:GRID}, ticks:{callback:v=>METRICS[curMetric].axis(v)}}}}
+});
+
+/* SHARE doughnut */
+const shareCtx=document.getElementById('cShare');
+const chartShare=new Chart(shareCtx,{
+  type:'doughnut',
+  data:{labels:PLAT_ORDER.map(p=>DATA.platforms[p].label),
+    datasets:[{data:PLAT_ORDER.map(p=>DATA.platforms[p].current.spend), backgroundColor:PLAT_ORDER.map(p=>C[p]), borderColor:'#fff', borderWidth:3, hoverOffset:8}]},
+  options:{responsive:true, maintainAspectRatio:false, cutout:'62%',
+    plugins:{legend:{position:'right', labels:{boxWidth:12, boxHeight:12, usePointStyle:true, pointStyle:'circle', padding:14, font:{family:"'Montserrat'",weight:'800',size:12}}},
+      tooltip:{backgroundColor:INK, padding:12, cornerRadius:10, callbacks:{label:c=>{const tot=TC.spend; return ` ${c.label}: ${eur2(c.raw)} (${(c.raw/tot*100).toFixed(1)}%)`;}}}}}
+});
+
+function updateCharts(){
+  if(curView==='platform'){
+    chartPlat.data.datasets[0].data=PLAT_ORDER.map(p=>DATA.platforms[p].current[curMetric]||0);
+    chartPlat.data.datasets[1].data=PLAT_ORDER.map(p=>DATA.platforms[p].previous[curMetric]||0);
+    chartPlat.update();
+  } else if(curView==='daily'){
+    chartDaily.data.datasets.forEach(ds=>{
+      ds.data=DATA.daily.map(d=>(d[ds.platform]||{})[curMetric]||0);
+      ds.hidden=!dailyVisible[ds.platform] || !PLAT_ORDER.includes(ds.platform);
+    });
+    chartDaily.update();
+  }
+}
+
+/* legend for daily */
+function renderLegend(){
+  const L=document.getElementById('chartLegend');
+  const note=document.getElementById('chartNote');
+  if(curView==='daily'){
+    L.style.display='flex';
+    L.innerHTML=[['meta','Meta'],['google','Google Ads']].filter(([p])=>PLAT_ORDER.includes(p)).map(([p,lbl])=>
+      `<button class="s27-legbtn ${dailyVisible[p]?'':'off'}" data-p="${p}"><span class="dot" style="background:${C[p]}"></span>${lbl}</button>`).join('');
+    L.querySelectorAll('.s27-legbtn').forEach(b=>b.addEventListener('click',()=>{
+      const p=b.dataset.p; dailyVisible[p]=!dailyVisible[p]; b.classList.toggle('off'); updateCharts();
+    }));
+    note.innerHTML=`<b>Let op:</b> dagelijkse data is beschikbaar voor Meta & Google Ads. TikTok & Snapchat leveren in deze export enkel periodetotalen — zie "Per platform" en "Verdeling budget" voor hun cijfers.`;
+  } else if(curView==='platform'){
+    L.style.display='none'; L.innerHTML='';
+    note.innerHTML=`Volle balken = deze periode, lichte balken = vorige periode. ${curMetric==='reach'?'<b>Google Ads (Search) rapporteert geen bereik.</b>':''}`;
+  } else {
+    L.style.display='none'; L.innerHTML='';
+    note.innerHTML=`Verdeling van de totale besteding (${eur2(TC.spend)}) over de 4 platformen in deze periode.`;
+  }
+}
+
+/* tab switching */
+const CHART_MAP={platform:chartPlat, daily:chartDaily, share:chartShare};
+document.querySelectorAll('#chartTabs .s27-tab').forEach(t=>{
+  t.addEventListener('click',()=>{
+    curView=t.dataset.view;
+    document.querySelectorAll('#chartTabs .s27-tab').forEach(x=>x.classList.toggle('active',x===t));
+    document.querySelectorAll('.s27-chart-panel').forEach(p=>p.classList.toggle('active',p.dataset.panel===curView));
+    if(curView==='daily' && !['spend','clicks'].includes(curMetric)) curMetric='spend';
+    if(curView==='platform' && !METRICS[curMetric]) curMetric='spend';
+    renderMetricSel(); renderLegend(); updateCharts();
+    // canvas was display:none bij creatie -> nu pas correct meten
+    requestAnimationFrame(()=>{ CHART_MAP[curView].resize(); CHART_MAP[curView].update(); });
+  });
+});
+
+renderMetricSel(); renderLegend(); updateCharts();
+
+/* ================= DOELGROEPEN (Meta) ================= */
+(function(){
+  const AUD=DATA.audiences; const _secA=document.getElementById('secAudiences');
+  if(!AUD || !AUD.length){ if(_secA) _secA.style.display='none'; return; }
+  const CAT_COLOR={Type:'#12AC4E', Leeftijd:'#3083DC', Regio:'#9441DB', Retargeting:'#F66131', Overig:'#9E919E'};
+  const AUD_METRICS={
+    lpv:{label:'LP-weergaven', fmt:int, asc:false, axis:compact},
+    spend:{label:'Besteding', fmt:eur2, asc:false, axis:v=>'€'+compact(v)},
+    cost_per_lpv:{label:'Kost / weergave', fmt:eur2, asc:true, axis:v=>'€'+v},
+  };
+  let audMetric='lpv';
+  const shortName=n=>n.replace(/\s*\(ouders[^)]*\)/i,'').replace(/\s*-\s*A\+/,'').trim();
+
+  const sel=document.getElementById('audMetricSel');
+  function renderAudSel(){
+    sel.innerHTML=Object.keys(AUD_METRICS).map(k=>`<button class="s27-chip ${k===audMetric?'active':''}" data-m="${k}">${AUD_METRICS[k].label}</button>`).join('');
+    sel.querySelectorAll('.s27-chip').forEach(b=>b.addEventListener('click',()=>{audMetric=b.dataset.m; renderAudSel(); drawAud();}));
+  }
+  const ctx=document.getElementById('cAud');
+  const chart=new Chart(ctx,{type:'bar', data:{labels:[],datasets:[{data:[],backgroundColor:[],borderRadius:6,maxBarThickness:30}]},
+    options:{indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},
+        tooltip:{backgroundColor:INK,padding:12,cornerRadius:10,titleFont:{family:"'Montserrat'",weight:'800'},
+          callbacks:{title:items=>AUD.find(a=>shortName(a.name)===items[0].label)?.name||items[0].label,
+            label:c=>{const a=AUD.find(x=>shortName(x.name)===c.label)||{}; return [` ${AUD_METRICS[audMetric].label}: ${AUD_METRICS[audMetric].fmt(c.raw)}`,` Besteding: ${eur2(a.spend)} · CTR: ${pct(a.ctr)}`];}}}},
+      scales:{x:{beginAtZero:true,grid:{color:GRID},ticks:{callback:v=>AUD_METRICS[audMetric].axis(v)}},
+        y:{grid:{display:false},ticks:{font:{family:"'Montserrat'",weight:'800',size:11},color:INK,autoSkip:false,
+          callback:function(v){const l=this.getLabelForValue(v); return l.length>24? l.slice(0,23)+'…':l;}}}}}});
+  function drawAud(){
+    const m=AUD_METRICS[audMetric];
+    const sorted=[...AUD].sort((a,b)=> m.asc? a[audMetric]-b[audMetric] : b[audMetric]-a[audMetric]).slice(0,10);
+    chart.data.labels=sorted.map(a=>shortName(a.name));
+    chart.data.datasets[0].data=sorted.map(a=>a[audMetric]);
+    chart.data.datasets[0].backgroundColor=sorted.map(a=>CAT_COLOR[a.category]||CAT_COLOR.Overig);
+    chart.update();
+  }
+  const cats=[...new Set(AUD.map(a=>a.category))];
+  document.getElementById('audLegend').innerHTML=cats.map(c=>`<span class="s27-aud-legitem"><span class="dot" style="background:${CAT_COLOR[c]||CAT_COLOR.Overig}"></span>${c}</span>`).join('');
+  const best=[...AUD].sort((a,b)=>b.lpv-a.lpv)[0];
+  const worst=[...AUD].filter(a=>a.lpv>0).sort((a,b)=>b.cost_per_lpv-a.cost_per_lpv)[0];
+  document.getElementById('audNote').innerHTML=`<b>Inzicht:</b> "${shortName(best.name)}" levert de meeste landingspagina-weergaven (${int(best.lpv)} aan ${eur2(best.cost_per_lpv)}/weergave). Doelgroep-segmenten op type (kleuters, tieners, lagere school) presteren hier duidelijk kostefficiënter dan de smalle leeftijdssegmenten.`;
+  renderAudSel(); drawAud();
+})();
+} /* ===== einde render(DATA) ===== */
+
+/* =====================================================================
+   Studio 27 — Ads rapport bootstrap
+   Databron-resolutie:  RAW_INLINE  ->  ?data=<URL> / ?src=  ->  window.S27_DATA_URL
+   Parst RAW in de browser (buildDataset) en rendert. Toont laad/fout-status.
+   ===================================================================== */
+(function(){
+  // spinner-keyframe injecteren
+  const st=document.createElement('style');
+  st.textContent='@keyframes s27spin{to{transform:rotate(360deg)}}';
+  document.head.appendChild(st);
+
+  function boot(msg, isError){
+    let el=document.getElementById('s27-boot');
+    if(!el){ el=document.createElement('div'); el.id='s27-boot';
+      el.style.cssText='position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#FAF7F2;z-index:99999;font-family:Montserrat,system-ui,sans-serif;color:#6B5B6B;text-align:center;padding:24px';
+      document.body.appendChild(el); }
+    el.innerHTML = isError
+      ? '<div><div style="font-size:30px;margin-bottom:10px">⚠️</div><div style="font-weight:800;color:#230F23;font-size:18px;margin-bottom:8px">Rapport kon niet laden</div><div style="max-width:440px;font-size:14px;line-height:1.5">'+msg+'</div></div>'
+      : '<div><div style="width:40px;height:40px;border:4px solid #E7DFD3;border-top-color:#3083DC;border-radius:50%;margin:0 auto 16px;animation:s27spin .8s linear infinite"></div><div style="font-weight:800;color:#230F23">Rapport laden…</div></div>';
+  }
+  function done(){ const el=document.getElementById('s27-boot'); if(el) el.remove(); }
+
+  async function start(){
+    boot('', false);
+    try{
+      let raw = (typeof RAW_INLINE!=='undefined' && RAW_INLINE) ? RAW_INLINE : null;
+      if(!raw){
+        const params=new URLSearchParams(location.search);
+        const url=params.get('data')||params.get('src')||(typeof window!=='undefined'?window.S27_DATA_URL:null);
+        if(url){ const res=await fetch(url,{cache:'no-store'}); if(!res.ok) throw new Error('Databron antwoordde met HTTP '+res.status); raw=await res.json(); }
+      }
+      if(!raw) throw new Error('Geen databron gevonden. Geef <code>?data=&lt;JSON-URL&gt;</code> mee in de embed-URL, of injecteer de JSON.');
+      if(typeof raw==='string'){ try{ raw=JSON.parse(raw); }catch(e){} }
+      // Accepteer zowel een RAUWE export als reeds-opgeschoonde data (klein, ~15KB).
+      const DATA = (raw && raw.platforms && raw.daily) ? raw : buildDataset(raw);
+      if(!DATA || !DATA.platforms) throw new Error('Onverwacht dataformaat in de JSON-export.');
+      render(DATA);
+      done();
+    }catch(err){
+      console.error('[S27 rapport]', err);
+      boot((err&&err.message)||String(err), true);
+    }
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();
+
+</script>
+</body>
+</html>
