@@ -119,6 +119,26 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-tab:hover { color:var(--s27-ink); }
 .s27-tab[aria-selected="true"] { color:var(--s27-blue-ink); border-bottom-color:var(--s27-blue); }
 .s27-tab[aria-selected="true"] svg { color:var(--s27-blue); }
+
+/* #93 dropdown-navigatie — groepen met hover/klik-dropdowns */
+.s27-tabnav { align-items:stretch; }
+.s27-navgroup { position:relative; display:inline-flex; }
+.s27-navgroup-btn { background:none; border:none; padding:12px 11px 10px; cursor:pointer; font-family:var(--font-display); font-size:12.5px; font-weight:700; color:var(--s27-ink-3); display:inline-flex; align-items:center; gap:6px; border-bottom:3px solid transparent; transition:all .15s var(--ease-out); white-space:nowrap; }
+.s27-navgroup-btn > svg:first-child { width:14px; height:14px; flex-shrink:0; }
+.s27-navgroup-btn:hover { color:var(--s27-ink); }
+.s27-navchev { width:11px !important; height:11px !important; opacity:.55; transition:transform .15s var(--ease-out); margin-left:1px; }
+.s27-navgroup:hover .s27-navchev, .s27-navgroup.is-open .s27-navchev { transform:rotate(180deg); }
+.s27-navgroup.is-active .s27-navgroup-btn { color:var(--s27-blue-ink); border-bottom-color:var(--s27-blue); }
+.s27-navgroup.is-active .s27-navgroup-btn > svg:first-child { color:var(--s27-blue); }
+.s27-navdrop { position:absolute; top:calc(100% + 2px); left:0; min-width:215px; background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:13px; box-shadow:0 14px 34px rgba(35,15,35,0.13); padding:6px; display:none; flex-direction:column; gap:2px; z-index:60; }
+.s27-navgroup:hover .s27-navdrop, .s27-navgroup.is-open .s27-navdrop { display:flex; animation:s27fadeIn .15s var(--ease-out) backwards; }
+.s27-navdrop .s27-tab { width:100%; justify-content:flex-start; border-bottom:none !important; border-radius:9px; padding:10px 12px; font-size:13px; color:var(--s27-ink-2); }
+.s27-navdrop .s27-tab svg { width:15px; height:15px; }
+.s27-navdrop .s27-tab:hover { background:var(--s27-paper-2); color:var(--s27-ink); }
+.s27-navdrop .s27-tab[aria-selected="true"] { background:var(--s27-blue-soft); color:var(--s27-blue-ink); }
+.s27-navdrop .s27-tab[aria-selected="true"] svg { color:var(--s27-blue-ink); }
+@media (hover:none){ .s27-navgroup:hover .s27-navdrop { display:none; } .s27-navgroup.is-open .s27-navdrop { display:flex; } }
+
 .s27-tabview { animation:s27fadeIn .3s var(--ease-out) backwards; }
 .s27-tabview[hidden] { display:none !important; }
 

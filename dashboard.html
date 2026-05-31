@@ -70,36 +70,42 @@
 
     <div class="s27-tabnav-wrap">
       <nav class="s27-tabnav" role="tablist">
-        <button class="s27-tab" data-tab="dashboard" role="tab" aria-selected="true">
-          <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-spark"/></svg><span>Dashboard</span>
+        <button class="s27-tab s27-tab-solo" data-tab="dashboard" role="tab" aria-selected="true">
+          <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-spark"/></svg><span>Start</span>
         </button>
-        <button class="s27-tab" data-tab="projecten" role="tab" aria-selected="false">
-          <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-inbox"/></svg><span>Projecten</span>
-        </button>
-        <button class="s27-tab" data-tab="doorlopend" role="tab" aria-selected="false">
-          <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-soc"/></svg><span>Doorlopend</span>
-        </button>
-        <button class="s27-tab" data-tab="performance" role="tab" aria-selected="false">
-          <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-chart"/></svg><span>Performance</span>
-        </button>
-        <button class="s27-tab" data-tab="opleidingen" role="tab" aria-selected="false">
-          <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-opl"/></svg><span>Opleidingen</span>
-        </button>
-        <button class="s27-tab" data-tab="meetings" role="tab" aria-selected="false">
-          <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-cal"/></svg><span>Meetings</span>
-        </button>
-        <button class="s27-tab" data-tab="bedrijf" role="tab" aria-selected="false">
-          <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-brand"/></svg><span>Mijn bedrijf</span>
-        </button>
-        <button class="s27-tab" data-tab="facturatie" role="tab" aria-selected="false">
-          <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-inbox"/></svg><span>Facturatie</span>
-        </button>
-        <button class="s27-tab" data-tab="nieuw" role="tab" aria-selected="false">
-          <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-upload"/></svg><span>Nieuw project</span>
-        </button>
-        <button class="s27-tab" data-tab="instellingen" role="tab" aria-selected="false">
-          <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-user"/></svg><span>Instellingen</span>
-        </button>
+        <div class="s27-navgroup" data-group="werk">
+          <button class="s27-navgroup-btn" type="button" aria-expanded="false">
+            <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-inbox"/></svg><span>Mijn werk</span>
+            <svg class="s27-navchev" width="11" height="11" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="s27-navdrop" role="group" aria-label="Mijn werk">
+            <button class="s27-tab" data-tab="projecten" role="tab" aria-selected="false"><svg width="15" height="15" viewBox="0 0 24 24"><use href="#s27p-inbox"/></svg><span>Projecten</span></button>
+            <button class="s27-tab" data-tab="doorlopend" role="tab" aria-selected="false"><svg width="15" height="15" viewBox="0 0 24 24"><use href="#s27p-soc"/></svg><span>Doorlopend</span></button>
+            <button class="s27-tab" data-tab="opleidingen" role="tab" aria-selected="false"><svg width="15" height="15" viewBox="0 0 24 24"><use href="#s27p-opl"/></svg><span>Opleidingen</span></button>
+            <button class="s27-tab" data-tab="performance" role="tab" aria-selected="false"><svg width="15" height="15" viewBox="0 0 24 24"><use href="#s27p-chart"/></svg><span>Performance</span></button>
+          </div>
+        </div>
+        <div class="s27-navgroup" data-group="plannen">
+          <button class="s27-navgroup-btn" type="button" aria-expanded="false">
+            <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-cal"/></svg><span>Plannen</span>
+            <svg class="s27-navchev" width="11" height="11" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="s27-navdrop" role="group" aria-label="Plannen">
+            <button class="s27-tab" data-tab="meetings" role="tab" aria-selected="false"><svg width="15" height="15" viewBox="0 0 24 24"><use href="#s27p-cal"/></svg><span>Meetings</span></button>
+            <button class="s27-tab" data-tab="nieuw" role="tab" aria-selected="false"><svg width="15" height="15" viewBox="0 0 24 24"><use href="#s27p-upload"/></svg><span>Nieuw project</span></button>
+          </div>
+        </div>
+        <div class="s27-navgroup" data-group="bedrijf">
+          <button class="s27-navgroup-btn" type="button" aria-expanded="false">
+            <svg width="14" height="14" viewBox="0 0 24 24"><use href="#s27p-brand"/></svg><span>Mijn bedrijf</span>
+            <svg class="s27-navchev" width="11" height="11" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="s27-navdrop" role="group" aria-label="Mijn bedrijf">
+            <button class="s27-tab" data-tab="bedrijf" role="tab" aria-selected="false"><svg width="15" height="15" viewBox="0 0 24 24"><use href="#s27p-brand"/></svg><span>Huisstijl &amp; bestanden</span></button>
+            <button class="s27-tab" data-tab="facturatie" role="tab" aria-selected="false"><svg width="15" height="15" viewBox="0 0 24 24"><use href="#s27p-inbox"/></svg><span>Facturatie</span></button>
+            <button class="s27-tab" data-tab="instellingen" role="tab" aria-selected="false"><svg width="15" height="15" viewBox="0 0 24 24"><use href="#s27p-user"/></svg><span>Instellingen</span></button>
+          </div>
+        </div>
       </nav>
     </div>
 

@@ -1188,6 +1188,11 @@ function switchTab(tabId){
     const isActive = b.dataset.tab === tabId;
     b.setAttribute('aria-selected', isActive ? 'true' : 'false');
   });
+  // #93 dropdown-nav: markeer de groep waar de actieve tab in zit + sluit alle dropdowns
+  document.querySelectorAll('.s27-navgroup').forEach(g => {
+    g.classList.toggle('is-active', !!g.querySelector('.s27-tab[aria-selected="true"]'));
+    g.classList.remove('is-open');
+  });
   document.querySelectorAll('.s27-tabview').forEach(v => {
     v.hidden = (v.id !== 's27-tab-' + tabId);
   });
@@ -4416,6 +4421,20 @@ function init(){
   // Tab navigatie handlers
   document.querySelectorAll('.s27-tab[data-tab]').forEach(b => {
     b.addEventListener('click', () => switchTab(b.dataset.tab));
+  });
+  // #93 dropdown-nav: groep-knoppen openen/sluiten (klik = touch-vriendelijk; hover = CSS)
+  document.querySelectorAll('.s27-navgroup-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const grp = btn.closest('.s27-navgroup');
+      const wasOpen = grp.classList.contains('is-open');
+      document.querySelectorAll('.s27-navgroup').forEach(g => g.classList.remove('is-open'));
+      if(!wasOpen) grp.classList.add('is-open');
+      btn.setAttribute('aria-expanded', String(!wasOpen));
+    });
+  });
+  document.addEventListener('click', e => {
+    if(!e.target.closest('.s27-navgroup')) document.querySelectorAll('.s27-navgroup').forEach(g => g.classList.remove('is-open'));
   });
 }
 
