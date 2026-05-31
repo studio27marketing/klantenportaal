@@ -1199,6 +1199,7 @@ function switchTab(tabId){
   // Lazy-render placeholder tabs
   if(tabId === 'projecten')    renderProjecten();
   if(tabId === 'doorlopend')   renderDoorlopend();
+  if(tabId === 'berichten')    renderBerichtenTab();
   if(tabId === 'performance')  renderPerformanceTab();
   if(tabId === 'opleidingen')  renderOpleidingen();
   if(tabId === 'bedrijf')      renderBedrijfTab();
@@ -1218,6 +1219,91 @@ function renderPlaceholderTab(bodyId, title, body){
     '<p class="s27-empty-sub">' + body + '</p>' +
   '</div>';
 }
+/* =================================================================
+   BERICHTEN-INBOX (v3.2-4 #95)
+   Eén centrale plek voor alle teamcommunicatie: een gesprek per project
+   (hergebruik van de bestaande per-project chat) + een directe lijn voor
+   algemene vragen. Previews laden lui per project.
+   ================================================================= */
+function loadConvSeen(){ try { return JSON.parse(localStorage.getItem('s27_conv_seen_' + (state.session && state.session.bedrijf_id)) || '{}'); } catch(e){ return {}; } }
+function markConvSeen(taskId){ try { const c = loadConvSeen(); c[taskId] = Date.now(); localStorage.setItem('s27_conv_seen_' + (state.session && state.session.bedrijf_id), JSON.stringify(c)); } catch(e){} }
+
+async function renderBerichtenTab(){
+  const body = $('s27-berichten-body');
+  if(!body) return;
+  const d = state.dashboard || {};
+  const projs = (d.actieve_projecten || []).slice();
+  const am = d.contact || {};
+  const header =
+    '<div class="s27-msg-top">' +
+      '<div class="s27-msg-top-info">' +
+        '<strong>Een algemene vraag?</strong>' +
+        '<span>Stuur het team rechtstreeks een bericht — of gebruik de ✦ assistent rechtsonder voor een snel antwoord.</span>' +
+      '</div>' +
+      '<button class="s27-btn s27-btn-primary" data-dm="vraag" data-dm-onderwerp="Bericht voor ' + esc(am.am_naam || 'het team') + '">✉️ Nieuw bericht</button>' +
+    '</div>';
+  if(!projs.length){
+    body.innerHTML = header + '<div class="s27-empty"><div class="s27-empty-title">Nog geen gesprekken</div><p class="s27-empty-sub">Zodra er een project loopt, vind je hier per project de chat met ons team terug.</p></div>';
+    return;
+  }
+  body.innerHTML = header +
+    '<div class="s27-msg-list">' + projs.map(renderConversationRow).join('') + '</div>';
+  body.querySelectorAll('[data-conv-task]').forEach(el => el.addEventListener('click', () => {
+    markConvSeen(el.dataset.convTask);
+    openProjectDetail(el.dataset.convTask);
+  }));
+  loadConversationPreviews(projs);
+}
+
+function renderConversationRow(p){
+  const di = getDisciplineInfo(p.discipline);
+  return '<button type="button" class="s27-msg-row" data-conv-task="' + esc(p.task_id) + '">' +
+    '<span class="s27-msg-ava" style="--accent:' + di.accent + '"><svg width="17" height="17" viewBox="0 0 24 24"><use href="#' + di.icon + '"/></svg></span>' +
+    '<span class="s27-msg-main">' +
+      '<span class="s27-msg-row-top"><strong class="s27-msg-name">' + esc(p.naam || 'Project') + '</strong><small class="s27-msg-time" data-conv-time="' + esc(p.task_id) + '"></small></span>' +
+      '<span class="s27-msg-preview" data-conv-prev="' + esc(p.task_id) + '">' + esc(di.label) + ' · gesprek laden…</span>' +
+    '</span>' +
+    '<span class="s27-msg-unread" data-conv-unread="' + esc(p.task_id) + '" hidden></span>' +
+  '</button>';
+}
+
+async function loadConversationPreviews(projs){
+  for(const p of projs){
+    let comments = [];
+    try {
+      if(state.demoMode){
+        comments = (getDemoDetail(p.task_id, p).comments) || [];
+      } else if(ENDPOINTS.chatList){
+        const r = await api(ENDPOINTS.chatList, { task_id: p.task_id, bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token });
+        comments = (r.ok && r.data && r.data.comments) || [];
+      }
+    } catch(e){ /* preview faalt stil */ }
+    updateConversationRow(p, comments);
+  }
+}
+
+function updateConversationRow(p, comments){
+  const sel = id => '[data-conv-' + id + '="' + p.task_id + '"]';
+  const prevEl = document.querySelector(sel('prev'));
+  const timeEl = document.querySelector(sel('time'));
+  const unreadEl = document.querySelector(sel('unread'));
+  const di = getDisciplineInfo(p.discipline);
+  if(!comments.length){
+    if(prevEl) prevEl.textContent = di.label + ' · nog geen berichten — stuur de eerste';
+    return;
+  }
+  const last = comments[comments.length - 1];
+  const auteur = last.auteur || last.author || '';
+  const fromTeam = /studio\s*27/i.test(auteur) || !!last.intern;
+  const txt = (last.tekst || last.text || last.comment_text || '').replace(/\s+/g, ' ').trim();
+  if(prevEl) prevEl.textContent = (fromTeam ? '' : 'Jij: ') + (txt.slice(0, 90) || '📎 bijlage');
+  const ts = last.datum || last.date;
+  if(timeEl && ts){ try { timeEl.textContent = fmtRelTime(ts); } catch(e){} }
+  const lastSeen = loadConvSeen()[p.task_id] || 0;
+  const lastMs = ts ? Date.parse(ts) : 0;
+  if(unreadEl && fromTeam && lastMs && lastMs > lastSeen) unreadEl.hidden = false;
+}
+
 /* =================================================================
    PERFORMANCE DASHBOARD (v3 Feature 1, #84)
    mode=list → rapporten per bedrijf (task_id, naam, discipline, bestand)
