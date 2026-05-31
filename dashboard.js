@@ -2592,6 +2592,108 @@ document.addEventListener('click', e => {
   form.appendChild(hidden);
 });
 
+/* =================================================================
+   SHOOT INPLANNEN IN DE PROJECT-VIEW (v3.2-3 #94)
+   Op een shoot-taak met voorwaarden vervuld (contact/bedrijf + time-estimate +
+   aantal content creators) tonen we de beschikbare shootdagen. Een dag kiezen
+   opent de berichten-composer met de dag ingevuld → team bevestigt de afspraak.
+   ================================================================= */
+function projectShootEligible(proj, detail){
+  const st = (proj.status || '').toLowerCase().replace(/\s+/g, '_');
+  const d = detail || {};
+  const isShoot = d.type_job === '6' || proj.discipline === 'video_fotografie';
+  if(!isShoot) return 'none';
+  if(st === 'goedgekeurd' || isAfgerondStatus(proj)) return 'none'; // al opgeleverd → niet meer inplannen
+  const hasOwner = d.has_contact === 'yes' || d.has_bedrijf === 'yes' || proj.discipline === 'video_fotografie';
+  const hasTime = d.time_estimate && parseInt(d.time_estimate, 10) > 0;
+  const hasCreators = d.content_creators !== '' && d.content_creators != null;
+  return (hasOwner && hasTime && hasCreators) ? 'eligible' : 'incomplete';
+}
+
+function renderProjectShootBlock(proj, detail){
+  const mode = projectShootEligible(proj, detail);
+  if(mode === 'none') return '';
+  if(mode === 'incomplete'){
+    return '<div class="s27-pv-section s27-pv-section-shoot">' +
+      '<h3 class="s27-pv-section-title">📸 Shoot inplannen</h3>' +
+      '<p class="s27-pv-fb-lead">We bereiden je shoot voor. Zodra de duur en het aantal content creators vastliggen, kan je hier meteen een moment kiezen. Een vraag? <a href="#" data-dm="shoot" data-dm-onderwerp="Shoot inplannen — ' + esc(proj.naam || '') + '">stuur ons een bericht</a>.</p>' +
+    '</div>';
+  }
+  return '<div class="s27-pv-section s27-pv-section-shoot">' +
+    '<h3 class="s27-pv-section-title">📸 Plan je shoot in</h3>' +
+    '<p class="s27-pv-fb-lead">Kies een dag die jou past — wij wijzen de juiste content creator(s) toe, jij hoeft niet te kiezen wie. Na je keuze bevestigt het team de definitieve afspraak.</p>' +
+    '<div id="s27-pv-shootbox"><div class="s27-loading" style="padding:14px">Beschikbare shootdagen ophalen…</div></div>' +
+  '</div>';
+}
+
+async function loadProjectShootSlots(proj, detail){
+  const box = $('s27-pv-shootbox');
+  if(!box) return;
+  const needed = Math.max(1, (parseInt((detail && detail.content_creators) || '0', 10) || 0) + 1);
+  try {
+    if(!_shootDataCache){
+      const r = await fetch(ENDPOINTS.shootAvailability, { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+      _shootDataCache = await r.json();
+    }
+    box.innerHTML = renderProjectShootDays(_shootDataCache, needed, proj);
+  } catch(e){
+    box.innerHTML = '<div class="s27-form-error">Beschikbare momenten konden niet geladen worden — <a href="#" data-dm="shoot" data-dm-onderwerp="Shoot inplannen — ' + esc(proj.naam || '') + '">stuur een aanvraag</a>.</div>';
+  }
+}
+
+function renderProjectShootDays(data, needed, proj){
+  const hosts = (data && data.hosts) || [];
+  const shoots = ((data && data.shoots) || []).concat((data && data.shoots_27m) || []);
+  const vakantie = (data && data.vakantie) || [];
+  const now = Date.now();
+  const startMs = now + 48 * 3600000;
+  const horizonMs = now + (28 * 86400000);
+  const bezetByHost = {};
+  hosts.forEach(h => bezetByHost[h.id] = new Set());
+  shoots.forEach(t => {
+    const due = parseInt(t.due_date, 10);
+    if(!due || due > horizonMs) return;
+    const day = new Date(due).toISOString().slice(0,10);
+    (t.assignees || []).forEach(a => { if(bezetByHost[a.id]) bezetByHost[a.id].add(day); });
+  });
+  vakantie.forEach(v => {
+    const start = parseInt(v.start_date || v.due_date, 10);
+    const end = parseInt(v.due_date || v.start_date, 10);
+    if(!start) return;
+    for(let cur = start; cur <= end && cur <= horizonMs; cur += 86400000){
+      const day = new Date(cur).toISOString().slice(0,10);
+      (v.assignees || []).forEach(a => { if(bezetByHost[a.id]) bezetByHost[a.id].add(day); });
+    }
+  });
+  const dagen = [];
+  for(let d = Math.ceil(startMs / 86400000) * 86400000; d <= horizonMs && dagen.length < 8; d += 86400000){
+    const dt = new Date(d);
+    const dow = dt.getDay();
+    if(dow === 0 || dow === 6) continue;
+    const dayKey = dt.toISOString().slice(0,10);
+    const vrijCount = hosts.filter(h => !bezetByHost[h.id].has(dayKey)).length;
+    if(vrijCount >= needed){
+      dagen.push({ day: dayKey, label: dt.toLocaleDateString('nl-BE', {weekday:'long', day:'2-digit', month:'long'}), vrij: vrijCount });
+    }
+  }
+  const creatorTxt = needed === 1 ? '1 content creator' : needed + ' content creators';
+  const pname = (proj && proj.naam) || 'shoot';
+  if(!dagen.length){
+    return '<div class="s27-shoot-head"><strong>📸 Beschikbare shootdagen</strong><span>Geen dag met ' + esc(creatorTxt) + ' vrij in de komende 4 weken</span></div>' +
+      '<p class="s27-shoot-info">Geen geschikt moment? <a href="#" data-dm="shoot" data-dm-onderwerp="Shoot inplannen — ' + esc(pname) + ' — geen geschikt moment">Stuur ons je voorkeuren</a> en we zoeken samen.</p>';
+  }
+  return '<div class="s27-shoot-head"><strong>📸 Kies je shootdag</strong><span>We wijzen ' + esc(creatorTxt) + ' toe</span></div>' +
+    '<div class="s27-shoot-daygrid">' +
+      dagen.map(dg => '<button type="button" class="s27-shoot-day" data-dm="shoot"' +
+        ' data-dm-onderwerp="Shoot inplannen — ' + esc(pname) + ' — voorkeur ' + esc(dg.label) + '"' +
+        ' data-dm-placeholder="Bevestig je voorkeur of geef een opmerking mee (bv. locatie, voor- of namiddag)…">' +
+        '<span class="s27-shoot-day-label">' + esc(dg.label) + '</span>' +
+        '<span class="s27-shoot-day-free">' + dg.vrij + ' creator' + (dg.vrij === 1 ? '' : 's') + ' vrij</span>' +
+      '</button>').join('') +
+    '</div>' +
+    '<p class="s27-shoot-info">⚡ Klik op een dag om die als voorkeur door te geven. Het team bevestigt de definitieve afspraak.</p>';
+}
+
 function renderNieuwProjectSuccess(result){
   const direct = result._intentie === 'direct_start';
   const isShoot = result._project_type === 'Video + Fotografie';
@@ -3177,6 +3279,12 @@ async function openProjectDetail(taskId, openOnTab){
             deliverables_raw: r.data.deliverables_raw || '',
             feedback_link: r.data.feedback_link || '',
             feedback_status: r.data.feedback_status || '',
+            time_estimate: r.data.time_estimate || '',
+            content_creators: r.data.content_creators != null ? String(r.data.content_creators) : '',
+            type_job: r.data.type_job != null ? String(r.data.type_job) : '',
+            shootlink: r.data.shootlink || '',
+            has_contact: r.data.has_contact || '',
+            has_bedrijf: r.data.has_bedrijf || '',
             budget: r.data.budget || '',
             project_status: r.data.status || '',
             project_url: r.data.url || ''
@@ -3283,6 +3391,7 @@ function renderProjectView(proj, detail, roundState){
 
     <div class="s27-pv-twocol">
       <div class="s27-pv-leftcol">
+        ${renderProjectShootBlock(proj, detail)}
         ${roundState === 'active' ? `
           <div class="s27-pv-section s27-pv-section-fb">
             <h3 class="s27-pv-section-title">🔔 Dit project wacht op jouw feedback</h3>
@@ -3334,6 +3443,9 @@ function renderProjectView(proj, detail, roundState){
   // Wire up handlers
   const back = $('s27-pv-back-btn');
   if(back) back.addEventListener('click', exitProjectView);
+
+  // #94: shoot-inplanblok laden (enkel aanwezig bij een shoot-klare taak)
+  loadProjectShootSlots(proj, detail);
 
   // v2.2 #64: feedback widget renders DIRECT in linkerkolom — geen knop meer nodig
   if(needsFeedback){
@@ -4185,7 +4297,12 @@ function getDemoDetail(taskId, proj){
     comments: [
       { auteur:'Bjorn (Studio 27)', datum:new Date(Date.now()-3600000*4).toISOString(), tekst:'Eerste edit staat klaar op Vimeo — laat ons weten wat je vindt!' },
       { auteur:'Ilke (Studio 27)',  datum:new Date(Date.now()-86400000*2).toISOString(), tekst:'Shoot is goed verlopen. We hebben extra B-roll opgenomen die we kunnen gebruiken voor social cuts.' }
-    ]
+    ],
+    type_job: proj.discipline === 'video_fotografie' ? '6' : '',
+    time_estimate: proj.discipline === 'video_fotografie' ? '14400000' : '',
+    content_creators: proj.discipline === 'video_fotografie' ? '1' : '',
+    has_contact: 'yes',
+    has_bedrijf: 'yes'
   };
 }
 
