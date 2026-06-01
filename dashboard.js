@@ -256,14 +256,71 @@ async function apiV2(url, payload){
 }
 
 // Deel B — koppel het ingelogde account aan een bedrijf via het Make portal-provision-scenario.
-// Stuurt het Firebase ID-token (Make verifieert het server-side via Firebase en zoekt het bedrijf
+// Stuurt het Firebase ID-token (Make verifieert het server-side via Firebase + zoekt de bedrijven
 // op in ClickUp). text/plain body = "simple request" → geen CORS-preflight op de Make-webhook.
-async function tryProvision(token){
+// Multi-bedrijf: provision geeft ALLE bedrijven voor de e-mail terug + zet de claim op het gekozen
+// (of eerste) bedrijf. selectedBid kiest welk bedrijf actief wordt (Make verifieert toegang).
+function zipCompanies(ids, names){
+  const i = String(ids || '').split('|').filter(Boolean);
+  const n = String(names || '').split('|');
+  return i.map(function(id, k){ return { id: id, naam: (n[k] || 'Bedrijf').trim() }; });
+}
+async function provisionFetch(token, selectedBid){
   try {
-    const r = await fetch(PROVISION_URL, { method:'POST', body: JSON.stringify({ idToken: token }) });
+    const r = await fetch(PROVISION_URL, { method:'POST', body: JSON.stringify({ idToken: token, selected_bedrijf_id: selectedBid || '' }) });
     const d = await r.json().catch(function(){ return {}; });
-    return !!(d && d.ok && d.bedrijf_id);
-  } catch(e){ return false; }
+    if(d && d.ok){
+      state.portalCompanies = zipCompanies(d.companies_ids, d.companies_names);
+      state.activeBedrijf = d.bedrijf_id || '';
+      try { if(d.bedrijf_id) localStorage.setItem('s27_active_bedrijf', d.bedrijf_id); } catch(e){}
+    }
+    return d || {};
+  } catch(e){ return {}; }
+}
+function lastSelectedBedrijf(){ try { return localStorage.getItem('s27_active_bedrijf') || ''; } catch(e){ return ''; } }
+async function tryProvision(token){
+  const d = await provisionFetch(token, lastSelectedBedrijf());
+  return !!(d && d.ok && d.bedrijf_id);
+}
+// Bij login: koppel + haal de bedrijvenlijst (voor de switcher) + forceer een verse claim.
+async function loadCompaniesAndLink(){
+  try {
+    const token = window.S27Auth ? await window.S27Auth.token() : null;
+    if(!token) return;
+    const d = await provisionFetch(token, lastSelectedBedrijf());
+    if(d && d.ok && window.S27Auth) { await window.S27Auth.token(true); }
+  } catch(e){}
+}
+// Bedrijf-switcher in de topbalk — enkel zichtbaar bij >1 bedrijf.
+function renderCompanySwitcher(){
+  const host = document.querySelector('.s27-topbar-left');
+  if(!host) return;
+  let el = document.getElementById('s27-company-switch');
+  const comps = state.portalCompanies || [];
+  if(comps.length < 2){ if(el) el.remove(); return; }
+  if(!el){
+    el = document.createElement('select');
+    el.id = 's27-company-switch';
+    el.title = 'Wissel van bedrijf';
+    el.style.cssText = 'margin-left:14px;padding:7px 28px 7px 11px;border:1px solid var(--s27-line,#e7e2e8);border-radius:10px;background:#fff;font:600 13px/1 var(--font-body,system-ui);color:var(--s27-ink,#2a1f2b);cursor:pointer;max-width:240px';
+    el.addEventListener('change', function(){ switchCompany(el.value); });
+    host.appendChild(el);
+  }
+  el.innerHTML = comps.map(function(c){ return '<option value="' + esc(c.id) + '"' + (c.id === state.activeBedrijf ? ' selected' : '') + '>' + esc(c.naam) + '</option>'; }).join('');
+}
+async function switchCompany(id){
+  if(!id || id === state.activeBedrijf) return;
+  try { localStorage.setItem('s27_active_bedrijf', id); } catch(e){}
+  const token = window.S27Auth ? await window.S27Auth.token() : null;
+  if(!token) return;
+  const upd = $('s27-updated'); if(upd) upd.textContent = 'Wisselen…';
+  const d = await provisionFetch(token, id);
+  if(d && d.ok){
+    if(window.S27Auth) await window.S27Auth.token(true);   // verse claim met het nieuwe bedrijf
+    state._provisionTried = false;
+    loadDashboard();
+    renderCompanySwitcher();
+  }
 }
 
 function handleSessionExpired(message){
@@ -4885,7 +4942,9 @@ async function initAuthV2(){
       state.demoMode = false;
       v2Err('');
       showDashboard();
+      await loadCompaniesAndLink();   // multi-bedrijf: koppel + haal bedrijvenlijst, verse claim
       loadDashboard();
+      renderCompanySwitcher();        // toont de bedrijf-switcher in de topbalk bij >1 bedrijf
     }
   });
 
