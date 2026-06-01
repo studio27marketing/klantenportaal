@@ -3299,25 +3299,18 @@ async function renderInstellingenTab(){
       </section>
 
       <section class="s27-settings-card">
-        <h3 class="s27-settings-title"><svg width="16" height="16"><use href="#s27p-lock"/></svg> Wachtwoord</h3>
-        <p class="s27-settings-sub">Reset je toegangscode. Je krijgt meteen een nieuwe code per e-mail${waEmail ? ' op <strong>' + esc(waEmail) + '</strong>' : ' bij je contactpersoon'}. Je huidige code werkt daarna niet meer.</p>
-        <button class="s27-btn s27-btn-ghost" id="s27-reset-pw"><svg width="15" height="15" style="margin-right:6px"><use href="#s27p-lock"/></svg> Wachtwoord resetten</button>
-        <p class="s27-settings-status" id="s27-reset-pw-status" style="display:none"></p>
+        <h3 class="s27-settings-title"><svg width="16" height="16"><use href="#s27p-lock"/></svg> Inloggen &amp; beveiliging</h3>
+        ${AUTH_V2 ? `
+          <p class="s27-settings-sub">Je logt veilig in met je Google-account of een e-maillink, beveiligd met tweestapsverificatie. Er is geen apart wachtwoord om te resetten. Geen toegang meer? Vraag op de loginpagina een nieuwe e-maillink aan, of bericht hieronder je contactpersoon.</p>
+        ` : `
+          <p class="s27-settings-sub">Reset je toegangscode. Je krijgt meteen een nieuwe code per e-mail${waEmail ? ' op <strong>' + esc(waEmail) + '</strong>' : ' bij je contactpersoon'}. Je huidige code werkt daarna niet meer.</p>
+          <button class="s27-btn s27-btn-ghost" id="s27-reset-pw"><svg width="15" height="15" style="margin-right:6px"><use href="#s27p-lock"/></svg> Wachtwoord resetten</button>
+          <p class="s27-settings-status" id="s27-reset-pw-status" style="display:none"></p>
+        `}
       </section>
 
       <section class="s27-settings-card">
-        <h3 class="s27-settings-title"><svg width="16" height="16"><use href="#s27p-user"/></svg> Jouw contactpersoon bij Studio 27</h3>
-        ${contact.am_naam ? `
-          <div class="s27-am-card">
-            ${contact.am_foto_url ? `<img src="${esc(contact.am_foto_url)}" alt="${esc(contact.am_naam)}" class="s27-am-photo"/>` : '<div class="s27-am-photo s27-am-photo-fallback">' + esc((contact.am_naam||'?')[0]) + '</div>'}
-            <div>
-              <strong>${esc(contact.am_naam)}</strong>
-              <span>${esc(contact.am_rol || 'Account manager')}</span>
-              <a href="#" data-dm="vraag" data-dm-onderwerp="Bericht voor ${esc(contact.am_naam || 'team')}">💬 Bericht sturen naar ${esc(contact.am_naam ? contact.am_naam.split(' ')[0] : 'team')}</a>
-              ${contact.am_gsm ? `<a href="tel:${esc(contact.am_gsm)}" class="s27-contact-call-direct">📞 ${esc(contact.am_gsm)}</a>` : ''}
-            </div>
-          </div>
-        ` : '<p class="s27-settings-sub">Contact info wordt binnenkort getoond.</p>'}
+        ${renderContact(contact)}
       </section>
 
       <section class="s27-settings-card">
@@ -3328,10 +3321,9 @@ async function renderInstellingenTab(){
           <dt>Sessie geldig tot</dt><dd>${esc(expiresStr)}</dd>
         </dl>
         <div class="s27-settings-actions">
-          <button class="s27-btn s27-btn-ghost" id="s27-clear-cache">Cache wissen &amp; vers herladen</button>
           <button class="s27-btn s27-btn-danger" id="s27-logout-btn">Uitloggen</button>
         </div>
-        <p class="s27-settings-hint">Zie je een oude versie? "Cache wissen" leegt alles, logt je uit en haalt het portaal volledig vers op.</p>
+        <p class="s27-settings-hint">Zie je een oude versie? <button type="button" id="s27-clear-cache" class="s27-textlink">Cache wissen &amp; vers herladen</button> — leegt alles, logt je uit en haalt het portaal volledig vers op.</p>
       </section>
     </div>
   `;

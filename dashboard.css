@@ -1117,6 +1117,9 @@ body { margin:0; background:var(--s27-paper-2); }
 /* ---- Onboarding-tour: expliciete opt-out + dynamische spotlight ---- */
 .s27-tour-never { display:block; margin:14px auto 0; background:none; border:none; font-family:var(--font-body); font-size:12px; font-weight:600; color:var(--s27-ink-4); cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
 .s27-tour-never:hover { color:var(--s27-ink-2); }
+/* Subtiele inline tekstlink (bv. cache wissen onopvallend in de hint) */
+.s27-textlink { background:none; border:none; padding:0; font:inherit; color:var(--s27-blue-ink); font-weight:700; cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
+.s27-textlink:hover { color:var(--s27-blue); }
 .s27-tour-spot { position:relative; z-index:99999; background:var(--s27-paper); border-radius:var(--r-sm); animation:s27tourspot 1.6s var(--ease-out) infinite; }
 @keyframes s27tourspot {
   0%,100% { box-shadow:0 0 0 3px rgba(48,131,220,0.28), 0 6px 18px rgba(35,15,35,0.16); }

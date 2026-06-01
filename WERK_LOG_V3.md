@@ -32,7 +32,12 @@ Alles is lokaal getest met de echte widget (`portal-local.html?demo=1&auth=v1`) 
 - De tour speelde **al** maar 1× (gate `localStorage 's27_tour_completed'`). Toegevoegd: een expliciete knop **"De rondleiding niet meer tonen"** op elke stap, die de tour permanent uitzet (ook bij handmatig heropenen).
 - **Dynamischer gemaakt** zoals gevraagd: elke stap heeft nu een **spotlight** — een pulserende blauwe ring rond het echte nav-element (bv. "Mijn werk") dat boven de gedimde overlay "uitlicht", plus `scrollIntoView`. Geverifieerd met screenshot (de "Mijn werk"-groep licht op).
 
-### ✅ E. Het masterplan zelf (`REWORK_PLAN_V3.md`)
+### ✅ E. Instellingen-polish
+- **Wachtwoord-reset**: nu conditioneel — onder auth-v2 (Firebase, de live default) verdwijnt de "toegangscode resetten" en komt er een correcte uitleg ("je logt in met Google/e-maillink + 2FA, niets te resetten"). Onder `?auth=v1` blijft de oude reset (vangnet). Geverifieerd: in v1-demo toont de oude knop, in v2 de Firebase-uitleg.
+- **Cache/sessie subtieler**: de prominente "Cache wissen"-knop is nu een discrete **tekstlink** in de hint ("Zie je een oude versie? *Cache wissen & vers herladen*"). Blijft volledig werken voor jouw tests; herlaadt naar de juiste portaal-URL. Geverifieerd met screenshot.
+- **Contactpersonen** in Instellingen tonen nu óók de **trio** (i.p.v. één account manager), consistent met de Start-pagina.
+
+### ✅ F. Het masterplan zelf (`REWORK_PLAN_V3.md`)
 - Volledige feature-per-feature spec van **alle ~16 vragen**, mijn architectuurkeuzes, en — zoals je vroeg — een **doemdenker-premortem** met elke bug/risico dat ik vooraf zie (Make-valkuilen, CORS/form-urlencoded, ClickUp scope-lek, calendar freeBusy, XSS, dubbele meldingen, …) + de mitigatie per stuk.
 
 **Git:** branch `portal-v3-rework`, commit `354b786`. Niet gepusht. `main`/CDN ongewijzigd.
