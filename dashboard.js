@@ -257,7 +257,9 @@ async function apiV2(url, payload){
 
 // Deel B — koppel het ingelogde account aan een bedrijf via het Make portal-provision-scenario.
 // Stuurt het Firebase ID-token (Make verifieert het server-side via Firebase + zoekt de bedrijven
-// op in ClickUp). text/plain body = "simple request" → geen CORS-preflight op de Make-webhook.
+// op in ClickUp). Body = application/x-www-form-urlencoded: dat is een CORS-"simple" content-type
+// (dus GEEN preflight op de Make-webhook) ÉN Make parset er de velden uit (text/plain deed dat niet
+// → idToken kwam leeg binnen → lege e-mail; dat was de bug).
 // Multi-bedrijf: provision geeft ALLE bedrijven voor de e-mail terug + zet de claim op het gekozen
 // (of eerste) bedrijf. selectedBid kiest welk bedrijf actief wordt (Make verifieert toegang).
 // Parse de provision-respons "id::Naam|id::Naam" → [{id, naam}].
@@ -271,7 +273,11 @@ function zipCompanies(combined){
 }
 async function provisionFetch(token, selectedBid){
   try {
-    const r = await fetch(PROVISION_URL, { method:'POST', body: JSON.stringify({ idToken: token, selected_bedrijf_id: selectedBid || '' }) });
+    const r = await fetch(PROVISION_URL, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/x-www-form-urlencoded' },
+      body: 'idToken=' + encodeURIComponent(token) + '&selected_bedrijf_id=' + encodeURIComponent(selectedBid || '')
+    });
     const d = await r.json().catch(function(){ return {}; });
     if(d && d.ok){
       state.portalCompanies = zipCompanies(d.companies);
