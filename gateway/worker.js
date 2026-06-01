@@ -200,6 +200,7 @@ async function handleAdminLink(request, env, cors) {
     headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: [email] }),
   });
+  if (!lookupRes.ok) return json({ ok: false, error: 'lookup_failed', detail: await lookupRes.text() }, 502, cors);
   const lookup = await lookupRes.json();
   const user = lookup && lookup.users && lookup.users[0];
   if (!user) return json({ ok: false, error: 'user_not_found', message: 'Geen account met dat e-mailadres — laat de klant eerst één keer inloggen.' }, 404, cors);
