@@ -33,12 +33,19 @@
     document.head.appendChild(link);
   }
 
-  function loadScript(src) {
+  function loadScript(src, tries) {
     if (document.querySelector('script[data-s27-portal-js]')) return;
+    tries = tries || 4;
     var s = document.createElement('script');
     s.src = src + CB;
     s.defer = true;
     s.setAttribute('data-s27-portal-js', '1');
+    s.onerror = function() {
+      // raw.githack cold-cache hik → script opnieuw proberen
+      if (s.parentNode) s.parentNode.removeChild(s);
+      if (tries > 1) { setTimeout(function() { loadScript(src, tries - 1); }, 500); }
+      else { var m = document.getElementById(MOUNT_ID); if (m) showError(m, 'Kon de portaal-code niet laden.'); }
+    };
     document.body.appendChild(s);
   }
 
@@ -48,6 +55,23 @@
       '<span style="font-size:13px;display:block;color:#7f1d1d">' + msg + '</span>' +
       '<span style="font-size:12px;display:block;color:#a16a6a;margin-top:12px">Probeer opnieuw of mail naar <a href="mailto:ilke@studio27.be" style="color:#991b1b">ilke@studio27.be</a></span>' +
       '</div>';
+  }
+
+  function delay(ms) { return new Promise(function(res) { setTimeout(res, ms); }); }
+
+  // Retry tegen raw.githack cold-cache hikjes (intermitterende 425 → browser "Failed to fetch").
+  function fetchRetry(url, opts, tries) {
+    return fetch(url, opts).then(function(r) {
+      if (r.ok) return r;
+      if (tries > 1 && (r.status === 425 || r.status === 429 || r.status >= 500)) {
+        return delay(500).then(function() { return fetchRetry(url, opts, tries - 1); });
+      }
+      throw new Error('HTTP ' + r.status);
+    }, function(networkErr) {
+      // fetch rejected (netwerk/CORS — bv. 425-errorpagina zonder CORS-header)
+      if (tries > 1) return delay(500).then(function() { return fetchRetry(url, opts, tries - 1); });
+      throw networkErr;
+    });
   }
 
   function init() {
@@ -60,10 +84,9 @@
     // 1. CSS first (no FOUC)
     loadCSS(CDN + '/dashboard.css');
 
-    // 2. Fetch HTML markup, inject, then load JS
-    fetch(CDN + '/dashboard.html' + CB, { cache: 'no-cache' })
+    // 2. Fetch HTML markup (met retry tegen CDN cold-cache 425), inject, dan JS laden
+    fetchRetry(CDN + '/dashboard.html' + CB, { cache: 'no-cache' }, 4)
       .then(function(r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.text();
       })
       .then(function(html) {
