@@ -49,7 +49,10 @@ const ENDPOINTS = {
 /* ===== AUTH v2 (Firebase + Cloudflare-gateway) — alleen actief achter ?auth=v2
    of localStorage s27_auth_v2=1. Raakt de bestaande gedeelde-code-login NIET.
    Zie AUTH_UPGRADE_PLAN.md. ===== */
-const AUTH_V2 = /[?&]auth=v2(?:&|$)/.test(location.search) || (function(){ try { return localStorage.getItem('s27_auth_v2') === '1'; } catch(e){ return false; } })();
+// CUTOVER 01-06: de nieuwe Firebase-login (2FA + gateway) is nu de DEFAULT voor iedereen.
+// Het portaal is nog niet in klantgebruik, dus geen migratie nodig. Fallback naar de oude
+// gedeelde-code-login kan via ?auth=v1 (vangnet tijdens testen).
+const AUTH_V2 = !/[?&]auth=v1(?:&|$)/.test(location.search);
 const GATEWAY_BASE = 'https://s27-portal-gateway.studio27marketing.workers.dev';
 // JIT-provisioning (Deel B): eerste login zonder bedrijf-koppeling → Make zoekt het bedrijf
 // op via het ClickUp-veld "Portaal-toegang" en zet de koppeling. Zie MODULES_EN_TOEGANG_PLAN.md.
