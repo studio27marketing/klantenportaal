@@ -38,7 +38,7 @@ Eén bron van waarheid = de **Bedrijf-taak in ClickUp**. De widget is "dom": hij
 
 In `dashboard.js`:
 - `normaliseDashboard()` leest nu een optioneel `modules`-object uit de feed.
-- `PORTAL_MODULES = ['performance','doorlopend','opleidingen']` — de **schakelbare** modules. Kern-tabs (Start, Berichten, Projecten, Meetings, Huisstijl, Facturatie, Nieuw project, Instellingen) staan hier bewust niet in en zijn altijd zichtbaar.
+- `PORTAL_MODULES = ['performance','socials','ads','seo','opleidingen']` — de **schakelbare** modules. **(Doorlopend is opgesplitst in 3 tabs: Socials / Advertenties / SEO-GEO — zie A5.)** Kern-tabs (Start, Berichten, Projecten, Meetings, Huisstijl, Facturatie, Nieuw project, Instellingen) staan hier bewust niet in en zijn altijd zichtbaar.
 - `moduleEnabled(key)` → `false` enkel als de feed `modules[key] === false`. **Geen `modules` in de feed ⇒ alles zichtbaar** (geen regressie voor bestaande klanten/demo).
 - `applyModuleVisibility()` verbergt de nav-tab + verbergt een lege nav-groep + stuurt terug naar Start als je op een net-uitgezette tab stond.
 - De hub-startkaarten (Performance/Doorlopend/Opleidingen) volgen dezelfde toggle.
@@ -48,41 +48,59 @@ In `dashboard.js`:
 
 Uitbreiden naar een nieuwe module = sleutel toevoegen aan `PORTAL_MODULES` + label in ClickUp + mapping in Make. Verder niets.
 
-## A2. Wat JIJ in ClickUp doet (eenmalig)
+## A2. ClickUp-veld — ✅ AANGEMAAKT (01-06)
 
-Maak op de lijst **Bedrijven** (`901520180288`, folder S27-CRM) één custom field:
+Op de lijst **Bedrijven** (`901520180288`, folder S27-CRM):
 
 | Eigenschap | Waarde |
 |---|---|
 | **Veldnaam** | `Actieve portaal-modules` |
-| **Type** | **Labels** (multi-select — je vinkt meerdere opties aan) |
-| **Opties** | `Performance` · `Doorlopend` · `Opleidingen` |
+| **Field-ID** | `b8effbfe-c4d6-42fb-b8ac-bc7d48a71734` |
+| **Type** | **labels** (multi-select) |
+
+**Opties (option-ID's voor de Make-mapping):**
+| Label | option-ID |
+|---|---|
+| Performance | `74c2e17b-faa8-482f-97c2-ecdc21962d91` |
+| Socials | `c7255337-8ef8-4186-8766-5f7de709d1d3` |
+| Ads | `c321b00c-d18f-444a-bd6d-db980f7c2b05` |
+| Opleidingen | `5b7be1df-c838-4d59-8a38-794fa79c3adc` |
 
 **Werking (allow-list = fail-closed, juist voor betaalde modules):** je vinkt aan wat de klant **wél** heeft.
-- TEST CLIENT BV → Performance **niet** aanvinken → Performance verdwijnt.
-- Klant mét performance-abonnement → Performance **wel** aanvinken.
-- Leeg veld = geen optionele modules → alle drie verborgen (kern-tabs blijven).
+- TEST CLIENT BV → Performance **niet** aanvinken → Performance-tab verdwijnt.
+- Leeg veld = geen optionele modules → alle drie de tabs verborgen (kern-tabs blijven).
 
-> Liever andersom (leeg = toon alles, en je vinkt aan wat je wil **verbergen**)? Dat kan: noem het veld `Portaal-modules verbergen` en draai in Make de formule om (zie A3). De frontend werkt voor beide modellen ongewijzigd.
+**Label → dashboard-tab** (de UI heeft één Doorlopend-tab voor social+ads+seo, geen aparte Socials/Ads-tab):
+| ClickUp-label | dashboard-tab (`PORTAL_MODULES`-sleutel) |
+|---|---|
+| Performance | `performance` |
+| Socials **of** Ads | `doorlopend` |
+| Opleidingen | `opleidingen` |
 
-> Je kan dit veld ook door mij laten aanmaken via de API — dan krijg je meteen de option-ID's die Make nodig heeft. Zeg maar.
+De extra granulariteit (Socials apart van Ads) blijft beschikbaar voor later (bv. welke cijfers Performance toont, of een latere opsplitsing van de Doorlopend-tab). De frontend blijft ongewijzigd; Make vertaalt labels → tab-booleans.
 
-## A3. Wat in Make moet (dashboard-feed scenario)
+## A3. Make dashboard-feed — ✅ LIVE + GEVERIFIEERD (01-06)
 
-Het **dashboard-feed**-scenario (de webhook achter `ENDPOINTS.dashboard`, intern scenario **5896037**) leest de Bedrijf-taak al. Voeg aan de **JSON-respons op het topniveau** een `modules`-object toe:
+**Status:** scenario **5896037** stuurt nu een top-level `modules`-object mee. Live getest:
+- TEST CLIENT BV (`86c9yv1wy`) → `{"performance":false,"doorlopend":true,"opleidingen":true}`
+- TEST CLIENT 2 BV (`86ca23kjx`) → `{"performance":true,"doorlopend":true,"opleidingen":true}`
+
+**Implementatie (additief, niets bestaands gewijzigd):** nieuwe modules vóór de project-feeder — `21` GET `/v2/task/{{1.bedrijf_id}}` (de Bedrijf-taak, met onerror→Resume zodat een fout de feed niet breekt), `22` zet `mods` = `join(...)` van de geselecteerde label-IDs, `24` zet `m_perf/m_door/m_opl` (tekst "true"/"false"). Module `13` (WebhookRespond) kreeg `,"modules":{...}` achter `contact`. **Leeg veld of API-fout ⇒ alle booleans "true"** (geen regressie voor bestaande klanten met leeg veld). ⚠️ Make kent **geen `or()`** → doorlopend = geneste `if` (Socials → true, anders Ads → true, anders false).
+
+> Onderstaande was de oorspronkelijke spec; nu dus geïmplementeerd. Het **dashboard-feed**-scenario (de webhook achter `ENDPOINTS.dashboard`, intern scenario **5896037**) leest de Bedrijf-taak al. Voeg aan de **JSON-respons op het topniveau** een `modules`-object toe, afgeleid van het labels-veld `b8effbfe-…` (match bij voorkeur op **option-ID**, dat is stabieler dan de naam):
 
 ```json
 "modules": {
-  "performance": {{ if(contains(labelsText; "Performance");  true; false) }},
-  "doorlopend":  {{ if(contains(labelsText; "Doorlopend");   true; false) }},
-  "opleidingen": {{ if(contains(labelsText; "Opleidingen");  true; false) }}
+  "performance": {{ if(contains(labelIds; "74c2e17b-faa8-482f-97c2-ecdc21962d91"); true; false) }},
+  "doorlopend":  {{ if(or(contains(labelIds; "c7255337-8ef8-4186-8766-5f7de709d1d3"); contains(labelIds; "c321b00c-d18f-444a-bd6d-db980f7c2b05")); true; false) }},
+  "opleidingen": {{ if(contains(labelIds; "5b7be1df-c838-4d59-8a38-794fa79c3adc"); true; false) }}
 }
 ```
 
-waarbij `labelsText` = de geselecteerde opties van het veld *Actieve portaal-modules* als tekst (in Make: de array van het Labels-veld `join`-en tot één string).
+waarbij `labelIds` = de geselecteerde option-ID's van het veld *Actieve portaal-modules* als tekst (in Make: de array van het labels-veld `join`-en tot één string). `doorlopend` staat aan zodra **Socials óf Ads** is aangevinkt.
 
-- **Allow-list** (aanbevolen): `contains(...) ? true : false` (zoals hierboven).
-- **Deny-list** (leeg = alles aan): draai om → `contains(...) ? false : true`.
+- **Allow-list** (aanbevolen, fail-closed): `contains(...) ? true : false` (zoals hierboven).
+- **Deny-list** (leeg = alles aan): draai elke tak om → `contains(...) ? false : true`.
 
 Niets anders in de feed wijzigt. De widget pakt `data.modules` automatisch op.
 
@@ -95,9 +113,29 @@ Tabs verbergen is **cosmetisch**: het endpoint blijft technisch bereikbaar. Voor
 
 Voor de huidige vraag ("Performance niet zichtbaar voor Testclient") volstaat A1–A3. A4 is de stap die je zet zodra modules echt geld kosten.
 
+## A5. Doorlopend opgesplitst in Socials / Ads / SEO-GEO — ✅ gebouwd (01-06)
+
+De vroegere ene "Doorlopend"-tab is **3 losse tabs** geworden in de groep *Mijn werk*: **Socials**, **Advertenties**, **SEO/GEO**. Reden: per-module schakelbaar én duidelijker. Intern blijft de categorie `doorlopend` bestaan; één generieke renderer `renderDoorlopendDisc(tabKey, discipline)` filtert per discipline (`social`/`ads`/`seo`). Iconen `s27p-soc/ads/seo` bestonden al.
+
+**Stand per laag:**
+- **Frontend** ✅ — 3 tabs + 3 hub-kaarten + `PORTAL_MODULES` bijgewerkt. Lokaal geverifieerd: `modules:{socials:false}` ⇒ Socials-tab + hubkaart verborgen, Ads/SEO/Performance zichtbaar, en de Ads-tab toont enkel ads-projecten, de SEO-tab enkel seo-projecten.
+- **Make** ✅ live — `modules` = `{performance, socials, ads, opleidingen}`. Geverifieerd: TEST CLIENT BV → `{performance:false, socials:true, ads:true, opleidingen:true}`.
+- **SEO/GEO** ✅ — label **`SEO-GEO`** toegevoegd (option-ID `ef4d645f-002b-4a7d-bc76-3b2160eb72e6`); `m_seo` in Make (module 24) + `"seo"` in de response (module 13). Live geverifieerd: TEST CLIENT BV (zonder SEO-GEO-label) → `seo:false`, TEST CLIENT 2 BV → `seo:true`.
+
+**Het volledige labels-veld `Actieve portaal-modules` (`b8effbfe-…`):** Performance `74c2e17b` · Socials `c7255337` · Ads `c321b00c` · Opleidingen `5b7be1df` · SEO-GEO `ef4d645f`. Feed-`modules` = `{performance, socials, ads, seo, opleidingen}`, alle 5 schakelbaar.
+
 ---
 
 # DEEL B — Account aanmaken/toekennen via e-mail in ClickUp
+
+## B — STATUS: ✅ GEBOUWD (01-06)
+
+- **ClickUp-veld** `Portaal-toegang` (id `f0de5c6c-0eea-4809-8e40-145fc7359a3d`, type text) — aangemaakt. Vul per klant één of meer login-e-mails (komma-gescheiden).
+- **Make `portal-provision`** (scenario **5994302**, hook `…hjmc9k1w…`) — LIVE + getest. Flow: webhook `{idToken}` → Firebase-tokenverificatie (identitytoolkit accounts:lookup) → `email` → ClickUp-query op `Portaal-toegang` (`=`) → `bedrijf_id` → live `/admin/link` zet de `bedrijf_id`-claim → respons `{ok,bedrijf_id,email}`. Geverifieerd: hardcoded `test.portal@studio27.be` → `bedrijf_id 86c9yv1wy` + `/admin/link` aangeroepen; ongeldig token → `ok:false` (nette afwijzing, geen verkeerd bedrijf).
+- **Frontend-haak** (op branch) — `apiV2()` vangt `no_company_link` (403) → `tryProvision(token)` → bij succes `token(true)` (force-refresh claim) → herprobeert de call 1×. `auth.js token(force)` toegevoegd. `_provisionTried` voorkomt loops.
+- **Geen gateway-redeploy** — gebruikt de al-live `/admin/link`.
+
+**Activatie:** dit loopt over de **Firebase-login (auth-v2)**, die nog in pilot staat (default = oude gedeelde-code-login). B werkt dus zodra je via `?auth=v2` (of na de auth-v2-cutover) inlogt. **E2E-eindtest (door Vincent):** zet je eigen Google-adres in `Portaal-toegang` van een testbedrijf → log in via `?auth=v2` met Google → je belandt automatisch op dat dashboard. ⚠️ De `=`-lookup matcht exact één e-mail per veld; voor meerdere e-mails per bedrijf later naar `contains`/data-store.
 
 ## B0. Hoe login vandaag werkt
 
@@ -147,19 +185,19 @@ Als je B1 te veel vindt voor nu: hou `/admin/link` en maak 'm self-service via C
 # Go-live checklist (één keer live)
 
 **Vooraf (geen impact op productie):**
-1. [ ] ClickUp: veld **`Actieve portaal-modules`** (Labels: Performance/Doorlopend/Opleidingen) aanmaken — Deel A2.
-2. [ ] ClickUp: veld **`Portaal-toegang (e-mails)`** (Text) aanmaken — Deel B2.
-3. [ ] Per actieve portaalklant: modules aanvinken + toegang-mails invullen. (Belangrijk: doe dit vóór stap 5, anders verdwijnt een module die je niet aanvinkte.)
-4. [ ] Make: `modules`-object toevoegen aan dashboard-feed (5896037) — Deel A3. (Door mij.)
-5. [ ] Make: `portal-resolve`-scenario + gateway JIT-koppeling — Deel B3. (Door mij.)
+1. [x] ✅ ClickUp: veld **`Actieve portaal-modules`** (Labels) aangemaakt — Deel A2.
+2. [ ] ClickUp: veld **`Portaal-toegang (e-mails)`** (Text) aanmaken — Deel B2. (Voor Deel B.)
+3. [~] Modules invullen: ✅ TEST CLIENT BV + TEST CLIENT 2 BV gezet. Resterende **echte** klanten: leeg = alles zichtbaar, dus enkel invullen wáár je iets wil verbergen.
+4. [x] ✅ Make: `modules`-object in dashboard-feed (5896037) — **live + geverifieerd** (Deel A3).
+5. [ ] Make: `portal-resolve`-scenario + gateway JIT-koppeling — Deel B3. (Door mij, Deel B.)
 6. [ ] (Optioneel/aanrader) endpoint-hardening performance — Deel A4. (Door mij; bouwt op de bestaande `perfreport`-handler.)
 
-**Live zetten:**
-7. [ ] `gateway/worker.js` (perfreport + JIT) committen + deployen naar de Worker.
-8. [ ] Branch `portal-modules-access` mergen naar `main` → CDN serveert de nieuwe `dashboard.js` (binnen ~1 min via cache-bust).
-9. [ ] Rooktest met TEST CLIENT BV (Performance verborgen) en TEST CLIENT 2 BV (modules aan).
+**Live zetten (Deel A — resteert enkel de frontend):**
+7. [ ] **Branch `portal-modules-access` mergen naar `main`** → CDN serveert de nieuwe `dashboard.js` (~1 min). Dít activeert de zichtbaarheid voor klanten. *(commit enkel `dashboard.js` + dit plan; laat de losse `worker.js`-wijziging erbuiten.)*
+8. [ ] Rooktest live: TEST CLIENT BV (Performance-tab weg) en TEST CLIENT 2 BV (alles zichtbaar).
+9. [ ] Later, samen met Deel B: `gateway/worker.js` (perfreport + JIT) committen + deployen.
 
-**Volgorde-logica:** de frontend toont alles tot de feed `modules` stuurt. Daardoor is mergen (stap 8) vóór de Make-wijziging (stap 4) risicoloos — er verandert pas iets zodra Make het map-object meelevert. Echte "flip" = stap 4.
+**Huidige veilige tussentoestand:** de feed stuurt al `modules`, maar de **productie-`dashboard.js` op `main` negeert dat veld nog** (backward-compatible) → klanten zien nu niets veranderen. De zichtbaarheid "flipt" pas bij de merge (stap 7). Bestaande klanten hebben een leeg veld ⇒ alles blijft zichtbaar, dus de merge geeft geen regressie.
 
 ---
 

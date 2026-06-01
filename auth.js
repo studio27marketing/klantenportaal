@@ -168,7 +168,7 @@ const S27Auth = {
     } catch (e) { await reauthIfNeeded(e); throw new Error(friendly(e)); }
   },
 
-  async token() { return auth && auth.currentUser ? auth.currentUser.getIdToken() : null; },
+  async token(force) { return auth && auth.currentUser ? auth.currentUser.getIdToken(!!force) : null; },
 
   // Helper voor de end-to-end test: roept de gateway aan met het ID-token
   async call(endpoint, body) {

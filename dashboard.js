@@ -51,6 +51,9 @@ const ENDPOINTS = {
    Zie AUTH_UPGRADE_PLAN.md. ===== */
 const AUTH_V2 = /[?&]auth=v2(?:&|$)/.test(location.search) || (function(){ try { return localStorage.getItem('s27_auth_v2') === '1'; } catch(e){ return false; } })();
 const GATEWAY_BASE = 'https://s27-portal-gateway.studio27marketing.workers.dev';
+// JIT-provisioning (Deel B): eerste login zonder bedrijf-koppeling → Make zoekt het bedrijf
+// op via het ClickUp-veld "Portaal-toegang" en zet de koppeling. Zie MODULES_EN_TOEGANG_PLAN.md.
+const PROVISION_URL = 'https://hook.eu1.make.com/hjmc9k1w9ry027kom3rfiwci9pejub78';
 const ENDPOINT_KEYS = Object.keys(ENDPOINTS).reduce(function(m, k){ m[ENDPOINTS[k]] = k; return m; }, {});
 const AUTH_JS_URL = (function(){
   try {
@@ -227,9 +230,37 @@ async function apiV2(url, payload){
     let parsed;
     try { parsed = { ok:r.ok, status:r.status, data:JSON.parse(t) }; }
     catch { parsed = { ok:r.ok, status:r.status, data:{ _raw:t } }; }
+    // Deel B — JIT-provisioning: ingelogd maar nog geen bedrijf-koppeling → koppel via Make,
+    // vernieuw het token (nieuwe bedrijf_id-claim) en herprobeer de call exact één keer.
+    if(parsed.status === 403 && parsed.data && parsed.data.error === 'no_company_link' && !state._provisionTried){
+      state._provisionTried = true;
+      const linked = await tryProvision(token);
+      if(linked){
+        const fresh = (window.S27Auth ? await window.S27Auth.token(true) : token) || token;
+        const r2 = await fetch(GATEWAY_BASE + '/' + key, {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + fresh },
+          body: JSON.stringify(payload || {})
+        });
+        const t2 = await r2.text();
+        try { return { ok:r2.ok, status:r2.status, data:JSON.parse(t2) }; }
+        catch { return { ok:r2.ok, status:r2.status, data:{ _raw:t2 } }; }
+      }
+    }
     if(parsed.status === 401 && state && state.session){ handleSessionExpired(parsed.data && parsed.data.message); }
     return parsed;
   } catch(e){ return { ok:false, status:0, error:e.message }; }
+}
+
+// Deel B — koppel het ingelogde account aan een bedrijf via het Make portal-provision-scenario.
+// Stuurt het Firebase ID-token (Make verifieert het server-side via Firebase en zoekt het bedrijf
+// op in ClickUp). text/plain body = "simple request" → geen CORS-preflight op de Make-webhook.
+async function tryProvision(token){
+  try {
+    const r = await fetch(PROVISION_URL, { method:'POST', body: JSON.stringify({ idToken: token }) });
+    const d = await r.json().catch(function(){ return {}; });
+    return !!(d && d.ok && d.bedrijf_id);
+  } catch(e){ return false; }
 }
 
 function handleSessionExpired(message){
@@ -543,13 +574,18 @@ function renderHubBody(d){
   const deliverable = projectsInCategory(d, 'deliverable');
   const lopend = deliverable.filter(p => !isAfgerondStatus(p)).length;
   const wacht = deliverable.filter(p => matchesStatusFilter(p, 'wacht_feedback')).length;
-  const doorlopendCount = projectsInCategory(d, 'doorlopend').length;
+  const doorlopend = projectsInCategory(d, 'doorlopend');
+  const socialsCount = doorlopend.filter(p => p.discipline === 'social').length;
+  const adsCount = doorlopend.filter(p => p.discipline === 'ads').length;
+  const seoCount = doorlopend.filter(p => p.discipline === 'seo').length;
   const opleidingCount = projectsInCategory(d, 'opleiding').length;
   const meetings = d.aankomende_meetings || [];
   const projMeta = (lopend ? lopend + ' lopend' : 'Geen lopende') + (wacht ? ' · ' + wacht + ' wacht op jou' : '');
   const grid = [
     hubCard('projecten','s27p-inbox','#3083DC','Projecten', projMeta, 'Website, branding, video & strategie — geef feedback en keur opleveringen goed.'),
-    moduleEnabled('doorlopend')  ? hubCard('doorlopend','s27p-soc','#F66131','Doorlopend', (doorlopendCount ? doorlopendCount + ' actief' : 'Geen actief'), 'Social, advertenties en SEO/GEO — trajecten die continu lopen.') : '',
+    moduleEnabled('socials') ? hubCard('socials','s27p-soc','#F66131','Socials', (socialsCount ? socialsCount + ' actief' : 'Geen actief'), 'Je social-mediabeheer — content en planning die continu loopt.') : '',
+    moduleEnabled('ads')     ? hubCard('ads','s27p-ads','#3083DC','Advertenties', (adsCount ? adsCount + ' actief' : 'Geen actief'), 'Je campagnes op Meta, Google en meer — continu beheerd en bijgestuurd.') : '',
+    moduleEnabled('seo')     ? hubCard('seo','s27p-seo','#12AC4E','SEO/GEO', (seoCount ? seoCount + ' actief' : 'Geen actief'), 'Je vindbaarheid in zoekmachines én AI-antwoorden — een doorlopend traject.') : '',
     moduleEnabled('opleidingen') ? hubCard('opleidingen','s27p-opl','#12AC4E','Opleidingen', (opleidingCount ? opleidingCount + ' lopend' : 'Geen lopende'), 'Je opleidingen en workshops bij Studio 27 — planning en materiaal.') : '',
     moduleEnabled('performance') ? hubCard('performance','s27p-chart','#9441DB','Performance','Bekijk je cijfers','Je advertentie- en social-resultaten, helder gevisualiseerd.') : '',
     hubCard('meetings','s27p-cal','#3083DC','Meetings', (meetings.length ? meetings.length + ' gepland' : 'Plan een meeting'), 'Bekijk je agenda en plan zelf een nieuw overleg in.'),
@@ -1160,29 +1196,27 @@ function attachProjectenHandlers(){
 }
 
 // v3.1-5: DOORLOPENDE projecten (social/ads/seo) — retainer, geen feedback/goedgekeurd-flow.
-function renderDoorlopend(){
-  const body = $('s27-doorlopend-body'); if(!body) return;
+// v4 modules-split: Doorlopend is opgesplitst in 3 eigen tabs (Socials/Ads/SEO-GEO).
+// Eén generieke renderer, gefilterd op discipline. Categorie blijft intern 'doorlopend'.
+const DOORLOPEND_COPY = {
+  social: { intro:'Je social media loopt continu — content, planning en opvolging. De cijfers vind je in <em>Performance</em>.', empty:'Zodra je social-mediatraject loopt, vind je het hier terug.' },
+  ads:    { intro:'Je advertenties draaien continu — Meta, Google en meer, doorlopend bijgestuurd. De cijfers vind je in <em>Performance</em>.', empty:'Zodra een advertentiecampagne loopt, vind je ze hier terug.' },
+  seo:    { intro:'Je SEO/GEO-traject loopt continu — werken aan je vindbaarheid in zoekmachines én AI-antwoorden.', empty:'Zodra je SEO/GEO-traject loopt, vind je het hier terug.' }
+};
+function renderDoorlopendDisc(tabKey, discipline){
+  const body = $('s27-' + tabKey + '-body'); if(!body) return;
   const d = state.dashboard;
   if(!d){ body.innerHTML = '<div class="s27-loading">Laden…</div>'; return; }
-  const projs = projectsInCategory(d, 'doorlopend');
+  const projs = projectsInCategory(d, 'doorlopend').filter(p => p.discipline === discipline);
+  const copy = DOORLOPEND_COPY[discipline] || { intro:'', empty:'Nog niets om te tonen.' };
   const intro = '<div class="s27-doorlopend-intro">' +
     '<span class="s27-doorlopend-intro-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.22-8.56"/><polyline points="21 4 21 9 16 9"/></svg></span>' +
-    '<div><strong>Doorlopende trajecten</strong><p>Social media, advertenties en SEO/GEO lopen continu — geen losse opleveringen, maar maandelijkse opvolging. De gedetailleerde cijfers van je advertenties en social vind je in <em>Performance</em>.</p></div></div>';
+    '<div><strong>Doorlopend traject</strong><p>' + copy.intro + '</p></div></div>';
   if(!projs.length){
-    body.innerHTML = intro + '<div class="s27-empty"><div class="s27-empty-title">Nog geen doorlopende trajecten</div><p class="s27-empty-sub">Zodra een social-, ads- of SEO/GEO-traject loopt, vind je het hier terug.</p></div>';
+    body.innerHTML = intro + '<div class="s27-empty"><div class="s27-empty-title">Nog geen lopend traject</div><p class="s27-empty-sub">' + copy.empty + '</p></div>';
     return;
   }
-  const byDisc = groupBy(projs, p => p.discipline);
-  let html = intro + '<div class="s27-acc-list">';
-  Object.keys(byDisc).forEach(key => {
-    const meta = discMeta(key);
-    html += '<div class="s27-doorlopend-group">' +
-      '<div class="s27-doorlopend-group-head"><span class="s27-acc-icon"><svg width="16" height="16" viewBox="0 0 24 24"><use href="#' + meta.icon + '"/></svg></span>' +
-        '<span class="s27-acc-title">' + esc(meta.label) + '</span><span class="s27-acc-count">' + byDisc[key].length + '</span></div>' +
-      '<div class="s27-acc-body">' + byDisc[key].map(renderDoorlopendCard).join('') + '</div></div>';
-  });
-  html += '</div>';
-  body.innerHTML = html;
+  body.innerHTML = intro + '<div class="s27-acc-list"><div class="s27-acc-body">' + projs.map(renderDoorlopendCard).join('') + '</div></div>';
   body.querySelectorAll('.s27-projc').forEach(el => {
     el.addEventListener('click', () => openProjectDetail(el.dataset.taskId));
     el.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); openProjectDetail(el.dataset.taskId); } });
@@ -1234,7 +1268,7 @@ document.addEventListener('click', e => {
    nieuw, instellingen) staan bewust NIET in deze lijst — die zijn altijd aan.
    Uitbreiden = sleutel hier toevoegen + label in ClickUp + mapping in Make.
    ================================================================= */
-const PORTAL_MODULES = ['performance', 'doorlopend', 'opleidingen'];
+const PORTAL_MODULES = ['performance', 'socials', 'ads', 'seo', 'opleidingen'];
 function moduleEnabled(key){
   if(PORTAL_MODULES.indexOf(key) === -1) return true;            // kern-tab → altijd zichtbaar
   const m = state.dashboard && state.dashboard.modules;
@@ -1273,7 +1307,9 @@ function switchTab(tabId){
   });
   // Lazy-render placeholder tabs
   if(tabId === 'projecten')    renderProjecten();
-  if(tabId === 'doorlopend')   renderDoorlopend();
+  if(tabId === 'socials')      renderDoorlopendDisc('socials', 'social');
+  if(tabId === 'ads')          renderDoorlopendDisc('ads', 'ads');
+  if(tabId === 'seo')          renderDoorlopendDisc('seo', 'seo');
   if(tabId === 'berichten')    renderBerichtenTab();
   if(tabId === 'performance')  renderPerformanceTab();
   if(tabId === 'opleidingen')  renderOpleidingen();
