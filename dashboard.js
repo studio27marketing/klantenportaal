@@ -260,17 +260,21 @@ async function apiV2(url, payload){
 // op in ClickUp). text/plain body = "simple request" → geen CORS-preflight op de Make-webhook.
 // Multi-bedrijf: provision geeft ALLE bedrijven voor de e-mail terug + zet de claim op het gekozen
 // (of eerste) bedrijf. selectedBid kiest welk bedrijf actief wordt (Make verifieert toegang).
-function zipCompanies(ids, names){
-  const i = String(ids || '').split('|').filter(Boolean);
-  const n = String(names || '').split('|');
-  return i.map(function(id, k){ return { id: id, naam: (n[k] || 'Bedrijf').trim() }; });
+// Parse de provision-respons "id::Naam|id::Naam" → [{id, naam}].
+function zipCompanies(combined){
+  return String(combined || '').split('|').filter(Boolean).map(function(row){
+    const idx = row.indexOf('::');
+    const id = idx >= 0 ? row.slice(0, idx) : row;
+    const naam = idx >= 0 ? row.slice(idx + 2) : 'Bedrijf';
+    return { id: id.trim(), naam: (naam || 'Bedrijf').trim() };
+  });
 }
 async function provisionFetch(token, selectedBid){
   try {
     const r = await fetch(PROVISION_URL, { method:'POST', body: JSON.stringify({ idToken: token, selected_bedrijf_id: selectedBid || '' }) });
     const d = await r.json().catch(function(){ return {}; });
     if(d && d.ok){
-      state.portalCompanies = zipCompanies(d.companies_ids, d.companies_names);
+      state.portalCompanies = zipCompanies(d.companies);
       state.activeBedrijf = d.bedrijf_id || '';
       try { if(d.bedrijf_id) localStorage.setItem('s27_active_bedrijf', d.bedrijf_id); } catch(e){}
     }
