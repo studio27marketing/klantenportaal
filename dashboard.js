@@ -46,6 +46,20 @@ const ENDPOINTS = {
   performance:       'https://hook.eu1.make.com/chmsfitxr12m8cpjp4x3fb8ru1nqr7gg'
 };
 
+/* ===== AUTH v2 (Firebase + Cloudflare-gateway) — alleen actief achter ?auth=v2
+   of localStorage s27_auth_v2=1. Raakt de bestaande gedeelde-code-login NIET.
+   Zie AUTH_UPGRADE_PLAN.md. ===== */
+const AUTH_V2 = /[?&]auth=v2(?:&|$)/.test(location.search) || (function(){ try { return localStorage.getItem('s27_auth_v2') === '1'; } catch(e){ return false; } })();
+const GATEWAY_BASE = 'https://s27-portal-gateway.studio27marketing.workers.dev';
+const ENDPOINT_KEYS = Object.keys(ENDPOINTS).reduce(function(m, k){ m[ENDPOINTS[k]] = k; return m; }, {});
+const AUTH_JS_URL = (function(){
+  try {
+    var sc = document.querySelector('script[data-s27-portal-js]');
+    if (sc && sc.src) return sc.src.replace(/dashboard\.js(\?.*)?$/, 'auth.js');
+  } catch(e){}
+  return 'https://raw.githack.com/studio27marketing/klantenportaal/main/auth.js';
+})();
+
 /* =================================================================
    BRAND CATEGORIEËN (Mijn bedrijf tab)
    ================================================================= */
@@ -177,6 +191,7 @@ function decodeMakeString(s){
 }
 
 async function api(url, payload){
+  if (AUTH_V2) return apiV2(url, payload);
   try {
     const r = await fetch(url, {
       method:'POST',
@@ -191,6 +206,28 @@ async function api(url, payload){
     if(parsed.status === 401 && state && state.session){
       handleSessionExpired(parsed.data && parsed.data.message);
     }
+    return parsed;
+  } catch(e){ return { ok:false, status:0, error:e.message }; }
+}
+
+// AUTH v2: route elke api()-call via de Cloudflare-gateway met het Firebase ID-token.
+// bedrijf_id wordt server-side door de gateway gezet; session_token uit payload wordt genegeerd.
+async function apiV2(url, payload){
+  try {
+    const key = ENDPOINT_KEYS[url];
+    if(!key) return { ok:false, status:0, error:'onbekend endpoint: ' + url };
+    const token = window.S27Auth ? await window.S27Auth.token() : null;
+    if(!token){ if(state && state.session) handleSessionExpired('Niet ingelogd.'); return { ok:false, status:401 }; }
+    const r = await fetch(GATEWAY_BASE + '/' + key, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + token },
+      body: JSON.stringify(payload || {})
+    });
+    const t = await r.text();
+    let parsed;
+    try { parsed = { ok:r.ok, status:r.status, data:JSON.parse(t) }; }
+    catch { parsed = { ok:r.ok, status:r.status, data:{ _raw:t } }; }
+    if(parsed.status === 401 && state && state.session){ handleSessionExpired(parsed.data && parsed.data.message); }
     return parsed;
   } catch(e){ return { ok:false, status:0, error:e.message }; }
 }
@@ -347,6 +384,7 @@ async function handleLogin(e){
 
 function handleLogout(){
   if(!confirm('Wil je echt uitloggen? Je kan altijd opnieuw inloggen met je code.')) return;
+  if (AUTH_V2) { if (window.S27Auth) window.S27Auth.logout(); return; }
   clearSession();
   $('s27-bedrijfsnaam').value = '';
   $('s27-token').value = '';
@@ -4624,11 +4662,132 @@ function injectStatusBot(){
 }
 
 /* =================================================================
+   AUTH v2 — Firebase-login UI (achter ?auth=v2)
+   ================================================================= */
+var _authV2 = { enrollStarted:false };
+
+function v2LoadScriptOnce(src, id){
+  return new Promise(function(resolve, reject){
+    if(document.getElementById(id)){ resolve(); return; }
+    var s = document.createElement('script');
+    s.src = src; s.id = id;
+    s.onload = function(){ resolve(); };
+    s.onerror = function(){ reject(new Error('kon script niet laden: ' + src)); };
+    document.head.appendChild(s);
+  });
+}
+
+function v2Err(msg){
+  var el = $('s27-v2-err');
+  if(!el) return;
+  if(!msg){ el.style.display = 'none'; return; }
+  el.textContent = msg; el.style.display = 'block';
+}
+
+function v2ShowPhase(phase){
+  ['s27-v2-signin','s27-v2-mfa','s27-v2-enroll'].forEach(function(id){ var el = $(id); if(el) el.style.display = 'none'; });
+  var map = { signed_out:'s27-v2-signin', mfa_challenge:'s27-v2-mfa', needs_enrollment:'s27-v2-enroll' };
+  var t = map[phase]; if(t && $(t)) $(t).style.display = 'block';
+}
+
+function buildV2LoginUI(){
+  var card = document.querySelector('#s27-login-view .s27-login-card');
+  if(!card || document.getElementById('s27-v2-auth')) return;
+  var oldForm = $('s27-login-form'); if(oldForm) oldForm.style.display = 'none';
+  var oldHelp = document.querySelector('#s27-login-view .s27-login-help'); if(oldHelp) oldHelp.style.display = 'none';
+  var inS = 'width:100%;padding:11px;border:1px solid #d9d9e0;border-radius:10px;font-size:15px;box-sizing:border-box;margin-bottom:8px';
+  var coS = 'width:100%;padding:11px;border:1px solid #d9d9e0;border-radius:10px;font-size:18px;letter-spacing:3px;text-align:center;box-sizing:border-box;margin-bottom:8px';
+  var wrap = document.createElement('div');
+  wrap.id = 's27-v2-auth';
+  wrap.innerHTML =
+    '<div id="s27-v2-err" class="s27-login-error" style="display:none"></div>' +
+    '<div id="s27-v2-signin">' +
+      '<button type="button" id="s27-v2-google" class="s27-btn"><span>Inloggen met Google</span></button>' +
+      '<div style="text-align:center;margin:14px 0;color:#9a9a9a;font-size:13px">— of met e-maillink —</div>' +
+      '<input id="s27-v2-email" type="email" autocomplete="email" placeholder="jij@bedrijf.be" style="' + inS + '">' +
+      '<button type="button" id="s27-v2-emaillink" class="s27-btn" style="background:#1a1a1a"><span>Stuur inloglink</span></button>' +
+      '<p id="s27-v2-emailsent" style="display:none;color:#166534;font-size:13px;margin-top:10px">Link verstuurd — open de link in dezelfde browser.</p>' +
+    '</div>' +
+    '<div id="s27-v2-mfa" style="display:none">' +
+      '<p style="font-size:14px;color:#555;margin-top:0">Voer de 6-cijfercode uit je authenticator-app in.</p>' +
+      '<input id="s27-v2-mfacode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" style="' + coS + '">' +
+      '<button type="button" id="s27-v2-mfaverify" class="s27-btn"><span>Bevestigen</span></button>' +
+    '</div>' +
+    '<div id="s27-v2-enroll" style="display:none">' +
+      '<p style="font-size:14px;color:#555;margin-top:0"><b>Tweestapsverificatie instellen (verplicht)</b><br>Scan de QR met Google Authenticator of Authy — of voer de sleutel handmatig in. Geef daarna de 6-cijfercode die je app toont.</p>' +
+      '<div id="s27-v2-qr" style="display:flex;justify-content:center;margin:10px 0;min-height:160px"></div>' +
+      '<p style="font-size:12px;color:#777;text-align:center;word-break:break-all">Sleutel: <code id="s27-v2-secret"></code></p>' +
+      '<input id="s27-v2-enrollcode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-cijfercode uit je app" style="' + coS + '">' +
+      '<button type="button" id="s27-v2-enrollbtn" class="s27-btn"><span>Activeren</span></button>' +
+    '</div>';
+  card.appendChild(wrap);
+  $('s27-v2-google').addEventListener('click', function(){ v2Err(''); window.S27Auth.google(); });
+  $('s27-v2-emaillink').addEventListener('click', function(){
+    var e = ($('s27-v2-email').value || '').trim();
+    if(!e){ v2Err('Vul je e-mailadres in.'); return; }
+    v2Err(''); window.S27Auth.emailLink(e).catch(function(x){ v2Err(x.message); });
+  });
+  $('s27-v2-mfaverify').addEventListener('click', function(){
+    window.S27Auth.mfaVerify(($('s27-v2-mfacode').value || '').trim()).catch(function(x){ v2Err(x.message); });
+  });
+  $('s27-v2-enrollbtn').addEventListener('click', function(){
+    window.S27Auth.enrollVerify(($('s27-v2-enrollcode').value || '').trim()).catch(function(x){ v2Err(x.message); });
+  });
+}
+
+async function initAuthV2(){
+  showLogin();
+  buildV2LoginUI();
+  v2LoadScriptOnce('https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs/qrcode.min.js', 's27-qrcode-lib').catch(function(){});
+  try {
+    await import(AUTH_JS_URL);
+  } catch(e){
+    console.error('[S27] auth.js import faalde:', e);
+    v2Err('Kon de loginmodule niet laden. Ververs de pagina.');
+    return;
+  }
+  if(!window.S27Auth){ v2Err('Loginmodule niet beschikbaar.'); return; }
+
+  window.S27Auth.subscribe(async function(s){
+    if(s.phase === 'signed_out'){
+      _authV2.enrollStarted = false;
+      showLogin(); v2ShowPhase('signed_out'); v2Err(s.error || '');
+    } else if(s.phase === 'email_sent'){
+      var es = $('s27-v2-emailsent'); if(es) es.style.display = 'block';
+    } else if(s.phase === 'mfa_challenge'){
+      v2Err(s.error || ''); showLogin(); v2ShowPhase('mfa_challenge');
+    } else if(s.phase === 'needs_enrollment'){
+      v2Err(s.error || ''); showLogin(); v2ShowPhase('needs_enrollment');
+      if(!_authV2.enrollStarted){
+        _authV2.enrollStarted = true;
+        try {
+          var r = await window.S27Auth.enrollBegin();
+          var sec = $('s27-v2-secret'); if(sec) sec.textContent = r.secret;
+          var qrEl = $('s27-v2-qr');
+          if(qrEl){ qrEl.innerHTML = ''; if(window.QRCode){ new window.QRCode(qrEl, { text:r.qrUrl, width:160, height:160 }); } else { qrEl.textContent = '(QR-lib laadt nog — gebruik de sleutel hieronder)'; } }
+        } catch(e){ _authV2.enrollStarted = false; v2Err(e.message); }
+      }
+    } else if(s.phase === 'ready'){
+      var u = s.user || {};
+      state.session = { bedrijf_id:'via-gateway', bedrijfsnaam:(u.email || 'Klant'), session_token:'firebase', uid:u.uid };
+      state.demoMode = false;
+      v2Err('');
+      showDashboard();
+      loadDashboard();
+    }
+  });
+
+  window.S27Auth.init({ gatewayBase: GATEWAY_BASE }).catch(function(e){ v2Err('Init faalde: ' + e.message); });
+}
+
+/* =================================================================
    INIT
    ================================================================= */
 function init(){
   const params = qs();
-  if(params.get('demo') === '1'){
+  if (AUTH_V2) {
+    initAuthV2();
+  } else if(params.get('demo') === '1'){
     state.demoMode = true;
     state.session = { bedrijf_id:'demo', bedrijfsnaam:'TEST CLIENT BV', session_token:'demo', expires_at:null };
     showDashboard();
@@ -4646,18 +4805,20 @@ function init(){
     }
   }
 
-  // Login: use button click + Enter key (skip form-submit because Webflow wraps form in w-form widget)
-  const loginBtn = $('s27-login-btn');
-  if(loginBtn) loginBtn.addEventListener('click', handleLogin);
-  ['s27-bedrijfsnaam','s27-token'].forEach(id => {
-    const el = $(id);
-    if(el) el.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); handleLogin(e); } });
-  });
-  // Block default form submit completely (Webflow form-wrapper triggers fail-message)
-  const loginForm = $('s27-login-form');
-  if(loginForm) loginForm.addEventListener('submit', e => { e.preventDefault(); e.stopPropagation(); handleLogin(e); return false; });
-  // Hide Webflow w-form-done / w-form-fail divs if Webflow wrapped our form
-  document.querySelectorAll('#s27-portal .w-form-fail, #s27-portal .w-form-done').forEach(el => el.style.display = 'none');
+  // Login (legacy gedeelde-code): alleen bedraden als AUTH_V2 uit staat.
+  if (!AUTH_V2) {
+    const loginBtn = $('s27-login-btn');
+    if(loginBtn) loginBtn.addEventListener('click', handleLogin);
+    ['s27-bedrijfsnaam','s27-token'].forEach(id => {
+      const el = $(id);
+      if(el) el.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); handleLogin(e); } });
+    });
+    // Block default form submit completely (Webflow form-wrapper triggers fail-message)
+    const loginForm = $('s27-login-form');
+    if(loginForm) loginForm.addEventListener('submit', e => { e.preventDefault(); e.stopPropagation(); handleLogin(e); return false; });
+    // Hide Webflow w-form-done / w-form-fail divs if Webflow wrapped our form
+    document.querySelectorAll('#s27-portal .w-form-fail, #s27-portal .w-form-done').forEach(el => el.style.display = 'none');
+  }
 
   $('s27-lock-btn').addEventListener('click', handleLogout);
   $('s27-modal-close').addEventListener('click', closeModal);

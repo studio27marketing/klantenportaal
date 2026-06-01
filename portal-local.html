@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio 27 portaal — lokale test (dual-mode)</title>
+</head>
+<body>
+<!--
+  Lokale test van de echte widget, beide paden:
+    http://localhost:8000/portal-local.html            → OUDE login (gedeelde code)
+    http://localhost:8000/portal-local.html?auth=v2     → NIEUWE login (Firebase + 2FA + gateway)
+  Spiegelt productie exact: AUTH_V2 volgt puur de URL (?auth=v2), geen geforceerde localStorage-vlag.
+  Draaien: cd klantendashboard && python3 -m http.server 8000
+-->
+<div id="s27-portal-mount"></div>
+<script>
+  // Geen geforceerde vlag: laat AUTH_V2 puur door de URL bepalen (net als productie).
+  try { if (!/[?&]auth=v2(?:&|$)/.test(location.search)) localStorage.removeItem('s27_auth_v2'); } catch (e) {}
+</script>
+<script>
+(function () {
+  var BASE = './';
+  var link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = BASE + 'dashboard.css';
+  document.head.appendChild(link);
+  fetch(BASE + 'dashboard.html')
+    .then(function (r) { return r.text(); })
+    .then(function (html) {
+      document.getElementById('s27-portal-mount').innerHTML = html;
+      var s = document.createElement('script');
+      s.src = BASE + 'dashboard.js';
+      s.setAttribute('data-s27-portal-js', '1');
+      document.body.appendChild(s);
+    })
+    .catch(function (e) {
+      document.getElementById('s27-portal-mount').innerHTML =
+        '<p style="font-family:system-ui;padding:40px;text-align:center">Kon dashboard.html niet laden (' + e.message + '). Draai je een lokale server in de klantendashboard-map?</p>';
+    });
+})();
+</script>
+</body>
+</html>

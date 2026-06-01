@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio 27 — Auth v2 test</title>
+<style>
+  body{font-family:system-ui,-apple-system,sans-serif;max-width:520px;margin:40px auto;padding:0 16px;color:#1a1a1a}
+  h1{font-size:20px} h2{font-size:15px;margin:0 0 8px}
+  .card{border:1px solid #e5e5e5;border-radius:12px;padding:20px;margin:16px 0}
+  input{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:15px;box-sizing:border-box;margin:6px 0}
+  button{padding:10px 16px;border:0;border-radius:8px;background:#9441DB;color:#fff;font-weight:600;cursor:pointer;font-size:14px;margin:4px 0}
+  button.alt{background:#1a1a1a}
+  .hide{display:none}
+  .err{color:#991b1b;font-size:13px;margin:8px 0;background:#fef2f2;border:1px solid #fecaca;padding:10px;border-radius:8px}
+  .ok{color:#166534;font-size:13px}
+  pre{background:#f6f6f6;padding:12px;border-radius:8px;overflow:auto;font-size:12px;white-space:pre-wrap}
+  .muted{color:#666;font-size:12px}
+  code{background:#f0f0f0;padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<h1>Studio 27 — Auth v2 testpagina</h1>
+<p class="muted">Geïsoleerde test voor Firebase-login + verplichte 2FA. Raakt het live portaal niet.
+Moet draaien op een <b>authorized domain</b> (localhost of studio27.be), anders blokkeert Firebase de login.</p>
+
+<div class="card">
+  <h2>Gateway-URL (optioneel — voor de end-to-end test)</h2>
+  <input id="gw" value="https://s27-portal-gateway.studio27marketing.workers.dev" placeholder="https://s27-portal-gateway.&lt;account&gt;.workers.dev">
+  <p class="muted">Vul in zodra de Worker gedeployed is. Leeg = enkel login/2FA testen.</p>
+</div>
+
+<div id="err" class="err hide"></div>
+
+<!-- SIGNED OUT -->
+<div id="v-signedout" class="card hide">
+  <h2>Inloggen</h2>
+  <button id="btn-google">Inloggen met Google</button>
+  <p class="muted" style="margin:14px 0 4px">of met e-maillink (wachtwoordloos):</p>
+  <input id="email" type="email" placeholder="jij@bedrijf.be">
+  <button class="alt" id="btn-emaillink">Stuur inloglink</button>
+  <p id="emailsent" class="ok hide">Link verstuurd — open 'm in dezelfde browser (en houd deze server draaiend).</p>
+</div>
+
+<!-- MFA CHALLENGE -->
+<div id="v-mfa" class="card hide">
+  <h2>Tweestapsverificatie</h2>
+  <p class="muted">Voer de 6-cijfercode uit je authenticator-app in.</p>
+  <input id="mfa-code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456">
+  <button id="btn-mfa">Bevestigen</button>
+  <button class="alt relogin" style="margin-left:8px">Opnieuw inloggen</button>
+</div>
+
+<!-- ENROLLMENT (verplicht, 1e login) -->
+<div id="v-enroll" class="card hide">
+  <h2>2FA instellen (verplicht)</h2>
+  <p class="muted"><b>1.</b> Scan de QR met Google Authenticator / Authy — of voeg de sleutel handmatig toe.<br>
+  <b>2.</b> Je app toont dan een <b>6-cijfercode</b>. Vul díe hieronder in — <b>niet</b> de sleutel.</p>
+  <div id="qr" style="margin:8px auto;display:flex;justify-content:center;min-height:180px"></div>
+  <p class="muted">Sleutel (handmatig toevoegen): <code id="secret"></code></p>
+  <input id="enroll-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-cijfercode uit je app">
+  <button id="btn-enroll">Activeren</button>
+  <button class="alt relogin" style="margin-left:8px">Opnieuw inloggen</button>
+</div>
+
+<!-- READY -->
+<div id="v-ready" class="card hide">
+  <h2 class="ok">✓ Ingelogd</h2>
+  <pre id="userinfo"></pre>
+  <button id="btn-test">Test gateway-call /dashboard</button>
+  <button class="alt" id="btn-logout">Uitloggen</button>
+  <pre id="callresult" class="hide"></pre>
+</div>
+
+<script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs/qrcode.min.js"></script>
+<script type="module">
+import { S27Auth } from './auth.js';
+
+const $ = (id) => document.getElementById(id);
+const show = (id) => ['v-signedout','v-mfa','v-enroll','v-ready']
+  .forEach((v) => $(v).classList.toggle('hide', v !== id));
+const err = (m) => { const e = $('err'); if (!m) { e.classList.add('hide'); return; } e.textContent = m; e.classList.remove('hide'); };
+let enrollStarted = false;
+
+S27Auth.subscribe(async (s) => {
+  if (s.phase !== 'signed_out' || !s.error) err(s.error || '');
+  if (s.phase === 'signed_out') { show('v-signedout'); enrollStarted = false; if (s.error) err(s.error); }
+  else if (s.phase === 'email_sent') $('emailsent').classList.remove('hide');
+  else if (s.phase === 'mfa_challenge') show('v-mfa');
+  else if (s.phase === 'needs_enrollment') {
+    show('v-enroll');
+    if (!enrollStarted) {
+      enrollStarted = true;
+      try {
+        const { qrUrl, secret } = await S27Auth.enrollBegin();
+        $('secret').textContent = secret;
+        const qrEl = $('qr'); qrEl.innerHTML = '';
+        if (window.QRCode) new window.QRCode(qrEl, { text: qrUrl, width: 180, height: 180 });
+        else qrEl.textContent = '(QR-lib niet geladen — gebruik de sleutel hieronder)';
+      } catch (e) { enrollStarted = false; err(e.message); }
+    }
+  } else if (s.phase === 'ready') {
+    show('v-ready');
+    const u = s.user;
+    $('userinfo').textContent = JSON.stringify(
+      { email: u.email, uid: u.uid, providers: (u.providerData || []).map((p) => p.providerId) }, null, 2);
+  }
+});
+
+$('gw').addEventListener('change', () => S27Auth.setGateway($('gw').value.trim()));
+$('btn-google').onclick = () => S27Auth.google();
+$('btn-emaillink').onclick = () => { const e = $('email').value.trim(); if (e) S27Auth.emailLink(e).catch((x) => err(x.message)); };
+$('btn-mfa').onclick = () => S27Auth.mfaVerify($('mfa-code').value.trim()).catch((x) => err(x.message));
+$('btn-enroll').onclick = () => S27Auth.enrollVerify($('enroll-code').value.trim()).catch((x) => err(x.message));
+$('btn-logout').onclick = () => S27Auth.logout();
+document.querySelectorAll('.relogin').forEach((b) => (b.onclick = () => S27Auth.logout()));
+$('btn-test').onclick = async () => {
+  try {
+    const r = await S27Auth.call('dashboard', {});
+    $('callresult').classList.remove('hide');
+    $('callresult').textContent = 'HTTP ' + r.status + '\n' + JSON.stringify(r.data, null, 2);
+  } catch (e) { err(e.message); }
+};
+
+S27Auth.init({ gatewayBase: $('gw').value.trim() }).catch((e) => err('Init faalde: ' + e.message));
+</script>
+</body>
+</html>

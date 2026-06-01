@@ -1,0 +1,16 @@
+name = "s27-portal-gateway"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+# Niet-geheime variabelen. GATEWAY_SECRET NOOIT hier — zet via:
+#   npx wrangler secret put GATEWAY_SECRET
+[vars]
+PROJECT_ID = "studio27-cloud"
+ALLOWED_ORIGINS = "https://www.studio27.be,https://studio27.be"
+
+# Rate limiting + sleutel-cache. Maak de namespace aan met:
+#   npx wrangler kv namespace create KV
+# en plak het gegenereerde id hieronder, dan deze 3 regels uncommenten:
+# [[kv_namespaces]]
+# binding = "KV"
+# id = "PLAK_KV_NAMESPACE_ID_HIER"
