@@ -447,7 +447,10 @@ function normaliseDashboard(d){
     actieve_projecten: Array.isArray(d.actieve_projecten) ? d.actieve_projecten : [],
     historie_3mnd: Array.isArray(d.historie_3mnd) ? d.historie_3mnd : [],
     aankomende_meetings: Array.isArray(d.aankomende_meetings) ? d.aankomende_meetings : [],
-    contact: d.contact || { am_naam:'Ilke Meeusen', am_email:'ilke@studio27.be', am_rol:'Account manager' }
+    contact: d.contact || { am_naam:'Ilke Meeusen', am_email:'ilke@studio27.be', am_rol:'Account manager' },
+    // Module-zichtbaarheid per klant (bron: ClickUp → dashboard-feed). Object met booleans,
+    // bv. {"performance":false}. Afwezig/null = alles tonen (backward-safe, geen regressie).
+    modules: (d.modules && typeof d.modules === 'object') ? d.modules : null
   };
 }
 
@@ -463,6 +466,7 @@ function renderDashboard(d){
   injectHelpButton();
   const heroLead = document.querySelector('#s27-tab-dashboard .s27-hero-lead'); if(heroLead) heroLead.style.display = 'none';
   const heroTag  = document.querySelector('#s27-tab-dashboard .s27-hero-tag');  if(heroTag) heroTag.style.display = 'none';
+  applyModuleVisibility();   // verberg nav-tabs van uitgezette modules (vóór render = geen flikkering)
   renderHubBody(d);
   renderProjecten();   // pre-render zodat tabwissel instant is
   const upd = $('s27-updated'); if(upd) upd.textContent = 'Bijgewerkt om ' + new Date().toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'});
@@ -545,9 +549,9 @@ function renderHubBody(d){
   const projMeta = (lopend ? lopend + ' lopend' : 'Geen lopende') + (wacht ? ' · ' + wacht + ' wacht op jou' : '');
   const grid = [
     hubCard('projecten','s27p-inbox','#3083DC','Projecten', projMeta, 'Website, branding, video & strategie — geef feedback en keur opleveringen goed.'),
-    hubCard('doorlopend','s27p-soc','#F66131','Doorlopend', (doorlopendCount ? doorlopendCount + ' actief' : 'Geen actief'), 'Social, advertenties en SEO/GEO — trajecten die continu lopen.'),
-    hubCard('opleidingen','s27p-opl','#12AC4E','Opleidingen', (opleidingCount ? opleidingCount + ' lopend' : 'Geen lopende'), 'Je opleidingen en workshops bij Studio 27 — planning en materiaal.'),
-    hubCard('performance','s27p-chart','#9441DB','Performance','Bekijk je cijfers','Je advertentie- en social-resultaten, helder gevisualiseerd.'),
+    moduleEnabled('doorlopend')  ? hubCard('doorlopend','s27p-soc','#F66131','Doorlopend', (doorlopendCount ? doorlopendCount + ' actief' : 'Geen actief'), 'Social, advertenties en SEO/GEO — trajecten die continu lopen.') : '',
+    moduleEnabled('opleidingen') ? hubCard('opleidingen','s27p-opl','#12AC4E','Opleidingen', (opleidingCount ? opleidingCount + ' lopend' : 'Geen lopende'), 'Je opleidingen en workshops bij Studio 27 — planning en materiaal.') : '',
+    moduleEnabled('performance') ? hubCard('performance','s27p-chart','#9441DB','Performance','Bekijk je cijfers','Je advertentie- en social-resultaten, helder gevisualiseerd.') : '',
     hubCard('meetings','s27p-cal','#3083DC','Meetings', (meetings.length ? meetings.length + ' gepland' : 'Plan een meeting'), 'Bekijk je agenda en plan zelf een nieuw overleg in.'),
     hubCard('bedrijf','s27p-brand','#9441DB','Huisstijl & bestanden','Merkbestanden','Logo\'s, fonts, kleuren en brand-PDFs — alles op één plek, altijd up-to-date.'),
     hubCard('nieuw','s27p-upload','#F8C028','Nieuw project','Start hier','Vertel je idee en krijg meteen een prijsindicatie op maat.'),
@@ -1220,7 +1224,40 @@ document.addEventListener('click', e => {
   switchTab(t.dataset.gotoTab);
 });
 
+/* =================================================================
+   PORTAL-MODULES — zichtbaarheid per klant (toggle vanuit ClickUp)
+   De dashboard-feed geeft optioneel een booleans-object `modules` terug,
+   afgeleid van een ClickUp-veld op de Bedrijf-taak. Een module wordt
+   verborgen zodra de feed hem expliciet op `false` zet. Geen `modules`
+   in de feed (oude klanten / demo) ⇒ alles zichtbaar (geen regressie).
+   Kern-tabs (start, berichten, projecten, meetings, bedrijf, facturatie,
+   nieuw, instellingen) staan bewust NIET in deze lijst — die zijn altijd aan.
+   Uitbreiden = sleutel hier toevoegen + label in ClickUp + mapping in Make.
+   ================================================================= */
+const PORTAL_MODULES = ['performance', 'doorlopend', 'opleidingen'];
+function moduleEnabled(key){
+  if(PORTAL_MODULES.indexOf(key) === -1) return true;            // kern-tab → altijd zichtbaar
+  const m = state.dashboard && state.dashboard.modules;
+  if(!m || typeof m !== 'object') return true;                   // geen config ⇒ alles tonen
+  return m[key] !== false;                                       // enkel een expliciete false verbergt
+}
+function applyModuleVisibility(){
+  // 1) Tab-knoppen in de navigatie tonen/verbergen
+  PORTAL_MODULES.forEach(key => {
+    const show = moduleEnabled(key);
+    document.querySelectorAll('.s27-tab[data-tab="' + key + '"]').forEach(b => { b.style.display = show ? '' : 'none'; });
+  });
+  // 2) Een navigatiegroep verbergen als al z'n tabs weg zijn (bv. lege "Mijn werk")
+  document.querySelectorAll('.s27-navgroup').forEach(g => {
+    const anyVisible = Array.prototype.some.call(g.querySelectorAll('.s27-tab'), b => b.style.display !== 'none');
+    g.style.display = anyVisible ? '' : 'none';
+  });
+  // 3) Staat de klant op een tab die net verborgen werd? → terug naar Start
+  if(state.activeTab && !moduleEnabled(state.activeTab)) switchTab('dashboard');
+}
+
 function switchTab(tabId){
+  if(!moduleEnabled(tabId)) tabId = 'dashboard';                 // hard slot: nooit naar een uitgezette module
   state.activeTab = tabId;
   document.querySelectorAll('.s27-tab').forEach(b => {
     const isActive = b.dataset.tab === tabId;
@@ -1413,10 +1450,46 @@ function getMockPerformanceReports(){
   ];
 }
 
+// AUTH v2: één gescopet rapport per bedrijf, via de gateway (/perfreport) uit de ads-cache
+// (key = bedrijf_id, server-side afgedwongen). Geen losse rapport-taken/chips → geen cross-client lek.
+async function renderPerformanceV2(body){
+  const token = window.S27Auth ? await window.S27Auth.token() : null;
+  if(!token){ body.innerHTML = '<div class="s27-error">Niet ingelogd — log opnieuw in.</div>'; return; }
+  const dataUrl = GATEWAY_BASE + '/perfreport?token=' + encodeURIComponent(token);
+  let has = false;
+  try {
+    const r = await fetch(dataUrl);
+    if(r.ok){ const j = await r.json(); has = !!(j && (j.client_name || j.start_date || j.periode_meta_campaign)); }
+  } catch(e){}
+  if(!has){
+    body.innerHTML = ''
+      + '<div class="s27-perf-empty">'
+      +   '<div class="s27-perf-empty-icon"><svg width="26" height="26" viewBox="0 0 24 24"><use href="#s27p-chart"/></svg></div>'
+      +   '<strong>Nog geen performance-rapporten</strong>'
+      +   '<p>Zodra er advertenties of social media voor je lopen bij Studio 27, verschijnt hier automatisch een helder rapport met al je cijfers.</p>'
+      + '</div>';
+    return;
+  }
+  body.innerHTML = ''
+    + '<div class="s27-perf-frame-wrap">'
+    +   '<div class="s27-perf-frame-loader" id="s27-perf-frame-loader"><span class="s27-spin"></span><span>Rapport laden…</span></div>'
+    +   '<iframe id="s27-perf-frame" class="s27-perf-frame" title="Performance-rapport" loading="lazy" referrerpolicy="no-referrer"></iframe>'
+    + '</div>';
+  bindPerfHeightListener();
+  const frame = $('s27-perf-frame'), loader = $('s27-perf-frame-loader');
+  if(frame){
+    frame.style.height = '640px';
+    frame.onload = () => { if(loader) loader.style.display = 'none'; };
+    frame.src = s27AssetBase() + '/performance-report.html?_v=' + PERF_ENGINE_VER + '&data=' + encodeURIComponent(dataUrl);
+  }
+}
+
 async function renderPerformanceTab(){
   const body = $('s27-performance-body');
   if(!body) return;
   body.innerHTML = '<div class="s27-loading">Performance laden</div>';
+
+  if (AUTH_V2 && !state.demoMode) return renderPerformanceV2(body);
 
   let reports = [];
   if(state.demoMode){

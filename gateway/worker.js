@@ -214,6 +214,28 @@ async function handleAdminLink(request, env, cors) {
   return json({ ok: true, uid: user.localId, email: email, bedrijf_id: bedrijfId }, 200, cors);
 }
 
+/* ---- PERFORMANCE-RAPPORT: gescopet ophalen uit de ads-cache (key = bedrijf_id) ----
+   De ads-company-master cachet het rapport onder key = bedrijf_id (datastore ADS_RAPPORTEN,
+   serve-hook). Hier halen we het op met de bedrijf_id uit het GEVERIFIEERDE token, zodat een
+   klant nooit een andere key kan opvragen. Token via ?token= (iframe-GET) of Bearer-header. */
+const ADS_SERVE_URL = 'https://hook.eu1.make.com/n4gmm74o1r7icidm4ra1q5pt861e2k46';
+async function handlePerfReport(request, env) {
+  const cors = { 'Access-Control-Allow-Origin': '*', 'Vary': 'Origin' };
+  const url = new URL(request.url);
+  const idToken = url.searchParams.get('token') || (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+  if (!idToken) return json({ ok: false, error: 'missing_token' }, 401, cors);
+  let claims;
+  try { claims = await verifyFirebaseToken(idToken, env.PROJECT_ID); }
+  catch (e) { return json({ ok: false, error: 'invalid_token' }, 401, cors); }
+  const bedrijfId = claims.bedrijf_id;
+  if (!bedrijfId) return json({ ok: false, error: 'no_company_link', message: 'Account nog niet aan een bedrijf gekoppeld.' }, 403, cors);
+  let r;
+  try { r = await fetch(ADS_SERVE_URL + '?key=' + encodeURIComponent(bedrijfId)); }
+  catch (e) { return json({ ok: false, error: 'upstream_unreachable' }, 502, cors); }
+  const text = await r.text();
+  return new Response(text, { status: r.status, headers: { 'Content-Type': 'application/json', ...cors } });
+}
+
 /* ---- Worker -------------------------------------------------------------- */
 export default {
   async fetch(request, env, ctx) {
@@ -222,6 +244,13 @@ export default {
     const ch = corsHeaders(origin, allowed);
 
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: ch });
+
+    // perfreport: het performance-rapport voor het INGELOGDE bedrijf. Wordt door een iframe
+    // (GET) opgehaald, die geen Authorization-header kan sturen → token via ?token=. Scoping
+    // gebeurt server-side: bedrijf_id komt uit het geverifieerde token, niet uit de URL.
+    if (new URL(request.url).pathname.replace(/^\/+|\/+$/g, '') === 'perfreport')
+      return handlePerfReport(request, env);
+
     if (request.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405, ch);
 
     // Browser-origin allowlist (niet-browser clients sturen geen Origin → token is de echte poort)
