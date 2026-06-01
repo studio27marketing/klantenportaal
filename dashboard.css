@@ -1078,6 +1078,51 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-hub-card.is-soon:hover { transform:none; box-shadow:none; border-color:var(--s27-line); }
 .s27-hub-card.is-soon:hover::before { opacity:0; }
 
+/* ---- Start-hub: sectiekoppen + diensten/snel-rasters (v3 rework) ---- */
+.s27-section-head { display:flex; align-items:baseline; gap:12px; margin:6px 0 14px; flex-wrap:wrap; }
+.s27-section-eyebrow { font-family:var(--font-display); font-size:11px; font-weight:800; letter-spacing:0.06em; text-transform:uppercase; color:var(--s27-ink-3); }
+.s27-section-head h2 { font-family:var(--font-display); font-size:19px; font-weight:900; letter-spacing:-0.02em; color:var(--s27-ink); margin:0; }
+.s27-diensten { margin-bottom:10px; }
+.s27-snel { margin-bottom:24px; }
+.s27-snel-grid { grid-template-columns:repeat(auto-fill, minmax(206px, 1fr)); }
+
+/* ---- Niet-actieve tak: subtiele FOMO-teaser (de "ze missen iets"-strategie) ---- */
+.s27-dienst.is-locked { background:var(--s27-paper-2); border-style:dashed; border-color:color-mix(in srgb, var(--accent, var(--s27-blue)) 30%, var(--s27-line)); }
+.s27-dienst.is-locked .s27-hub-card-ic { opacity:0.55; filter:saturate(0.7); transition:opacity .18s, filter .18s; }
+.s27-dienst.is-locked .s27-hub-card-title { color:var(--s27-ink-2); }
+.s27-dienst.is-locked:hover { background:var(--s27-paper); border-style:solid; }
+.s27-dienst.is-locked:hover .s27-hub-card-ic { opacity:1; filter:none; }
+.s27-dienst-lockbadge { position:absolute; top:14px; right:14px; display:inline-flex; align-items:center; gap:4px; font-family:var(--font-display); font-size:9px; font-weight:800; letter-spacing:0.04em; text-transform:uppercase; color:var(--s27-ink-4); background:var(--s27-paper-3); padding:3px 8px; border-radius:var(--r-pill); transition:color .18s, background .18s; }
+.s27-dienst.is-locked:hover .s27-dienst-lockbadge { color:#fff; background:var(--accent, var(--s27-blue)); }
+.s27-dienst-cta { font-family:var(--font-display); font-size:12px; font-weight:800; color:var(--accent, var(--s27-blue)); margin-top:8px; opacity:0; transform:translateX(-4px); transition:opacity .18s var(--ease-out), transform .18s var(--ease-out); }
+.s27-dienst.is-locked:hover .s27-dienst-cta { opacity:1; transform:translateX(0); }
+
+/* ---- Jouw contactpersonen bij Studio 27 (vaste trio) ---- */
+.s27-team { margin-top:28px; }
+.s27-team-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:14px; }
+.s27-team-card { display:flex; flex-direction:column; align-items:flex-start; gap:10px; padding:18px; background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:var(--r-md); transition:box-shadow .18s, border-color .18s; }
+.s27-team-card:hover { box-shadow:var(--sh-md); border-color:color-mix(in srgb, var(--s27-blue) 30%, var(--s27-line)); }
+.s27-team-avatar { width:54px; height:54px; border-radius:50%; overflow:hidden; background:var(--s27-blue-soft); color:var(--s27-blue-ink); display:flex; align-items:center; justify-content:center; font-family:var(--font-display); font-weight:800; font-size:18px; flex:0 0 auto; }
+.s27-team-avatar img { width:100%; height:100%; object-fit:cover; }
+.s27-team-info { display:flex; flex-direction:column; gap:2px; }
+.s27-team-rol { font-family:var(--font-display); font-size:10px; font-weight:800; letter-spacing:0.05em; text-transform:uppercase; color:var(--s27-blue-ink); }
+.s27-team-naam { font-family:var(--font-display); font-size:16px; font-weight:800; color:var(--s27-ink); }
+.s27-team-tip { font-size:12.5px; color:var(--s27-ink-3); line-height:1.45; }
+.s27-team-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:2px; }
+.s27-team-actions a { display:inline-flex; align-items:center; gap:6px; font-family:var(--font-display); font-size:12px; font-weight:700; color:var(--s27-ink-2); border:1.5px solid var(--s27-line); padding:7px 12px; border-radius:var(--r-pill); cursor:pointer; transition:all .15s; text-decoration:none; }
+.s27-team-actions a:hover { border-color:var(--s27-blue); color:var(--s27-blue-ink); background:var(--s27-blue-soft); }
+.s27-team-actions .s27-team-call { border-color:color-mix(in srgb, var(--s27-green) 50%, var(--s27-line)); color:var(--s27-green-ink); }
+.s27-team-actions .s27-team-call:hover { border-color:var(--s27-green); background:var(--s27-green-soft); color:var(--s27-green-ink); }
+
+/* ---- Onboarding-tour: expliciete opt-out + dynamische spotlight ---- */
+.s27-tour-never { display:block; margin:14px auto 0; background:none; border:none; font-family:var(--font-body); font-size:12px; font-weight:600; color:var(--s27-ink-4); cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
+.s27-tour-never:hover { color:var(--s27-ink-2); }
+.s27-tour-spot { position:relative; z-index:99999; background:var(--s27-paper); border-radius:var(--r-sm); animation:s27tourspot 1.6s var(--ease-out) infinite; }
+@keyframes s27tourspot {
+  0%,100% { box-shadow:0 0 0 3px rgba(48,131,220,0.28), 0 6px 18px rgba(35,15,35,0.16); }
+  50%     { box-shadow:0 0 0 8px rgba(48,131,220,0.42), 0 8px 24px rgba(35,15,35,0.22); }
+}
+
 /* Chat-hint in project-view (onderscheid team-chat vs AI-bot) */
 .s27-pv-chat-hint { font-size:12.5px; line-height:1.5; color:var(--s27-ink-3); background:var(--s27-blue-faint); border:1px solid var(--s27-blue-soft); border-radius:var(--r-sm); padding:9px 12px; margin:0 0 12px; }
 .s27-pv-chat-hint strong { color:var(--s27-ink-2); font-weight:800; }

@@ -134,6 +134,52 @@ const DISC_CATEGORY = {
 };
 function disciplineCategory(disc){ return DISC_CATEGORY[disc] || 'deliverable'; }
 function projectsInCategory(d, cat){ return ((d && d.actieve_projecten) || []).filter(p => disciplineCategory(p.discipline) === cat); }
+
+/* =================================================================
+   DESIGN-SYSTEM: canonieke tak→kleur (de "bijbel", colors_and_type.css)
+   Strategie=blauw · Branding=roze · Video&fotografie=paars ·
+   Website&SEO/GEO=groen · Online adverteren=oranje · Social media=geel.
+   Eén bron van waarheid — overal (hub, tabs, status-chips) hieruit putten.
+   ================================================================= */
+const DISC_COLOR = {
+  strategie:'#3083DC', branding:'#F697CE', video_fotografie:'#9441DB',
+  webdesign:'#12AC4E', seo:'#12AC4E', ads:'#F66131', social:'#F8C028',
+  opleiding:'#5B6CFF', automation:'#230F23', performance:'#9441DB'
+};
+function discColor(id){ return DISC_COLOR[id] || '#3083DC'; }
+
+/* De 8 klant-zichtbare takken voor de "Onze diensten voor jou"-hub.
+   moduleKey = sleutel in de dashboard-feed `modules` + ClickUp-label.
+   targetTab = waar een actieve tak naartoe deeplinkt.
+   teaser    = verleidelijke FOMO-copy voor een nog-niet-actieve tak. */
+const DISCIPLINE_HUB = [
+  { disc:'strategie',        moduleKey:'strategie',   targetTab:'projecten',    icon:'s27p-strat', label:'Strategie',          teaser:'Een scherpe strategie als fundament — ontdek waar groei voor jou zit.' },
+  { disc:'branding',         moduleKey:'branding',    targetTab:'projecten',    icon:'s27p-brand', label:'Branding',           teaser:'Een merk dat blijft plakken — ontdek wat sterke branding voor je doet.' },
+  { disc:'video_fotografie', moduleKey:'video_fotografie', targetTab:'projecten', icon:'s27p-cam', label:'Video & fotografie', teaser:'Beeld dat blijft hangen — laat ons jouw verhaal in beeld brengen.' },
+  { disc:'webdesign',        moduleKey:'webdesign',   targetTab:'projecten',    icon:'s27p-web',   label:'Webdesign',          teaser:'Een website die verkoopt — ontdek wat we voor je kunnen bouwen.' },
+  { disc:'seo',              moduleKey:'seo',         targetTab:'seo',          icon:'s27p-seo',   label:'SEO & GEO',          teaser:'Bovenaan in Google én in AI-antwoorden — ontdek je vindbaarheid.' },
+  { disc:'ads',              moduleKey:'ads',         targetTab:'ads',          icon:'s27p-ads',   label:'Online adverteren',  teaser:'Meer klanten via gerichte advertenties — ontdek wat adverteren oplevert.' },
+  { disc:'social',           moduleKey:'socials',     targetTab:'socials',      icon:'s27p-soc',   label:'Social media',       teaser:'Elke dag zichtbaar bij je doelpubliek — laat ons je socials dragen.' },
+  { disc:'opleiding',        moduleKey:'opleidingen', targetTab:'opleidingen',  icon:'s27p-opl',   label:'Opleidingen',        teaser:'Je team sterker maken — ontdek onze opleidingen en workshops.' }
+];
+
+// Bepaalt of een tak voor deze klant ACTIEF of GELOCKED (teaser) is.
+// Voorrang: expliciete feed-vlag > inferentie (heeft de klant er projecten in?).
+// Zo werkt het nu al (inferentie) én exact zodra de feed alle 8 vlaggen stuurt.
+function disciplineState(d, h){
+  const m = d && d.modules;
+  if(m && typeof m === 'object' && typeof m[h.moduleKey] === 'boolean'){
+    return m[h.moduleKey] ? 'active' : 'locked';
+  }
+  const projs = ((d && d.actieve_projecten) || []).concat((d && d.historie_3mnd) || []);
+  const heeft = projs.some(p => p.discipline === h.disc);
+  return heeft ? 'active' : 'locked';
+}
+function disciplineCount(d, disc){
+  const projs = (d && d.actieve_projecten) || [];
+  const n = projs.filter(p => p.discipline === disc && !isAfgerondStatus(p)).length;
+  return n;
+}
 const STATUS_LABELS = {
   'to_do':'Te plannen', 'in_progress':'In productie', 'doorgestuurd':'Klaar voor review',
   'goedgekeurd':'Goedgekeurd', 'done':'Afgerond', 'on_hold':'On hold',
@@ -651,17 +697,14 @@ function renderHubBody(d){
   const opleidingCount = projectsInCategory(d, 'opleiding').length;
   const meetings = d.aankomende_meetings || [];
   const projMeta = (lopend ? lopend + ' lopend' : 'Geen lopende') + (wacht ? ' · ' + wacht + ' wacht op jou' : '');
-  const grid = [
-    hubCard('projecten','s27p-inbox','#3083DC','Projecten', projMeta, 'Website, branding, video & strategie — geef feedback en keur opleveringen goed.'),
-    moduleEnabled('socials') ? hubCard('socials','s27p-soc','#F66131','Socials', (socialsCount ? socialsCount + ' actief' : 'Geen actief'), 'Je social-mediabeheer — content en planning die continu loopt.') : '',
-    moduleEnabled('ads')     ? hubCard('ads','s27p-ads','#3083DC','Advertenties', (adsCount ? adsCount + ' actief' : 'Geen actief'), 'Je campagnes op Meta, Google en meer — continu beheerd en bijgestuurd.') : '',
-    moduleEnabled('seo')     ? hubCard('seo','s27p-seo','#12AC4E','SEO/GEO', (seoCount ? seoCount + ' actief' : 'Geen actief'), 'Je vindbaarheid in zoekmachines én AI-antwoorden — een doorlopend traject.') : '',
-    moduleEnabled('opleidingen') ? hubCard('opleidingen','s27p-opl','#12AC4E','Opleidingen', (opleidingCount ? opleidingCount + ' lopend' : 'Geen lopende'), 'Je opleidingen en workshops bij Studio 27 — planning en materiaal.') : '',
-    moduleEnabled('performance') ? hubCard('performance','s27p-chart','#9441DB','Performance','Bekijk je cijfers','Je advertentie- en social-resultaten, helder gevisualiseerd.') : '',
+  const dienstenGrid = renderDienstenGrid(d);
+  // "Snel naar" — niet-discipline-gebonden tools (altijd zichtbaar)
+  const snelGrid = [
+    hubCard('performance','s27p-chart', discColor('performance'),'Performance', moduleEnabled('performance') ? 'Bekijk je cijfers' : 'Nog niet actief', 'Je advertentie- en social-resultaten, helder gevisualiseerd.', !moduleEnabled('performance')),
     hubCard('meetings','s27p-cal','#3083DC','Meetings', (meetings.length ? meetings.length + ' gepland' : 'Plan een meeting'), 'Bekijk je agenda en plan zelf een nieuw overleg in.'),
-    hubCard('bedrijf','s27p-brand','#9441DB','Huisstijl & bestanden','Merkbestanden','Logo\'s, fonts, kleuren en brand-PDFs — alles op één plek, altijd up-to-date.'),
+    hubCard('bedrijf','s27p-brand','#9441DB','Mijn bedrijf','Huisstijl, team & gegevens','Logo\'s, fonts, kleuren, je team en je bedrijfsgegevens — alles op één plek.'),
     hubCard('nieuw','s27p-upload','#F8C028','Nieuw project','Start hier','Vertel je idee en krijg meteen een prijsindicatie op maat.'),
-    hubCard('instellingen','s27p-user','#6B5B6B','Instellingen','Gegevens & notificaties','Je contactgegevens, voorkeuren, notificaties en wachtwoord — allemaal hier.')
+    hubCard('instellingen','s27p-user','#6B5B6B','Instellingen','Gegevens & notificaties','Je contactgegevens, voorkeuren en notificaties — allemaal hier.')
   ].join('');
   body.innerHTML =
     renderCockpitActions(d) +
@@ -670,7 +713,14 @@ function renderHubBody(d){
       '<span class="s27-hub-bot-txt"><strong>Vraag het de assistent</strong><span>Hoever staat een project? Wanneer is iets klaar? Stel je vraag — je krijgt meteen antwoord.</span></span>' +
       '<span class="s27-hub-bot-cta">Open chat →</span>' +
     '</button>' +
-    '<div class="s27-hub-grid">' + grid + '</div>' +
+    '<div class="s27-diensten">' +
+      '<div class="s27-section-head"><span class="s27-section-eyebrow">Onze diensten voor jou</span><h2>Waar we samen aan werken</h2></div>' +
+      '<div class="s27-hub-grid s27-diensten-grid">' + dienstenGrid + '</div>' +
+    '</div>' +
+    '<div class="s27-snel">' +
+      '<div class="s27-section-head"><span class="s27-section-eyebrow">Snel naar</span></div>' +
+      '<div class="s27-hub-grid s27-snel-grid">' + snelGrid + '</div>' +
+    '</div>' +
     '<div class="s27-meetings-mini">' +
       '<div class="s27-meetings-mini-head"><strong>Aankomende meetings</strong>' +
       (meetings.length ? '<button class="s27-mini-cta" data-go-tab="meetings">Alle ' + meetings.length + ' bekijken →</button>' : '') + '</div>' +
@@ -681,6 +731,11 @@ function renderHubBody(d){
   body.querySelectorAll('[data-hub-card]').forEach(el => el.addEventListener('click', () => {
     const t = el.dataset.hubCard;
     switchTab(t);
+  }));
+  body.querySelectorAll('[data-dienst-locked]').forEach(el => el.addEventListener('click', () => {
+    const dienst = el.dataset.dienstLocked;
+    openDMModal('dienst', { ontvanger:'ilke', onderwerp:'Interesse in ' + dienst,
+      placeholder:'Vertel ons kort wat je zoekt rond ' + dienst.toLowerCase() + ' — we sturen je vrijblijvend een voorstel op maat.' });
   }));
   body.querySelectorAll('[data-go-tab]').forEach(el => el.addEventListener('click', e => { e.stopPropagation(); switchTab(el.dataset.goTab); }));
   body.querySelectorAll('[data-cockpit-idx]').forEach(el => el.addEventListener('click', () => handleCockpitAction((state.cockpitActions || [])[parseInt(el.dataset.cockpitIdx, 10)])));
@@ -695,6 +750,35 @@ function hubCard(tab, icon, accent, title, meta, desc, soon){
     '<span class="s27-hub-card-meta">' + esc(meta) + '</span>' +
     '<span class="s27-hub-card-desc">' + esc(desc) + '</span>' +
   '</button>';
+}
+
+/* "Onze diensten voor jou" — alle 8 takken in hun bijbel-kleur.
+   Actieve tak → deeplink. Niet-actieve tak → subtiele FOMO-teaser
+   die een vrijblijvend interesse-bericht opent (geen harde paywall). */
+function renderDienstenGrid(d){
+  return DISCIPLINE_HUB.map(h => {
+    const st = disciplineState(d, h);
+    const col = discColor(h.disc);
+    if(st === 'active'){
+      const n = disciplineCount(d, h.disc);
+      const doorlopend = (h.disc === 'social' || h.disc === 'ads' || h.disc === 'seo');
+      const meta = doorlopend ? (n ? n + ' actief' : 'Loopt continu') : (n ? n + ' lopend' : 'Bekijk');
+      return '<button type="button" class="s27-hub-card s27-dienst" data-hub-card="' + esc(h.targetTab) + '" style="--accent:' + col + '">' +
+        '<span class="s27-hub-card-ic"><svg width="20" height="20" viewBox="0 0 24 24"><use href="#' + h.icon + '"/></svg></span>' +
+        '<span class="s27-hub-card-title">' + esc(h.label) + '</span>' +
+        '<span class="s27-hub-card-meta">' + esc(meta) + '</span>' +
+        '<span class="s27-hub-card-desc">' + esc(h.teaser) + '</span>' +
+      '</button>';
+    }
+    // GELOCKED → subtiele teaser (FOMO by design, niet irritant)
+    return '<button type="button" class="s27-hub-card s27-dienst is-locked" data-dienst-locked="' + esc(h.label) + '" style="--accent:' + col + '">' +
+      '<span class="s27-hub-card-ic"><svg width="20" height="20" viewBox="0 0 24 24"><use href="#' + h.icon + '"/></svg></span>' +
+      '<span class="s27-dienst-lockbadge"><svg width="10" height="10" viewBox="0 0 24 24"><use href="#s27p-lock"/></svg> Nog niet actief</span>' +
+      '<span class="s27-hub-card-title">' + esc(h.label) + '</span>' +
+      '<span class="s27-hub-card-desc">' + esc(h.teaser) + '</span>' +
+      '<span class="s27-dienst-cta">Meer weten? →</span>' +
+    '</button>';
+  }).join('');
 }
 
 // v3.1: Projecten-tab — de volledige lijst + filters. "Opgeleverd" toont het archief.
@@ -789,7 +873,7 @@ function renderProjectCompact(p){
    ================================================================= */
 const DM_RECIPIENTS = [
   { id:'ilke',    naam:'Ilke Meeusen',      rol:'Accountmanager' },
-  { id:'arne',    naam:'Arne Goetschalckx', rol:'Zaakvoerder' },
+  { id:'arne',    naam:'Arne Goetschalckx', rol:'Vertegenwoordiger' },
   { id:'vincent', naam:'Vincent Verleije',  rol:'Zaakvoerder' }
 ];
 
@@ -799,7 +883,8 @@ const DM_PRESETS = {
   meeting:   { defaultTo:'ilke',    title:'Plan een meeting in',    subject:'Meeting-aanvraag',      icon:'📅', cta:'Verstuur meeting-aanvraag' },
   shoot:     { defaultTo:'ilke',    title:'Plan een shoot in',      subject:'Shoot-aanvraag',        icon:'📸', cta:'Verstuur shoot-aanvraag' },
   archief:   { defaultTo:'ilke',    title:'Vraag oude deliverables op', subject:'Vraag oud project op', icon:'📁', cta:'Bericht versturen' },
-  upload:    { defaultTo:'ilke',    title:'Hulp bij grote bestanden', subject:'Hulp bij upload',     icon:'📦', cta:'Stuur verzoek' }
+  upload:    { defaultTo:'ilke',    title:'Hulp bij grote bestanden', subject:'Hulp bij upload',     icon:'📦', cta:'Stuur verzoek' },
+  dienst:    { defaultTo:'ilke',    title:'Ontdek wat we voor je kunnen doen', subject:'Interesse in een nieuwe dienst', icon:'✨', cta:'Stuur mijn interesse' }
 };
 
 function openDMModal(presetKey, prefills){
@@ -935,6 +1020,20 @@ const TOUR_STEPS = [
     body: 'Vragen? Klik op "Stuur bericht" of "Vraag terugbel" — alles loopt rechtstreeks naar de juiste persoon. Wij zien het meteen en kunnen direct actie ondernemen. Veel succes!'
   }
 ];
+// Spotlight-doelen per stap (dynamische rondleiding: ring + inzoom op de echte nav).
+[null, '.s27-navgroup[data-group="werk"]', '.s27-tab[data-tab="berichten"]', '.s27-navgroup[data-group="bedrijf"]', '.s27-tab[data-tab="dashboard"]']
+  .forEach((t, i) => { if(TOUR_STEPS[i]) TOUR_STEPS[i].target = t; });
+
+// Markeer het doel-element met een pulserende ring + scroll het in beeld.
+function spotlightTour(selector){
+  document.querySelectorAll('.s27-tour-spot').forEach(el => el.classList.remove('s27-tour-spot'));
+  if(!selector) return;
+  const el = document.querySelector(selector);
+  if(!el) return;
+  el.classList.add('s27-tour-spot');
+  try { el.scrollIntoView({ behavior:'smooth', block:'center', inline:'center' }); } catch(e){}
+}
+function clearTourSpotlight(){ document.querySelectorAll('.s27-tour-spot').forEach(el => el.classList.remove('s27-tour-spot')); }
 
 function showWelcomeTour(firstTime){
   // Build modal
@@ -971,12 +1070,20 @@ function renderTourStep(modal, firstTime){
           ? `<button class="s27-btn s27-btn-primary" id="s27-tour-next">Volgende →</button>`
           : `<button class="s27-btn s27-btn-primary" id="s27-tour-done">${firstTime ? 'Aan de slag' : 'Sluiten'}</button>`}
       </div>
+      <button type="button" class="s27-tour-never" id="s27-tour-never">De rondleiding niet meer tonen</button>
     </div>
   `;
+  spotlightTour(step.target);
   // Handlers
   const close = () => {
+    clearTourSpotlight();
     try { modal.remove(); } catch(e){}
     if(firstTime) try { localStorage.setItem('s27_tour_completed', new Date().toISOString()); } catch(e){}
+  };
+  // Expliciete opt-out: zet de tour permanent uit (ook bij handmatig heropenen).
+  const neverShow = () => {
+    try { localStorage.setItem('s27_tour_completed', new Date().toISOString()); } catch(e){}
+    close();
   };
   const next = () => {
     if(state._tourStep < TOUR_STEPS.length - 1){
@@ -995,6 +1102,7 @@ function renderTourStep(modal, firstTime){
   const nextBtn = $('s27-tour-next'); if(nextBtn) nextBtn.addEventListener('click', next);
   const prevBtn = $('s27-tour-prev'); if(prevBtn) prevBtn.addEventListener('click', prev);
   const doneBtn = $('s27-tour-done'); if(doneBtn) doneBtn.addEventListener('click', close);
+  const neverBtn = $('s27-tour-never'); if(neverBtn) neverBtn.addEventListener('click', neverShow);
   modal.querySelectorAll('.s27-tour-dot').forEach(d => {
     d.addEventListener('click', () => {
       state._tourStep = parseInt(d.dataset.step, 10) || 0;
@@ -1221,24 +1329,40 @@ const TEAM_PHOTOS = {
 };
 function teamPhotoFor(name){ return TEAM_PHOTOS[(name||'').toLowerCase().trim()] || null; }
 
+// Jouw contactpersonen bij Studio 27 — de vaste trio (Vincent: meervoud!).
+// Ilke = accountmanager · Arne = vertegenwoordiger · Vincent = zaakvoerder.
+// Berichten landen via [data-dm] → directMessage-scenario → ClickUp.
+const STUDIO_CONTACTS = [
+  { id:'ilke',    naam:'Ilke Meeusen',      rol:'Accountmanager',    tip:'Je vaste aanspreekpunt — overzicht over al je projecten.' },
+  { id:'arne',    naam:'Arne Goetschalckx', rol:'Vertegenwoordiger', tip:'Voor advertenties, nieuwe projecten en advies op maat.' },
+  { id:'vincent', naam:'Vincent Verleije',  rol:'Zaakvoerder',       tip:'Voor strategie en de grote beslissingen.' }
+];
 function renderContact(c){
-  const initials = getInitials(c.am_naam);
-  // Use team photo if available (fallback if Make-scenario didn't supply foto_url)
-  if(!c.am_foto_url) c.am_foto_url = teamPhotoFor(c.am_naam);
-  return `<div class="s27-contact">
-    <div class="s27-contact-avatar">${c.am_foto_url ? `<img src="${esc(c.am_foto_url)}" alt="${esc(c.am_naam)}">` : esc(initials)}</div>
-    <div class="s27-contact-body">
-      <div class="s27-contact-tag">Account manager</div>
-      <div class="s27-contact-name">${esc(c.am_naam || 'Ilke Meeusen')}</div>
-      <div class="s27-contact-role">${esc(c.am_rol || 'Jouw vast aanspreekpunt bij Studio 27')}</div>
-      <p class="s27-contact-tip">💡 Vraag over een lopend project? Open het project en chat direct met het team — sneller dan bellen, alles bij je dossier.</p>
-    </div>
-    <div class="s27-contact-actions">
-      <a class="primary" href="#" data-dm="vraag" data-dm-onderwerp="Vraag voor ${esc(c.am_naam || 'team')}"><svg width="13" height="13"><use href="#s27p-mail"/></svg> Bericht sturen naar ${esc(c.am_naam ? c.am_naam.split(' ')[0] : 'team')}</a>
-      <a href="#" data-dm="terugbel" data-dm-onderwerp="Terugbel-verzoek ${esc(state.session && state.session.bedrijfsnaam || '')}" data-dm-placeholder="Beste moment om te bellen: bv. morgen voormiddag, of vrijdag 14u-16u.&#10;&#10;Bespreek onderwerp: "><svg width="13" height="13"><use href="#s27p-phone"/></svg> Vraag terugbel</a>
-      ${c.am_gsm ? `<a href="tel:${esc(c.am_gsm)}" class="s27-contact-call-direct"><svg width="13" height="13"><use href="#s27p-phone"/></svg> Direct bellen</a>` : ''}
-    </div>
-  </div>`;
+  c = c || {};
+  const amName = (c.am_naam || '').toLowerCase().trim();
+  return '<div class="s27-team">' +
+    '<div class="s27-section-head"><span class="s27-section-eyebrow">Jouw contactpersonen bij Studio 27</span></div>' +
+    '<div class="s27-team-grid">' +
+      STUDIO_CONTACTS.map(p => {
+        const foto = teamPhotoFor(p.naam);
+        const isAM = amName && amName === p.naam.toLowerCase();
+        const gsm = (isAM && c.am_gsm) ? c.am_gsm : '';
+        const first = p.naam.split(' ')[0];
+        return '<div class="s27-team-card">' +
+          '<div class="s27-team-avatar">' + (foto ? '<img src="' + esc(foto) + '" alt="' + esc(p.naam) + '" loading="lazy">' : esc(getInitials(p.naam))) + '</div>' +
+          '<div class="s27-team-info">' +
+            '<span class="s27-team-rol">' + esc(p.rol) + '</span>' +
+            '<span class="s27-team-naam">' + esc(p.naam) + '</span>' +
+            '<span class="s27-team-tip">' + esc(p.tip) + '</span>' +
+          '</div>' +
+          '<div class="s27-team-actions">' +
+            '<a href="#" data-dm="vraag" data-dm-ontvanger="' + p.id + '" data-dm-onderwerp="Vraag voor ' + esc(first) + '"><svg width="13" height="13"><use href="#s27p-mail"/></svg> Bericht ' + esc(first) + '</a>' +
+            (gsm ? '<a href="tel:' + esc(gsm) + '" class="s27-team-call"><svg width="13" height="13"><use href="#s27p-phone"/></svg> Bel direct</a>' : '') +
+          '</div>' +
+        '</div>';
+      }).join('') +
+    '</div>' +
+  '</div>';
 }
 
 /* =================================================================
