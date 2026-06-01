@@ -273,7 +273,10 @@ export default {
       body.bedrijf_id = bedrijfId;   // override alles wat de client meestuurde
       body.uid = claims.sub;
       body.email = claims.email || '';
-      delete body.session_token;     // oude gedeelde token is niet meer relevant
+      // De v2 PORTAL-scenario's checken length(session_token) > 10. Deze call is al via het
+      // Firebase-token geverifieerd + bedrijf_id is server-side gezet, dus we leveren een token
+      // van geldige lengte zodat die legacy-check slaagt. (Bij cutover vervangen door X-Gateway-Secret.)
+      body.session_token = 'gw-verified-' + claims.sub;
     }
 
     let makeRes;
