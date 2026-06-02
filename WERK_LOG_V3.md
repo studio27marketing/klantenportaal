@@ -2,8 +2,27 @@
 
 > Dit is het "wat-heb-ik-gedaan"-document dat je vroeg. Het hoort bij `REWORK_PLAN_V3.md` (het volledige masterplan). Hieronder: wat ik concreet heb gebouwd + geverifieerd, de uitdagingen, wat anders liep dan verwacht (zodat we sneller worden), de **ROOD-gemarkeerde** dingen, en jouw actielijst.
 
-## 🟢 / 🔴 Allerbelangrijkste in één zin
-**Ik heb NIETS aan de live productie gewijzigd.** Geen enkel Make-scenario aangepast/geactiveerd, geen ClickUp-data gewijzigd, niets naar `main` gepusht. **Er zijn dus geen ROOD-scenario's die je eerst moet verifiëren** — alles staat veilig op de git-branch `portal-v3-rework` en in dit document. Je kan morgen rustig testen en pas daarna mergen. (Wat ik *wel* aanraad om straks live te zetten staat onderaan als expliciete keuze, niet als iets dat al draait.)
+## 🔴 UPDATE 2 juni — brand-overhaul + GO-LIVE (na jouw feedback)
+Je gaf feedback dat de UI te oppervlakkig was (afgeleide iconen i.p.v. echte merkstempels, takken enkel op de home) en zei "zet alles in 1 keer live". Dat is nu gebeurd:
+
+**✅ LIVE op `main` (CDN), commit `99b24a0`:**
+- **Echte merk-stempels** uit het design system vervangen de generieke lijn-iconen — Strategie (blauw), Branding (roze hart), Video & fotografie (paarse lens), Webdesign + SEO (groene check), Online adverteren (oranje), Social media (geel). Self-hosted in `/assets/`. Géén afgeleide iconen meer.
+- **Website-look**: lowercase taklabels, rondere kaarten (28px), scribble-onderlijning op accent-woorden, bounce-knoppen, mini-stempels in de nav.
+- **Takken in de nav**: "Mijn werk"-dropdown toont nu alle 8 takken als eigen knop (niet enkel op de home) + Performance + Alle projecten; vergrendelde takken worden verborgen.
+- *(raw.githack-CDN heeft ~2-5 min lag; GitHub-raw is meteen vers — geverifieerd HTTP 200 op de assets.)*
+
+**🔴 LIVE Make-wijziging (geverifieerd, additief) — scenario `5896037` "Dashboard Feed":**
+- Je gaf akkoord (3a) om de feed uit te breiden naar **8 module-booleans**. Gedaan, **additief** (4 nieuwe sleutels: strategie/branding/video_fotografie/webdesign), bestaande sleutels onaangeroerd.
+- **Geverifieerd via curl op beide testbedrijven:** BV → `{…strategie:true, branding:false, video_fotografie:true, webdesign:true, seo:false, performance:false…}` (exact = ClickUp-veld); 2BV → strategie/branding/video/webdesign:false, rest:true (exact). Valide JSON, 6 projecten teruggegeven.
+- **Rollback klaar:** `MAKE_BACKUPS/5896037_dashboardfeed_before_v3.json` bevat de originele module 24 + 13 — terugzetten = die 2 fragmenten herstellen via `scenarios_update`.
+- → **Verifieer dit als eerste** in jouw test: log in als testbedrijf en check dat de juiste takken locked/actief zijn. Werkt het niet zoals verwacht, gebruik de rollback.
+
+**WhatsApp-dispatcher — connecties gevonden, klaar om te bouwen:** je hebt zowel een **Twilio** (`7860123`) als een **WhatsApp Business Cloud x S27** (`5770466`) connectie. Het ClickUp-veld **Notificatie-voorkeur** (`ad6f0803-857b-451c-96cb-fdd15b70cc5b`: WhatsApp `2fd124e0…` / E-mail `e7534000…` / Beide `9041d265…` / Geen `249174c9…`) bestaat. **Echte blokkering** voor live-sturen is niet de connectie maar een **Meta-goedgekeurde WhatsApp-template** (verplicht voor business-initiated berichten) + de keuze welke events een melding triggeren. Dispatcher-spec staat in REWORK_PLAN_V3 §4.2; ik bouw 'm zodra de template er is.
+
+---
+
+## 🟢 / 🔴 Status van de eerste nacht (vóór deze update)
+De onderstaande log beschrijft de eerste, volledig veilige nacht (branch, niets live). Sindsdien is bovenstaande live gezet.
 
 ---
 

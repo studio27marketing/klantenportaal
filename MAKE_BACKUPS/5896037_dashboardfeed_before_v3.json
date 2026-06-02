@@ -1,0 +1,13 @@
+{
+  "_note": "ROLLBACK-BACKUP van de 2 modules die V3 additief wijzigt in scenario 5896037 (Dashboard Feed). Om terug te draaien: vervang module 24 'variables' en module 13 'body' door onderstaande ORIGINELE waarden via scenarios_update. Gemaakt 2026-06-02 vóór de 8-module-uitbreiding.",
+  "scenarioId": 5896037,
+  "hookId": 3107560,
+  "original_module_24_variables": [
+    { "name": "m_perf", "value": "{{if(length(22.mods) = 0; \"true\"; if(contains(22.mods; \"74c2e17b-faa8-482f-97c2-ecdc21962d91\"); \"true\"; \"false\"))}}" },
+    { "name": "m_soc",  "value": "{{if(length(22.mods) = 0; \"true\"; if(contains(22.mods; \"c7255337-8ef8-4186-8766-5f7de709d1d3\"); \"true\"; \"false\"))}}" },
+    { "name": "m_ads",  "value": "{{if(length(22.mods) = 0; \"true\"; if(contains(22.mods; \"c321b00c-d18f-444a-bd6d-db980f7c2b05\"); \"true\"; \"false\"))}}" },
+    { "name": "m_seo",  "value": "{{if(length(22.mods) = 0; \"true\"; if(contains(22.mods; \"ef4d645f-002b-4a7d-bc76-3b2160eb72e6\"); \"true\"; \"false\"))}}" },
+    { "name": "m_opl",  "value": "{{if(length(22.mods) = 0; \"true\"; if(contains(22.mods; \"5b7be1df-c838-4d59-8a38-794fa79c3adc\"); \"true\"; \"false\"))}}" }
+  ],
+  "original_module_13_modules_fragment": "\"modules\":{\"performance\":{{24.m_perf}},\"socials\":{{24.m_soc}},\"ads\":{{24.m_ads}},\"seo\":{{24.m_seo}},\"opleidingen\":{{24.m_opl}}}"
+}
