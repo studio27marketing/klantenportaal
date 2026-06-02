@@ -4813,8 +4813,10 @@ function getDemoDetail(taskId, proj){
    ================================================================= */
 const BOT_SUGGESTIONS = [
   'Hoever staat mijn project?',
-  'Wanneer is alles klaar?',
-  'Wat wacht er nog op mij?'
+  'Wat wacht er nog op mij?',
+  'Wanneer is mijn volgende meeting?',
+  'Hoe geef ik feedback?',
+  'Ik wil een nieuw project aanvragen'
 ];
 
 function botRecipientId(naam){
