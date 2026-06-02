@@ -1053,6 +1053,28 @@ document.addEventListener('click', e => {
   openDMModal(presetKey, prefills);
 });
 
+// Globale delegatie voor de inplan-picker (laden / slot kiezen / boeken)
+document.addEventListener('click', e => {
+  if(!e.target.closest) return;
+  const loadBtn = e.target.closest('[data-plan-load]');
+  if(loadBtn){ e.preventDefault(); loadPlanSlots(loadBtn.getAttribute('data-plan-load'), state.activeProject || {}); return; }
+  const slotBtn = e.target.closest('[data-plan-slot]');
+  if(slotBtn){
+    const tid = slotBtn.getAttribute('data-plan-task');
+    if(state.planCtx[tid]) state.planCtx[tid].sel = Number(slotBtn.getAttribute('data-plan-slot'));
+    const cont = slotBtn.closest('.s27-plan-picker');
+    if(cont) cont.querySelectorAll('.s27-plan-slot').forEach(b => b.classList.toggle('is-sel', b === slotBtn));
+    const book = $('s27-plan-book-' + tid); if(book) book.disabled = false;
+    return;
+  }
+  const bookBtn = e.target.closest('[data-plan-book]');
+  if(bookBtn){ e.preventDefault(); bookPlanSlot(bookBtn.getAttribute('data-plan-book')); return; }
+});
+document.addEventListener('change', e => {
+  const mode = e.target.closest && e.target.closest('[data-plan-mode]');
+  if(mode && state.planCtx[mode.getAttribute('data-plan-mode')]) state.planCtx[mode.getAttribute('data-plan-mode')].online = (mode.value === 'online');
+});
+
 /* =================================================================
    TUTORIAL / WALKTHROUGH (v2 Fase 32)
    ================================================================= */
@@ -3296,22 +3318,152 @@ function renderProjectShootBlock(proj, detail){
   '</div>';
 }
 
+/* ===================================================================
+   INPLANNEN OP DE ECHTE AGENDA — slot-picker
+   Haalt beschikbaarheid (assignee-planning + payroll) uit ClickUp via
+   ENDPOINTS.beschikbaarheid, berekent vrije slots in JS, en maakt bij
+   keuze een Google Calendar-event (Meet of locatie) via ENDPOINTS.inplannen.
+   =================================================================== */
+state.planCtx = state.planCtx || {};   // per task: {assignee, list_id, slots, sel, online}
+
+// Bezet-blokken → vrije slots. 08–17, werkdagen, 30min-raster, min 2u vooraf, 21 dagen vooruit.
+function computeFreeSlots(blokken, durMs){
+  const busy = [];
+  (blokken || []).forEach(function(b){
+    const s = Number(b.start) || 0, d = Number(b.due) || 0, e = Number(b.est) || 0;
+    let bs = 0, be = 0;
+    if(b.afwezig){ bs = s; be = d > s ? d : (s + (e || 86400000)); }
+    else if(e > 0){ bs = s; be = s + e; }
+    else if(d > s){ bs = s; be = d; }
+    if(bs && be > bs) busy.push([bs, be]);
+  });
+  const slots = [];
+  const now = Date.now();
+  const day0 = new Date(); day0.setHours(0,0,0,0);
+  for(let day = 1; day <= 21 && slots.length < 60; day++){
+    const dt = new Date(day0.getTime() + day*86400000);
+    const dow = dt.getDay(); if(dow === 0 || dow === 6) continue;   // enkel werkdagen
+    for(let m = 8*60; m + durMs/60000 <= 17*60; m += 30){           // 08:00–17:00
+      const ss = new Date(dt); ss.setHours(0, m, 0, 0);
+      const t0 = ss.getTime(), t1 = t0 + durMs;
+      if(t0 < now + 2*3600000) continue;                            // min 2u vooraf
+      if(busy.some(function(iv){ return t0 < iv[1] && t1 > iv[0]; })) continue;
+      slots.push(t0);
+    }
+  }
+  return slots;
+}
+
+const PLAN_DUR_MS = 90 * 60000;   // 1u30 (v1; time_estimate-gebaseerd = volgende verfijning)
+
+async function loadPlanSlots(taskId, proj){
+  const box = $('s27-plan-' + taskId);
+  if(!box) return;
+  box.innerHTML = '<div class="s27-loading">Beschikbare momenten ophalen…</div>';
+  let data = null;
+  if(!state.demoMode && ENDPOINTS.beschikbaarheid){
+    const van = Date.now(), tot = Date.now() + 22*86400000;
+    const res = await api(ENDPOINTS.beschikbaarheid, { task_id: taskId, van: String(van), tot: String(tot), bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token });
+    data = (res && res.ok && res.data && res.data.ok) ? res.data : null;
+  } else {
+    // demo: een paar fictieve bezet-blokken
+    data = { assignee_naam:'Guus Van den Heuvel', assignee_email:'guus@studio27.be', list_id:'demo', blokken:[{start:Date.now()+2*86400000, due:0, est:7200000, afwezig:false}] };
+  }
+  if(!data){
+    box.innerHTML = '<p class="s27-shoot-info">Beschikbaarheid kon niet geladen worden. <a href="#" data-dm="meeting" data-dm-onderwerp="Afspraak inplannen — ' + esc(proj.naam||'') + '">Stuur ons je voorkeuren</a> en we plannen samen.</p>';
+    return;
+  }
+  const slots = computeFreeSlots(data.blokken, PLAN_DUR_MS);
+  state.planCtx[taskId] = { assignee: data.assignee_naam || 'je Studio 27-contact', assignee_email: data.assignee_email || '', list_id: data.list_id || '', online: true, sel: null, proj: proj };
+  box.innerHTML = renderPlanPicker(taskId, slots);
+}
+
+function renderPlanPicker(taskId, slots){
+  const ctx = state.planCtx[taskId] || {};
+  if(!slots.length){
+    return '<p class="s27-shoot-info">Geen vrije momenten in de komende 3 weken. <a href="#" data-dm="meeting" data-dm-onderwerp="Afspraak inplannen — geen moment beschikbaar">Stuur ons je voorkeuren</a> en we zoeken samen.</p>';
+  }
+  // groepeer per dag
+  const byDay = {};
+  slots.forEach(function(ms){
+    const d = new Date(ms);
+    const key = d.toISOString().slice(0,10);
+    (byDay[key] = byDay[key] || []).push(ms);
+  });
+  const dagLabel = function(ms){ return new Date(ms).toLocaleDateString('nl-BE', { weekday:'long', day:'numeric', month:'long' }); };
+  const uur = function(ms){ return new Date(ms).toLocaleTimeString('nl-BE', { hour:'2-digit', minute:'2-digit' }); };
+  const dagen = Object.keys(byDay).slice(0, 8).map(function(key){
+    const list = byDay[key];
+    return '<div class="s27-plan-day"><div class="s27-plan-day-label">' + esc(dagLabel(list[0])) + '</div><div class="s27-plan-times">' +
+      list.slice(0,12).map(function(ms){ return '<button type="button" class="s27-plan-slot" data-plan-slot="' + ms + '" data-plan-task="' + esc(taskId) + '">' + esc(uur(ms)) + '</button>'; }).join('') +
+      '</div></div>';
+  }).join('');
+  return '<div class="s27-plan-picker">' +
+    '<p class="s27-plan-sub">Met <strong>' + esc(ctx.assignee || '') + '</strong> · duur ± 1u30. Kies een moment:</p>' +
+    '<div class="s27-plan-mode"><label><input type="radio" name="plan-mode-' + esc(taskId) + '" value="online" checked data-plan-mode="' + esc(taskId) + '"> Online (Google Meet)</label>' +
+    '<label><input type="radio" name="plan-mode-' + esc(taskId) + '" value="fysiek" data-plan-mode="' + esc(taskId) + '"> Fysiek bij Studio 27</label></div>' +
+    '<div class="s27-plan-days">' + dagen + '</div>' +
+    '<div class="s27-plan-foot"><span class="s27-plan-state" id="s27-plan-state-' + esc(taskId) + '"></span>' +
+    '<button type="button" class="s27-btn s27-btn-primary" id="s27-plan-book-' + esc(taskId) + '" data-plan-book="' + esc(taskId) + '" disabled>Bevestig afspraak</button></div>' +
+  '</div>';
+}
+
+async function bookPlanSlot(taskId){
+  const ctx = state.planCtx[taskId];
+  if(!ctx || !ctx.sel) return;
+  const stEl = $('s27-plan-state-' + taskId);
+  const btn = $('s27-plan-book-' + taskId);
+  if(btn){ btn.disabled = true; btn.textContent = 'Inplannen…'; }
+  const start = ctx.sel, eind = ctx.sel + PLAN_DUR_MS;
+  const iso = function(ms){ return new Date(ms).toISOString(); };
+  const proj = ctx.proj || {};
+  const t = taskScheduleType(proj) || 'meeting';
+  const titel = ({ strategie:'Strategiesessie', opstart:'Opstartmeeting', meeting:'Afspraak', shoot:'Shoot' }[t]) + ' — ' + (proj.naam || 'Studio 27');
+  const besch = 'Afspraak ingepland via je Studio 27-portaal. Je hebt deze ' + (t==='strategie'?'strategiesessie':(t==='opstart'?'opstartmeeting':'afspraak')) + ' met ' + (ctx.assignee || 'het Studio 27-team') + '.' + (ctx.online ? '' : ' Locatie: Studio 27, Rijkevorsel.');
+  const sess = state.session || {};
+  const cc = (state.bedrijfContent && state.bedrijfContent.contact) || {};
+  const payload = {
+    task_id: taskId, list_id: ctx.list_id,
+    start: iso(start), eind: iso(eind), start_ms: String(start),
+    online: !!ctx.online,
+    titel: titel, beschrijving: besch,
+    locatie: ctx.online ? '' : 'Studio 27, Sint-Lenaartsesteenweg, Rijkevorsel',
+    assignee_email: ctx.assignee_email, assignee_naam: ctx.assignee,
+    client_email: cc.email || sess.email || '', client_naam: ((cc.voornaam||'') + ' ' + (cc.achternaam||'')).trim() || sess.bedrijfsnaam || 'Klant',
+    bedrijf_id: sess.bedrijf_id, session_token: sess.session_token
+  };
+  try {
+    if(state.demoMode || !ENDPOINTS.inplannen){
+      await new Promise(function(r){ setTimeout(r, 700); });
+    } else {
+      await api(ENDPOINTS.inplannen, payload);   // gateway vult client_email server-side aan
+    }
+    const box = $('s27-plan-' + taskId);
+    if(box) box.innerHTML = '<div class="s27-plan-done"><span class="s27-plan-done-ic">✅</span><strong>Afspraak ingepland!</strong>' +
+      '<p>' + esc(new Date(start).toLocaleString('nl-BE', { weekday:'long', day:'numeric', month:'long', hour:'2-digit', minute:'2-digit' })) + ' met ' + esc(ctx.assignee||'Studio 27') + '.</p>' +
+      '<p class="s27-plan-done-sub">Je krijgt zo een agenda-uitnodiging' + (ctx.online ? ' met een Google Meet-link' : ' (fysiek bij Studio 27)') + ' in je mailbox.</p></div>';
+  } catch(e){
+    if(stEl){ stEl.textContent = 'Inplannen mislukte — probeer opnieuw.'; stEl.className = 's27-plan-state s27-status-err'; }
+    if(btn){ btn.disabled = false; btn.textContent = 'Bevestig afspraak'; }
+  }
+}
+
 // Veralgemeend inplan-blok: shoot (bestaand) OF strategiesessie / opstartmeeting / meeting.
 function renderProjectScheduleBlock(proj, detail){
   const t = taskScheduleType(proj);
   if(t === 'shoot') return renderProjectShootBlock(proj, detail);
   if(!t) return '';
   const cfg = {
-    strategie: { ic:'🎯', title:'Plan je strategiesessie', lead:'Kies je voorkeursmoment — we plannen de sessie met de juiste strateeg en sturen je nadien een agenda-uitnodiging met alle betrokkenen.', hint:'' },
-    opstart:   { ic:'🚀', title:'Plan je opstartmeeting', lead:'Een sterke start maakt het verschil. Geef je voorkeur door en we bevestigen met een agenda-uitnodiging.', hint:'Voorkeur: fysiek bij ons in Studio 27 — persoonlijker en efficiënter.' },
-    meeting:   { ic:'📅', title:'Plan een afspraak in', lead:'Geef je voorkeursmoment door; we bevestigen met de juiste persoon en sturen een agenda-uitnodiging.', hint:'' }
+    strategie: { ic:'🎯', title:'Plan je strategiesessie', lead:'Kies hieronder een moment dat in de agenda van de juiste strateeg past — wij sturen je meteen een agenda-uitnodiging.' },
+    opstart:   { ic:'🚀', title:'Plan je opstartmeeting', lead:'Een sterke start maakt het verschil. Kies een vrij moment; wij bevestigen met een agenda-uitnodiging.' },
+    meeting:   { ic:'📅', title:'Plan een afspraak in', lead:'Kies een moment dat past in de agenda van je Studio 27-contact; wij sturen je een agenda-uitnodiging.' }
   }[t];
   const accent = discColor(proj.discipline);
-  const subj = cfg.title + ' — ' + (proj.naam || '');
+  const tid = esc(proj.task_id || '');
   return '<div class="s27-pv-section s27-pv-section-plan" style="--accent:' + accent + '">' +
     '<h3 class="s27-pv-section-title">' + cfg.ic + ' ' + esc(cfg.title) + '</h3>' +
-    '<p class="s27-pv-fb-lead">' + esc(cfg.lead) + (cfg.hint ? ' <strong>' + esc(cfg.hint) + '</strong>' : '') + '</p>' +
-    '<button type="button" class="s27-btn s27-btn-inline" data-dm="meeting" data-dm-onderwerp="' + esc(subj) + '" data-dm-placeholder="Geef 2-3 voorkeursmomenten door (dag + voor-/namiddag). Online of fysiek bij Studio 27?">Stel een moment voor →</button>' +
+    '<p class="s27-pv-fb-lead">' + esc(cfg.lead) + '</p>' +
+    '<div id="s27-plan-' + tid + '"><button type="button" class="s27-btn s27-btn-inline" data-plan-load="' + tid + '">Toon beschikbare momenten →</button></div>' +
   '</div>';
 }
 

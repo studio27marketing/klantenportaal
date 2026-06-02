@@ -1186,6 +1186,25 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-notifrow-pref { flex:0 0 auto; padding:9px 12px; border:1.5px solid var(--s27-line); border-radius:var(--r-md); font-size:13.5px; font-family:var(--font-body); background:var(--s27-paper); color:var(--s27-ink); cursor:pointer; }
 .s27-notifrow-pref:focus { outline:none; border-color:var(--s27-blue); box-shadow:var(--sh-focus,0 0 0 3px rgba(48,131,220,.28)); }
 
+/* Inplannen — slot-picker */
+.s27-plan-picker { margin-top:4px; }
+.s27-plan-sub { font-size:13.5px; color:var(--s27-ink-2); margin:0 0 12px; }
+.s27-plan-mode { display:flex; gap:18px; flex-wrap:wrap; margin-bottom:14px; }
+.s27-plan-mode label { display:inline-flex; align-items:center; gap:7px; font-size:13.5px; color:var(--s27-ink-2); cursor:pointer; }
+.s27-plan-days { display:flex; flex-direction:column; gap:12px; }
+.s27-plan-day-label { font-family:var(--font-display); font-size:12px; font-weight:800; letter-spacing:0.02em; color:var(--s27-ink-3); text-transform:capitalize; margin-bottom:6px; }
+.s27-plan-times { display:flex; flex-wrap:wrap; gap:7px; }
+.s27-plan-slot { font-family:var(--font-display); font-size:13px; font-weight:700; padding:8px 13px; border:1.5px solid var(--s27-line); border-radius:var(--r-pill); background:var(--s27-paper); color:var(--s27-ink-2); cursor:pointer; transition:all .14s; }
+.s27-plan-slot:hover { border-color:var(--accent, var(--s27-blue)); color:var(--accent, var(--s27-blue)); }
+.s27-plan-slot.is-sel { background:var(--accent, var(--s27-blue)); border-color:var(--accent, var(--s27-blue)); color:#fff; }
+.s27-plan-foot { display:flex; align-items:center; justify-content:flex-end; gap:14px; margin-top:16px; }
+.s27-plan-state { font-size:13px; }
+.s27-plan-done { text-align:center; padding:18px 10px; }
+.s27-plan-done-ic { font-size:32px; display:block; margin-bottom:8px; }
+.s27-plan-done strong { font-family:var(--font-display); font-size:17px; color:var(--s27-ink); display:block; }
+.s27-plan-done p { font-size:13.5px; color:var(--s27-ink-2); margin:6px 0 0; }
+.s27-plan-done-sub { color:var(--s27-ink-3) !important; font-size:12.5px !important; }
+
 /* Takken-nav: elke tak een eigen knop met mini-merkstempel (niet enkel op de home) */
 .s27-navdrop--werk { min-width:230px; }
 .s27-navstamp { display:inline-flex; width:18px; height:18px; flex:0 0 18px; align-items:center; justify-content:center; }
