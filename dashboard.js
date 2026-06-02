@@ -3378,7 +3378,8 @@ async function loadPlanSlots(taskId, proj){
   }
   const durMs = planDurMs(data.taak_est);
   const slots = computeFreeSlots(data.blokken, durMs);
-  state.planCtx[taskId] = { assignee: data.assignee_naam || 'je Studio 27-contact', assignee_email: data.assignee_email || '', list_id: data.list_id || '', online: true, sel: null, proj: proj, dur: durMs };
+  const aEmails = String(data.assignee_emails || data.assignee_email || '').split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+  state.planCtx[taskId] = { assignee: data.assignee_naam || 'je Studio 27-contact', assignee_email: data.assignee_email || '', assignee_emails: aEmails, list_id: data.list_id || '', online: true, sel: null, proj: proj, dur: durMs };
   box.innerHTML = renderPlanPicker(taskId, slots);
 }
 
@@ -3426,21 +3427,28 @@ async function bookPlanSlot(taskId){
   const besch = 'Afspraak ingepland via je Studio 27-portaal. Je hebt deze ' + (t==='strategie'?'strategiesessie':(t==='opstart'?'opstartmeeting':'afspraak')) + ' met ' + (ctx.assignee || 'het Studio 27-team') + '.' + (ctx.online ? '' : ' Locatie: Studio 27, Rijkevorsel.');
   const sess = state.session || {};
   const cc = (state.bedrijfContent && state.bedrijfContent.contact) || {};
+  const clientNaam = ((cc.voornaam||'') + ' ' + (cc.achternaam||'')).trim() || sess.bedrijfsnaam || 'Klant';
+  // Genodigden = de klant + ALLE assignees van de taak (multi-assignee). Lege e-mails eruit.
+  // Assignee-e-mails zijn server-resolved (engine); client-e-mail uit het portaal-contact.
+  const attendees = [{ email: cc.email || sess.email || '', displayName: clientNaam }]
+    .concat((ctx.assignee_emails || []).map(function(e){ return { email: e }; }))
+    .filter(function(a){ return a.email; });
   const payload = {
     task_id: taskId, list_id: ctx.list_id,
     start: iso(start), eind: iso(eind), start_ms: String(start),
     online: !!ctx.online,
     titel: titel, beschrijving: besch,
     locatie: ctx.online ? '' : 'Studio 27, Sint-Lenaartsesteenweg, Rijkevorsel',
-    assignee_email: ctx.assignee_email, assignee_naam: ctx.assignee,
-    client_email: cc.email || sess.email || '', client_naam: ((cc.voornaam||'') + ' ' + (cc.achternaam||'')).trim() || sess.bedrijfsnaam || 'Klant',
+    attendees: attendees,
+    assignee_naam: ctx.assignee,
+    client_email: cc.email || sess.email || '', client_naam: clientNaam,
     bedrijf_id: sess.bedrijf_id, session_token: sess.session_token
   };
   try {
     if(state.demoMode || !ENDPOINTS.inplannen){
       await new Promise(function(r){ setTimeout(r, 700); });
     } else {
-      await api(ENDPOINTS.inplannen, payload);   // gateway vult client_email server-side aan
+      await api(ENDPOINTS.inplannen, payload);   // attendees = klant + alle assignees
     }
     const box = $('s27-plan-' + taskId);
     if(box) box.innerHTML = '<div class="s27-plan-done"><span class="s27-plan-done-ic">✅</span><strong>Afspraak ingepland!</strong>' +
