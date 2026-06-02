@@ -449,7 +449,10 @@ function panelNieuwProject(){
 function panelHuisstijl(){
   const sw=[['Blauw','#3083DC'],['Roze','#F697CE'],['Paars','#9441DB'],['Groen','#12AC4E'],['Oranje','#F66131']];
   const files=(window.S27DATA && S27DATA.huisstijl()); const team=(window.S27DATA && S27DATA.team());
-  const fileCards = files ? (files.length ? files.map(f=>`<div class="filecard" style="min-width:240px"><div class="ft">${ic('img',20)}</div><div style="flex:1;min-width:0"><div class="fn" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</div><div class="fs">${f.size?esc(String(f.size)):''}</div></div><a class="icon-btn" style="width:34px;height:34px" href="${esc(f.url||'#')}" target="_blank" rel="noopener">${ic('download',16)}</a></div>`).join('') : '<div class="fs" style="color:var(--ink-4)">Nog geen bestanden geüpload.</div>')
+  const fmtBytes=(n)=>{ n=parseInt(n,10)||0; if(!n)return ''; if(n<1024)return n+' B'; if(n<1048576)return Math.round(n/1024)+' KB'; return (n/1048576).toFixed(1)+' MB'; };
+  const mimeIc=(m)=>{ m=String(m||''); if(m.indexOf('image')===0)return 'img'; if(m.indexOf('video')===0)return 'video'; return 'doc'; };
+  const fileMeta=(f)=>{ const p=[]; const b=fmtBytes(f.size); if(b)p.push(b); if(f.modified){ const d=new Date(f.modified); if(!isNaN(d.getTime()))p.push(d.toLocaleDateString('nl-BE',{day:'numeric',month:'short',year:'numeric'})); } return p.join(' · '); };
+  const fileCards = files ? (files.length ? files.map(f=>`<div class="filecard" style="min-width:240px"><div class="ft">${ic(mimeIc(f.mime),20)}</div><div style="flex:1;min-width:0"><div class="fn" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</div><div class="fs">${esc(fileMeta(f))}</div></div><a class="icon-btn" style="width:34px;height:34px" href="${esc(f.url||'#')}" target="_blank" rel="noopener">${ic('download',16)}</a></div>`).join('') : '<div class="fs" style="color:var(--ink-4)">Nog geen bestanden in je Huisstijl-map. Sleep hieronder een bestand om te beginnen.</div>')
     : `<div class="filecard" style="min-width:240px"><div class="ft">${ic('img',20)}</div><div style="flex:1"><div class="fn">logo-tc-fullcolor.svg</div><div class="fs">Vector · 24 KB</div></div><button class="icon-btn" style="width:34px;height:34px">${ic('download',16)}</button></div><div class="filecard" style="min-width:240px"><div class="ft">${ic('img',20)}</div><div style="flex:1"><div class="fn">logo-tc-wit.png</div><div class="fs">PNG · 180 KB</div></div><button class="icon-btn" style="width:34px;height:34px">${ic('download',16)}</button></div>`;
   const teamCards = (team && team.contactpersonen) ? (team.contactpersonen.length ? team.contactpersonen.map(c=>{const nm=((c.voornaam||'')+' '+(c.achternaam||'')).trim()||'Contact';return `<div class="filecard"><div class="ft" style="border-radius:50%;background:var(--s27-blue);color:#fff;font-family:var(--font-display);font-weight:800">${esc(nm.split(' ').map(x=>x[0]).join('').slice(0,2))}</div><div style="flex:1"><div class="fn">${esc(nm)}</div><div class="fs">${esc(c.rol||c.email||'')}</div></div><button class="btn btn-ghost btn-sm">Wijzig</button></div>`;}).join('') : '<div class="fs" style="color:var(--ink-4)">Nog geen contactpersonen.</div>')
     : [['Sarah Janssens','Marketing · hoofdcontact','blue'],['Tom De Cock','Zaakvoerder','green']].map(t=>`<div class="filecard"><div class="ft" style="border-radius:50%;background:var(--s27-${t[2]});color:#fff;font-family:var(--font-display);font-weight:800">${t[0].split(' ').map(x=>x[0]).join('')}</div><div style="flex:1"><div class="fn">${t[0]}</div><div class="fs">${t[1]}</div></div><button class="btn btn-ghost btn-sm">Wijzig</button></div>`).join('');
@@ -458,7 +461,7 @@ function panelHuisstijl(){
     'Alles wat we nodig hebben om consistent voor je te werken, netjes bij elkaar.',
     scribble('krabbel-roze.png','top:-4px;right:8px;width:120px;transform:rotate(-6deg)'))
   +`<div class="setsec">
-    <h3>Logo</h3><p class="sdesc">De huidige logobestanden van TEST CLIENT BV.</p>
+    <h3>Huisstijl-bestanden</h3><p class="sdesc">Alle bestanden uit je gedeelde Huisstijl-map op Google Drive — logo's, fonts, templates. Altijd up-to-date.</p>
     <div style="display:flex;gap:14px;flex-wrap:wrap">${fileCards}</div>
     <div class="dropzone" style="margin-top:14px" onclick="document.getElementById('hsFile').click()">${ic('upload',30)}<b>Sleep je bestand hierheen</b><div style="font-size:12.5px;margin-top:4px">of klik om te bladeren · SVG, PNG, AI, PDF</div></div>
     <input type="file" id="hsFile" style="display:none" onchange="uploadHuisstijl(this)">
@@ -491,12 +494,12 @@ function panelFacturatie(){
     'Transparant en zonder kleine lettertjes — je weet exact waarvoor je betaalt.',
     scribble('krabbel-groen.png','top:-4px;right:8px;width:120px;transform:rotate(-5deg)'))
   +`<div class="setsec">
-    <h3>Bedrijfsgegevens</h3>
+    <h3>Facturatiegegevens</h3>
+    <p class="sdesc">Deze gegevens lopen rechtstreeks gelijk met onze administratie. Pas je iets aan, dan verwerken Ilke en Arne het meteen.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:6px">
-      <div class="field"><label>Ondernemingsnummer</label><input id="facBtw" value="${esc(b.btw||(demo?'BE 0123.456.789':''))}" placeholder="BE 0xxx.xxx.xxx"></div>
-      <div class="field"><label>Aantal medewerkers</label><input id="facAantal" value="${esc(b.aantal_medewerkers||(demo?'24':''))}"></div>
+      <div class="field"><label>Ondernemingsnummer / BTW</label><input id="facBtw" value="${esc(b.btw||(demo?'BE 0123.456.789':''))}" placeholder="BE 0xxx.xxx.xxx"></div>
       <div class="field"><label>Facturatie-e-mail</label><input id="facEmail" value="${esc(b.facturatie_email||(demo?'boekhouding@testclient.be':''))}" placeholder="boekhouding@…"></div>
-      <div class="field"><label>Betaaltermijn</label><select><option>30 dagen</option><option>14 dagen</option></select></div>
+      <div class="field" style="grid-column:1/-1"><label>Facturatie-opmerkingen</label><textarea id="facOpm" rows="2" style="font-family:var(--font-body);font-size:14px;padding:11px 13px;border:1px solid var(--line);border-radius:var(--r-sm);resize:vertical;outline:none" placeholder="bv. PO-nummer op elke factuur, kwartaalfacturatie…">${esc(b.facturatie_opmerkingen||(demo?'Graag steeds ons PO-nummer op de factuur.':''))}</textarea></div>
     </div>
     <div style="margin-top:14px"><button class="btn btn-branch br-green btn-sm" onclick="saveBedrijfGegevens(this)">${ic('check',15)} Gegevens opslaan</button></div>
   </div>
@@ -509,8 +512,31 @@ function panelFacturatie(){
   </div>`;
 }
 
+function contactRow(c){
+  const nm=((c.voornaam||'')+' '+(c.achternaam||'')).trim()||'Contactpersoon';
+  const init=(nm.split(/\s+/).map(x=>x[0]).join('').slice(0,2)||'?').toUpperCase();
+  const sub=[c.rol||c.email||'', c.gsm||'', (c.voorkeur&&c.voorkeur!=='Geen')?('meldingen: '+c.voorkeur):''].filter(Boolean).join(' · ');
+  return `<div class="contact-row" data-cid="${esc(c.id||'')}"><span class="cr-av" style="background:var(--s27-indigo,#5B5BD6)">${esc(init)}</span><div class="cr-tx"><b>${esc(nm)}</b><span>${esc(sub)}</span></div><button class="btn btn-ghost btn-sm" onclick="editContact('${esc(c.id||'')}')">Wijzig</button><button class="icon-btn" style="width:32px;height:32px;margin-left:6px" title="Verwijderen" onclick="removeContact('${esc(c.id||'')}',this)">${ic('trash',15)}</button></div>`;
+}
+function contactFormHTML(c){
+  c=c||{}; const fld='font-family:var(--font-body);font-size:14px;padding:11px 13px;border:1px solid var(--line);border-radius:var(--r-sm);outline:none;background:#fff';
+  return `<div class="setsec" id="contactForm" style="background:var(--paper-2,#FAF7F2);border:1px solid var(--line);margin-top:12px">
+    <h3>${c.id?'Contactpersoon wijzigen':'Nieuwe contactpersoon'}</h3>
+    <div class="set-grid">
+      <div class="field"><label>Voornaam</label><input id="cfVoor" value="${esc(c.voornaam||'')}" style="${fld}"></div>
+      <div class="field"><label>Achternaam</label><input id="cfAchter" value="${esc(c.achternaam||'')}" style="${fld}"></div>
+      <div class="field"><label>E-mail</label><input id="cfEmail" value="${esc(c.email||'')}" placeholder="naam@bedrijf.be" style="${fld}"></div>
+      <div class="field"><label>GSM / WhatsApp</label><input id="cfGsm" value="${esc(c.gsm||'')}" placeholder="+32 4xx xx xx xx" style="${fld}"></div>
+      <div class="field"><label>Meldingen via</label><select id="cfVoorkeur" style="${fld}">${['Geen','WhatsApp','E-mail','Beide'].map(o=>`<option ${o===(c.voorkeur||'Geen')?'selected':''}>${o}</option>`).join('')}</select></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:14px"><button class="btn btn-branch br-indigo btn-sm" onclick="saveContact('${esc(c.id||'')}',this)">${ic('check',15)} Opslaan</button><button class="btn btn-ghost btn-sm" onclick="closeContactForm()">Annuleer</button></div>
+  </div>`;
+}
 function panelInstellingen(){
   const t=(window.S27DATA && S27DATA.team())||{}; const c=(t.contactpersonen&&t.contactpersonen[0])||{}; const vk=c.voorkeur||'Geen'; const demo=!_live();
+  const contacts=(t.contactpersonen||[]);
+  const demoContacts=[{voornaam:'Sarah',achternaam:'Janssens',rol:'Marketing · hoofdcontact',gsm:'+32 478 12 34 56',voorkeur:'WhatsApp',id:'demo1'},{voornaam:'Tom',achternaam:'De Cock',rol:'Zaakvoerder',email:'tom@testclient.be',id:'demo2'}];
+  const contactsHTML = contacts.length ? contacts.map(contactRow).join('') : (demo ? demoContacts.map(contactRow).join('') : '<div class="fs" style="color:var(--ink-4)">Nog geen contactpersonen toegevoegd — voeg je eerste collega toe.</div>');
   return hero('indigo','Mijn bedrijf · Instellingen',
     `Jouw <span class="accent">voorkeuren${squig()}</span>`)
   +`<div class="setsec">
@@ -519,6 +545,12 @@ function panelInstellingen(){
       <div class="field"><label>Meldingen via</label><select onchange="saveNotifPref(this)">${['Geen','WhatsApp','E-mail','Beide'].map(o=>`<option ${o===vk?'selected':''}>${o}</option>`).join('')}</select></div>
       <div class="field"><label>GSM / WhatsApp-nummer</label><input value="${esc(c.gsm||(demo?'+32 478 12 34 56':''))}" placeholder="+32 4xx xx xx xx"></div>
     </div>
+  </div>
+  <div class="setsec">
+    <h3>Contactpersonen van je bedrijf</h3><p class="sdesc">Iedereen die hier staat kan inloggen én collega's toevoegen of verwijderen. Voeg gerust je hele team toe.</p>
+    <div class="contact-list" id="bedrijfContactList">${contactsHTML}</div>
+    <button class="btn btn-outline btn-sm" style="margin-top:12px" onclick="addContact()">${ic('upload',15)} Persoon toevoegen</button>
+    <div id="contactFormHost"></div>
   </div>
   <div class="setsec">
     <h3>Jouw contactpersonen bij Studio 27</h3><p class="sdesc">Drie vaste gezichten — altijd bereikbaar.</p>

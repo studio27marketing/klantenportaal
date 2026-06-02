@@ -390,12 +390,26 @@ async function submitGeneralFeedback(btn){
   if(state.demoMode || !state.activeProject) return;
   try { await api(ENDPOINTS.feedbackV2, { task_id:state.activeProject, bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[], algemene_opmerking:msg, kanaal:kanaal, kanaal_label:chan }); } catch(e){}
 }
-// bedrijfsgegevens opslaan (update_bedrijf)
+// facturatiegegevens opslaan — ALLE velden via facturatieSave (schrijft naar exact de
+// ClickUp-velden die content-get terugleest → volledige round-trip-sync, geen lege overschrijf)
 async function saveBedrijfGegevens(btn){
   if(state.demoMode){ if(btn) btn.innerHTML='Opgeslagen ✓'; return; }
   if(btn){ btn.disabled=true; btn.textContent='Opslaan…'; }
-  try { await api(ENDPOINTS.bedrijfBeheer, { action:'update_bedrijf', bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, ondernemingsnummer:(($id('facBtw')||{}).value||''), aantal_medewerkers:(($id('facAantal')||{}).value||''), website:'' });
-    if(($id('facEmail'))){ try{ await api(ENDPOINTS.facturatieSave, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, facturatie_email:$id('facEmail').value||'' }); }catch(e){} }
+  try {
+    await api(ENDPOINTS.facturatieSave, {
+      bedrijf_id:state.session.bedrijf_id,
+      session_token:state.session.session_token,
+      klant_naam:S27DATA.bedrijfsnaam(),
+      ondernemingsnummer:(($id('facBtw')||{}).value||''),
+      facturatie_email:(($id('facEmail')||{}).value||''),
+      facturatie_opmerkingen:(($id('facOpm')||{}).value||'')
+    });
+    // lokale state bijwerken zodat een re-render dezelfde waarden toont (sync ook client-side)
+    if(state.data && state.data.bedrijf){
+      state.data.bedrijf.btw=(($id('facBtw')||{}).value||'');
+      state.data.bedrijf.facturatie_email=(($id('facEmail')||{}).value||'');
+      state.data.bedrijf.facturatie_opmerkingen=(($id('facOpm')||{}).value||'');
+    }
     if(btn){ btn.disabled=false; btn.innerHTML='Opgeslagen ✓'; }
   } catch(e){ if(btn){ btn.disabled=false; btn.textContent='Opnieuw proberen'; } }
 }
@@ -404,6 +418,31 @@ async function saveNotifPref(sel){
   if(state.demoMode) return;
   const t=(window.S27DATA && S27DATA.team()); const c=(t&&t.contactpersonen&&t.contactpersonen[0])||{};
   try { await api(ENDPOINTS.bedrijfBeheer, { action:'update_contact', contact_id:c.id||'', bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, voornaam:c.voornaam||'', achternaam:c.achternaam||'', email:c.email||'', gsm:c.gsm||'', rol:c.rol||'', voorkeur:sel.value }); } catch(e){}
+}
+/* ---- Contactpersonen-beheer (iedere contactpersoon mag toevoegen/wijzigen/verwijderen) ---- */
+function _contactById(id){ const t=window.S27DATA&&S27DATA.team(); const a=(t&&t.contactpersonen)||[]; for(var i=0;i<a.length;i++){ if(String(a[i].id)===String(id)) return a[i]; } return null; }
+function addContact(){ const host=$id('contactFormHost'); if(!host)return; host.innerHTML=contactFormHTML(null); const f=host.querySelector('input'); if(f)f.focus(); host.scrollIntoView&&host.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+function editContact(id){ const host=$id('contactFormHost'); if(!host)return; host.innerHTML=contactFormHTML(_contactById(id)||{id:id}); const f=host.querySelector('input'); if(f)f.focus(); }
+function closeContactForm(){ const host=$id('contactFormHost'); if(host) host.innerHTML=''; }
+async function saveContact(id, btn){
+  const g=(x)=>(($id(x)||{}).value||'').trim();
+  const payload={ voornaam:g('cfVoor'), achternaam:g('cfAchter'), email:g('cfEmail'), gsm:g('cfGsm'), voorkeur:g('cfVoorkeur')||'Geen' };
+  if(!payload.voornaam && !payload.email){ const e=$id('cfVoor'); if(e){ e.style.borderColor='var(--s27-orange)'; e.focus(); } return; }
+  if(btn){ btn.disabled=true; btn.textContent='Opslaan…'; }
+  if(state.demoMode){ closeContactForm(); return; }
+  try {
+    var body=Object.assign({ bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token }, payload);
+    if(id){ body.action='update_contact'; body.contact_id=id; } else { body.action='save_contact'; }
+    await api(ENDPOINTS.bedrijfBeheer, body);
+    state.data.team=null; try{ await S27DATA.loadTeam(); }catch(e){} renderPanel('instellingen');
+  } catch(e){ if(btn){ btn.disabled=false; btn.textContent='Opnieuw proberen'; } }
+}
+async function removeContact(id, btn){
+  const c=_contactById(id); const nm=c?(((c.voornaam||'')+' '+(c.achternaam||'')).trim()||'deze persoon'):'deze persoon';
+  if(typeof confirm==='function' && !confirm('Wil je '+nm+' verwijderen uit het bedrijfsdashboard? Deze persoon verliest dan toegang tot het portaal.')) return;
+  const row=btn&&btn.closest&&btn.closest('.contact-row'); if(row){ row.style.opacity='.5'; row.style.pointerEvents='none'; }
+  if(state.demoMode){ if(row)row.remove(); return; }
+  try { await api(ENDPOINTS.bedrijfBeheer, { action:'delete_contact', contact_id:id, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token }); state.data.team=null; try{ await S27DATA.loadTeam(); }catch(e){} renderPanel('instellingen'); } catch(e){ if(row){ row.style.opacity=''; row.style.pointerEvents=''; } }
 }
 function pickMtype(el,who,color,type){
   el.parentElement.querySelectorAll('.mtype').forEach(b=>b.classList.remove('sel')); el.classList.add('sel');
