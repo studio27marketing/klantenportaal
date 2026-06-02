@@ -43,7 +43,9 @@ const ENDPOINTS = {
   // v3.1-7 deel B — Per-project facturatie-bevestiging bij goedkeuring (schrijft naar projecttaak-veld 42a0fd8e)
   projectFacturatieSave: 'https://hook.eu1.make.com/cmqf97ej6aewxokt9g23tbff6gxg7frm',
   // v3 Feature 1 — Performance Dashboard. mode=list → rapporten per bedrijf; mode=data&task_id=… → volledige rapport-JSON (via custom s27fetch-app, gzip-proof). Scenario 5964345.
-  performance:       'https://hook.eu1.make.com/chmsfitxr12m8cpjp4x3fb8ru1nqr7gg'
+  performance:       'https://hook.eu1.make.com/chmsfitxr12m8cpjp4x3fb8ru1nqr7gg',
+  // v3 Bedrijf-beheer — action=get_team | update_bedrijf | save_contact (scenario 6005xxx). Hook ingevuld na scenario-creatie.
+  bedrijfBeheer:     'https://hook.eu1.make.com/BEDRIJFBEHEER_HOOK'
 };
 
 /* ===== AUTH v2 (Firebase + Cloudflare-gateway) — alleen actief achter ?auth=v2
@@ -99,9 +101,16 @@ function categoryFromFilename(name){
 function getMockBedrijfContent(){
   return {
     algemene_voorkeuren: '',
+    bedrijfsnaam: 'TEST CLIENT BV',
     btw: 'BE0123.456.789',
+    aantal_medewerkers: 10,
+    website: 'https://test-client.example.com',
     facturatie_email: 'facturen@testclient.be',
     facturatie_opmerkingen: 'PO-nummer PO-2026-001 vermelden op elke factuur',
+    contactpersonen: [
+      { id:'86ca0f6um', voornaam:'Jan',  achternaam:'Janssens',  email:'jan.janssens@testclient.be', gsm:'+32470000001', rol:'Zaakvoerder',     ondernemingsleider:true,  voorkeur:'WhatsApp' },
+      { id:'demo-c2',   voornaam:'Sara', achternaam:'Peeters',   email:'sara.peeters@testclient.be', gsm:'+32470000002', rol:'Marketing',      ondernemingsleider:false, voorkeur:'E-mail' }
+    ],
     categorieen: {
       logos: [], fonts: [], kleuren: [], brand_pdfs: [], fotos: [], overig: []
     }
@@ -1919,6 +1928,160 @@ function renderKleurInput(id, label, hint, value){
   </div>`;
 }
 
+/* =================================================================
+   BEDRIJF-BEHEER (v3) — bedrijfsgegevens (#medewerkers→ClickUp),
+   contactpersonen toevoegen/wijzigen, ondernemingsleiders.
+   ================================================================= */
+function contactInitials(c){ return (((c.voornaam||'')[0]||'') + ((c.achternaam||'')[0]||'')).toUpperCase() || '?'; }
+
+function renderBedrijfBeheer(data){
+  const naam = data.bedrijfsnaam || (state.session && state.session.bedrijfsnaam) || 'Mijn bedrijf';
+  const contacts = data.contactpersonen || [];
+  const gegevens =
+    '<div class="s27-beheer-card">' +
+      '<div class="s27-section-head"><div><h2 class="s27-section-title">Bedrijfsgegevens</h2><p class="s27-section-sub">Deze gegevens gebruiken we voor je dossier en facturatie. Wijzigingen komen direct bij ons binnen.</p></div></div>' +
+      '<form id="s27-gegevens-form" class="s27-beheer-grid">' +
+        '<label class="s27-form-field"><span>Bedrijfsnaam</span><input type="text" value="' + esc(naam) + '" disabled></label>' +
+        '<label class="s27-form-field"><span>Ondernemingsnummer / BTW</span><input type="text" name="ondernemingsnummer" value="' + esc(data.btw||'') + '" placeholder="BE0xxx.xxx.xxx"></label>' +
+        '<label class="s27-form-field"><span>Aantal medewerkers</span><input type="number" name="aantal_medewerkers" min="0" value="' + esc(data.aantal_medewerkers!=null?String(data.aantal_medewerkers):'') + '" placeholder="bv. 12"></label>' +
+        '<label class="s27-form-field"><span>Website</span><input type="url" name="website" value="' + esc(data.website||'') + '" placeholder="https://…"></label>' +
+        '<div class="s27-beheer-foot"><span class="s27-settings-status" id="s27-gegevens-status"></span><button type="submit" class="s27-btn s27-btn-inline">Gegevens opslaan</button></div>' +
+      '</form>' +
+    '</div>';
+  const team =
+    '<div class="s27-beheer-card">' +
+      '<div class="s27-section-head"><div><h2 class="s27-section-title">Team &amp; contactpersonen</h2><p class="s27-section-sub">Wie werkt er met ons samen? Voeg collega\'s toe — ze worden meteen als contactpersoon gekoppeld. Markeer ondernemingsleiders apart.</p></div><button type="button" class="s27-btn s27-btn-inline" id="s27-contact-add"><svg width="13" height="13"><use href="#s27p-user"/></svg> Contactpersoon</button></div>' +
+      '<div class="s27-contacts-list" id="s27-contacts-list">' +
+        (contacts.length ? contacts.map(renderContactRow).join('') : '<p class="s27-empty-txt">Nog geen contactpersonen toegevoegd. Voeg je eerste collega toe →</p>') +
+      '</div>' +
+    '</div>';
+  return '<div class="s27-beheer">' + gegevens + team + '</div>';
+}
+
+function renderContactRow(c){
+  const naam = ((c.voornaam||'') + ' ' + (c.achternaam||'')).trim() || 'Contactpersoon';
+  return '<div class="s27-contactrow" data-cid="' + esc(c.id||'') + '">' +
+    '<div class="s27-contactrow-av">' + esc(contactInitials(c)) + '</div>' +
+    '<div class="s27-contactrow-info">' +
+      '<strong>' + esc(naam) + (c.ondernemingsleider ? ' <span class="s27-leider-badge">Ondernemingsleider</span>' : '') + '</strong>' +
+      '<span>' + esc(c.rol||'Contactpersoon') + (c.email ? ' · ' + esc(c.email) : '') + (c.gsm ? ' · ' + esc(c.gsm) : '') + '</span>' +
+    '</div>' +
+    (c.voorkeur ? '<span class="s27-contactrow-pref">🔔 ' + esc(c.voorkeur) + '</span>' : '') +
+    '<button type="button" class="s27-contactrow-edit" data-edit-contact="' + esc(c.id||'') + '">Wijzig</button>' +
+  '</div>';
+}
+
+function openContactModal(existing){
+  existing = existing || {};
+  const isEdit = !!existing.id;
+  let modal = $('s27-contact-modal');
+  if(modal) modal.remove();
+  modal = document.createElement('div');
+  modal.id = 's27-contact-modal';
+  modal.className = 's27-dm-overlay';
+  modal.setAttribute('role','dialog'); modal.setAttribute('aria-modal','true');
+  const opt = (v) => '<option value="' + v + '"' + ((existing.voorkeur||'WhatsApp')===v?' selected':'') + '>' + v + '</option>';
+  modal.innerHTML =
+    '<div class="s27-dm-dialog" role="document">' +
+      '<button class="s27-dm-close" aria-label="Sluiten">×</button>' +
+      '<h3 class="s27-dm-title">' + (isEdit ? 'Contactpersoon wijzigen' : 'Contactpersoon toevoegen') + '</h3>' +
+      '<p class="s27-dm-sub">Deze persoon wordt aan jouw bedrijf gekoppeld in onze planning. Een nieuwe contactpersoon krijgt niet automatisch portaaltoegang — dat regelen wij apart.</p>' +
+      '<form id="s27-contact-form">' +
+        '<div class="s27-beheer-grid">' +
+          '<label class="s27-form-field"><span>Voornaam *</span><input type="text" name="voornaam" required value="' + esc(existing.voornaam||'') + '"></label>' +
+          '<label class="s27-form-field"><span>Achternaam *</span><input type="text" name="achternaam" required value="' + esc(existing.achternaam||'') + '"></label>' +
+          '<label class="s27-form-field"><span>E-mail</span><input type="email" name="email" value="' + esc(existing.email||'') + '"></label>' +
+          '<label class="s27-form-field"><span>GSM</span><input type="text" name="gsm" value="' + esc(existing.gsm||'') + '" placeholder="+32…"></label>' +
+          '<label class="s27-form-field"><span>Rol / functie</span><input type="text" name="rol" value="' + esc(existing.rol||'') + '" placeholder="bv. Marketing"></label>' +
+          '<label class="s27-form-field"><span>Notificatie-voorkeur</span><select name="voorkeur">' + opt('WhatsApp')+opt('E-mail')+opt('Beide')+opt('Geen') + '</select></label>' +
+        '</div>' +
+        '<label class="s27-checkrow2"><input type="checkbox" name="ondernemingsleider"' + (existing.ondernemingsleider?' checked':'') + '> Deze persoon is een ondernemingsleider</label>' +
+        '<p class="s27-form-error" id="s27-contact-error" style="display:none"></p>' +
+        '<div class="s27-dm-actions">' +
+          '<button type="button" class="s27-btn s27-btn-ghost" id="s27-contact-cancel">Annuleer</button>' +
+          '<button type="submit" class="s27-btn s27-btn-primary">' + (isEdit ? 'Wijzigingen opslaan' : 'Toevoegen') + '</button>' +
+        '</div>' +
+      '</form>' +
+    '</div>';
+  document.body.appendChild(modal);
+  const close = () => { try { modal.remove(); } catch(e){} };
+  modal.querySelector('.s27-dm-close').addEventListener('click', close);
+  $('s27-contact-cancel').addEventListener('click', close);
+  modal.addEventListener('click', e => { if(e.target === modal) close(); });
+  $('s27-contact-form').addEventListener('submit', e => { e.preventDefault(); saveContact(e.target, existing, close); });
+}
+
+async function saveContact(form, existing, close){
+  const errEl = $('s27-contact-error');
+  const btn = form.querySelector('button[type="submit"]');
+  const g = n => (form[n] ? form[n].value : '').trim();
+  const rec = {
+    id: existing.id || '',
+    voornaam: g('voornaam'), achternaam: g('achternaam'),
+    email: g('email'), gsm: g('gsm'), rol: g('rol'),
+    voorkeur: form.voorkeur ? form.voorkeur.value : 'WhatsApp',
+    ondernemingsleider: !!(form.ondernemingsleider && form.ondernemingsleider.checked)
+  };
+  if(!rec.voornaam || !rec.achternaam){ if(errEl){ errEl.style.display='block'; errEl.textContent='Voornaam en achternaam zijn verplicht.'; } return; }
+  if(btn){ btn.disabled = true; btn.textContent = 'Opslaan…'; }
+  try {
+    if(!state.demoMode && ENDPOINTS.bedrijfBeheer && ENDPOINTS.bedrijfBeheer.indexOf('BEDRIJFBEHEER_HOOK') === -1){
+      await api(ENDPOINTS.bedrijfBeheer, Object.assign({ action:'save_contact', bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token }, rec));
+    }
+    // lokaal bijwerken zodat de lijst meteen klopt (optimistic)
+    const bc = state.bedrijfContent || (state.bedrijfContent = {});
+    bc.contactpersonen = bc.contactpersonen || [];
+    if(existing.id){
+      const i = bc.contactpersonen.findIndex(x => x.id === existing.id);
+      if(i >= 0) bc.contactpersonen[i] = Object.assign({}, bc.contactpersonen[i], rec);
+    } else {
+      rec.id = rec.id || ('new-' + Date.now());
+      bc.contactpersonen.push(rec);
+    }
+    const list = $('s27-contacts-list');
+    if(list) list.innerHTML = bc.contactpersonen.map(renderContactRow).join('');
+    wireContactRows();
+    if(close) close();
+  } catch(err){
+    if(errEl){ errEl.style.display='block'; errEl.textContent='Opslaan mislukte — probeer opnieuw of stuur ons een bericht.'; }
+    if(btn){ btn.disabled = false; btn.textContent = existing.id ? 'Wijzigingen opslaan' : 'Toevoegen'; }
+  }
+}
+
+function wireContactRows(){
+  document.querySelectorAll('[data-edit-contact]').forEach(b => b.addEventListener('click', () => {
+    const cid = b.dataset.editContact;
+    const c = ((state.bedrijfContent && state.bedrijfContent.contactpersonen) || []).find(x => x.id === cid) || {};
+    openContactModal(c);
+  }));
+}
+
+function wireBedrijfBeheer(){
+  const add = $('s27-contact-add');
+  if(add) add.addEventListener('click', () => openContactModal(null));
+  wireContactRows();
+  const form = $('s27-gegevens-form');
+  if(form) form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const g = n => (form[n] ? form[n].value : '').trim();
+    const payload = { ondernemingsnummer: g('ondernemingsnummer'), aantal_medewerkers: g('aantal_medewerkers'), website: g('website') };
+    const st = $('s27-gegevens-status');
+    const btn = form.querySelector('button[type="submit"]');
+    if(btn){ btn.disabled = true; btn.textContent = 'Opslaan…'; }
+    try {
+      if(!state.demoMode && ENDPOINTS.bedrijfBeheer && ENDPOINTS.bedrijfBeheer.indexOf('BEDRIJFBEHEER_HOOK') === -1){
+        await api(ENDPOINTS.bedrijfBeheer, Object.assign({ action:'update_bedrijf', bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token }, payload));
+      }
+      if(state.bedrijfContent){ state.bedrijfContent.btw = payload.ondernemingsnummer; state.bedrijfContent.aantal_medewerkers = payload.aantal_medewerkers; state.bedrijfContent.website = payload.website; }
+      if(st){ st.style.display='block'; st.className='s27-settings-status s27-status-ok'; st.textContent='✓ Opgeslagen — bedankt!'; }
+    } catch(err){
+      if(st){ st.style.display='block'; st.className='s27-settings-status s27-status-err'; st.textContent='Opslaan mislukte — probeer opnieuw.'; }
+    } finally {
+      if(btn){ btn.disabled = false; btn.textContent = 'Gegevens opslaan'; }
+    }
+  });
+}
+
 async function renderBedrijfTab(){
   const body = $('s27-bedrijf-body');
   if(!body) return;
@@ -1963,6 +2126,7 @@ async function renderBedrijfTab(){
     `<div class="s27-form-field s27-readfield"><span class="s27-readlabel">${esc(label)}</span><div class="s27-readvalue">${val ? esc(val) : '—'}</div><input type="text" name="${name}" value="${esc(val||'')}" placeholder="${esc(ph||'')}" hidden/></div>`;
 
   body.innerHTML = `
+    ${renderBedrijfBeheer(data)}
     <div class="s27-section">
       <div class="s27-section-head">
         <div>
@@ -1985,6 +2149,7 @@ async function renderBedrijfTab(){
     </div>
   `;
 
+  wireBedrijfBeheer();
   attachBedrijfHandlers();
   loadHuisstijlFiles();
 }

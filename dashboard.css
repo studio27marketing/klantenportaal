@@ -1154,6 +1154,33 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-btn-inline { width:auto; padding:11px 20px; }
 .s27-pv-section-plan { border-left:3px solid var(--accent, var(--s27-blue)); padding-left:16px; }
 
+/* ---- Bedrijf-beheer: gegevens + contactpersonen ---- */
+.s27-beheer { display:flex; flex-direction:column; gap:18px; margin-bottom:24px; }
+.s27-beheer-card { background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:var(--r-card,24px); padding:22px 22px 20px; }
+.s27-beheer-card .s27-section-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; margin-bottom:14px; }
+.s27-section-title { font-family:var(--font-display); font-size:18px; font-weight:900; color:var(--s27-ink); margin:0 0 4px; letter-spacing:-0.01em; }
+.s27-beheer-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); gap:14px; }
+.s27-beheer-grid .s27-form-field { display:flex; flex-direction:column; gap:5px; }
+.s27-beheer-grid .s27-form-field > span { font-family:var(--font-display); font-size:11px; font-weight:800; letter-spacing:0.04em; text-transform:uppercase; color:var(--s27-ink-3); }
+.s27-beheer-grid input, .s27-beheer-grid select { padding:11px 13px; border:1.5px solid var(--s27-line); border-radius:var(--r-md); font-size:14px; font-family:var(--font-body); background:var(--s27-paper); color:var(--s27-ink); }
+.s27-beheer-grid input:focus, .s27-beheer-grid select:focus { outline:none; border-color:var(--s27-blue); box-shadow:var(--sh-focus,0 0 0 3px rgba(48,131,220,.28)); }
+.s27-beheer-grid input:disabled { background:var(--s27-paper-2); color:var(--s27-ink-3); }
+.s27-beheer-foot { grid-column:1/-1; display:flex; align-items:center; justify-content:flex-end; gap:14px; margin-top:4px; }
+.s27-contacts-list { display:flex; flex-direction:column; gap:10px; margin-top:6px; }
+.s27-contactrow { display:flex; align-items:center; gap:14px; padding:12px 14px; background:var(--s27-paper-2); border:1px solid var(--s27-line); border-radius:var(--r-md); }
+.s27-contactrow-av { width:42px; height:42px; flex:0 0 42px; border-radius:50%; background:var(--s27-blue-soft); color:var(--s27-blue-ink); display:flex; align-items:center; justify-content:center; font-family:var(--font-display); font-weight:800; font-size:14px; }
+.s27-contactrow-info { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.s27-contactrow-info strong { font-family:var(--font-display); font-size:14px; font-weight:800; color:var(--s27-ink); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.s27-contactrow-info span { font-size:12.5px; color:var(--s27-ink-3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.s27-leider-badge { font-family:var(--font-display); font-size:9px; font-weight:800; letter-spacing:0.04em; text-transform:uppercase; color:var(--s27-purple-ink); background:var(--s27-purple-soft); padding:2px 8px; border-radius:var(--r-pill); }
+.s27-contactrow-pref { font-family:var(--font-display); font-size:11px; font-weight:700; color:var(--s27-ink-3); white-space:nowrap; }
+.s27-contactrow-edit { background:none; border:1.5px solid var(--s27-line); border-radius:var(--r-pill); padding:7px 14px; font-family:var(--font-display); font-size:11px; font-weight:800; color:var(--s27-ink-2); cursor:pointer; transition:all .15s; white-space:nowrap; }
+.s27-contactrow-edit:hover { border-color:var(--s27-blue); color:var(--s27-blue-ink); background:var(--s27-blue-soft); }
+.s27-checkrow2 { display:flex; align-items:center; gap:9px; font-size:13.5px; color:var(--s27-ink-2); font-weight:600; margin:14px 0 4px; cursor:pointer; }
+.s27-empty-txt { font-size:13px; color:var(--s27-ink-3); padding:10px 2px; }
+.s27-status-ok { color:var(--s27-green-ink); font-weight:700; }
+.s27-status-err { color:var(--s27-orange-ink); font-weight:700; }
+
 /* Takken-nav: elke tak een eigen knop met mini-merkstempel (niet enkel op de home) */
 .s27-navdrop--werk { min-width:230px; }
 .s27-navstamp { display:inline-flex; width:18px; height:18px; flex:0 0 18px; align-items:center; justify-content:center; }
