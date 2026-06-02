@@ -208,6 +208,34 @@ table.s27-table{width:100%; border-collapse:collapse; font-size:13px; min-width:
 .s27-footrow{display:flex; align-items:center; justify-content:space-between; gap:14px; margin-top:20px; flex-wrap:wrap;}
 .s27-footrow .s27-logo{font-size:16px;}
 .s27-footrow small{font-size:11px; color:var(--s27-ink-4); font-weight:700;}
+/* --- Per-campagne-tabellen + optimalisatie (Arne-structuur) --- */
+.s27-sec-sub{font-size:13.5px; color:var(--s27-ink-3); line-height:1.5; margin:6px 0 0; max-width:680px;}
+.s27-platcamp{background:var(--s27-paper); border:1px solid var(--s27-line); border-radius:var(--r-lg); padding:18px 18px 6px; margin-bottom:16px;}
+.s27-platcamp-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;}
+.s27-platcamp-count{font-family:var(--font-display); font-size:11px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--s27-ink-4);}
+.s27-ctable-wrap{overflow-x:auto;}
+.s27-ctable{width:100%; border-collapse:collapse; font-size:13px;}
+.s27-ctable th{font-family:var(--font-display); font-size:10px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--s27-ink-4); text-align:right; padding:10px 12px; border-bottom:1.5px solid var(--s27-line); white-space:nowrap;}
+.s27-ctable th.l, .s27-ctable td.l{text-align:left;}
+.s27-ctable td{padding:11px 12px; text-align:right; border-bottom:1px solid var(--s27-paper-3); font-family:var(--font-display); font-weight:800; color:var(--s27-ink); white-space:nowrap;}
+.s27-ctable tbody tr:last-child td{border-bottom:0;}
+.s27-cstat{display:inline-flex; align-items:center; gap:5px; font-family:var(--font-display); font-size:10.5px; font-weight:800; padding:3px 9px; border-radius:var(--r-pill);}
+.s27-cstat::before{content:''; width:7px; height:7px; border-radius:50%;}
+.s27-cstat.on{color:var(--s27-green-ink); background:var(--s27-green-soft);} .s27-cstat.on::before{background:var(--s27-green);}
+.s27-cstat.pause{color:var(--s27-yellow-ink); background:var(--s27-yellow-soft);} .s27-cstat.pause::before{background:var(--s27-yellow);}
+.s27-cstat.off{color:var(--s27-ink-4); background:var(--s27-paper-3);} .s27-cstat.off::before{background:var(--s27-ink-4);}
+.s27-opt{background:var(--s27-paper); border:1px solid var(--s27-line); border-left:4px solid var(--accent,var(--s27-blue)); border-radius:var(--r-md); padding:16px 18px; margin-bottom:12px;}
+.s27-opt-head{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:7px;}
+.s27-opt-head strong{font-family:var(--font-display); font-size:15px; font-weight:900; color:var(--s27-ink);}
+.s27-opt-plat{margin-left:auto; font-family:var(--font-display); font-size:11px; font-weight:800; color:var(--s27-ink-4);}
+.s27-prio{font-family:var(--font-display); font-size:10px; font-weight:900; letter-spacing:.04em; text-transform:uppercase; padding:3px 9px; border-radius:var(--r-pill);}
+.s27-prio-hoog{color:#fff; background:var(--s27-orange);}
+.s27-prio-middel{color:var(--s27-blue-ink); background:var(--s27-blue-soft);}
+.s27-prio-laag{color:var(--s27-ink-3); background:var(--s27-paper-3);}
+.s27-opt-why{font-size:13.5px; line-height:1.55; color:var(--s27-ink-2); margin:0;}
+.s27-opt-why b{color:var(--s27-ink); font-weight:900;}
+.s27-opt-lbl{font-family:var(--font-display); font-weight:900; color:var(--s27-ink); font-size:12.5px; text-transform:uppercase; letter-spacing:.03em; margin-right:4px;}
+.s27-opt-clear{background:var(--s27-green-soft); border:1px solid color-mix(in srgb,var(--s27-green) 30%,transparent); border-radius:var(--r-md); padding:16px 18px; font-size:14px; color:var(--s27-ink-2); line-height:1.55;}
 </style>
 </head>
 <body>
@@ -362,6 +390,16 @@ table.s27-table{width:100%; border-collapse:collapse; font-size:13px; min-width:
           </table>
         </div>
       </div>
+    </section>
+
+    <section class="s27-sec" id="secPerCamp">
+      <div class="s27-sec-head"><div><h2>Campagnes per platform</h2><p class="s27-sec-sub">Elke campagne naast elkaar — per kanaal, gesorteerd op besteding. Leadcampagnes tonen ook hun leads en kost per lead.</p></div></div>
+      <div id="perCampBody"></div>
+    </section>
+
+    <section class="s27-sec" id="secOpt">
+      <div class="s27-sec-head"><div><h2>Optimalisatie &amp; advies</h2><p class="s27-sec-sub">Concrete volgende stappen, automatisch afgeleid uit de cijfers van deze periode.</p></div></div>
+      <div id="optBody"></div>
     </section>
 
     <!-- FOOTER -->
@@ -1000,6 +1038,50 @@ renderMetricSel(); renderLegend(); updateCharts();
   const worst=[...AUD].filter(a=>a.lpv>0).sort((a,b)=>b.cost_per_lpv-a.cost_per_lpv)[0];
   document.getElementById('audNote').innerHTML=`<b>Inzicht:</b> "${shortName(best.name)}" levert de meeste landingspagina-weergaven (${int(best.lpv)} aan ${eur2(best.cost_per_lpv)}/weergave). Doelgroep-segmenten op type (kleuters, tieners, lagere school) presteren hier duidelijk kostefficiënter dan de smalle leeftijdssegmenten.`;
   renderAudSel(); drawAud();
+})();
+
+/* ---------- Per campagne, per platform (Arne-structuur: leads/CPL, status, geen rood) ---------- */
+(function(){
+  const wrap=document.getElementById('perCampBody'); if(!wrap) return;
+  const byPlat={}; (DATA.campaigns||[]).forEach(c=>{ (byPlat[c.platform]=byPlat[c.platform]||[]).push(c); });
+  const cpm=c=>c.impressions?c.spend/c.impressions*1000:0;
+  const cpl=c=>c.conversions?c.spend/c.conversions:0;
+  const statusPill=c=>{ const sp=c.spend||0,im=c.impressions||0;
+    if(sp>0&&im>0) return '<span class="s27-cstat on">Actief</span>';
+    if(im>0) return '<span class="s27-cstat pause">Gepauzeerd</span>';
+    return '<span class="s27-cstat off">Beëindigd</span>'; };
+  const html=PLAT_ORDER.filter(p=>byPlat[p]&&byPlat[p].length).map(p=>{
+    const camps=byPlat[p].slice().sort((a,b)=>(b.spend||0)-(a.spend||0));
+    const hasLeads=camps.some(c=>(c.conversions||0)>0);
+    const head='<tr><th class="l">Campagne</th><th>Status</th><th>Spend</th>'+(hasLeads?'<th>Leads</th><th>CPL</th>':'')+'<th>CPM</th><th>CTR</th><th>CPC</th></tr>';
+    const body=camps.map(c=>{ const isLead=(c.conversions||0)>0;
+      return '<tr><td class="l"><div class="s27-camp-name" title="'+String(c.name||'').replace(/"/g,'&quot;')+'">'+(c.name||'Campagne')+'</div></td>'+
+        '<td>'+statusPill(c)+'</td><td>'+eur2(c.spend)+'</td>'+
+        (hasLeads?('<td>'+(isLead?int(c.conversions):'—')+'</td><td>'+(isLead?eur2(cpl(c)):'—')+'</td>'):'')+
+        '<td>'+eur2(cpm(c))+'</td><td>'+pct(c.ctr)+'</td><td>'+eur2(c.cpc)+'</td></tr>'; }).join('');
+    return '<div class="s27-platcamp"><div class="s27-platcamp-head"><span class="s27-pbadge" data-p="'+p+'"><span class="dot" style="background:'+C[p]+'"></span>'+DATA.platforms[p].label+'</span><span class="s27-platcamp-count">'+camps.length+' campagne'+(camps.length===1?'':'s')+'</span></div>'+
+      '<div class="s27-ctable-wrap"><table class="s27-ctable"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div></div>';
+  }).join('');
+  wrap.innerHTML=html||'<p class="s27-method" style="border:0">Geen campagnedata in deze periode.</p>';
+})();
+
+/* ---------- Optimalisatie (data-gedreven, Arne-stijl: prioriteit + "Waarom:") ---------- */
+(function(){
+  const wrap=document.getElementById('optBody'); if(!wrap) return;
+  const tips=[]; const PL={hoog:'Hoog',middel:'Middel',laag:'Laag'};
+  (DATA.campaigns||[]).forEach(c=>{
+    const nm='"'+(c.name||'campagne')+'"';
+    if(c.platform==='google'&&(c.conversions||0)===0&&(c.clicks||0)>=100)
+      tips.push({prio:'hoog',p:c.platform,title:'Conversietracking activeren',why:'<b>'+int(c.clicks)+' klikken</b> op '+nm+' zonder één gemeten conversie. Zonder tracking weten we niet wat deze campagne écht oplevert — zet conversiemeting (formulieren/oproepen) als eerste prioriteit.'});
+    if((c.cpc||0)>1.5&&(c.clicks||0)>50)
+      tips.push({prio:'middel',p:c.platform,title:'Kost per klik verlagen',why:'CPC van <b>'+eur2(c.cpc)+'</b> op '+nm+' ligt hoog. Test scherpere targeting of sterkere advertenties om dezelfde klikken goedkoper binnen te halen.'});
+    if((c.ctr||0)>0&&(c.ctr||0)<0.5&&(c.impressions||0)>5000)
+      tips.push({prio:'laag',p:c.platform,title:'Advertentie-relevantie verhogen',why:'CTR van <b>'+pct(c.ctr)+'</b> op '+nm+' is laag — de boodschap of visual pakt het publiek nog te weinig. Vernieuw de creatives of de hook.'});
+  });
+  const order={hoog:0,middel:1,laag:2}; tips.sort((a,b)=>order[a.prio]-order[b.prio]);
+  wrap.innerHTML = tips.length
+    ? tips.slice(0,8).map(t=>'<div class="s27-opt" style="--accent:'+(C[t.p]||'#3083DC')+'"><div class="s27-opt-head"><span class="s27-prio s27-prio-'+t.prio+'">'+PL[t.prio]+'</span><strong>'+t.title+'</strong><span class="s27-opt-plat">'+(DATA.platforms[t.p]?DATA.platforms[t.p].label:'')+'</span></div><p class="s27-opt-why"><span class="s27-opt-lbl">Waarom:</span> '+t.why+'</p></div>').join('')
+    : '<div class="s27-opt-clear"><strong>✅ Geen dringende optimalisaties.</strong> De campagnes lopen gezond — we blijven fijntunen op rendement en testen nieuwe invalshoeken.</div>';
 })();
 } /* ===== einde render(DATA) ===== */
 

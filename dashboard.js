@@ -1676,7 +1676,7 @@ function updateConversationRow(p, comments){
    ================================================================= */
 const _perfState = { reports: [], activeTaskId: null, listenerBound: false, loadTimer: null, loaded: false };
 // Bump bij elke performance-report.html-wijziging → forceert verse CDN-fetch (omzeilt stale/404-edgecache)
-const PERF_ENGINE_VER = '20260602a';
+const PERF_ENGINE_VER = '20260602b';
 
 // Basis-URL waar de portal-assets staan (raw.githack in productie, lokaal bij _bottest)
 function s27AssetBase(){
