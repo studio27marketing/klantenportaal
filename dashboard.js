@@ -1950,7 +1950,7 @@ function renderBedrijfBeheer(data){
     '</div>';
   const team =
     '<div class="s27-beheer-card">' +
-      '<div class="s27-section-head"><div><h2 class="s27-section-title">Team &amp; contactpersonen</h2><p class="s27-section-sub">Wie werkt er met ons samen? Voeg collega\'s toe — ze worden meteen als contactpersoon gekoppeld. Markeer ondernemingsleiders apart.</p></div><button type="button" class="s27-btn s27-btn-inline" id="s27-contact-add"><svg width="13" height="13"><use href="#s27p-user"/></svg> Contactpersoon</button></div>' +
+      '<div class="s27-section-head"><div><h2 class="s27-section-title">Team &amp; contactpersonen</h2><p class="s27-section-sub">Wie werkt er met ons samen? Voeg collega\'s toe — ze worden meteen als contactpersoon gekoppeld en kunnen alles in dit portaal beheren.</p></div><button type="button" class="s27-btn s27-btn-inline" id="s27-contact-add"><svg width="13" height="13"><use href="#s27p-user"/></svg> Contactpersoon</button></div>' +
       '<div class="s27-contacts-list" id="s27-contacts-list">' +
         (contacts.length ? contacts.map(renderContactRow).join('') : '<p class="s27-empty-txt">Nog geen contactpersonen toegevoegd. Voeg je eerste collega toe →</p>') +
       '</div>' +
@@ -1963,7 +1963,7 @@ function renderContactRow(c){
   return '<div class="s27-contactrow" data-cid="' + esc(c.id||'') + '">' +
     '<div class="s27-contactrow-av">' + esc(contactInitials(c)) + '</div>' +
     '<div class="s27-contactrow-info">' +
-      '<strong>' + esc(naam) + (c.ondernemingsleider ? ' <span class="s27-leider-badge">Ondernemingsleider</span>' : '') + '</strong>' +
+      '<strong>' + esc(naam) + '</strong>' +
       '<span>' + esc(c.rol||'Contactpersoon') + (c.email ? ' · ' + esc(c.email) : '') + (c.gsm ? ' · ' + esc(c.gsm) : '') + '</span>' +
     '</div>' +
     (c.voorkeur ? '<span class="s27-contactrow-pref">🔔 ' + esc(c.voorkeur) + '</span>' : '') +
@@ -1995,7 +1995,6 @@ function openContactModal(existing){
           '<label class="s27-form-field"><span>Rol / functie</span><input type="text" name="rol" value="' + esc(existing.rol||'') + '" placeholder="bv. Marketing"></label>' +
           '<label class="s27-form-field"><span>Notificatie-voorkeur</span><select name="voorkeur">' + opt('WhatsApp')+opt('E-mail')+opt('Beide')+opt('Geen') + '</select></label>' +
         '</div>' +
-        '<label class="s27-checkrow2"><input type="checkbox" name="ondernemingsleider"' + (existing.ondernemingsleider?' checked':'') + '> Deze persoon is een ondernemingsleider</label>' +
         '<p class="s27-form-error" id="s27-contact-error" style="display:none"></p>' +
         '<div class="s27-dm-actions">' +
           '<button type="button" class="s27-btn s27-btn-ghost" id="s27-contact-cancel">Annuleer</button>' +
@@ -2019,8 +2018,7 @@ async function saveContact(form, existing, close){
     id: existing.id || '',
     voornaam: g('voornaam'), achternaam: g('achternaam'),
     email: g('email'), gsm: g('gsm'), rol: g('rol'),
-    voorkeur: form.voorkeur ? form.voorkeur.value : 'WhatsApp',
-    ondernemingsleider: !!(form.ondernemingsleider && form.ondernemingsleider.checked)
+    voorkeur: form.voorkeur ? form.voorkeur.value : 'WhatsApp'
   };
   if(!rec.voornaam || !rec.achternaam){ if(errEl){ errEl.style.display='block'; errEl.textContent='Voornaam en achternaam zijn verplicht.'; } return; }
   if(btn){ btn.disabled = true; btn.textContent = 'Opslaan…'; }
