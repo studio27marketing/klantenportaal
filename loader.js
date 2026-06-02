@@ -1,52 +1,63 @@
 /* ============================================================
-   Studio 27 Klantendashboard — Loader v1.0.0
+   Studio 27 Klantenportaal — Loader v2.0.0 (v4 liquid-glass)
    ============================================================
-   Single entry point voor het dashboard. Webflow-embed bevat
-   ALLEEN dit script + een mount-div. Alles wordt vanaf GitHub
-   (via jsDelivr CDN) opgehaald, zodat updates instant live
-   gaan zodra het GitHub-bestand wijzigt (~30min cache @main).
+   Single entry point. Webflow-embed bevat ALLEEN dit script +
+   een mount-div. Alles wordt vanaf GitHub (raw.githack CDN)
+   opgehaald, zodat updates instant live gaan.
 
    Webflow Embed code (3 regels, never touched):
      <div id="s27-portal-mount"></div>
      <script src="https://cdn.jsdelivr.net/gh/studio27marketing/klantenportaal@main/loader.js"></script>
+
+   v2.0.0: laadt het v4-portaal uit /v4/ (styles+glass+tweaks.css,
+   shell.html → mount, dan api→data→assets-data→panels→portal→tweaks.js
+   in volgorde). Het oude dashboard.* blijft in de repo voor revert.
    ============================================================ */
 (function() {
   'use strict';
 
   var REPO   = 'studio27marketing/klantenportaal';
   var BRANCH = 'main';
-  // raw.githack.com: juiste MIME types voor JS/CSS, instant na purge. Cache-bust via query.
-  var CDN    = 'https://raw.githack.com/' + REPO + '/' + BRANCH;
+  var CDN    = 'https://raw.githack.com/' + REPO + '/' + BRANCH + '/v4';
   var MOUNT_ID = 's27-portal-mount';
 
-  // Cache-bust: granulariteit 60s tijdens MVP (auto-fresh elke minuut) of explicit timestamp met ?nocache=1
+  // Cache-bust: 60s-granulariteit (auto-fresh elke minuut) of expliciet met ?nocache=1
   var CB = (location.search.indexOf('nocache=1') >= 0)
     ? ('?cb=' + Date.now())
     : ('?v=' + Math.floor(Date.now() / 60000));
 
-  function loadCSS(href) {
+  var CSS = ['styles.css', 'glass.css', 'tweaks.css'];
+  var SCRIPTS = ['api.js', 'data.js', 'assets-data.js', 'panels.js', 'portal.js', 'tweaks.js'];
+  var FONTS = 'https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Nunito:wght@400;500;600;700;800&display=swap';
+
+  function loadCSS() {
     if (document.querySelector('link[data-s27-portal-css]')) return;
-    var link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = href + CB;
-    link.setAttribute('data-s27-portal-css', '1');
-    document.head.appendChild(link);
+    var f = document.createElement('link');
+    f.rel = 'stylesheet'; f.href = FONTS; f.setAttribute('data-s27-portal-css', '1');
+    document.head.appendChild(f);
+    CSS.forEach(function(c) {
+      var l = document.createElement('link');
+      l.rel = 'stylesheet'; l.href = CDN + '/' + c + CB; l.setAttribute('data-s27-portal-css', '1');
+      document.head.appendChild(l);
+    });
   }
 
-  function loadScript(src, tries) {
+  // Scripts in VOLGORDE laden (async=false → ordered execution voor dynamisch ingevoegde scripts).
+  // api.js krijgt data-s27-api zodat het auth.js relatief naast zichzelf resolvet.
+  function loadScripts() {
     if (document.querySelector('script[data-s27-portal-js]')) return;
-    tries = tries || 4;
-    var s = document.createElement('script');
-    s.src = src + CB;
-    s.defer = true;
-    s.setAttribute('data-s27-portal-js', '1');
-    s.onerror = function() {
-      // raw.githack cold-cache hik → script opnieuw proberen
-      if (s.parentNode) s.parentNode.removeChild(s);
-      if (tries > 1) { setTimeout(function() { loadScript(src, tries - 1); }, 500); }
-      else { var m = document.getElementById(MOUNT_ID); if (m) showError(m, 'Kon de portaal-code niet laden.'); }
-    };
-    document.body.appendChild(s);
+    SCRIPTS.forEach(function(name) {
+      var s = document.createElement('script');
+      s.src = CDN + '/' + name + CB;
+      s.async = false;
+      s.setAttribute('data-s27-portal-js', '1');
+      if (name === 'api.js') s.setAttribute('data-s27-api', '1');
+      s.onerror = function() {
+        var m = document.getElementById(MOUNT_ID);
+        if (m && !m.querySelector('#login')) showError(m, 'Kon de portaal-code niet laden (' + name + ').');
+      };
+      document.body.appendChild(s);
+    });
   }
 
   function showError(mount, msg) {
@@ -59,7 +70,7 @@
 
   function delay(ms) { return new Promise(function(res) { setTimeout(res, ms); }); }
 
-  // Retry tegen raw.githack cold-cache hikjes (intermitterende 425 → browser "Failed to fetch").
+  // Retry tegen raw.githack cold-cache hikjes (intermitterende 425/429/5xx).
   function fetchRetry(url, opts, tries) {
     return fetch(url, opts).then(function(r) {
       if (r.ok) return r;
@@ -68,7 +79,6 @@
       }
       throw new Error('HTTP ' + r.status);
     }, function(networkErr) {
-      // fetch rejected (netwerk/CORS — bv. 425-errorpagina zonder CORS-header)
       if (tries > 1) return delay(500).then(function() { return fetchRetry(url, opts, tries - 1); });
       throw networkErr;
     });
@@ -80,21 +90,15 @@
       console.error('[Studio 27] Mount element #' + MOUNT_ID + ' niet gevonden op de pagina.');
       return;
     }
-
-    // 1. CSS first (no FOUC)
-    loadCSS(CDN + '/dashboard.css');
-
-    // 2. Fetch HTML markup (met retry tegen CDN cold-cache 425), inject, dan JS laden
-    fetchRetry(CDN + '/dashboard.html' + CB, { cache: 'no-cache' }, 4)
-      .then(function(r) {
-        return r.text();
-      })
+    loadCSS();
+    fetchRetry(CDN + '/shell.html' + CB, { cache: 'no-cache' }, 4)
+      .then(function(r) { return r.text(); })
       .then(function(html) {
         mount.innerHTML = html;
-        loadScript(CDN + '/dashboard.js');
+        loadScripts();
       })
       .catch(function(err) {
-        showError(mount, 'Kon dashboard-markup niet ophalen (' + err.message + ').');
+        showError(mount, 'Kon portaal-markup niet ophalen (' + err.message + ').');
         console.error('[Studio 27] Failed to load portal:', err);
       });
   }
