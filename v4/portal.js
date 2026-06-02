@@ -444,19 +444,64 @@ async function removeContact(id, btn){
   if(state.demoMode){ if(row)row.remove(); return; }
   try { await api(ENDPOINTS.bedrijfBeheer, { action:'delete_contact', contact_id:id, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token }); state.data.team=null; try{ await S27DATA.loadTeam(); }catch(e){} renderPanel('instellingen'); } catch(e){ if(row){ row.style.opacity=''; row.style.pointerEvents=''; } }
 }
+const MEET_HOSTS={ 'Arne':{email:'arne@studio27.be'}, 'Ilke':{email:'ilke@studio27.be'} };
 function pickMtype(el,who,color,type){
   el.parentElement.querySelectorAll('.mtype').forEach(b=>b.classList.remove('sel')); el.classList.add('sel');
   const ag=$id('meetAgenda'); if(ag)ag.classList.remove('np-hidden');
   const w=$id('meetWho'); if(w)w.innerHTML='<span class="mw-av" style="background:var(--s27-'+color+')">'+who[0]+'</span><span class="mw-tx">'+type+'<b>met '+who+'</b></span>';
-  const c=$id('meetConfirm'); if(c){ c.textContent='Bevestig afspraak met '+who; c.dataset.who=who; }
+  loadMeetSlots(who,color,type);
 }
+// Dynamische beschikbaarheid van Arne/Ilke (live Google Calendar free/busy via meeting-availability-gcal)
+async function loadMeetSlots(who,color,type){
+  const box=$id('meetSlots'); if(box)box.innerHTML='<p class="fs" style="color:var(--ink-4);padding:8px 0">Beschikbare momenten ophalen…</p>';
+  const email=(MEET_HOSTS[who]||{}).email||'';
+  let busy=[];
+  if(!state.demoMode){
+    try{ const res=await api(ENDPOINTS.meetingAvailability,{ session_token:state.session.session_token, bedrijf_id:state.session.bedrijf_id });
+      const cals=(res&&res.data&&res.data.calendars)||{}; const cal=cals[email]||{};
+      busy=(cal.busy||[]).map(b=>({start:new Date(b.start).getTime(), end:new Date(b.end).getTime()})).filter(b=>b.end>b.start);
+    }catch(e){}
+  } else {
+    busy=[{start:Date.now()+3*86400000+3*3600000, end:Date.now()+3*86400000+5*3600000},{start:Date.now()+4*86400000+6*3600000, end:Date.now()+4*86400000+8*3600000}];
+  }
+  const durMs=30*60000; const slots=computeFreeFromBusy(busy,durMs);
+  state.meetCtx={who:who,color:color||'blue',type:type,email:email,online:true,sel:null,dur:durMs,byDay:{}};
+  if(box)box.innerHTML=renderMeetPicker(slots);
+}
+function computeFreeFromBusy(busy,durMs){
+  const out=[]; const lead=Date.now()+48*3600000;
+  for(let d=0; d<16 && out.length<48; d++){
+    const day=new Date(lead+d*86400000); const dow=day.getDay(); if(dow===0||dow===6) continue;
+    for(let h=9; h<17; h++){ for(let m=0;m<60;m+=30){
+      const s=new Date(day.getFullYear(),day.getMonth(),day.getDate(),h,m,0,0); const st=s.getTime(); const en=st+durMs;
+      if(st<lead) continue; if(en>new Date(day.getFullYear(),day.getMonth(),day.getDate(),17,0,0,0).getTime()) continue;
+      if(busy.some(b=>st<b.end && en>b.start)) continue;
+      out.push(st);
+    }}
+  }
+  return out;
+}
+function renderMeetPicker(slots){
+  if(!slots.length) return '<p class="fs" style="color:var(--ink-3);padding:6px 0">Geen vrije momenten in de komende twee weken — stuur ons gerust een berichtje, dan zoeken we samen iets.</p>';
+  const byDay={}; slots.forEach(st=>{ const k=new Date(st); const key=k.getFullYear()+'-'+('0'+(k.getMonth()+1)).slice(-2)+'-'+('0'+k.getDate()).slice(-2); (byDay[key]=byDay[key]||[]).push(st); });
+  const days=Object.keys(byDay).sort().slice(0,7); state.meetCtx.byDay=byDay;
+  const DOW=['zo','ma','di','wo','do','vr','za'];
+  let html='<p class="fs" style="margin:0 0 10px;color:var(--ink-3)">Live uit de agenda van <b>'+escapeHtml(state.meetCtx.who)+'</b> · ± 30 min. Kies een moment:</p>';
+  html+='<label class="ms-label">Kies een dag</label><div class="calstrip">'+days.map((k,i)=>{ const d=new Date(k+'T12:00:00'); return '<button class="calday'+(i===0?' sel':'')+'" data-meetday="'+k+'" onclick="selMeetDay(this)"><div class="dow">'+DOW[d.getDay()]+'</div><div class="dnum">'+d.getDate()+'</div></button>'; }).join('')+'</div>';
+  html+='<label class="ms-label">Tijdslot <span style="font-weight:600;color:var(--ink-4)">(9–17u, werkdagen)</span></label><div class="slotgrid" id="meetSlotGrid">'+meetSlotButtons(byDay[days[0]])+'</div>';
+  html+='<button class="btn btn-branch br-'+state.meetCtx.color+' btn-block" id="meetConfirm" style="margin-top:16px" onclick="confirmMeeting(this)" disabled>Bevestig afspraak met '+escapeHtml(state.meetCtx.who)+'</button>';
+  return html;
+}
+function meetSlotButtons(arr){ return (arr||[]).map(st=>{ const d=new Date(st); const t=('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); return '<button class="slot" data-meetslot="'+st+'" onclick="selMeetSlot(this)">'+t+'</button>'; }).join(''); }
+function selMeetDay(el){ const k=el.dataset.meetday; const strip=el.parentElement; if(strip)strip.querySelectorAll('.calday').forEach(d=>d.classList.remove('sel')); el.classList.add('sel'); const grid=$id('meetSlotGrid'); if(grid)grid.innerHTML=meetSlotButtons(((state.meetCtx||{}).byDay||{})[k]); if(state.meetCtx)state.meetCtx.sel=null; const c=$id('meetConfirm'); if(c)c.disabled=true; }
+function selMeetSlot(el){ const box=$id('meetSlots'); if(box)box.querySelectorAll('.slot').forEach(s=>s.classList.remove('sel')); el.classList.add('sel'); if(state.meetCtx)state.meetCtx.sel=Number(el.dataset.meetslot); const c=$id('meetConfirm'); if(c)c.disabled=false; }
 async function confirmMeeting(btn){
-  const day=document.querySelector('.calday.sel'), slot=document.querySelector('.slot.sel');
-  const dag=day?day.textContent.replace(/\s+/g,' ').trim():'(geen dag)'; const tijd=slot?slot.textContent.trim():'(geen tijd)';
-  const who=(btn&&btn.dataset.who)||'Studio 27';
+  const ctx=state.meetCtx||{}; const who=ctx.who||'Studio 27';
+  if(!ctx.sel){ return; }
+  const dt=new Date(ctx.sel); const wanneer=dt.toLocaleString('nl-BE',{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'});
   if(state.demoMode){ if(btn) btn.innerHTML='Aanvraag verstuurd ✓'; return; }
   if(btn){ btn.disabled=true; btn.textContent='Versturen…'; }
-  try { await api(ENDPOINTS.directMessage, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), onderwerp:'Meeting-aanvraag via portaal', bericht:'Graag een meeting met '+who+'. Voorkeur: '+dag+' om '+tijd+'.' });
+  try { await api(ENDPOINTS.directMessage, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), onderwerp:(ctx.type||'Meeting')+'-aanvraag via portaal', bericht:'Graag een '+(ctx.type||'meeting')+' met '+who+' op '+wanneer+' — gekozen uit de live beschikbaarheid in het portaal.' });
     if(btn){ btn.disabled=false; btn.innerHTML='Aanvraag verstuurd ✓ — we bevestigen snel'; }
   } catch(e){ if(btn){ btn.disabled=false; btn.textContent='Opnieuw proberen'; } }
 }

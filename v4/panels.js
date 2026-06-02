@@ -348,8 +348,6 @@ function panelPerformance(){
 }
 
 function panelMeetings(){
-  const days=[['ma','12'],['di','13'],['wo','14'],['do','15'],['vr','16'],['ma','19'],['di','20']];
-  const slots=['09:00','09:30','10:00','11:00','13:30','14:00','14:30','16:00'];
   const mt=(window.S27DATA && S27DATA.meetings());
   const MAAND=['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
   let meetHtml;
@@ -390,15 +388,7 @@ function panelMeetings(){
       </div>
       <div id="meetAgenda" class="np-hidden">
         <div class="meet-who" id="meetWho"></div>
-        <label class="ms-label">Kies een dag</label>
-        <div class="calstrip">
-          ${days.map((d,i)=>`<button class="calday ${i===2?'sel':''}" onclick="selectDay(this)"><div class="dow">${d[0]}</div><div class="dnum">${d[1]}</div></button>`).join('')}
-        </div>
-        <label class="ms-label">Tijdslot <span style="font-weight:600;color:var(--ink-4)">(9–17u, werkdagen)</span></label>
-        <div class="slotgrid">
-          ${slots.map((s,i)=>`<button class="slot ${i===2?'sel':''}" ${i===4?'disabled':''} onclick="selectSlot(this)">${s}</button>`).join('')}
-        </div>
-        <button class="btn btn-branch br-blue btn-block" id="meetConfirm" style="margin-top:16px" onclick="confirmMeeting(this)">Bevestig afspraak</button>
+        <div id="meetSlots"></div>
       </div>
     </aside>
   </div>`;
