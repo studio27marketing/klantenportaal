@@ -309,13 +309,24 @@ function panelAdvertenties(){
   </div>`;
 }
 
+const ADS_ENGINE_URL='https://raw.githack.com/studio27marketing/klantenportaal/main/ads-report-engine.html';
 function panelPerformance(){
+  const head = hero('purple','Performance', `Jouw <span class="accent">resultaten${squig()}</span> in cijfers`);
+  const url = _live() ? (state.perfUrl||null) : null;
+  if(url){
+    const src = ADS_ENGINE_URL+'?embed=1&data='+encodeURIComponent(url);
+    return head
+      +`<p class="sdesc" style="margin:-4px 0 16px;max-width:64ch">Je live advertentieresultaten over de afgelopen ~30 dagen — automatisch bijgewerkt vanuit je campagnes (Meta, Google, TikTok &amp; Snapchat).</p>
+      <div class="card" style="padding:0;overflow:hidden;border-radius:var(--r-lg,20px)">
+        <iframe id="perfFrame" src="${esc(src)}" title="Jouw advertentierapport" loading="lazy" style="width:100%;border:0;display:block;min-height:760px;background:transparent"></iframe>
+      </div>
+      <p class="fs" style="color:var(--ink-4);margin-top:12px">Zie je nog geen cijfers? Dan lopen je campagnes nog niet of verzamelen ze nog data — zodra er resultaten zijn, verschijnen ze hier vanzelf.</p>`;
+  }
+  return head + perfMockHTML();
+}
+function perfMockHTML(){
   const bars=[40,55,48,70,62,85,78,92];
-  return hero('purple','Performance',
-    `Jouw <span class="accent">resultaten${squig()}</span> in cijfers`,
-    'Wat leveren onze inspanningen op? Helder, eerlijk en altijd in context.',
-    scribble('stralen-paars.png','top:-12px;right:8px;width:124px;transform:rotate(6deg)'))
-  +`<div class="kpi-grid">
+  return `${_live()?'<div class="fb-banner" style="margin-bottom:18px"><div class="fb-ic">'+ic('info',20)+'</div><div class="fb-tx"><b>Voorbeeldweergave</b><p>Zodra je advertentiecampagnes data verzamelen, zie je hier je échte cijfers in dit overzicht.</p></div></div>':''}<div class="kpi-grid">
     <div class="kpi br-blue"><div class="kbar"></div><div class="klab">Totaal bereik</div><div class="knum">412K</div><span class="chip chip-up">${ic('up',12)} +14% t.o.v. vorige</span></div>
     <div class="kpi br-green"><div class="kbar"></div><div class="klab">Websiteklikken</div><div class="knum">9.840</div><span class="chip chip-up">${ic('up',12)} +9%</span></div>
     <div class="kpi br-orange"><div class="kbar"></div><div class="klab">Advertentiekost</div><div class="knum">€ 2.840</div><span class="chip chip-flat">${ic('flat',12)} stabiel</span></div>

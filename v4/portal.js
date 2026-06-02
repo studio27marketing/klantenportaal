@@ -203,6 +203,7 @@ async function ensureTabData(name){
   if(name==='meetings' && !state.data.meetings) await S27DATA.loadMeetings();
   if(name==='huisstijl' && !state.data.huisstijl) await S27DATA.loadHuisstijl();
   if((name==='facturatie'||name==='instellingen') && !state.data.bedrijf){ await S27DATA.loadBedrijf(); await S27DATA.loadTeam(); }
+  if(name==='performance'){ try{ state.perfUrl=(await S27DATA.performanceUrl())||null; }catch(e){ state.perfUrl=null; } }
 }
 function renderPanel(name){
   const page=$id('page');
@@ -610,6 +611,8 @@ function renderTour(){
 function tourNav(dir){ tourIdx+=dir; if(tourIdx>=TOUR.length){endTour(true);return;} if(tourIdx<0)tourIdx=0; renderTour(); }
 function endTour(remember){ $id('tourScrim').classList.remove('show'); $id('spotlight').classList.remove('show'); $id('tourDialog').classList.remove('show'); if(window.innerWidth<=980)closeSidebar(); if(remember)localStorage.setItem('s27_tour_completed',new Date().toISOString()); }
 window.addEventListener('resize',()=>{ if($id('tourDialog')&&$id('tourDialog').classList.contains('show'))renderTour(); });
+// Advertentierapport-iframe (Arne's engine) auto-resize op postMessage
+window.addEventListener('message',function(e){ try{ if(e&&e.data&&e.data.type==='s27-ads-report-height'){ var f=$id('perfFrame'); if(f&&e.data.height){ f.style.minHeight='0'; f.style.height=(parseInt(e.data.height,10)+24)+'px'; } } }catch(_){} });
 
 function initSbGlass(){
   const nav=document.querySelector('.sb-nav'); if(!nav)return;
