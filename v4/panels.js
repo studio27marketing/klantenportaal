@@ -448,17 +448,20 @@ function panelNieuwProject(){
 
 function panelHuisstijl(){
   const sw=[['Blauw','#3083DC'],['Roze','#F697CE'],['Paars','#9441DB'],['Groen','#12AC4E'],['Oranje','#F66131']];
+  const files=(window.S27DATA && S27DATA.huisstijl()); const team=(window.S27DATA && S27DATA.team());
+  const fileCards = files ? (files.length ? files.map(f=>`<div class="filecard" style="min-width:240px"><div class="ft">${ic('img',20)}</div><div style="flex:1;min-width:0"><div class="fn" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</div><div class="fs">${f.size?esc(String(f.size)):''}</div></div><a class="icon-btn" style="width:34px;height:34px" href="${esc(f.url||'#')}" target="_blank" rel="noopener">${ic('download',16)}</a></div>`).join('') : '<div class="fs" style="color:var(--ink-4)">Nog geen bestanden geüpload.</div>')
+    : `<div class="filecard" style="min-width:240px"><div class="ft">${ic('img',20)}</div><div style="flex:1"><div class="fn">logo-tc-fullcolor.svg</div><div class="fs">Vector · 24 KB</div></div><button class="icon-btn" style="width:34px;height:34px">${ic('download',16)}</button></div><div class="filecard" style="min-width:240px"><div class="ft">${ic('img',20)}</div><div style="flex:1"><div class="fn">logo-tc-wit.png</div><div class="fs">PNG · 180 KB</div></div><button class="icon-btn" style="width:34px;height:34px">${ic('download',16)}</button></div>`;
+  const teamCards = (team && team.contactpersonen) ? (team.contactpersonen.length ? team.contactpersonen.map(c=>{const nm=((c.voornaam||'')+' '+(c.achternaam||'')).trim()||'Contact';return `<div class="filecard"><div class="ft" style="border-radius:50%;background:var(--s27-blue);color:#fff;font-family:var(--font-display);font-weight:800">${esc(nm.split(' ').map(x=>x[0]).join('').slice(0,2))}</div><div style="flex:1"><div class="fn">${esc(nm)}</div><div class="fs">${esc(c.rol||c.email||'')}</div></div><button class="btn btn-ghost btn-sm">Wijzig</button></div>`;}).join('') : '<div class="fs" style="color:var(--ink-4)">Nog geen contactpersonen.</div>')
+    : [['Sarah Janssens','Marketing · hoofdcontact','blue'],['Tom De Cock','Zaakvoerder','green']].map(t=>`<div class="filecard"><div class="ft" style="border-radius:50%;background:var(--s27-${t[2]});color:#fff;font-family:var(--font-display);font-weight:800">${t[0].split(' ').map(x=>x[0]).join('')}</div><div style="flex:1"><div class="fn">${t[0]}</div><div class="fs">${t[1]}</div></div><button class="btn btn-ghost btn-sm">Wijzig</button></div>`).join('');
   return hero('pink','Mijn bedrijf · Huisstijl',
     `Jouw <span class="accent">merk${squig()}</span> &amp; bestanden`,
     'Alles wat we nodig hebben om consistent voor je te werken, netjes bij elkaar.',
     scribble('krabbel-roze.png','top:-4px;right:8px;width:120px;transform:rotate(-6deg)'))
   +`<div class="setsec">
     <h3>Logo</h3><p class="sdesc">De huidige logobestanden van TEST CLIENT BV.</p>
-    <div style="display:flex;gap:14px;flex-wrap:wrap">
-      <div class="filecard" style="min-width:240px"><div class="ft">${ic('img',20)}</div><div style="flex:1"><div class="fn">logo-tc-fullcolor.svg</div><div class="fs">Vector · 24 KB</div></div><button class="icon-btn" style="width:34px;height:34px">${ic('download',16)}</button></div>
-      <div class="filecard" style="min-width:240px"><div class="ft">${ic('img',20)}</div><div style="flex:1"><div class="fn">logo-tc-wit.png</div><div class="fs">PNG · 180 KB</div></div><button class="icon-btn" style="width:34px;height:34px">${ic('download',16)}</button></div>
-    </div>
-    <div class="dropzone" style="margin-top:14px">${ic('upload',30)}<b>Sleep je bestand hierheen</b><div style="font-size:12.5px;margin-top:4px">of klik om te bladeren · SVG, PNG, AI, PDF</div></div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap">${fileCards}</div>
+    <div class="dropzone" style="margin-top:14px" onclick="document.getElementById('hsFile').click()">${ic('upload',30)}<b>Sleep je bestand hierheen</b><div style="font-size:12.5px;margin-top:4px">of klik om te bladeren · SVG, PNG, AI, PDF</div></div>
+    <input type="file" id="hsFile" style="display:none" onchange="uploadHuisstijl(this)">
   </div>
   <div class="setsec">
     <h3>Kleuren</h3><p class="sdesc">Je merkkleuren. Pas een hex aan als er iets wijzigt.</p>
@@ -472,10 +475,9 @@ function panelHuisstijl(){
     </div>
   </div>
   <div class="setsec">
-    <h3>Team &amp; contactpersonen</h3><p class="sdesc">Wie mogen wij contacteren bij TEST CLIENT BV?</p>
+    <h3>Team &amp; contactpersonen</h3><p class="sdesc">Wie mogen wij contacteren bij ${esc(_bedrijf())}?</p>
     <div style="display:flex;flex-direction:column;gap:10px">
-      ${[['Sarah Janssens','Marketing · hoofdcontact','blue'],['Tom De Cock','Zaakvoerder','green']].map(t=>`
-      <div class="filecard"><div class="ft" style="border-radius:50%;background:var(--s27-${t[2]});color:#fff;font-family:var(--font-display);font-weight:800">${t[0].split(' ').map(x=>x[0]).join('')}</div><div style="flex:1"><div class="fn">${t[0]}</div><div class="fs">${t[1]}</div></div><button class="btn btn-ghost btn-sm">Wijzig</button></div>`).join('')}
+      ${teamCards}
       <button class="btn btn-outline btn-sm" style="align-self:flex-start">${ic('upload',15)} Persoon toevoegen</button>
     </div>
   </div>`;

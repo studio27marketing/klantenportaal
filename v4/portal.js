@@ -384,6 +384,15 @@ async function submitNieuwProject(btn){
     if(btn){ btn.disabled=false; btn.innerHTML='Aanvraag verstuurd ✓'; }
   } catch(e){ if(btn){ btn.disabled=false; btn.textContent='Opnieuw proberen'; } }
 }
+async function uploadHuisstijl(input){
+  const f=input.files&&input.files[0]; if(!f) return;
+  if(state.demoMode){ return; }
+  const rd=new FileReader();
+  rd.onload=async function(){ const b64=String(rd.result).split(',')[1]||'';
+    try{ await api(ENDPOINTS.huisstijlUpload, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, filename:f.name, file_data:b64 }); state.data.huisstijl=null; goTab('huisstijl'); }catch(e){}
+  };
+  rd.readAsDataURL(f);
+}
 function toggleBot(){ const p=$id('botPanel'),f=$id('botFab'); const open=p.classList.toggle('show'); f.style.display=open?'none':'flex'; }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($id('tourScrim')&&$id('tourScrim').classList.contains('show'))endTour(false); else if(state.viewMode==='project')goTab('projecten'); } });
 
