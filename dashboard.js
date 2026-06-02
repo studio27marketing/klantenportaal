@@ -45,7 +45,7 @@ const ENDPOINTS = {
   // v3 Feature 1 — Performance Dashboard. mode=list → rapporten per bedrijf; mode=data&task_id=… → volledige rapport-JSON (via custom s27fetch-app, gzip-proof). Scenario 5964345.
   performance:       'https://hook.eu1.make.com/chmsfitxr12m8cpjp4x3fb8ru1nqr7gg',
   // v3 Bedrijf-beheer — action=get_team | update_bedrijf | save_contact (scenario 6005xxx). Hook ingevuld na scenario-creatie.
-  bedrijfBeheer:     'https://hook.eu1.make.com/BEDRIJFBEHEER_HOOK'
+  bedrijfBeheer:     'https://hook.eu1.make.com/bf5xp3rkbh7dik9rp6jvue4w9p2moctn'
 };
 
 /* ===== AUTH v2 (Firebase + Cloudflare-gateway) — alleen actief achter ?auth=v2
@@ -2093,6 +2093,20 @@ async function renderBedrijfTab(){
   } else {
     const res = await api(ENDPOINTS.bedrijfContent, { bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token });
     data = (res.ok && res.data && !res.data.error) ? res.data : getMockBedrijfContent();
+  }
+
+  // Live: verrijk met actuele bedrijfsgegevens (aantal medewerkers / btw / website) rechtstreeks uit ClickUp via get_team
+  if(!state.demoMode && ENDPOINTS.bedrijfBeheer && ENDPOINTS.bedrijfBeheer.indexOf('BEDRIJFBEHEER_HOOK') === -1){
+    try{
+      const gt = await api(ENDPOINTS.bedrijfBeheer, { action:'get_team', bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token });
+      if(gt && gt.ok && gt.data){
+        if(gt.data.aantal_medewerkers !== undefined && gt.data.aantal_medewerkers !== '') data.aantal_medewerkers = gt.data.aantal_medewerkers;
+        if(gt.data.btw) data.btw = gt.data.btw;
+        if(gt.data.website) data.website = gt.data.website;
+        if(gt.data.contact_count !== undefined) data.contact_count = gt.data.contact_count;
+        if(Array.isArray(gt.data.contactpersonen) && gt.data.contactpersonen.length) data.contactpersonen = gt.data.contactpersonen;
+      }
+    }catch(e){ /* gegevens vallen terug op bedrijfContent */ }
   }
   state.bedrijfContent = data;
 
