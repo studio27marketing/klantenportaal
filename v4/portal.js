@@ -221,7 +221,23 @@ async function goTab(name){
   if(!state.demoMode && needsLoad(name)) renderLoading(name);
   await ensureTabData(name);
   renderPanel(name);
+  updateNavBadges();
   closeSidebar(); syncUrl();
+}
+// Zijbalk-badges dynamisch maken (shell.html heeft hardcoded mock-getallen).
+// In demo laten we de mock staan; in live tonen we echte tellingen / verbergen we wat we niet betrouwbaar weten.
+function updateNavBadges(){
+  try{
+    if(state.demoMode) return;
+    var setB=function(tab,n){ var b=document.querySelector('.sb-item[data-tab="'+tab+'"] .sb-badge'); if(!b)return; if(n>0){ b.textContent=n; b.style.display=''; } else { b.style.display='none'; } };
+    var projs=(window.S27DATA&&S27DATA.projects())||null;
+    if(projs){ setB('projecten', projs.filter(function(p){return p.status!=='done';}).length); }
+    var mt=(window.S27DATA&&S27DATA.meetings());
+    if(mt){ setB('meetings', (mt.list||[]).filter(function(m){return m.dt&&m.dt.getTime()>=Date.now()-86400000;}).length); }
+    // berichten + topbar-bel: geen betrouwbare ongelezen-telling -> mock-badge verbergen
+    var bb=document.querySelector('.sb-item[data-tab="berichten"] .sb-badge'); if(bb) bb.style.display='none';
+    document.querySelectorAll('.topbar .badge').forEach(function(b){ b.style.display='none'; });
+  }catch(e){}
 }
 function needsLoad(name){
   if(state.data.dashboard && ['start','projecten','diensten','berichten','socials','advertenties'].indexOf(name)>=0) return false;
