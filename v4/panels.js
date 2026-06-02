@@ -555,6 +555,10 @@ function chatHTML(taskId){
 /* =========================================================
    PROJECT DETAIL MODAL
    ========================================================= */
+function scheduleBlock(p){
+  if(!p || p.status!=='todo') return '';
+  return `<div class="setsec" style="margin-top:18px"><h3 style="display:flex;align-items:center;gap:8px">${ic('st_plan',18)} Plan je moment</h3><p class="sdesc">Kies een tijdslot dat past in de agenda van je Studio 27-contact — wij sturen meteen een agenda-uitnodiging met Meet-link of locatie.</p><div id="s27-plan-${esc(p.id)}"><button class="btn btn-branch br-${p.br} btn-sm" onclick="loadPlanSlots('${esc(p.id)}')">Toon beschikbare momenten →</button></div></div>`;
+}
 function buildModal(id, from){
   const p=_projects().find(x=>x.id===id)||{id:id,name:'Project',disc:'',status:'prog',br:'blue'};
   const sl=STATUS_LABEL[p.status]||STATUS_LABEL.prog; const lab=sl[0], cls=sl[1];
@@ -599,6 +603,7 @@ function buildModal(id, from){
     <div class="approved-list">
       ${approved.map(t=>`<div class="approved-row"><span class="check-circ">${ic('check',13)}</span><span>${t}</span></div>`).join('')}
     </div>
+    ${scheduleBlock(p)}
   </div>`;
 
   const deliverables=`<div class="mpane" data-mpane="deliverables">

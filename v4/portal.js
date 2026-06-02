@@ -393,6 +393,64 @@ async function uploadHuisstijl(input){
   };
   rd.readAsDataURL(f);
 }
+/* ===== Agenda-slotpicker — echte beschikbaarheid + inplannen (scope-guarded) ===== */
+const PLAN_DUR_MS=90*60000, PLAN_DUR_MAX=6*3600000;
+function planDurMs(e){ e=Number(e)||0; return (e>0&&e<=PLAN_DUR_MAX)?e:PLAN_DUR_MS; }
+function fmtDur(ms){ const m=Math.round((Number(ms)||0)/60000),h=Math.floor(m/60),r=m%60; return h?(h+'u'+(r?String(r).padStart(2,'0'):'')):(r+'min'); }
+function computeFreeSlots(blokken,durMs){
+  const busy=[]; (blokken||[]).forEach(b=>{ const s=Number(b.start)||0,d=Number(b.due)||0,e=Number(b.est)||0; let bs=0,be=0;
+    if(b.afwezig){bs=s;be=d>s?d:(s+(e||86400000));} else if(e>0){bs=s;be=s+e;} else if(d>s){bs=s;be=d;} if(bs&&be>bs)busy.push([bs,be]); });
+  const slots=[]; const now=Date.now(); const day0=new Date(); day0.setHours(0,0,0,0);
+  for(let day=1;day<=21&&slots.length<60;day++){ const dt=new Date(day0.getTime()+day*86400000); const dw=dt.getDay(); if(dw===0||dw===6)continue;
+    for(let m=480;m+durMs/60000<=1020;m+=30){ const ss=new Date(dt); ss.setHours(0,m,0,0); const t0=ss.getTime(),t1=t0+durMs;
+      if(t0<now+2*3600000)continue; if(busy.some(iv=>t0<iv[1]&&t1>iv[0]))continue; slots.push(t0); } }
+  return slots;
+}
+async function loadPlanSlots(taskId){
+  const box=$id('s27-plan-'+taskId); if(!box) return;
+  box.innerHTML='<div class="empty" style="padding:20px"><div class="brand-spinner" style="margin:0 auto 10px"></div>Beschikbare momenten ophalen…</div>';
+  let data=null;
+  if(!state.demoMode){ const van=Date.now(),tot=Date.now()+22*86400000;
+    const res=await api(ENDPOINTS.beschikbaarheid,{task_id:taskId,van:String(van),tot:String(tot),bedrijf_id:state.session.bedrijf_id,session_token:state.session.session_token});
+    data=(res&&res.ok&&res.data&&res.data.ok)?res.data:null;
+  } else { data={assignee_naam:'Guus Van den Heuvel',assignee_emails:'guus@studio27.be',list_id:'demo',taak_est:0,blokken:[{start:Date.now()+2*86400000,due:0,est:7200000,afwezig:false}]}; }
+  if(!data){ box.innerHTML='<p class="fs" style="color:var(--ink-3)">Beschikbaarheid kon niet geladen worden. <a href="#" onclick="goTab(\'meetings\');return false">Plan via Meetings →</a></p>'; return; }
+  const durMs=planDurMs(data.taak_est); const slots=computeFreeSlots(data.blokken,durMs);
+  const aEmails=String(data.assignee_emails||data.assignee_email||'').split(',').map(s=>s.trim()).filter(Boolean);
+  state.planCtx=state.planCtx||{};
+  state.planCtx[taskId]={assignee:data.assignee_naam||'je Studio 27-contact',assignee_emails:aEmails,list_id:data.list_id||'',online:true,sel:null,dur:durMs};
+  box.innerHTML=renderPlanPicker(taskId,slots);
+}
+function renderPlanPicker(taskId,slots){
+  const ctx=(state.planCtx||{})[taskId]||{};
+  if(!slots.length) return '<p class="fs" style="color:var(--ink-3)">Geen vrije momenten in de komende 3 weken. <a href="#" onclick="goTab(\'meetings\');return false">Plan via Meetings →</a></p>';
+  const byDay={}; slots.forEach(ms=>{ const k=new Date(ms).toISOString().slice(0,10); (byDay[k]=byDay[k]||[]).push(ms); });
+  const dl=ms=>new Date(ms).toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'long'});
+  const uur=ms=>new Date(ms).toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'});
+  const days=Object.keys(byDay).slice(0,8).map(k=>{ const list=byDay[k];
+    return '<div style="margin-bottom:12px"><div class="run-disc" style="margin-bottom:6px;text-transform:capitalize;color:var(--ink-3)">'+escapeHtml(dl(list[0]))+'</div><div class="slotgrid">'+
+      list.slice(0,12).map(ms=>'<button class="slot" data-plan-slot="'+ms+'" data-plan-task="'+escapeHtml(taskId)+'" onclick="pickPlanSlot(this)">'+escapeHtml(uur(ms))+'</button>').join('')+'</div></div>';
+  }).join('');
+  return '<p class="fs" style="margin:0 0 12px;color:var(--ink-3)">Met <b>'+escapeHtml(ctx.assignee||'')+'</b> · duur ± '+escapeHtml(fmtDur(ctx.dur||PLAN_DUR_MS))+'. Kies een moment:</p>'+
+    '<div style="display:flex;gap:16px;margin-bottom:14px"><label class="remember"><input type="radio" name="pm-'+escapeHtml(taskId)+'" value="online" checked onchange="planMode(\''+escapeHtml(taskId)+'\',true)"> Online (Google Meet)</label><label class="remember"><input type="radio" name="pm-'+escapeHtml(taskId)+'" value="fysiek" onchange="planMode(\''+escapeHtml(taskId)+'\',false)"> Fysiek bij Studio 27</label></div>'+
+    days+'<button class="btn btn-branch br-blue btn-block" id="plan-book-'+escapeHtml(taskId)+'" onclick="bookPlanSlot(\''+escapeHtml(taskId)+'\')" disabled style="margin-top:8px">Bevestig afspraak</button>';
+}
+function pickPlanSlot(el){ const tid=el.dataset.planTask; if(state.planCtx&&state.planCtx[tid])state.planCtx[tid].sel=Number(el.dataset.planSlot); const box=$id('s27-plan-'+tid); if(box)box.querySelectorAll('.slot').forEach(s=>s.classList.remove('sel')); el.classList.add('sel'); const b=$id('plan-book-'+tid); if(b)b.disabled=false; }
+function planMode(tid,online){ if(state.planCtx&&state.planCtx[tid])state.planCtx[tid].online=online; }
+async function bookPlanSlot(taskId){
+  const ctx=(state.planCtx||{})[taskId]; if(!ctx||!ctx.sel)return;
+  const btn=$id('plan-book-'+taskId); if(btn){btn.disabled=true;btn.textContent='Inplannen…';}
+  const start=ctx.sel,eind=ctx.sel+(ctx.dur||PLAN_DUR_MS); const iso=ms=>new Date(ms).toISOString();
+  const p=(S27DATA.projects()||[]).find(x=>x.id===taskId)||{name:'Afspraak'};
+  const cc=(state.data.bedrijf&&state.data.bedrijf.contact)||{};
+  const clientNaam=((cc.voornaam||'')+' '+(cc.achternaam||'')).trim()||S27DATA.bedrijfsnaam();
+  const attendees=[{email:cc.email||state.session.email||'',displayName:clientNaam}].concat((ctx.assignee_emails||[]).map(e=>({email:e}))).filter(a=>a.email);
+  const box=$id('s27-plan-'+taskId);
+  const done=()=>{ if(box)box.innerHTML='<div class="empty" style="padding:24px"><div class="em-ic">'+ic('st_approved',56)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Afspraak ingepland!</b><p style="margin:6px 0 0">'+escapeHtml(new Date(start).toLocaleString('nl-BE',{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'}))+' met '+escapeHtml(ctx.assignee||'Studio 27')+'.</p><p class="fs" style="color:var(--ink-4)">Je krijgt zo een agenda-uitnodiging'+(ctx.online?' met een Google Meet-link':' (fysiek bij Studio 27)')+'.</p></div>'; };
+  if(state.demoMode){ done(); return; }
+  try { await api(ENDPOINTS.inplannen,{task_id:taskId,list_id:ctx.list_id,start:iso(start),eind:iso(eind),start_ms:String(start),online:!!ctx.online,titel:'Afspraak — '+(p.name||'Studio 27'),beschrijving:'Ingepland via je Studio 27-portaal met '+(ctx.assignee||'het team')+'.',locatie:ctx.online?'':'Studio 27, Sint-Lenaartsesteenweg, Rijkevorsel',attendees:attendees,assignee_naam:ctx.assignee,client_email:cc.email||'',client_naam:clientNaam,bedrijf_id:state.session.bedrijf_id,session_token:state.session.session_token}); done(); }
+  catch(e){ if(btn){btn.disabled=false;btn.textContent='Bevestig afspraak';} }
+}
 function toggleBot(){ const p=$id('botPanel'),f=$id('botFab'); const open=p.classList.toggle('show'); f.style.display=open?'none':'flex'; }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($id('tourScrim')&&$id('tourScrim').classList.contains('show'))endTour(false); else if(state.viewMode==='project')goTab('projecten'); } });
 
