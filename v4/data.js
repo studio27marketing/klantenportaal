@@ -53,9 +53,14 @@
     return 'Sarah';
   };
   DATA.bedrijfsnaam = function(){
+    // echte naam uit de provisioning-lijst (portalCompanies + activeBedrijf) — de v1-feed
+    // geeft een placeholder "Klant" terug, die negeren we.
+    var comps = state.portalCompanies||[], active = state.activeBedrijf;
+    for(var i=0;i<comps.length;i++){ if(comps[i].id===active && comps[i].naam) return comps[i].naam; }
+    if(comps.length===1 && comps[0].naam) return comps[0].naam;
     var d = state.data.dashboard;
-    if(d && d.klant && d.klant.bedrijfsnaam) return d.klant.bedrijfsnaam;
-    return (S().bedrijfsnaam) || 'TEST CLIENT BV';
+    if(d && d.klant && d.klant.bedrijfsnaam && d.klant.bedrijfsnaam!=='Klant') return d.klant.bedrijfsnaam;
+    return (S().bedrijfsnaam) || 'je bedrijf';
   };
 
   /* ---- deliverables_raw → [{label,url,type}] (regex-URLs, zoals dashboard.js) ---- */
@@ -209,7 +214,14 @@
 
   DATA.meetings = function(){
     var m = state.data.meetings; if(!m) return null;
-    var list = (m.meetings||[]).map(function(x){
+    // ENKEL meetings van deze klant: de scenario geeft alle S27-meetings terug,
+    // we filteren op de bedrijfsnaam in de titel (zoals dashboard.js).
+    var naam = String(DATA.bedrijfsnaam()||'').toUpperCase().trim();
+    var raw = (m.meetings||[]).filter(function(x){
+      if(!naam || naam==='JE BEDRIJF') return true;
+      return String(x.titel||'').toUpperCase().indexOf(naam) >= 0;
+    });
+    var list = raw.map(function(x){
       var ms = parseInt(x.datum,10); var dt = ms>1e9 ? new Date(ms) : new Date(x.datum);
       return { id:x.meeting_id, titel:x.titel, dt:dt, status:x.status, link:x.link,
                type:/kickoff/i.test(x.titel||'')?'Kickoff':'Meeting' };

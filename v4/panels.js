@@ -115,26 +115,26 @@ function svcStamp(s){
   return s.stamp ? `<img class="stamp" src="${ASSET[s.stamp]||('assets/'+s.stamp)}" alt="">` : `<span class="stamp-ic">${ic(s.icon,28)}</span>`;
 }
 const SVC_DISC = { strategie:'strategie', video:'video_fotografie', website:'webdesign', ads:'ads', social:'social', branding:'branding', seo:'seo', opleiding:'opleiding' };
-function buildSvcCards(){
-  return SERVICES.map(s=>{
-    const isActive = _live() ? S27DATA.discActive(SVC_DISC[s.key]) : s.active;
-    if(isActive){
-      const discMap={strategie:'Strategie',video:'Video- en fotografie',website:'Website en SEO'};
-      const act = discMap[s.key] ? `goDienst('${discMap[s.key]}')` : `goTab('${s.key==='ads'?'advertenties':'socials'}')`;
-      return `<div class="svc-card br-${s.br}">
-        <div class="svc-head"><div class="svc-ic">${svcStamp(s)}</div><h3>${s.name}</h3></div>
-        <div class="svc-status">${s.status}</div>
-        <div class="svc-foot"><button class="btn btn-branch btn-sm ${s.br==='yellow'?'on-yellow':''}" onclick="${act}">Bekijk ${ic('arrow',15)}</button></div>
-      </div>`;
-    }
-    return `<div class="svc-card locked br-${s.br}">
-      <div class="lock">${ic('lock',15)}</div>
-      <div class="svc-head"><div class="svc-ic">${svcStamp(s)}</div><h3>${s.name}</h3></div>
-      <p class="tease">${s.tease}</p>
-      <div class="svc-foot"><button class="btn btn-ghost btn-sm" onclick="goTab('nieuwproject')">Meer weten? ${ic('arrow',15)}</button></div>
-    </div>`;
-  }).join('');
+function svcActive(s){ return _live() ? S27DATA.discActive(SVC_DISC[s.key]) : s.active; }
+function svcAction(s){
+  const discMap={strategie:'Strategie',video:'Video- en fotografie',website:'Webdesign',seo:'SEO & GEO',branding:'Branding'};
+  return discMap[s.key] ? `goDienst('${discMap[s.key]}')` : `goTab('${s.key==='ads'?'advertenties':'socials'}')`;
 }
+function svcCard(s){
+  if(svcActive(s)){
+    return `<div class="svc-card br-${s.br}">
+      <div class="svc-head"><div class="svc-ic">${svcStamp(s)}</div><h3>${s.name}</h3></div>
+      <div class="svc-status">${s.status||'Actief voor jou'}</div>
+      <div class="svc-foot"><button class="btn btn-branch btn-sm ${s.br==='yellow'?'on-yellow':''}" onclick="${svcAction(s)}">Bekijk ${ic('arrow',15)}</button></div>
+    </div>`;
+  }
+  return `<div class="svc-card svc-inactief br-${s.br}">
+    <div class="svc-head"><div class="svc-ic">${svcStamp(s)}</div><h3>${s.name}</h3></div>
+    <p class="tease">${s.tease||'Interesse in deze dienst? Vraag vrijblijvend een offerte — we kijken graag wat we voor je kunnen doen.'}</p>
+    <div class="svc-foot"><button class="btn btn-branch btn-sm ${s.br==='yellow'?'on-yellow':''}" onclick="goDienstOfferte('${s.key}')">Vraag offerte aan ${ic('arrow',15)}</button></div>
+  </div>`;
+}
+function buildSvcCards(){ return SERVICES.map(svcCard).join(''); }
 const _COCKPIT_MOCK = [
   {br:'purple',cat:'Video- en fotografie',title:'Review nodig',ctx:'De eerste montage van je bedrijfsfilm <b>"Onder één dak"</b> staat klaar. Geef je akkoord of je feedback.',cta:'Bekijk montage',action:"openProject('p1')",tag:'vandaag',urgent:true,icon:'st_feedback'},
   {br:'blue',cat:'Strategie',title:'Feedback gevraagd',ctx:'We willen je input op de <b>positionering</b> voor 2026 voor we verder bouwen.',cta:'Geef feedback',action:"openProject('p4')",tag:'deze week',urgent:false,icon:'st_feedback'},
@@ -179,12 +179,12 @@ function panelStart(){
   </div>`;
 }
 
+function goDienstOfferte(key){ goTab('nieuwproject'); }
 function panelDiensten(){
-  return hero('blue','<span class="dot"></span>Onze diensten',
-    `Onze diensten <span class="accent">voor jou${squig()}</span>`,
-    'Alles wat we onder één dak doen. Wat actief is, opent meteen; de rest tonen we graag eens.',
-    scribble('sparkles-blue.svg','top:-6px;right:6px;width:112px;transform:rotate(8deg)'))
-  +`<div class="svc-grid">${buildSvcCards()}</div>`;
+  const act=SERVICES.filter(svcActive), inact=SERVICES.filter(s=>!svcActive(s));
+  return hero('blue','Onze diensten', `Onze diensten <span class="accent">voor jou${squig()}</span>`)
+  + (act.length?`<div class="section-head" style="margin-top:8px"><h2>Actief</h2><span class="count">${act.length} ${act.length===1?'dienst':'diensten'}</span></div><div class="svc-grid">${act.map(svcCard).join('')}</div>`:'')
+  + (inact.length?`<div class="section-head" style="margin-top:36px"><h2>Niet actief</h2><span class="count">${inact.length}</span></div><p style="color:var(--ink-3);font-size:13.5px;margin:-6px 0 18px;max-width:60ch">Diensten die we nu (nog) niet voor je doen. Interesse? Vraag vrijblijvend een offerte aan — geen verplichtingen.</p><div class="svc-grid">${inact.map(svcCard).join('')}</div>`:'');
 }
 
 function panelBerichten(){
@@ -559,6 +559,7 @@ function scheduleBlock(p){
   if(!p || p.status!=='todo') return '';
   return `<div class="setsec" style="margin-top:18px"><h3 style="display:flex;align-items:center;gap:8px">${ic('st_plan',18)} Plan je moment</h3><p class="sdesc">Kies een tijdslot dat past in de agenda van je Studio 27-contact — wij sturen meteen een agenda-uitnodiging met Meet-link of locatie.</p><div id="s27-plan-${esc(p.id)}"><button class="btn btn-branch br-${p.br} btn-sm" onclick="loadPlanSlots('${esc(p.id)}')">Toon beschikbare momenten →</button></div></div>`;
 }
+const REVIEW_CHANNEL_OPTS = [['portaal','via het portaal'],['whatsapp','via WhatsApp'],['email','via e-mail'],['telefoon','telefonisch'],['meeting','in een meeting']].map(function(c){return '<option value="'+c[0]+'">'+c[1]+'</option>';}).join('');
 function buildModal(id, from){
   const p=_projects().find(x=>x.id===id)||{id:id,name:'Project',disc:'',status:'prog',br:'blue'};
   const sl=STATUS_LABEL[p.status]||STATUS_LABEL.prog; const lab=sl[0], cls=sl[1];
@@ -578,7 +579,7 @@ function buildModal(id, from){
   let approved = isVideo ? ['Concept &amp; scenario','Locatie &amp; opnameplanning','Audio &amp; muziekselectie'] : ['Marktonderzoek &amp; analyse','Positioneringsworkshop'];
   if(det){
     if(det.deliverables && det.deliverables.length){
-      SUBTASKS=[{t:'Deliverables',st:p.status==='done'?'done':'wait',files:det.deliverables.map(d=>[esc(d.label),esc((d.url||'').replace(/^https?:\/\//,'').slice(0,44)),d.type==='video'?'video':d.type==='img'?'img':'doc'])}];
+      SUBTASKS=[{t:'Bestanden',st:p.status==='done'?'done':'wait',files:det.deliverables.map(d=>[esc(d.label),esc((d.url||'').replace(/^https?:\/\//,'').slice(0,44)),d.type==='video'?'video':d.type==='img'?'img':'doc',esc(d.url||'')])}];
     } else if(det.subtasks && det.subtasks.length){
       SUBTASKS=det.subtasks.map(s=>({t:esc(s.naam),st:s.status==='done'?'done':'wait',files:[]}));
     }
@@ -586,7 +587,7 @@ function buildModal(id, from){
   }
 
   const overview=`<div class="mpane active" data-mpane="overzicht">
-    ${needsFeedback?`<div class="fb-banner"><div class="fb-ic">${ic('spark',20)}</div><div class="fb-tx"><b>We wachten op jouw akkoord</b><p>Bekijk de deliverable en laat ons weten of we groen licht hebben.</p></div><div class="fb-act"><button class="btn btn-branch btn-sm br-green" onclick="approveAll(this)">Goedkeuren</button><button class="btn btn-outline btn-sm" onclick="switchModalTab('feedback')">Feedback geven</button></div></div>`:''}
+    ${needsFeedback?`<div class="fb-banner"><div class="fb-ic">${ic('spark',20)}</div><div class="fb-tx"><b>We wachten op jouw akkoord</b><p>Bekijk de deliverable en laat ons weten of we groen licht hebben.</p></div><div class="fb-act"><button class="btn btn-branch btn-sm br-green" onclick="approveAll(this)">Goedkeuren</button><button class="btn btn-outline btn-sm" onclick="switchModalTab('deliverables')">Bekijk bestanden</button></div></div>`:''}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
       <div class="card" style="padding:16px"><div class="klab" style="font-family:var(--font-display);font-weight:700;font-size:11px;color:var(--ink-4);text-transform:uppercase;letter-spacing:.05em">Discipline</div><b style="font-family:var(--font-display);font-size:15px">${p.disc}</b></div>
       <div class="card" style="padding:16px"><div class="klab" style="font-family:var(--font-display);font-weight:700;font-size:11px;color:var(--ink-4);text-transform:uppercase;letter-spacing:.05em">Status</div><div style="margin-top:6px">${spill(p.status)}</div></div>
@@ -607,29 +608,30 @@ function buildModal(id, from){
   </div>`;
 
   const deliverables=`<div class="mpane" data-mpane="deliverables">
-    <p class="deliv-intro">Klik een onderdeel open om de bestanden te zien die op jouw review wachten.</p>
+    <p class="deliv-intro">Hier staan al je bestanden. Keur per stuk goed of geef feedback — we noteren er ook bij via welke weg je het doorgaf, zodat niets verloren gaat.</p>
     ${SUBTASKS.map((s,i)=>`
       <div class="accordion subtask">
         <button class="acc-head subtask-head ${i===0?'open':''}" onclick="toggleAcc(this)">
           <span class="subtask-ic ${s.st==='done'?'is-done':'is-wait'}">${ic(s.st==='done'?'st_approved':'st_feedback',16)}</span>
           <span class="subtask-t">${s.t}</span>
-          <span class="subtask-meta">${s.st==='done'?'Goedgekeurd':s.files.length+' te reviewen'}</span>
+          <span class="subtask-meta">${s.st==='done'?'Goedgekeurd':s.files.length+' bestand'+(s.files.length===1?'':'en')}</span>
           <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
         </button>
         <div class="acc-body ${i===0?'open':''}"><div class="subtask-files">
-          ${s.files.map(f=>`<div class="deliv-file">
+          ${s.files.map(f=>`<div class="deliv-file" data-label="${f[0]}">
             <span class="df-ic">${ic(f[2]==='video'?'video':f[2]==='img'?'img':'doc',18)}</span>
             <div class="df-tx"><b>${f[0]}</b><span>${f[1]}</span></div>
-            <div class="df-act">${s.st==='done'?spill('done'):`<button class="btn btn-outline btn-sm">${ic('download',14)}</button><button class="btn btn-outline btn-sm">Feedback</button><button class="btn btn-branch btn-sm br-green" onclick="approveItem(this)">Goedkeuren</button>`}</div>
+            <div class="df-act">${s.st==='done'?spill('done'):`${f[3]?`<a class="btn btn-outline btn-sm" href="${f[3]}" target="_blank" rel="noopener">${ic('download',14)}</a>`:''}<button class="btn btn-outline btn-sm" onclick="fileFeedback(this)">Feedback</button><button class="btn btn-branch btn-sm br-green" onclick="fileApprove(this)">Goedkeuren</button>`}</div>
           </div>`).join('')}
         </div></div>
       </div>`).join('')}
   </div>`;
 
   const feedback=`<div class="mpane" data-mpane="feedback">
-    <p style="color:var(--ink-3);font-size:14px;margin-top:0">Laat hieronder weten wat je denkt. Opmerkingen passen we volledig gratis aan.</p>
-    <div class="field"><label>Jouw feedback</label><textarea rows="4" style="font-family:var(--font-body);font-size:14px;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r-sm);resize:vertical;outline:none" placeholder="bv. de intro mag iets korter…"></textarea></div>
-    <div style="display:flex;gap:10px;margin-top:16px"><button class="btn btn-branch br-green" onclick="approveAll(this)">${ic('check',16)} Goedkeuren</button><button class="btn btn-primary">Feedback versturen ${ic('arrow',16)}</button></div>
+    <p style="color:var(--ink-3);font-size:14px;margin-top:0">Een algemene opmerking over dit project? Laat het hier weten. Opmerkingen passen we volledig gratis aan. Wil je per bestand reageren? Dat kan onder <b>Bestanden</b>.</p>
+    <div class="field"><label>Jouw feedback</label><textarea id="genFbTx" rows="4" style="font-family:var(--font-body);font-size:14px;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r-sm);resize:vertical;outline:none" placeholder="bv. de intro mag iets korter…"></textarea></div>
+    <div class="field" style="margin-top:12px"><label>Via welke weg geef je dit door?</label><select id="genFbChan" style="font-family:var(--font-body);font-size:14px;padding:11px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:#fff;outline:none">${REVIEW_CHANNEL_OPTS}</select></div>
+    <div style="display:flex;gap:10px;margin-top:16px"><button class="btn btn-branch br-green" onclick="approveAll(this)">${ic('check',16)} Project goedkeuren</button><button class="btn btn-primary" onclick="submitGeneralFeedback(this)">Feedback versturen ${ic('arrow',16)}</button></div>
   </div>`;
 
   const d=DISC[p.disc]||{icon:'doc'};
@@ -646,7 +648,7 @@ function buildModal(id, from){
       <div class="detail-main">
         <div class="modal-tabs detail-tabs">
           <button class="mtab active" onclick="switchModalTab('overzicht')">Overzicht</button>
-          <button class="mtab" onclick="switchModalTab('deliverables')">Deliverables</button>
+          <button class="mtab" onclick="switchModalTab('deliverables')">Bestanden</button>
           <button class="mtab" onclick="switchModalTab('feedback')">Feedback</button>
           <button class="mtab mtab-chat" onclick="switchModalTab('chat')">Chat</button>
         </div>

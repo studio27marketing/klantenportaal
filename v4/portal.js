@@ -338,11 +338,57 @@ function selectDay(el){ el.parentElement.querySelectorAll('.calday').forEach(d=>
 function selectSlot(el){ if(el.disabled)return; el.parentElement.querySelectorAll('.slot').forEach(s=>s.classList.remove('sel')); el.classList.add('sel'); }
 function selectQopt(el){ el.parentElement.querySelectorAll('.qopt').forEach(q=>q.classList.remove('sel')); el.classList.add('sel'); }
 function selectOpt(el){ el.parentElement.querySelectorAll('.optcard').forEach(o=>o.classList.remove('sel')); el.classList.add('sel'); }
-function approveItem(btn){ btn.outerHTML='<span class="pill pill-done"><span class="pdot"></span>Goedgekeurd</span>'; }
+/* ---- Per-bestand review (goedkeuren / feedback + via welke weg) ---- */
+const REVIEW_CHANNELS=[['portaal','via het portaal'],['whatsapp','via WhatsApp'],['email','via e-mail'],['telefoon','telefonisch'],['meeting','in een meeting']];
+function _chanSelect(){ return '<select class="rv-chan" style="font-family:var(--font-body);font-size:13px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;outline:none">'+REVIEW_CHANNELS.map(function(c){return '<option value="'+c[0]+'">'+c[1]+'</option>';}).join('')+'</select>'; }
+function fileApprove(btn){ _fileReviewUI(btn,'approve'); }
+function fileFeedback(btn){ _fileReviewUI(btn,'feedback'); }
+function _fileReviewUI(btn,mode){
+  const row=btn.closest('.deliv-file'); if(!row||row.querySelector('.rv-panel'))return;
+  const act=row.querySelector('.df-act'); if(act)act.style.display='none';
+  const panel=document.createElement('div'); panel.className='rv-panel';
+  panel.setAttribute('style','margin-top:10px;padding:12px;background:var(--paper-2,#FAF7F2);border:1px solid var(--line);border-radius:10px;display:flex;flex-direction:column;gap:9px;width:100%');
+  const rowStyle='display:flex;align-items:center;gap:8px;flex-wrap:wrap';
+  const lblStyle='font-family:var(--font-display);font-weight:700;font-size:12px;color:var(--ink-3)';
+  if(mode==='feedback'){
+    panel.innerHTML='<textarea class="rv-tx" rows="3" placeholder="Wat mag er anders? Opmerkingen passen we volledig gratis aan." style="font-family:var(--font-body);font-size:13.5px;padding:10px;border:1px solid var(--line);border-radius:8px;resize:vertical;outline:none;width:100%;box-sizing:border-box"></textarea>'+
+      '<div style="'+rowStyle+'"><label style="'+lblStyle+'">Doorgegeven</label>'+_chanSelect()+
+      '<button class="btn btn-primary btn-sm" onclick="submitFileReview(this,\'feedback\')">Versturen</button>'+
+      '<button class="btn btn-ghost btn-sm" onclick="cancelFileReview(this)">Annuleer</button></div>';
+  } else {
+    panel.innerHTML='<div style="'+rowStyle+'"><label style="'+lblStyle+'">Goedkeuren</label>'+_chanSelect()+
+      '<button class="btn btn-branch btn-sm br-green" onclick="submitFileReview(this,\'goedgekeurd\')">Bevestigen</button>'+
+      '<button class="btn btn-ghost btn-sm" onclick="cancelFileReview(this)">Annuleer</button></div>';
+  }
+  row.appendChild(panel);
+  const tx=panel.querySelector('.rv-tx'); if(tx)tx.focus();
+}
+function cancelFileReview(btn){ const row=btn.closest('.deliv-file'); if(!row)return; const p=row.querySelector('.rv-panel'); if(p)p.remove(); const act=row.querySelector('.df-act'); if(act)act.style.display=''; }
+async function submitFileReview(btn,choice){
+  const row=btn.closest('.deliv-file'); const panel=btn.closest('.rv-panel'); if(!row||!panel)return;
+  const label=row.getAttribute('data-label')||'';
+  const sel=panel.querySelector('.rv-chan'); const kanaal=sel?sel.value:'portaal';
+  const txEl=panel.querySelector('.rv-tx'); const tx=txEl?txEl.value:'';
+  const chan=REVIEW_CHANNELS.find(function(c){return c[0]===kanaal;}); const chanLabel=chan?chan[1]:'';
+  const act=row.querySelector('.df-act'); panel.remove();
+  if(act){ act.style.display=''; act.innerHTML='<span class="pill pill-'+(choice==='goedgekeurd'?'done':'wait')+'"><span class="pdot"></span>'+(choice==='goedgekeurd'?'Goedgekeurd':'Feedback verstuurd')+'</span><span class="rv-via" style="font-size:12px;color:var(--ink-4);margin-left:8px">'+escapeHtml(chanLabel)+'</span>'; }
+  if(state.demoMode || !state.activeProject) return;
+  try { await api(ENDPOINTS.feedbackV2, { task_id:state.activeProject, bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[{label:label,choice:choice,opmerking:tx,kanaal:kanaal,kanaal_label:chanLabel}], algemene_opmerking:'' }); } catch(e){}
+}
 function approveAll(btn){ const banner=document.querySelector('.fb-banner'); if(banner){ banner.style.animation='none'; banner.innerHTML='<div class="fb-ic" style="background:var(--s27-green)">'+ic('check',20)+'</div><div class="fb-tx"><b>Bedankt — goedgekeurd!</b><p>We zetten meteen de volgende stap.</p></div>'; banner.style.background='var(--s27-green-soft)'; } submitFeedbackReal('goedgekeurd'); }
 async function submitFeedbackReal(choice){
   if(state.demoMode || !state.activeProject) return;
-  try { await api(ENDPOINTS.feedbackV2, { task_id:state.activeProject, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[{label:'Project',choice:choice}], algemene_opmerking:'' }); } catch(e){}
+  try { await api(ENDPOINTS.feedbackV2, { task_id:state.activeProject, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[{label:'Project',choice:choice,kanaal:'portaal'}], algemene_opmerking:'' }); } catch(e){}
+}
+async function submitGeneralFeedback(btn){
+  const tx=document.getElementById('genFbTx'), sel=document.getElementById('genFbChan');
+  const msg=tx?tx.value.trim():''; const kanaal=sel?sel.value:'portaal';
+  if(!msg){ if(tx){ tx.style.borderColor='var(--s27-orange)'; tx.focus(); } return; }
+  const chan=(REVIEW_CHANNELS.find(function(c){return c[0]===kanaal;})||[])[1]||'';
+  const wrap=btn.closest('.mpane');
+  if(wrap) wrap.innerHTML='<div class="empty" style="padding:32px"><div class="em-ic">'+ic('st_approved',56)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Bedankt voor je feedback!</b><p style="margin:6px 0 0">We gaan er meteen mee aan de slag.</p></div>';
+  if(state.demoMode || !state.activeProject) return;
+  try { await api(ENDPOINTS.feedbackV2, { task_id:state.activeProject, bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[], algemene_opmerking:msg, kanaal:kanaal, kanaal_label:chan }); } catch(e){}
 }
 // bedrijfsgegevens opslaan (update_bedrijf)
 async function saveBedrijfGegevens(btn){
