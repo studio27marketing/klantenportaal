@@ -148,6 +148,34 @@ const DISC_COLOR = {
 };
 function discColor(id){ return DISC_COLOR[id] || '#3083DC'; }
 
+// De ECHTE merk-stempels uit het design system (/assets/, kleur zit in de SVG zelf).
+// SEO = "Website en SEO" → dezelfde groene web-stempel (zo staat het in de bijbel).
+const STAMP_FILE = {
+  strategie:'icon-strategie.svg', branding:'icon-branding-heart.svg',
+  video_fotografie:'icon-video-fotografie.svg', webdesign:'icon-webdesign.svg',
+  seo:'icon-webdesign.svg', ads:'icon-adverteren.svg', social:'icon-socialmedia.svg',
+  opleiding:'sparkles-blue.svg'
+};
+function stampSrc(disc){ const f = STAMP_FILE[disc]; return f ? (s27AssetBase() + '/assets/' + f) : ''; }
+function discStampImg(disc, size){
+  const src = stampSrc(disc); size = size || 52;
+  return src ? '<img class="s27-stamp" src="' + esc(src) + '" alt="" width="' + size + '" height="' + size + '" loading="lazy">' : '';
+}
+// Is een tak vergrendeld voor deze klant? (voor nav-zichtbaarheid)
+function isDiscLocked(disc){
+  const h = DISCIPLINE_HUB.find(x => x.disc === disc);
+  if(!h || !state.dashboard) return false;
+  return disciplineState(state.dashboard, h) === 'locked';
+}
+// Vul de discipline-nav-items met hun echte mini-merkstempel.
+function injectNavStamps(){
+  document.querySelectorAll('.s27-navstamp[data-disc]').forEach(el => {
+    if(el.getAttribute('data-filled')) return;
+    const src = stampSrc(el.getAttribute('data-disc'));
+    if(src){ el.innerHTML = '<img src="' + esc(src) + '" alt="" width="18" height="18" loading="lazy">'; el.setAttribute('data-filled', '1'); }
+  });
+}
+
 /* De 8 klant-zichtbare takken voor de "Onze diensten voor jou"-hub.
    moduleKey = sleutel in de dashboard-feed `modules` + ClickUp-label.
    targetTab = waar een actieve tak naartoe deeplinkt.
@@ -764,7 +792,7 @@ function renderDienstenGrid(d){
       const doorlopend = (h.disc === 'social' || h.disc === 'ads' || h.disc === 'seo');
       const meta = doorlopend ? (n ? n + ' actief' : 'Loopt continu') : (n ? n + ' lopend' : 'Bekijk');
       return '<button type="button" class="s27-hub-card s27-dienst" data-hub-card="' + esc(h.targetTab) + '" style="--accent:' + col + '">' +
-        '<span class="s27-hub-card-ic"><svg width="20" height="20" viewBox="0 0 24 24"><use href="#' + h.icon + '"/></svg></span>' +
+        '<span class="s27-dienst-stamp">' + discStampImg(h.disc, 54) + '</span>' +
         '<span class="s27-hub-card-title">' + esc(h.label) + '</span>' +
         '<span class="s27-hub-card-meta">' + esc(meta) + '</span>' +
         '<span class="s27-hub-card-desc">' + esc(h.teaser) + '</span>' +
@@ -772,7 +800,7 @@ function renderDienstenGrid(d){
     }
     // GELOCKED → subtiele teaser (FOMO by design, niet irritant)
     return '<button type="button" class="s27-hub-card s27-dienst is-locked" data-dienst-locked="' + esc(h.label) + '" style="--accent:' + col + '">' +
-      '<span class="s27-hub-card-ic"><svg width="20" height="20" viewBox="0 0 24 24"><use href="#' + h.icon + '"/></svg></span>' +
+      '<span class="s27-dienst-stamp">' + discStampImg(h.disc, 54) + '</span>' +
       '<span class="s27-dienst-lockbadge"><svg width="10" height="10" viewBox="0 0 24 24"><use href="#s27p-lock"/></svg> Nog niet actief</span>' +
       '<span class="s27-hub-card-title">' + esc(h.label) + '</span>' +
       '<span class="s27-hub-card-desc">' + esc(h.teaser) + '</span>' +
@@ -1475,6 +1503,12 @@ function applyModuleVisibility(){
     const show = moduleEnabled(key);
     document.querySelectorAll('.s27-tab[data-tab="' + key + '"]').forEach(b => { b.style.display = show ? '' : 'none'; });
   });
+  // 1b) Vergrendelde deliverable-takken (strategie/branding/video/webdesign) uit de nav halen
+  ['strategie','branding','video_fotografie','webdesign'].forEach(disc => {
+    const locked = isDiscLocked(disc);
+    document.querySelectorAll('.s27-tab-disc[data-disc="' + disc + '"]').forEach(b => { b.style.display = locked ? 'none' : ''; });
+  });
+  injectNavStamps();   // echte mini-stempels in de takken-nav
   // 2) Een navigatiegroep verbergen als al z'n tabs weg zijn (bv. lege "Mijn werk")
   document.querySelectorAll('.s27-navgroup').forEach(g => {
     const anyVisible = Array.prototype.some.call(g.querySelectorAll('.s27-tab'), b => b.style.display !== 'none');

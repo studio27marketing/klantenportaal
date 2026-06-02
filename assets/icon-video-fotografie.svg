@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+
+<svg width="100%" height="100%" viewBox="0 0 2256 2256" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+    <g transform="matrix(1,0,0,1,-21973,-14532)">
+        <g id="Artboard8" transform="matrix(1,0,0,1,-0.483123,-0.650082)">
+            <rect x="21973.5" y="14532.6" width="2255.33" height="2255.33" style="fill:none;"></rect>
+            <clipPath id="_clip1">
+                <rect x="21973.5" y="14532.6" width="2255.33" height="2255.33"></rect>
+            </clipPath>
+            <g clip-path="url(#_clip1)">
+                <g transform="matrix(12.5024,0,0,12.5024,23101.1,14532.7)">
+                    <path d="M0,180.392C49.814,180.392 90.196,140.01 90.196,90.196C90.196,40.382 49.814,0 0,0C-49.814,0 -90.196,40.382 -90.196,90.196C-90.196,140.01 -49.814,180.392 0,180.392" style="fill:rgb(148,65,219);fill-rule:nonzero;"></path>
+                </g>
+                <g transform="matrix(0,12.5024,12.5024,0,23101.2,15096.5)">
+                    <path d="M45.099,-45.099C70.006,-45.099 90.197,-24.908 90.197,-0C90.197,24.906 70.006,45.099 45.099,45.099C20.192,45.099 0,24.906 0,-0C0,-24.908 20.192,-45.099 45.099,-45.099" style="fill:rgb(35,15,35);fill-rule:nonzero;"></path>
+                </g>
+            </g>
+        </g>
+    </g>
+</svg>

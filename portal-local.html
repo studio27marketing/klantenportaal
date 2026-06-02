@@ -23,14 +23,15 @@
   var BASE = './';
   var link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = BASE + 'dashboard.css';
+  var _cb = '?v=' + Date.now();   // lokale test: altijd verse css/js (geen browsercache)
+  link.href = BASE + 'dashboard.css' + _cb;
   document.head.appendChild(link);
-  fetch(BASE + 'dashboard.html')
+  fetch(BASE + 'dashboard.html' + _cb)
     .then(function (r) { return r.text(); })
     .then(function (html) {
       document.getElementById('s27-portal-mount').innerHTML = html;
       var s = document.createElement('script');
-      s.src = BASE + 'dashboard.js';
+      s.src = BASE + 'dashboard.js' + _cb;
       s.setAttribute('data-s27-portal-js', '1');
       document.body.appendChild(s);
     })

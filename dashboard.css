@@ -1120,6 +1120,42 @@ body { margin:0; background:var(--s27-paper-2); }
 /* Subtiele inline tekstlink (bv. cache wissen onopvallend in de hint) */
 .s27-textlink { background:none; border:none; padding:0; font:inherit; color:var(--s27-blue-ink); font-weight:700; cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
 .s27-textlink:hover { color:var(--s27-blue); }
+
+/* ============================================================
+   V3 BRAND-UPGRADE — échte merk-stempels, scribbles, rondere
+   kaarten, lowercase display, bounce — 1:1 met studio27.be
+   ============================================================ */
+:root { --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1); --r-card: 28px; }
+
+/* De echte kleurstempels (kleur zit in de SVG) — geen tint-chip, zoals op de site */
+.s27-dienst-stamp { display:flex; align-items:flex-start; min-height:54px; margin-bottom:10px; }
+.s27-stamp { width:54px; height:54px; display:block; object-fit:contain; }
+.s27-dienst.is-locked .s27-stamp { opacity:0.42; filter:grayscale(0.4); transition:opacity .2s var(--ease-out), filter .2s var(--ease-out); }
+.s27-dienst.is-locked:hover .s27-stamp { opacity:1; filter:none; }
+
+/* Rondere kaarten (28px = website) + lowercase taklabels (brand display = kleine letters) */
+.s27-hub-card { border-radius:var(--r-card); }
+.s27-hub-card:hover { transition:transform .2s var(--ease-bounce), box-shadow .2s var(--ease-out), border-color .2s var(--ease-out); }
+.s27-dienst { padding:24px 22px; }
+.s27-dienst .s27-hub-card-title { text-transform:lowercase; font-size:18px; letter-spacing:-0.01em; }
+.s27-diensten-grid { gap:18px; }
+.s27-section-head h2 { text-transform:lowercase; }
+
+/* Hand-drawn scribble-onderlijning onder de accent-woorden in de heroes (merksignatuur) */
+.s27-hero h1 .accent, #s27-hero-title .accent { color:var(--s27-blue); position:relative; }
+.s27-hero h1 .accent::after, #s27-hero-title .accent::after { content:''; position:absolute; left:-4px; right:-6px; bottom:-7px; height:11px;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 18' fill='none'><path d='M5 10 C 50 2, 100 16, 145 7 S 215 11, 235 5' stroke='%233083DC' stroke-width='6' stroke-linecap='round'/></svg>");
+  background-repeat:no-repeat; background-size:100% 100%; opacity:0.55; }
+
+/* Knoppen met merk-bounce op hover */
+.s27-btn:hover:not(:disabled) { transition:transform .22s var(--ease-bounce), background .2s var(--ease-out), box-shadow .2s var(--ease-out); }
+
+/* Takken-nav: elke tak een eigen knop met mini-merkstempel (niet enkel op de home) */
+.s27-navdrop--werk { min-width:230px; }
+.s27-navstamp { display:inline-flex; width:18px; height:18px; flex:0 0 18px; align-items:center; justify-content:center; }
+.s27-navstamp img { width:18px; height:18px; object-fit:contain; display:block; }
+.s27-tab-disc { text-transform:lowercase; letter-spacing:0; }
+.s27-navdrop-sep { height:1px; background:var(--s27-line); margin:7px 12px; }
 .s27-tour-spot { position:relative; z-index:99999; background:var(--s27-paper); border-radius:var(--r-sm); animation:s27tourspot 1.6s var(--ease-out) infinite; }
 @keyframes s27tourspot {
   0%,100% { box-shadow:0 0 0 3px rgba(48,131,220,0.28), 0 6px 18px rgba(35,15,35,0.16); }
