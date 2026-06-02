@@ -54,6 +54,8 @@ const MAKE_ENDPOINTS = {
   projectFacturatieSave: 'https://hook.eu1.make.com/cmqf97ej6aewxokt9g23tbff6gxg7frm',
   performance:           'https://hook.eu1.make.com/chmsfitxr12m8cpjp4x3fb8ru1nqr7gg',
   bedrijfBeheer:         'https://hook.eu1.make.com/bf5xp3rkbh7dik9rp6jvue4w9p2moctn',
+  beschikbaarheid:       'https://hook.eu1.make.com/jn1ael12s6b4xp6fsdqd49x9p27v8cht',
+  inplannen:             'https://hook.eu1.make.com/4r3y6ba68spfgcgng7v0lvso11il6p6u',
 };
 
 // Strengere limiet voor schrijf-/upload-acties; ruimer voor leesacties.
@@ -61,7 +63,7 @@ const SENSITIVE = new Set([
   'uploadProject', 'uploadAlg', 'bedrijfUpload', 'huisstijlUpload', 'huisstijlDelete',
   'chatAttachment', 'chatPost', 'directMessage', 'feedbackV2', 'newProjectIntake',
   'facturatieSave', 'projectFacturatieSave', 'bedrijfVoorkeuren', 'bedrijfContact',
-  'bedrijfBeheer',
+  'bedrijfBeheer', 'inplannen',
 ]);
 const LIMIT_SENSITIVE = 15; // per minuut, per gebruiker
 const LIMIT_DEFAULT   = 80;
