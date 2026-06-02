@@ -89,12 +89,24 @@ const STATUS_LABEL = {todo:['Nog in te plannen','pill-todo'],prog:['In productie
 const DISC = {
   'Video- en fotografie':{icon:'video',br:'purple',stamp:'icon-video-fotografie.svg'},
   'Website en SEO':{icon:'website',br:'green',stamp:'icon-webdesign.svg'},
+  'Webdesign':{icon:'website',br:'green',stamp:'icon-webdesign.svg'},
+  'SEO & GEO':{icon:'seo',br:'green',stamp:'icon-webdesign.svg'},
   'Strategie':{icon:'strategie',br:'blue',stamp:'icon-strategie.svg'},
   'Online adverteren':{icon:'ads',br:'orange',stamp:'icon-adverteren.svg'},
   'Social media':{icon:'social',br:'yellow',stamp:'icon-socialmedia.svg'},
+  'Branding':{icon:'branding',br:'pink',stamp:'icon-branding-heart.svg'},
+  'Opleidingen':{icon:'opleiding',br:'indigo'},
+  'Automations':{icon:'spark',br:'indigo'},
 };
+const DISC_ORDER = ['Strategie','Branding','Video- en fotografie','Webdesign','Website en SEO','SEO & GEO','Social media','Online adverteren','Opleidingen','Automations'];
 const discMark = (disc,cls='disc-stamp')=>{const d=DISC[disc];return d&&d.stamp?`<img class="${cls}" src="${ASSET[d.stamp]||('assets/'+d.stamp)}" alt="">`:ic((d&&d.icon)||'doc',20);};
-const spill = (st)=>{const[l,c]=STATUS_LABEL[st];return `<span class="pill ${c}">${ic(STATUS_ICON[st],13)}<span>${l}</span></span>`;};
+const spill = (st)=>{const m=STATUS_LABEL[st]||STATUS_LABEL.prog;return `<span class="pill ${m[1]}">${ic(STATUS_ICON[st]||'st_progress',13)}<span>${m[0]}</span></span>`;};
+
+/* ===== live-data brug (S27DATA) met mock-fallback ===== */
+function _live(){ return !!(window.S27DATA && typeof state!=='undefined' && !state.demoMode && state.session); }
+function _projects(){ const p = window.S27DATA && S27DATA.projects(); return (p && p.length!==undefined) ? p : PROJECTS; }
+function _greetNaam(){ return (window.S27DATA && S27DATA.klantNaam && S27DATA.klantNaam()) || 'Sarah'; }
+function _bedrijf(){ return (window.S27DATA && S27DATA.bedrijfsnaam && S27DATA.bedrijfsnaam()) || 'TEST CLIENT BV'; }
 
 /* =========================================================
    PANEL BUILDERS
@@ -102,9 +114,11 @@ const spill = (st)=>{const[l,c]=STATUS_LABEL[st];return `<span class="pill ${c}"
 function svcStamp(s){
   return s.stamp ? `<img class="stamp" src="${ASSET[s.stamp]||('assets/'+s.stamp)}" alt="">` : `<span class="stamp-ic">${ic(s.icon,28)}</span>`;
 }
+const SVC_DISC = { strategie:'strategie', video:'video_fotografie', website:'webdesign', ads:'ads', social:'social', branding:'branding', seo:'seo', opleiding:'opleiding' };
 function buildSvcCards(){
   return SERVICES.map(s=>{
-    if(s.active){
+    const isActive = _live() ? S27DATA.discActive(SVC_DISC[s.key]) : s.active;
+    if(isActive){
       const discMap={strategie:'Strategie',video:'Video- en fotografie',website:'Website en SEO'};
       const act = discMap[s.key] ? `goDienst('${discMap[s.key]}')` : `goTab('${s.key==='ads'?'advertenties':'socials'}')`;
       return `<div class="svc-card br-${s.br}">
@@ -121,63 +135,48 @@ function buildSvcCards(){
     </div>`;
   }).join('');
 }
+const _COCKPIT_MOCK = [
+  {br:'purple',cat:'Video- en fotografie',title:'Review nodig',ctx:'De eerste montage van je bedrijfsfilm <b>"Onder één dak"</b> staat klaar. Geef je akkoord of je feedback.',cta:'Bekijk montage',action:"openProject('p1')",tag:'vandaag',urgent:true,icon:'st_feedback'},
+  {br:'blue',cat:'Strategie',title:'Feedback gevraagd',ctx:'We willen je input op de <b>positionering</b> voor 2026 voor we verder bouwen.',cta:'Geef feedback',action:"openProject('p4')",tag:'deze week',urgent:false,icon:'st_feedback'},
+  {br:'orange',cat:'Online adverteren',title:'Rapport inplannen',ctx:'Tijd om de <b>resultaten van je campagnes</b> samen te bekijken. Prik een moment dat jou past.',cta:'Plan in',action:"goTab('meetings')",tag:'mei',urgent:false,icon:'st_plan'}
+];
+const _RUN_MOCK = [{br:'green',disc:'Website en SEO',name:'Nieuwe website & webshop',pct:62,status:'prog',label:'In productie'},{br:'blue',disc:'Strategie',name:'Merkstrategie 2026',pct:40,status:'wait',label:'Klaar voor feedback'},{br:'orange',disc:'Online adverteren',name:'Leadcampagne Q2',pct:78,status:'prog',label:'Live'}];
+const _DONE_MOCK = [{br:'yellow',name:'Contentkalender mei',disc:'Social media',when:'2 dagen geleden'},{br:'orange',name:'TikTok lentepromo',disc:'Online adverteren',when:'5 dagen geleden'},{br:'purple',name:'Sfeerreportage event',disc:'Video- en fotografie',when:'vorige week'}];
+function _cockpitCard(a){
+  return `<div class="action-card ${a.urgent?'urgent':''} br-${a.br}">
+    <div class="ac-top"><div class="ac-ico">${ic(a.icon||'st_feedback',19)}</div><div class="ac-titles"><span class="ac-cat">${esc(a.cat)}</span><h4>${esc(a.title)}</h4></div></div>
+    <p class="ac-ctx">${a.ctx}</p>
+    <div class="ac-foot"><button class="btn btn-branch btn-sm br-${a.br}" onclick="${a.action}">${esc(a.cta)}</button><span class="tag-mini">${esc(a.tag)}</span></div>
+  </div>`;
+}
+function _runRow(r){ return `<button class="run-row br-${r.br}" onclick="${r.id?`openProject('${esc(r.id)}','projecten')`:`goTab('projecten')`}"><div class="run-top"><span class="run-dot"></span><span class="run-disc">${esc(r.disc)}</span><span class="pill pill-${r.status}">${ic(STATUS_ICON[r.status]||'st_progress',12)}<span>${esc(r.label)}</span></span></div><b class="run-name">${esc(r.name)}</b><div class="run-prog"><div class="rp-bar"><i style="width:${r.pct||0}%"></i></div><span class="rp-pct">${r.pct||0}%</span></div></button>`; }
+function _doneRow(d){ return `<div class="done-row br-${d.br}"><span class="check-circ">${ic('check',13)}</span><div class="done-main"><b>${esc(d.name)}</b><span class="done-meta">${esc(d.disc)}${d.when?(' · '+esc(typeof d.when==='string'?d.when:'')):''}</span></div><span class="run-dot"></span></div>`; }
 function panelStart(){
-  return hero('blue','<span class="dot"></span>Portaal · TEST CLIENT BV',
-    `Welkom terug, <span class="accent">Sarah${squig()}</span>`,
-    'Fijn dat je er bent. Hier vind je alles wat we samen voor TEST CLIENT BV doen — netjes op één plek.',
-    scribble('sparkles-blue.svg','top:-6px;right:6px;width:118px;transform:rotate(8deg)'))
-  +`
-  <div class="section-head"><h2>Voor jou te doen</h2><span class="count">3 items</span></div>
-  <div class="cockpit-row">
-    <div class="action-card urgent br-purple">
-      <div class="ac-top"><div class="ac-ico">${ic('st_feedback',19)}</div><div class="ac-titles"><span class="ac-cat">Video- en fotografie</span><h4>Review nodig</h4></div></div>
-      <p class="ac-ctx">De eerste montage van je bedrijfsfilm <b>"Onder één dak"</b> staat klaar. Geef je akkoord of je feedback.</p>
-      <div class="ac-foot"><button class="btn btn-branch btn-sm br-purple" onclick="openProject('p1')">Bekijk montage</button><span class="tag-mini">vandaag</span></div>
-    </div>
-    <div class="action-card br-blue">
-      <div class="ac-top"><div class="ac-ico">${ic('st_feedback',19)}</div><div class="ac-titles"><span class="ac-cat">Strategie</span><h4>Feedback gevraagd</h4></div></div>
-      <p class="ac-ctx">We willen je input op de <b>positionering</b> voor 2026 voor we verder bouwen.</p>
-      <div class="ac-foot"><button class="btn btn-branch btn-sm br-blue" onclick="openProject('p4')">Geef feedback</button><span class="tag-mini">deze week</span></div>
-    </div>
-    <div class="action-card br-orange">
-      <div class="ac-top"><div class="ac-ico">${ic('st_plan',19)}</div><div class="ac-titles"><span class="ac-cat">Online adverteren</span><h4>Rapport inplannen</h4></div></div>
-      <p class="ac-ctx">Tijd om de <b>resultaten van je campagnes</b> samen te bekijken. Prik een moment dat jou past.</p>
-      <div class="ac-foot"><button class="btn btn-branch btn-sm br-orange" onclick="goTab('meetings')">Plan in</button><span class="tag-mini">mei</span></div>
-    </div>
-  </div>
-
+  const cock = window.S27DATA && S27DATA.cockpit();
+  const run  = (window.S27DATA && S27DATA.running()) || _RUN_MOCK;
+  const done = (window.S27DATA && S27DATA.done())   || _DONE_MOCK;
+  const head = hero('blue', _bedrijf(), `Welkom terug, <span class="accent">${esc(_greetNaam())}</span>`);
+  // Voor jou te doen
+  let cockHtml;
+  if(cock){
+    cockHtml = cock.length
+      ? `<div class="section-head"><h2>Voor jou te doen</h2><span class="count">${cock.length} ${cock.length===1?'item':'items'}</span></div><div class="cockpit-row">${cock.map(_cockpitCard).join('')}</div>`
+      : `<div class="empty" style="margin-top:24px"><div class="em-ic">${ic('st_approved',64)}</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Alles is bij!</b><p style="margin:6px 0 0">Er staat momenteel niets op jou te wachten — wij werken ondertussen verder.</p></div>`;
+  } else {
+    cockHtml = `<div class="section-head"><h2>Voor jou te doen</h2><span class="count">${_COCKPIT_MOCK.length} items</span></div><div class="cockpit-row">${_COCKPIT_MOCK.map(_cockpitCard).join('')}</div>`;
+  }
+  return head + cockHtml + `
   <div class="section-head"><h2>Jouw projecten</h2><button class="count linkish" onclick="goTab('projecten')">Alle projecten ${ic('arrow',13)}</button></div>
   <div class="proj-overview">
     <div class="ov-col">
-      <div class="ov-head"><span class="pill pill-prog"><span class="pdot"></span>Loopt nu</span><span class="ov-n">3</span></div>
-      <div class="run-list">
-        ${[['green','Website en SEO','Nieuwe website &amp; webshop',62,'prog','In productie'],
-           ['blue','Strategie','Merkstrategie 2026',40,'wait','Klaar voor feedback'],
-           ['orange','Online adverteren','Leadcampagne Q2',78,'prog','Live']].map(r=>`
-          <button class="run-row br-${r[0]}" onclick="goTab('projecten')">
-            <div class="run-top"><span class="run-dot"></span><span class="run-disc">${r[1]}</span><span class="pill pill-${r[4]}">${ic(STATUS_ICON[r[4]],12)}<span>${r[5]}</span></span></div>
-            <b class="run-name">${r[2]}</b>
-            <div class="run-prog"><div class="rp-bar"><i style="width:${r[3]}%"></i></div><span class="rp-pct">${r[3]}%</span></div>
-          </button>`).join('')}
-      </div>
+      <div class="ov-head"><span class="pill pill-prog"><span class="pdot"></span>Loopt nu</span><span class="ov-n">${run.length}</span></div>
+      <div class="run-list">${run.length?run.map(_runRow).join(''):'<div class="empty" style="padding:24px"><p>Geen lopende projecten.</p></div>'}</div>
     </div>
     <div class="ov-col">
-      <div class="ov-head"><span class="pill pill-done"><span class="pdot"></span>Recent afgerond</span><span class="ov-n">3</span></div>
-      <div class="done-list">
-        ${[['yellow','Contentkalender mei','Social media','2 dagen geleden'],
-           ['orange','TikTok lentepromo','Online adverteren','5 dagen geleden'],
-           ['purple','Sfeerreportage event','Video- en fotografie','vorige week']].map(d=>`
-          <div class="done-row br-${d[0]}">
-            <span class="check-circ">${ic('check',13)}</span>
-            <div class="done-main"><b>${d[1]}</b><span class="done-meta">${d[2]} · ${d[3]}</span></div>
-            <span class="run-dot"></span>
-          </div>`).join('')}
-      </div>
+      <div class="ov-head"><span class="pill pill-done"><span class="pdot"></span>Recent afgerond</span><span class="ov-n">${done.length}</span></div>
+      <div class="done-list">${done.length?done.map(_doneRow).join(''):'<div class="empty" style="padding:24px"><p>Nog niets afgerond.</p></div>'}</div>
     </div>
-  </div>
-
-  </div>
-  `;
+  </div>`;
 }
 
 function panelDiensten(){
@@ -189,29 +188,22 @@ function panelDiensten(){
 }
 
 function panelBerichten(){
-  return hero('blue','Berichten',
-    `Even <span class="accent">bijpraten${squig()}</span>?`,
-    'Alle communicatie per project, netjes op één plek. We schakelen snel — meestal binnen enkele minuten.')
-  +`<div style="display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start" class="berichten-wrap">
-    <div class="card" style="overflow:hidden">
-      ${[['p1','purple','Video- en fotografie','Bedrijfsfilm "Onder één dak"','Ilke: De montage staat online!','2',true],
-         ['p2','green','Website en SEO','Nieuwe website & webshop','Vincent: De staging-link is klaar om...','',false],
-         ['p4','blue','Strategie','Merkstrategie 2026','Arne: Top, ik verwerk je input.','',false],
-         ['p5','orange','Online adverteren','Leadcampagne Q2','Arne: We hebben de eerste leads binnen!','1',true]].map((t,idx)=>`
-        <button class="proj-row br-${t[1]}" style="border:none;border-radius:0;box-shadow:none;border-bottom:1px solid var(--line);${idx===0?'background:var(--paper-2)':''}" onclick="openProject('${t[0]}','berichten');switchModalTab('chat')">
+  const projs=_projects(); const first=projs[0];
+  const rows = projs.map((p,idx)=>`
+        <button class="proj-row br-${p.br}" style="border:none;border-radius:0;box-shadow:none;border-bottom:1px solid var(--line);${idx===0?'background:var(--paper-2)':''}" onclick="openProject('${esc(p.id)}','berichten');switchModalTab('chat')">
           <span class="ber-dot" style="background:var(--c)"></span>
-          <span class="pr-main"><span class="ber-disc" style="color:var(--c-ink)">${t[2]}</span><span class="pr-name" style="font-size:14px">${t[3]}</span><span style="display:block;font-size:12.5px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t[4]}</span></span>
-          ${t[5]?`<span class="badge" style="position:static;background:var(--c);color:#fff;border:none;min-width:20px;height:20px;font-size:11px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:800">${t[5]}</span>`:''}
-        </button>`).join('')}
-    </div>
-    <div class="card" style="padding:0;overflow:hidden">
-      <div style="padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:11px">
-        <span class="msg" style="all:unset"></span>
-        <div style="width:8px;height:8px;border-radius:3px;background:var(--s27-purple)"></div>
-        <b style="font-family:var(--font-display);font-size:15px">Bedrijfsfilm "Onder één dak"</b>
-        <button class="btn btn-ghost btn-sm br-purple" style="margin-left:auto" onclick="openProject('p1','berichten');switchModalTab('chat')">Open project ${ic('arrow',14)}</button>
-      </div>
-      <div style="padding:22px">${chatHTML()}</div>
+          <span class="pr-main"><span class="ber-disc" style="color:var(--c-ink)">${esc(p.disc)}</span><span class="pr-name" style="font-size:14px">${esc(p.name)}</span></span>
+          ${p.deliv?`<span class="badge" style="position:static;background:var(--c);color:#fff;border:none;min-width:20px;height:20px;font-size:11px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:800">!</span>`:''}
+        </button>`).join('');
+  return hero('blue','Berichten', `Even <span class="accent">bijpraten${squig()}</span>?`)
+  +`<div style="display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start" class="berichten-wrap">
+    <div class="card" style="overflow:hidden">${rows||'<div class="empty" style="padding:30px"><p>Nog geen gesprekken.</p></div>'}</div>
+    <div class="card br-${first?first.br:'blue'}" style="padding:0;overflow:hidden">
+      ${first?`<div style="padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:11px">
+        <div style="width:8px;height:8px;border-radius:3px;background:var(--c)"></div>
+        <b style="font-family:var(--font-display);font-size:15px">${esc(first.name)}</b>
+        <button class="btn btn-ghost btn-sm br-${first.br}" style="margin-left:auto" onclick="openProject('${esc(first.id)}','berichten');switchModalTab('chat')">Open project ${ic('arrow',14)}</button>
+      </div><div style="padding:22px">${chatHTML(first.id)}</div>`:'<div class="empty" style="padding:60px 20px"><div class="em-ic">'+ic('msg',64)+'</div><p>Selecteer links een project om het gesprek te openen.</p></div>'}
     </div>
   </div>`;
 }
@@ -234,7 +226,7 @@ function projCard(p){
 function projKanban(){
   const cols=[['todo','In te plannen',['todo']],['prog','In productie',['prog']],['wait','Feedback gevraagd',['wait','sent']],['done','Goedgekeurd',['done']]];
   return `<div class="kanban">${cols.map(c=>{
-    const items=PROJECTS.filter(p=>c[2].includes(p.status));
+    const items=_projects().filter(p=>c[2].indexOf(p.status)>=0);
     return `<div class="kan-col">
       <div class="kan-head"><span class="pill pill-${c[0]}">${ic(STATUS_ICON[c[2][0]],13)}<span>${c[1]}</span></span><span class="kan-n">${items.length}</span></div>
       <div class="kan-list">${items.map(projCard).join('')||'<div class="kan-empty">Niets hier — alles bij</div>'}</div>
@@ -242,19 +234,21 @@ function projKanban(){
   }).join('')}</div>`;
 }
 function projDienst(){
-  const order=['Video- en fotografie','Website en SEO','Strategie','Online adverteren','Social media'];
-  return order.map(disc=>{
-    const items=PROJECTS.filter(p=>p.disc===disc);
-    if(!items.length)return '';
-    const d=DISC[disc];
-    return `<div class="dienst-group br-${d.br}" data-disc="${disc}">
-      <div class="dienst-head"><span class="dienst-ic">${discMark(disc)}</span><h3>${disc}</h3><span class="dienst-n">${items.length} ${items.length===1?'project':'projecten'}</span></div>
+  const projs=_projects(); const groups={};
+  projs.forEach(p=>{ (groups[p.disc]=groups[p.disc]||[]).push(p); });
+  const keys=Object.keys(groups).sort((a,b)=>{ const ia=DISC_ORDER.indexOf(a),ib=DISC_ORDER.indexOf(b); return (ia<0?99:ia)-(ib<0?99:ib); });
+  const html=keys.map(disc=>{
+    const items=groups[disc]; const d=DISC[disc]||{br:items[0].br||'blue'};
+    return `<div class="dienst-group br-${d.br||items[0].br||'blue'}" data-disc="${esc(disc)}">
+      <div class="dienst-head"><span class="dienst-ic">${discMark(disc)}</span><h3>${esc(disc)}</h3><span class="dienst-n">${items.length} ${items.length===1?'project':'projecten'}</span></div>
       <div class="proj-list">${items.map(projRow).join('')}</div>
     </div>`;
   }).join('');
+  return html || `<div class="empty"><div class="em-ic">${ic('st_approved',64)}</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog geen projecten</b><p style="margin:6px 0 0">Zodra we samen starten, verschijnen je projecten hier.</p></div>`;
 }
 function panelProjecten(){
-  const order=['Video- en fotografie','Website en SEO','Strategie','Online adverteren','Social media'];
+  const order=[]; _projects().forEach(p=>{ if(order.indexOf(p.disc)<0) order.push(p.disc); });
+  order.sort((a,b)=>{ const ia=DISC_ORDER.indexOf(a),ib=DISC_ORDER.indexOf(b); return (ia<0?99:ia)-(ib<0?99:ib); });
   return hero('blue','Mijn werk · Projecten',
     `Alles wat we <span class="accent">samen${squig()}</span> maken`)
   +`<div class="proj-filter">
@@ -524,18 +518,19 @@ function panelInstellingen(){
 }
 
 /* ---- shared chat markup ---- */
-function chatHTML(){
-  const msgs=[
+function chatHTML(taskId){
+  const live = (taskId && window.S27DATA) ? S27DATA.chat(taskId) : null;
+  const msgs = (live && live.length!==undefined) ? live.map(m=>[m.av,m.who,m.color||'blue',m.tx,m.tm,m.me]) : [
     ['IM','Ilke Meeusen','blue','Hey Sarah! De eerste montage van de bedrijfsfilm staat klaar. Benieuwd wat je ervan vindt.','09:12',false],
     ['','Jij','blue','Wauw, ziet er strak uit! Kan de intro net iets korter?','09:41',true],
     ['IM','Ilke Meeusen','blue','Zeker, dat passen we gratis aan. Tegen morgen heb je een nieuwe versie.','09:43',false],
   ];
   return `<div class="chat-list" id="chatList">
-    ${msgs.map(m=>`<div class="msg ${m[5]?'me':''}">
+    ${msgs.length?msgs.map(m=>`<div class="msg ${m[5]?'me':''}">
       ${m[5]?'':`<span class="av" style="background:var(--s27-${m[2]})">${m[0]}</span>`}
       <div class="bubble"><div class="who">${m[1]}</div><div class="tx">${m[3]}</div><div class="tm">${m[4]}</div>
         <div class="react"><button>👍</button><button>❤️</button><button>🎉</button><button>🙌</button></div></div>
-    </div>`).join('')}
+    </div>`).join(''):'<div class="empty" style="padding:30px 10px"><p>Nog geen berichten — stuur ons gerust iets!</p></div>'}
   </div>
   <div class="chat-input"><input placeholder="Schrijf een bericht…" onkeydown="if(event.key==='Enter')sendChat(this)"><button class="chat-send" onclick="sendChat(this.previousElementSibling)">${ic('send',18)}</button></div>`;
 }
@@ -544,13 +539,14 @@ function chatHTML(){
    PROJECT DETAIL MODAL
    ========================================================= */
 function buildModal(id, from){
-  const p=PROJECTS.find(x=>x.id===id);
-  const[lab,cls]=STATUS_LABEL[p.status];
-  const isVideo=p.disc.startsWith('Video');
+  const p=_projects().find(x=>x.id===id)||{id:id,name:'Project',disc:'',status:'prog',br:'blue'};
+  const sl=STATUS_LABEL[p.status]||STATUS_LABEL.prog; const lab=sl[0], cls=sl[1];
+  const det=(window.S27DATA && S27DATA.detail(id))||null;
+  const isVideo=(p.disc||'').indexOf('Video')===0;
   const needsFeedback=p.status==='wait';
   const backTo=(from==='berichten')?'berichten':'projecten';
   const backLabel=(backTo==='berichten')?'berichten':'projecten';
-  const SUBTASKS = isVideo ? [
+  let SUBTASKS = isVideo ? [
     {t:'Montage',st:'wait',files:[['Montage v1 — volledige film','MP4 · 02:14','video'],['Korte teaser (15s)','MP4 · 00:15','video']]},
     {t:'Fotografie',st:'wait',files:[['Still — openingsshot','JPG · hoge resolutie','img'],['Still — teamportret','JPG · hoge resolutie','img']]},
     {t:'Audio &amp; muziek',st:'done',files:[['Soundtrack — gelicentieerd','MP3','doc']]},
@@ -558,7 +554,15 @@ function buildModal(id, from){
     {t:'Strategiedeck',st:'wait',files:[['Strategiedeck v1.pdf','PDF · 24 pagina\'s','doc']]},
     {t:'Vooronderzoek',st:'done',files:[['Marktanalyse.pdf','PDF · 12 pagina\'s','doc']]},
   ];
-  const approved = isVideo ? ['Concept &amp; scenario','Locatie &amp; opnameplanning','Audio &amp; muziekselectie'] : ['Marktonderzoek &amp; analyse','Positioneringsworkshop'];
+  let approved = isVideo ? ['Concept &amp; scenario','Locatie &amp; opnameplanning','Audio &amp; muziekselectie'] : ['Marktonderzoek &amp; analyse','Positioneringsworkshop'];
+  if(det){
+    if(det.deliverables && det.deliverables.length){
+      SUBTASKS=[{t:'Deliverables',st:p.status==='done'?'done':'wait',files:det.deliverables.map(d=>[esc(d.label),esc((d.url||'').replace(/^https?:\/\//,'').slice(0,44)),d.type==='video'?'video':d.type==='img'?'img':'doc'])}];
+    } else if(det.subtasks && det.subtasks.length){
+      SUBTASKS=det.subtasks.map(s=>({t:esc(s.naam),st:s.status==='done'?'done':'wait',files:[]}));
+    }
+    if(det.subtasks && det.subtasks.length){ approved=det.subtasks.filter(s=>s.status==='done').map(s=>esc(s.naam)); }
+  }
 
   const overview=`<div class="mpane active" data-mpane="overzicht">
     ${needsFeedback?`<div class="fb-banner"><div class="fb-ic">${ic('spark',20)}</div><div class="fb-tx"><b>We wachten op jouw akkoord</b><p>Bekijk de deliverable en laat ons weten of we groen licht hebben.</p></div><div class="fb-act"><button class="btn btn-branch btn-sm br-green" onclick="approveAll(this)">Goedkeuren</button><button class="btn btn-outline btn-sm" onclick="switchModalTab('feedback')">Feedback geven</button></div></div>`:''}
@@ -628,7 +632,7 @@ function buildModal(id, from){
       </div>
       <aside class="detail-chat">
         <div class="dc-head">${ic('msg',16)} Projectchat <span class="dc-sub">met je team</span></div>
-        <div class="dc-body">${chatHTML()}</div>
+        <div class="dc-body">${chatHTML(id)}</div>
       </aside>
     </div>
   </div>`;
