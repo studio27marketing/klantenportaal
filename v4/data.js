@@ -93,12 +93,24 @@
     if(d && d.ok !== false){ state.data.details[taskId] = d; }
     return state.data.details[taskId] || null;
   };
+  // ruwe ClickUp-comment {auteur,tekst,datum,is_klant,attachments} -> display-shape voor chatHTML
+  function mapChatComment(c){
+    var t = String(c.tekst||c.text||c.comment_text||'');
+    t = t.replace(/^\s*💬?\s*\[[^\]]*\]\s*/,'');   // "💬 [Klant: ...]"-prefix weg
+    t = t.replace(/\\n/g,'\n').replace(/^\n+/,'').replace(/\s+$/,'');   // letterlijke \n -> newline
+    var me = (c.is_klant===true || c.is_klant==='true');
+    var naam = c.auteur||c.author||(me?'Jij':'Studio 27');
+    var ms = parseInt(c.datum||c.date||0,10); var tm='';
+    if(ms){ var d=new Date(ms); if(!isNaN(d.getTime())) tm=('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
+    var ini=(String(naam).split(/\s+/).map(function(x){return x?x[0]:'';}).join('').slice(0,2)||'S2').toUpperCase();
+    return { av:ini, who:(me?'Jij':naam), color:'blue', tx:esc(t).replace(/\n/g,'<br>'), tm:tm, me:me, attachments:c.attachments||[] };
+  }
   DATA.loadChat = async function(taskId){
     if(!live()) return [];
     var res = await api(ENDPOINTS.chatList, base({ task_id:taskId }));
-    var arr = (res && res.ok && res.data && res.data.ok && res.data.comments) ? res.data.comments : [];
-    state.data.chats[taskId] = arr;
-    return arr;
+    var raw = (res && res.ok && res.data && res.data.ok && res.data.comments) ? res.data.comments : [];
+    state.data.chats[taskId] = raw.map(mapChatComment);
+    return state.data.chats[taskId];
   };
   DATA.loadMeetings = async function(){
     if(!live()) return false;
