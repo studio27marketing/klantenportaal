@@ -657,6 +657,26 @@ function isAfgerondStatus(p){
    Bundelt alle openstaande klantacties bovenaan de homepage:
    feedback geven · shoot inplannen · facturatie bevestigen.
    ================================================================= */
+// Detecteert of een te-plannen taak om een afspraak vraagt (strategiesessie /
+// opstartmeeting / meeting-keyword). Doorgetrokken over ALLE takken (Vincent-eis).
+const SCHEDULE_KW = {
+  strategie: /strategie.?sessie|strategiesessie|strategie.?meeting/i,
+  opstart:   /opstart|kick.?off|start.?meeting|startmeeting|pre.?productie|preproductie/i,
+  meeting:   /\bmeeting\b|overleg|afspraak|gesprek|sessie/i
+};
+function taskScheduleType(p){
+  if(!p) return '';
+  const st = (p.status || '').toLowerCase().replace(/\s+/g, '_');
+  if(st !== 'to_do') return '';            // enkel "Te plannen"
+  if(p.discipline === 'video_fotografie') return 'shoot';   // shoot-blok regelt eligibility zelf (opleverdatum = leverdatum, niet shootdatum)
+  if(p.opleverdatum) return '';            // meeting/sessie mét datum = al ingepland
+  const nm = p.naam || '';
+  if(SCHEDULE_KW.strategie.test(nm) || p.discipline === 'strategie') return 'strategie';
+  if(SCHEDULE_KW.opstart.test(nm))  return 'opstart';
+  if(SCHEDULE_KW.meeting.test(nm))  return 'meeting';
+  return '';
+}
+
 function collectCockpitActions(d){
   const projs = (d && d.actieve_projecten) || [];
   const factuurDone = loadFactuurConfirmCache();
@@ -668,9 +688,13 @@ function collectCockpitActions(d){
     if((st === 'doorgestuurd' || p.feedback_link) && !hasFreshFbLock(p)){
       actions.push({ type:'feedback', icon:'🔔', accent:'#F66131', label:'Geef je feedback', sub: p.naam || 'Project', cta:'Feedback geven', proj:p });
     }
-    // 2) Shoot inplannen — video/fotografie-deliverable die nog ingepland moet worden (te plannen)
-    if(cat === 'deliverable' && p.discipline === 'video_fotografie' && st === 'to_do' && !p.shoot_gepland){
-      actions.push({ type:'shoot', icon:'📸', accent:'#9441DB', label:'Plan je shoot in', sub: p.naam || 'Shoot', cta:'Shoot inplannen', proj:p });
+    // 2) Inplannen — shoot (video) OF strategiesessie/opstart/meeting (alle takken)
+    const sched = taskScheduleType(p);
+    if(sched === 'shoot' && !p.shoot_gepland){
+      actions.push({ type:'shoot', icon:'📸', accent:discColor('video_fotografie'), label:'Plan je shoot in', sub: p.naam || 'Shoot', cta:'Shoot inplannen', proj:p });
+    } else if(sched){
+      const m = { strategie:{ic:'🎯',label:'Plan je strategiesessie',cta:'Sessie inplannen'}, opstart:{ic:'🚀',label:'Plan je opstartmeeting',cta:'Opstart inplannen'}, meeting:{ic:'📅',label:'Plan een afspraak in',cta:'Afspraak inplannen'} }[sched];
+      actions.push({ type:'plan', icon:m.ic, accent:discColor(p.discipline), label:m.label, sub: p.naam || 'Afspraak', cta:m.cta, proj:p, schedType:sched });
     }
     // 3) Facturatie bevestigen — opgeleverde deliverable die je nog niet bevestigde
     if(cat === 'deliverable' && isAfgerondStatus(p) && !factuurDone[p.task_id]){
@@ -705,7 +729,7 @@ function renderCockpitActions(d){
 
 function handleCockpitAction(a){
   if(!a) return;
-  if(a.type === 'feedback' || a.type === 'shoot'){
+  if(a.type === 'feedback' || a.type === 'shoot' || a.type === 'plan'){
     if(a.proj && a.proj.task_id) openProjectDetail(a.proj.task_id, a.type === 'feedback' ? 'feedback' : 'overzicht');
   } else if(a.type === 'facturatie'){
     state.facturatiePendingProject = a.proj && a.proj.task_id;
@@ -3087,6 +3111,25 @@ function renderProjectShootBlock(proj, detail){
   '</div>';
 }
 
+// Veralgemeend inplan-blok: shoot (bestaand) OF strategiesessie / opstartmeeting / meeting.
+function renderProjectScheduleBlock(proj, detail){
+  const t = taskScheduleType(proj);
+  if(t === 'shoot') return renderProjectShootBlock(proj, detail);
+  if(!t) return '';
+  const cfg = {
+    strategie: { ic:'🎯', title:'Plan je strategiesessie', lead:'Kies je voorkeursmoment — we plannen de sessie met de juiste strateeg en sturen je nadien een agenda-uitnodiging met alle betrokkenen.', hint:'' },
+    opstart:   { ic:'🚀', title:'Plan je opstartmeeting', lead:'Een sterke start maakt het verschil. Geef je voorkeur door en we bevestigen met een agenda-uitnodiging.', hint:'Voorkeur: fysiek bij ons in Studio 27 — persoonlijker en efficiënter.' },
+    meeting:   { ic:'📅', title:'Plan een afspraak in', lead:'Geef je voorkeursmoment door; we bevestigen met de juiste persoon en sturen een agenda-uitnodiging.', hint:'' }
+  }[t];
+  const accent = discColor(proj.discipline);
+  const subj = cfg.title + ' — ' + (proj.naam || '');
+  return '<div class="s27-pv-section s27-pv-section-plan" style="--accent:' + accent + '">' +
+    '<h3 class="s27-pv-section-title">' + cfg.ic + ' ' + esc(cfg.title) + '</h3>' +
+    '<p class="s27-pv-fb-lead">' + esc(cfg.lead) + (cfg.hint ? ' <strong>' + esc(cfg.hint) + '</strong>' : '') + '</p>' +
+    '<button type="button" class="s27-btn s27-btn-inline" data-dm="meeting" data-dm-onderwerp="' + esc(subj) + '" data-dm-placeholder="Geef 2-3 voorkeursmomenten door (dag + voor-/namiddag). Online of fysiek bij Studio 27?">Stel een moment voor →</button>' +
+  '</div>';
+}
+
 async function loadProjectShootSlots(proj, detail){
   const box = $('s27-pv-shootbox');
   if(!box) return;
@@ -3844,7 +3887,7 @@ function renderProjectView(proj, detail, roundState){
 
     <div class="s27-pv-twocol">
       <div class="s27-pv-leftcol">
-        ${renderProjectShootBlock(proj, detail)}
+        ${renderProjectScheduleBlock(proj, detail)}
         ${roundState === 'active' ? `
           <div class="s27-pv-section s27-pv-section-fb">
             <h3 class="s27-pv-section-title">🔔 Dit project wacht op jouw feedback</h3>
@@ -4723,7 +4766,9 @@ function getDemoData(){
       { task_id:'demo-ads-1', naam:'Google Ads + Meta zomercampagne',discipline:'ads',       status:'in_progress', opleverdatum:'2026-06-01', voortgang_pct:50, type:'Performance', laatst_geupdatet: new Date(Date.now()-3600000*36).toISOString() },
       { task_id:'demo-seo-1', naam:'SEO/GEO optimalisatie',          discipline:'seo',       status:'in_progress', type:'Doorlopend traject', laatst_geupdatet: new Date(Date.now()-3600000*20).toISOString() },
       { task_id:'demo-opl-1', naam:'Opleiding social media beheer',  discipline:'opleiding', status:'in_progress', opleverdatum:'2026-06-18', type:'1-op-1 sessie', laatst_geupdatet: new Date(Date.now()-3600000*30).toISOString() },
-      { task_id:'demo-str-1', naam:'Strategie kick-off traject',     discipline:'strategie', status:'klaar voor facturatie', opleverdatum:'2026-05-20', type:'Strategiesessie', laatst_geupdatet: new Date(Date.now()-86400000*6).toISOString() }
+      { task_id:'demo-str-1', naam:'Strategie kick-off traject',     discipline:'strategie', status:'klaar voor facturatie', opleverdatum:'2026-05-20', type:'Strategiesessie', laatst_geupdatet: new Date(Date.now()-86400000*6).toISOString() },
+      { task_id:'demo-str-2', naam:'Strategiesessie groei Q3',       discipline:'strategie', status:'to_do', voortgang_pct:5, type:'Strategiesessie', laatst_geupdatet: new Date(Date.now()-3600000*2).toISOString() },
+      { task_id:'demo-web-4', naam:'Opstartmeeting nieuwe website',  discipline:'webdesign', status:'to_do', voortgang_pct:5, type:'Kickoff', laatst_geupdatet: new Date(Date.now()-3600000*3).toISOString() }
     ],
     historie_3mnd: [
       { task_id:'demo-h1', naam:'Aftermovie teamevent maart', discipline:'video_fotografie', afgerond_op:'2026-04-12', deliverables:[ { label:'Vimeo final', url:'https://vimeo.com/example' }, { label:'Drive', url:'https://drive.google.com/example' } ] },

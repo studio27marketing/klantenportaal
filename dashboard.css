@@ -1150,6 +1150,10 @@ body { margin:0; background:var(--s27-paper-2); }
 /* Knoppen met merk-bounce op hover */
 .s27-btn:hover:not(:disabled) { transition:transform .22s var(--ease-bounce), background .2s var(--ease-out), box-shadow .2s var(--ease-out); }
 
+/* Inplan-blok (strategiesessie/opstart/meeting) + inline knop */
+.s27-btn-inline { width:auto; padding:11px 20px; }
+.s27-pv-section-plan { border-left:3px solid var(--accent, var(--s27-blue)); padding-left:16px; }
+
 /* Takken-nav: elke tak een eigen knop met mini-merkstempel (niet enkel op de home) */
 .s27-navdrop--werk { min-width:230px; }
 .s27-navstamp { display:inline-flex; width:18px; height:18px; flex:0 0 18px; align-items:center; justify-content:center; }
