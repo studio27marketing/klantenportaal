@@ -9,6 +9,8 @@ Je gaf feedback dat de UI te oppervlakkig was (afgeleide iconen i.p.v. echte mer
 - **Echte merk-stempels** uit het design system vervangen de generieke lijn-iconen — Strategie (blauw), Branding (roze hart), Video & fotografie (paarse lens), Webdesign + SEO (groene check), Online adverteren (oranje), Social media (geel). Self-hosted in `/assets/`. Géén afgeleide iconen meer.
 - **Website-look**: lowercase taklabels, rondere kaarten (28px), scribble-onderlijning op accent-woorden, bounce-knoppen, mini-stempels in de nav.
 - **Takken in de nav**: "Mijn werk"-dropdown toont nu alle 8 takken als eigen knop (niet enkel op de home) + Performance + Alle projecten; vergrendelde takken worden verborgen.
+- **Inplannen doorgetrokken over alle takken** (commit `3178c62`): `taskScheduleType()` herkent te-plannen strategiesessies/opstartmeetings/meeting-taken (keyword + discipline) → cockpit toont "Plan je strategiesessie/opstartmeeting/afspraak", project-detail toont een inplan-blok met merk-CTA (opstart: voorkeur fysiek bij Studio 27). Shoot-flow ongewijzigd. *Echte assignee-agenda free/busy + auto Google Calendar-invite = backend-vervolgstap (nu: voorstel-moment → team bevestigt + nodigt uit).*
+- **Per-video goedkeuring bestond al** (geverifieerd): `parseDeliverablesRaw` splitst meerdere links → elk eigen ✅/💬-knop + kanaal/tekst/upload, submit pas als alles beantwoord is.
 - *(raw.githack-CDN heeft ~2-5 min lag; GitHub-raw is meteen vers — geverifieerd HTTP 200 op de assets.)*
 
 **🔴 LIVE Make-wijziging (geverifieerd, additief) — scenario `5896037` "Dashboard Feed":**
