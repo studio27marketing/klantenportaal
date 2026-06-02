@@ -17,7 +17,8 @@ var state = window.S27State = {
   activeBedrijf: '',
   _provisionTried: false,
   _sessionExpiredHandled: false,
-  data: {},                   // gecachte API-data (bedrijfContent, projecten, performance, …)
+  data: { dashboard:null, details:{}, chats:{}, meetings:null, bedrijf:null, team:null, huisstijl:null },  // gecachte API-data
+
   route: null                 // deep-link pending route (zie portal.js router)
 };
 
