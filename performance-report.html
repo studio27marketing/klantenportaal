@@ -184,8 +184,8 @@ table.s27-table{width:100%; border-collapse:collapse; font-size:13px; min-width:
 .s27-result-lbl{font-size:12px; color:var(--s27-ink-3); font-weight:700; margin-top:6px;}
 .s27-result-cost{margin-top:10px; padding-top:10px; border-top:1px solid var(--s27-line); font-family:var(--font-display); font-size:13px; font-weight:800; color:var(--s27-ink-2);}
 .s27-result-cost span{color:var(--s27-ink-4); font-weight:700;}
-.s27-callout{display:flex; gap:12px; align-items:flex-start; background:var(--s27-yellow-soft); border:1px solid rgba(248,192,40,0.45); border-radius:var(--r-md); padding:14px 18px; font-size:13px; color:var(--s27-ink-2); line-height:1.55;}
-.s27-callout svg{width:20px; height:20px; flex-shrink:0; color:var(--s27-yellow-ink); margin-top:1px;}
+.s27-callout{display:flex; gap:12px; align-items:flex-start; background:var(--s27-paper-3); border:1px solid var(--s27-line); border-radius:var(--r-md); padding:14px 18px; font-size:13px; color:var(--s27-ink-2); line-height:1.55;}
+.s27-callout svg{width:20px; height:20px; flex-shrink:0; color:var(--s27-ink-3); margin-top:1px;}
 .s27-callout b{color:var(--s27-ink); font-family:var(--font-display); font-weight:800;}
 
 /* DOELGROEPEN */
@@ -481,8 +481,8 @@ function buildDataset(raw){
     return day;
   }
 
-  const PLATFORMS={ meta:{label:'Meta',sub:'Facebook & Instagram'}, tiktok:{label:'TikTok',sub:'TikTok Ads'},
-                    snapchat:{label:'Snapchat',sub:'Snapchat Ads'}, google:{label:'Google Ads',sub:'Search'} };
+  const PLATFORMS={ meta:{label:'Meta Ads',sub:'Facebook & Instagram'}, tiktok:{label:'TikTok Ads',sub:'Video-advertenties'},
+                    snapchat:{label:'Snapchat Ads',sub:'Snapchat'}, google:{label:'Google Ads',sub:'Search'} };
   const cur={ meta:metaTotals('periode_meta_campaign'), tiktok:tiktokTotals('periode_tiktok_campaign'),
               snapchat:snapTotals('periode_snapchat_campaign'), google:googleTotals('periode_google_ads_campaign') };
   const prev={ meta:metaTotals('vorige_periode_meta_campaign'), tiktok:tiktokTotals('vorige_periode_tiktok_campaign'),
@@ -534,11 +534,11 @@ function buildDataset(raw){
   /* ---------- RESULTATEN ---------- */
   const m=platforms.meta.current, t=platforms.tiktok.current, s=platforms.snapchat.current, g=platforms.google.current;
   const tkLpv=(F('periode_tiktok_campaign')||[]).reduce((a,r)=>a+num(r.total_landing_page_view),0);
-  const results={ note:"Dit zijn verkeerscampagnes — het hoofddoel is websitebezoek. Conversiemeting (inschrijvingen) staat enkel actief op Google Ads. Voor Meta, TikTok en Snapchat tonen we de dichtstbijzijnde resultaatmetriek (landingspagina-weergaven / swipe-ups).",
+  const results={ note:"Dit zijn verkeerscampagnes — het hoofddoel is websitebezoek. Conversiemeting (inschrijvingen) staat enkel actief op Google Ads. Voor Meta, TikTok en Snapchat tonen we de dichtstbijzijnde resultaatmetriek (landingspagina-weergaven / klikken naar de site).",
     platforms:{
       meta:{result:Math.round(m.landing_page_views||0),result_label:'Landingspagina-weergaven',cost:m.landing_page_views?S27round(m.spend/m.landing_page_views,2):0,cost_label:'per weergave',conv_tracked:false},
       tiktok:{result:Math.round(tkLpv),result_label:'Landingspagina-weergaven',cost:tkLpv?S27round(t.spend/tkLpv,2):0,cost_label:'per weergave',conv_tracked:false},
-      snapchat:{result:Math.round(s.clicks||0),result_label:'Swipe-ups',cost:s.clicks?S27round(s.spend/s.clicks,2):0,cost_label:'per swipe',conv_tracked:false},
+      snapchat:{result:Math.round(s.clicks||0),result_label:'Klikken',cost:s.clicks?S27round(s.spend/s.clicks,2):0,cost_label:'per klik',conv_tracked:false},
       google:{result:Math.round(g.conversions||0),result_label:'Conversies',cost:g.conversions?S27round(g.spend/g.conversions,2):0,cost_label:'per conversie',conv_tracked:true,extra:'+ '+Math.round(g.phone_calls||0)+' telefoonoproepen'}
     } };
 
@@ -637,6 +637,9 @@ const C = DATA.platform_colors;
 // Enkel platformen met activiteit in deze periode tonen (uniform: werkt ook als een klant niet alle kanalen draait)
 const PLAT_ORDER = ['meta','tiktok','snapchat','google'].filter(p=>DATA.platforms&&DATA.platforms[p]&&(((DATA.platforms[p].current||{}).spend||0)>0||((DATA.platforms[p].current||{}).impressions||0)>0));
 const TONE = {meta:'blue',tiktok:'purple',snapchat:'yellow',google:'orange'};
+// Arne-regel (KRITISCH): platformnamen altijd voluit — nooit bare "TikTok"/"Snapchat". Geldt voor élke databron.
+const PLAT_LABEL_FULL={meta:'Meta Ads',tiktok:'TikTok Ads',snapchat:'Snapchat Ads',google:'Google Ads'};
+Object.keys(DATA.platforms||{}).forEach(p=>{ if(DATA.platforms[p]&&PLAT_LABEL_FULL[p]) DATA.platforms[p].label=PLAT_LABEL_FULL[p]; });
 
 /* ---------- Totals ---------- */
 function totals(period){
@@ -668,8 +671,8 @@ const KPIS = [
   {label:'Vertoningen',      tone:'purple', val:compact(TC.impressions),cur:TC.impressions, prev:TP.impressions, mode:'higher-better'},
   {label:'Klikken',          tone:'green',  val:int(TC.clicks),       cur:TC.clicks,      prev:TP.clicks,      mode:'higher-better'},
   {label:'Bereik (totaal)',  tone:'pink',   val:compact(TC.reach),    cur:TC.reach,       prev:TP.reach,       mode:'higher-better'},
-  {label:'Gem. CTR',         tone:'orange', val:pct(TC.ctr),          cur:TC.ctr,         prev:TP.ctr,         mode:'higher-better'},
-  {label:'Gem. CPC',         tone:'yellow', val:eur2(TC.cpc),         cur:TC.cpc,         prev:TP.cpc,         mode:'lower-better'},
+  {label:'CTR',              tone:'orange', val:pct(TC.ctr),          cur:TC.ctr,         prev:TP.ctr,         mode:'higher-better'},
+  {label:'CPC',              tone:'yellow', val:eur2(TC.cpc),         cur:TC.cpc,         prev:TP.cpc,         mode:'lower-better'},
 ];
 document.getElementById('kpiGrid').innerHTML = KPIS.map(k=>`
   <div class="s27-kpi" data-tone="${k.tone}">
@@ -692,7 +695,7 @@ function platMetrics(p){
   const extra={
     meta:[{s:'Linkkliks', b:int(d.link_clicks)},{s:'Landingspagina', b:int(d.landing_page_views)},{s:'Videoweergaven', b:compact(d.video_views)}],
     tiktok:[{s:'Videoweergaven', b:compact(d.video_views)},{s:'Likes', b:int(d.likes)},{s:'Shares', b:int(d.shares)}],
-    snapchat:[{s:'Videoweergaven', b:compact(d.video_views)},{s:'Video 15s+', b:compact(d.video_views_15s)},{s:'Swipes', b:int(d.clicks)}],
+    snapchat:[{s:'Videoweergaven', b:compact(d.video_views)},{s:'Video 15s+', b:compact(d.video_views_15s)},{s:'Klikken', b:int(d.clicks)}],
     google:[{s:'Conversies', b:int(d.conversions)},{s:'Telefoonoproepen', b:int(d.phone_calls)},{s:'Klikken', b:int(d.clicks)}],
   };
   return base.concat(extra[p]||[]);
@@ -752,6 +755,8 @@ renderTable();
 /* ---------- Resultaten ---------- */
 (function(){
   const R=DATA.results; if(!R) return;
+  // Arne-regel (KRITISCH): Snapchat-swipes heten overal "Klikken" — nooit "Swipes"/"Swipe-ups". Normaliseer ook stale/gecachete data.
+  Object.keys(R.platforms||{}).forEach(p=>{ var x=R.platforms[p]; if(x){ x.result_label=String(x.result_label||'').replace(/swipe-?ups?/ig,'Klikken'); x.cost_label=String(x.cost_label||'').replace(/per\s*swipe/ig,'per klik'); } });
   document.getElementById('resultsGrid').innerHTML = PLAT_ORDER.map(p=>{
     const r=R.platforms[p]; if(!r) return '';
     const track = r.conv_tracked
@@ -816,7 +821,7 @@ function renderAdTable(){
 document.getElementById('methodList').innerHTML=[
   `<b>Bron & periode.</b> Cijfers rechtstreeks uit Meta, TikTok, Snapchat & Google Ads voor de periode ${fmtDate(DATA.period.start)} t.e.m. ${fmtDate(DATA.period.end)}.`,
   `<b>Dagelijks verloop.</b> Dagdata is beschikbaar voor Meta & Google Ads. TikTok & Snapchat rapporteren in deze export enkel periodetotalen — daarom verschijnen die niet in de dagcurve.`,
-  `<b>Klikken.</b> Voor Meta tonen we linkkliks per dag; Snapchat-"klikken" zijn swipe-ups. CTR = klikken ÷ vertoningen, CPC = besteding ÷ klikken.`,
+  `<b>Klikken.</b> "Klikken" = kliks naar je website — voor Meta Ads de linkkliks, voor Snapchat Ads de swipes (Snapchats eigen term voor een klik). CTR = klikken ÷ vertoningen, CPC = besteding ÷ klikken.`,
   `<b>Bereik.</b> Het totale bereik is de som per platform en kan overlappen (eenzelfde persoon kan op meerdere kanalen bereikt zijn). Vertoningen zijn niet-uniek.`,
   `<b>Vergelijking.</b> Procentuele verschillen zijn t.o.v. de vorige periode (${fmtDate(DATA.previous_period.start)} – ${fmtDate(DATA.previous_period.end)}). Besteding kleurt neutraal — een budgetkeuze, geen waardeoordeel.`,
   `<b>Campagnes.</b> Campagnes zonder enige activiteit in deze periode (0 besteding én 0 vertoningen) zijn weggelaten uit het overzicht.`,
@@ -879,7 +884,7 @@ function mkGrad(ctx,color){
 const chartDaily=new Chart(dailyCtx,{
   type:'line',
   data:{labels:dailyLabels, datasets:[
-    {label:'Meta', platform:'meta', data:[], borderColor:C.meta, backgroundColor:mkGrad(dailyCtx.getContext('2d'),C.meta), borderWidth:2.5, tension:0.35, fill:true, pointRadius:0, pointHoverRadius:5, pointHoverBackgroundColor:C.meta, pointHoverBorderColor:'#fff', pointHoverBorderWidth:2},
+    {label:'Meta Ads', platform:'meta', data:[], borderColor:C.meta, backgroundColor:mkGrad(dailyCtx.getContext('2d'),C.meta), borderWidth:2.5, tension:0.35, fill:true, pointRadius:0, pointHoverRadius:5, pointHoverBackgroundColor:C.meta, pointHoverBorderColor:'#fff', pointHoverBorderWidth:2},
     {label:'Google Ads', platform:'google', data:[], borderColor:C.google, backgroundColor:mkGrad(dailyCtx.getContext('2d'),C.google), borderWidth:2.5, tension:0.35, fill:true, pointRadius:0, pointHoverRadius:5, pointHoverBackgroundColor:C.google, pointHoverBorderColor:'#fff', pointHoverBorderWidth:2},
   ]},
   options:{responsive:true, maintainAspectRatio:false, interaction:{mode:'index', intersect:false},
@@ -921,7 +926,7 @@ function renderLegend(){
   const note=document.getElementById('chartNote');
   if(curView==='daily'){
     L.style.display='flex';
-    L.innerHTML=[['meta','Meta'],['google','Google Ads']].filter(([p])=>PLAT_ORDER.includes(p)).map(([p,lbl])=>
+    L.innerHTML=[['meta','Meta Ads'],['google','Google Ads']].filter(([p])=>PLAT_ORDER.includes(p)).map(([p,lbl])=>
       `<button class="s27-legbtn ${dailyVisible[p]?'':'off'}" data-p="${p}"><span class="dot" style="background:${C[p]}"></span>${lbl}</button>`).join('');
     L.querySelectorAll('.s27-legbtn').forEach(b=>b.addEventListener('click',()=>{
       const p=b.dataset.p; dailyVisible[p]=!dailyVisible[p]; b.classList.toggle('off'); updateCharts();
