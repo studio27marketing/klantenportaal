@@ -1177,6 +1177,15 @@ body { margin:0; background:var(--s27-paper-2); }
 .s27-status-ok { color:var(--s27-green-ink); font-weight:700; }
 .s27-status-err { color:var(--s27-orange-ink); font-weight:700; }
 
+/* #6 Notificatie-voorkeuren per persoon (Instellingen) */
+.s27-notiflist { display:flex; flex-direction:column; gap:10px; margin-top:6px; }
+.s27-notifrow { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:11px 14px; background:var(--s27-paper-2); border:1px solid var(--s27-line); border-radius:var(--r-md); }
+.s27-notifrow-info { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.s27-notifrow-info strong { font-family:var(--font-display); font-size:14px; font-weight:800; color:var(--s27-ink); }
+.s27-notifrow-info span { font-size:12px; color:var(--s27-ink-3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.s27-notifrow-pref { flex:0 0 auto; padding:9px 12px; border:1.5px solid var(--s27-line); border-radius:var(--r-md); font-size:13.5px; font-family:var(--font-body); background:var(--s27-paper); color:var(--s27-ink); cursor:pointer; }
+.s27-notifrow-pref:focus { outline:none; border-color:var(--s27-blue); box-shadow:var(--sh-focus,0 0 0 3px rgba(48,131,220,.28)); }
+
 /* Takken-nav: elke tak een eigen knop met mini-merkstempel (niet enkel op de home) */
 .s27-navdrop--werk { min-width:230px; }
 .s27-navstamp { display:inline-flex; width:18px; height:18px; flex:0 0 18px; align-items:center; justify-content:center; }

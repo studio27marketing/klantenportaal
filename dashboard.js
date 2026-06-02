@@ -1984,7 +1984,7 @@ function openContactModal(existing){
   modal.id = 's27-contact-modal';
   modal.className = 's27-dm-overlay';
   modal.setAttribute('role','dialog'); modal.setAttribute('aria-modal','true');
-  const opt = (v) => '<option value="' + v + '"' + ((existing.voorkeur||'WhatsApp')===v?' selected':'') + '>' + v + '</option>';
+  const opt = (v) => '<option value="' + v + '"' + ((existing.voorkeur||'Geen')===v?' selected':'') + '>' + v + '</option>';
   modal.innerHTML =
     '<div class="s27-dm-dialog" role="document">' +
       '<button class="s27-dm-close" aria-label="Sluiten">×</button>' +
@@ -2022,13 +2022,15 @@ async function saveContact(form, existing, close){
     id: existing.id || '',
     voornaam: g('voornaam'), achternaam: g('achternaam'),
     email: g('email'), gsm: g('gsm'), rol: g('rol'),
-    voorkeur: form.voorkeur ? form.voorkeur.value : 'WhatsApp'
+    voorkeur: form.voorkeur ? form.voorkeur.value : 'Geen'
   };
   if(!rec.voornaam || !rec.achternaam){ if(errEl){ errEl.style.display='block'; errEl.textContent='Voornaam en achternaam zijn verplicht.'; } return; }
   if(btn){ btn.disabled = true; btn.textContent = 'Opslaan…'; }
   try {
     if(!state.demoMode && ENDPOINTS.bedrijfBeheer && ENDPOINTS.bedrijfBeheer.indexOf('BEDRIJFBEHEER_HOOK') === -1){
-      await api(ENDPOINTS.bedrijfBeheer, Object.assign({ action:'save_contact', bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token }, rec));
+      // bestaand contact → update_contact (editATask, geen duplicaat); nieuw → save_contact (create + koppel)
+      const act = existing.id ? { action:'update_contact', contact_id: existing.id } : { action:'save_contact' };
+      await api(ENDPOINTS.bedrijfBeheer, Object.assign(act, { bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token }, rec));
     }
     // lokaal bijwerken zodat de lijst meteen klopt (optimistic)
     const bc = state.bedrijfContent || (state.bedrijfContent = {});
@@ -3467,6 +3469,51 @@ async function submitNieuwProject(e){
     if(btn){ btn.disabled = false; btn.textContent = intentie==='direct_start'?'Bevestigen & inplannen':'Aanvraag versturen'; }
   }
 }
+// #6: notificatie-voorkeuren PER PERSOON, persistent naar ClickUp (via update_contact).
+// Standaard "Geen" (uit) tot iemand expliciet kiest.
+function renderNotifPerPersoon(contacts){
+  const list = Array.isArray(contacts) ? contacts : [];
+  if(!list.length){
+    return '<p class="s27-empty-txt">Voeg eerst contactpersonen toe bij <strong>Mijn bedrijf</strong> — daar bepaal je per persoon de meldingen.</p>';
+  }
+  const VK = ['Geen','WhatsApp','E-mail','Beide'];
+  return '<div class="s27-notiflist">' + list.map(function(c){
+    const naam = ((c.voornaam||'') + ' ' + (c.achternaam||'')).trim() || 'Contactpersoon';
+    const huidig = c.voorkeur || 'Geen';
+    const sub = [c.gsm, c.email].filter(Boolean).join(' · ');
+    return '<div class="s27-notifrow">' +
+      '<div class="s27-notifrow-info"><strong>' + esc(naam) + '</strong>' + (sub ? '<span>' + esc(sub) + '</span>' : '') + '</div>' +
+      '<select class="s27-notifrow-pref" data-cid="' + esc(c.id||'') + '" aria-label="Notificatie-voorkeur ' + esc(naam) + '">' +
+        VK.map(function(v){ return '<option value="' + v + '"' + (v===huidig?' selected':'') + '>' + v + '</option>'; }).join('') +
+      '</select>' +
+    '</div>';
+  }).join('') + '</div>';
+}
+function wireNotifPerPersoon(){
+  document.querySelectorAll('.s27-notifrow-pref').forEach(function(sel){
+    sel.addEventListener('change', async function(){
+      const cid = sel.getAttribute('data-cid');
+      const contacts = (state.bedrijfContent && state.bedrijfContent.contactpersonen) || [];
+      const c = contacts.find(function(x){ return x.id === cid; });
+      if(!c) return;
+      const nieuw = sel.value;
+      c.voorkeur = nieuw;
+      const naam = ((c.voornaam||'') + ' ' + (c.achternaam||'')).trim();
+      const status = $('s27-notif-status');
+      if(status){ status.style.display='block'; status.className='s27-settings-status'; status.textContent='Opslaan…'; }
+      if(state.demoMode || !ENDPOINTS.bedrijfBeheer || ENDPOINTS.bedrijfBeheer.indexOf('BEDRIJFBEHEER_HOOK') !== -1){
+        if(status){ status.className='s27-settings-status s27-status-ok'; status.textContent='✓ Voorkeur voor ' + naam + ' opgeslagen (demo).'; }
+        return;
+      }
+      try{
+        const r = await api(ENDPOINTS.bedrijfBeheer, { action:'update_contact', contact_id:c.id, bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token, voornaam:c.voornaam||'', achternaam:c.achternaam||'', email:c.email||'', gsm:c.gsm||'', rol:c.rol||'', voorkeur:nieuw });
+        if(r && r.ok && r.data && r.data.ok){ if(status){ status.className='s27-settings-status s27-status-ok'; status.textContent='✓ Voorkeur voor ' + naam + ' opgeslagen.'; } }
+        else throw new Error('nok');
+      }catch(e){ if(status){ status.className='s27-settings-status s27-status-err'; status.textContent='Kon niet opslaan — probeer opnieuw.'; } }
+    });
+  });
+}
+
 async function renderInstellingenTab(){
   const body = $('s27-instellingen-body');
   if(!body) return;
@@ -3481,10 +3528,16 @@ async function renderInstellingenTab(){
     }
     state.bedrijfContent = data;
   }
+  // #6: contactpersonen + hun voorkeur server-side ophalen voor de notif-per-persoon-sectie
+  if((!data.contactpersonen || !data.contactpersonen.length) && !state.demoMode && ENDPOINTS.bedrijfBeheer && ENDPOINTS.bedrijfBeheer.indexOf('BEDRIJFBEHEER_HOOK') === -1){
+    try{
+      const gt = await api(ENDPOINTS.bedrijfBeheer, { action:'get_team', bedrijf_id: state.session.bedrijf_id, session_token: state.session.session_token });
+      if(gt && gt.ok && gt.data && Array.isArray(gt.data.contactpersonen)) data.contactpersonen = gt.data.contactpersonen;
+    }catch(e){ /* notif-sectie toont dan de lege-staat */ }
+  }
   const sess = state.session || {};
   const dash = state.dashboard || {};
   const contact = dash.contact || {};
-  const prefs = loadNotifPrefs();
   const contactC = loadContactCache();
   const cc = data.contact || {};
   const c = {
@@ -3541,18 +3594,9 @@ async function renderInstellingenTab(){
     <div class="s27-settings-grid">
       <section class="s27-settings-card">
         <h3 class="s27-settings-title"><svg width="16" height="16"><use href="#s27p-spark"/></svg> Notificatie-voorkeuren</h3>
-        <p class="s27-settings-sub">Hoe wil je dat we je waarschuwen bij nieuwe feedback-vraag, opleveringen of vragen vanuit het team?</p>
-        <div class="s27-notif-options">
-          <label class="s27-notif-opt"><input type="radio" name="notif" value="mail" ${prefs.kanaal === 'mail' ? 'checked' : ''}/><div><strong>Alleen e-mail</strong><span>Klassieke updates in je inbox</span></div></label>
-          <label class="s27-notif-opt"><input type="radio" name="notif" value="whatsapp" ${prefs.kanaal === 'whatsapp' ? 'checked' : ''}/><div><strong>Alleen WhatsApp</strong><span>Snel, direct, op je telefoon</span></div></label>
-          <label class="s27-notif-opt"><input type="radio" name="notif" value="beide" ${prefs.kanaal === 'beide' || !prefs.kanaal ? 'checked' : ''}/><div><strong>Beide kanalen</strong><span>Niets missen — aanbevolen</span></div></label>
-        </div>
-        <div class="s27-notif-targets">
-          <div class="s27-notif-target"><span>📱 WhatsApp naar</span><strong>${waGsm ? esc(waGsm) : 'geen gsm ingesteld'}</strong></div>
-          <div class="s27-notif-target"><span>✉️ E-mail naar</span><strong>${esc(waEmail || '—')}</strong></div>
-          <p class="s27-notif-target-hint">Klopt dit niet? Pas je gsm/e-mail aan hierboven bij <strong>Contactgegevens</strong>.</p>
-        </div>
-        <button class="s27-btn s27-btn-primary" id="s27-save-notif" style="margin-top:14px">Voorkeuren opslaan</button>
+        <p class="s27-settings-sub">Per persoon: hoe willen jullie verwittigd worden bij een feedback-vraag, oplevering of bericht van het team? <strong>Standaard staat dit uit</strong> — zet het aan per persoon. Wijzigingen worden meteen opgeslagen.</p>
+        ${renderNotifPerPersoon(data.contactpersonen)}
+        <p class="s27-notif-target-hint">Gsm of e-mail van een persoon kloppen niet? Pas die aan bij <strong>Mijn bedrijf → contactpersonen</strong>.</p>
         <p class="s27-settings-status" id="s27-notif-status" style="display:none"></p>
       </section>
 
@@ -3588,8 +3632,7 @@ async function renderInstellingenTab(){
   // Wire up handlers
   attachBedrijfHandlers(); // contactgegevens-edit + algemene-voorkeuren (null-guarded, wired waar de velden staan)
   wirePasswordReset();
-  const saveBtn = $('s27-save-notif');
-  if(saveBtn) saveBtn.addEventListener('click', saveNotifPrefs);
+  wireNotifPerPersoon();
   const clearBtn = $('s27-clear-cache');
   if(clearBtn) clearBtn.addEventListener('click', () => {
     if(!confirm('Cache wissen, uitloggen en het portaal vers herladen?\n\nJe moet daarna opnieuw inloggen.')) return;
