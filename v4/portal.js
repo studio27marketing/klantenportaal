@@ -359,6 +359,31 @@ async function saveNotifPref(sel){
   const t=(window.S27DATA && S27DATA.team()); const c=(t&&t.contactpersonen&&t.contactpersonen[0])||{};
   try { await api(ENDPOINTS.bedrijfBeheer, { action:'update_contact', contact_id:c.id||'', bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, voornaam:c.voornaam||'', achternaam:c.achternaam||'', email:c.email||'', gsm:c.gsm||'', rol:c.rol||'', voorkeur:sel.value }); } catch(e){}
 }
+function pickMtype(el,who,color,type){
+  el.parentElement.querySelectorAll('.mtype').forEach(b=>b.classList.remove('sel')); el.classList.add('sel');
+  const ag=$id('meetAgenda'); if(ag)ag.classList.remove('np-hidden');
+  const w=$id('meetWho'); if(w)w.innerHTML='<span class="mw-av" style="background:var(--s27-'+color+')">'+who[0]+'</span><span class="mw-tx">'+type+'<b>met '+who+'</b></span>';
+  const c=$id('meetConfirm'); if(c){ c.textContent='Bevestig afspraak met '+who; c.dataset.who=who; }
+}
+async function confirmMeeting(btn){
+  const day=document.querySelector('.calday.sel'), slot=document.querySelector('.slot.sel');
+  const dag=day?day.textContent.replace(/\s+/g,' ').trim():'(geen dag)'; const tijd=slot?slot.textContent.trim():'(geen tijd)';
+  const who=(btn&&btn.dataset.who)||'Studio 27';
+  if(state.demoMode){ if(btn) btn.innerHTML='Aanvraag verstuurd ✓'; return; }
+  if(btn){ btn.disabled=true; btn.textContent='Versturen…'; }
+  try { await api(ENDPOINTS.directMessage, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), onderwerp:'Meeting-aanvraag via portaal', bericht:'Graag een meeting met '+who+'. Voorkeur: '+dag+' om '+tijd+'.' });
+    if(btn){ btn.disabled=false; btn.innerHTML='Aanvraag verstuurd ✓ — we bevestigen snel'; }
+  } catch(e){ if(btn){ btn.disabled=false; btn.textContent='Opnieuw proberen'; } }
+}
+async function submitNieuwProject(btn){
+  const dienst=(($id('npDienst')||{}).value)||''; const typeSel=$id('npType'); const typeTxt=(typeSel&&typeSel.value)?typeSel.options[typeSel.selectedIndex].text:''; const when=(($id('npWhen')||{}).value)||'';
+  if(!dienst) return;
+  if(state.demoMode){ if(btn) btn.innerHTML='Aanvraag verstuurd ✓'; return; }
+  if(btn){ btn.disabled=true; btn.textContent='Versturen…'; }
+  try { await api(ENDPOINTS.newProjectIntake, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), project_type:dienst+(typeTxt?(' — '+typeTxt):''), gewenste_opleverdatum:when, omschrijving:'Aanvraag via portaal: '+dienst+(typeTxt?(' / '+typeTxt):'')+' / start: '+when, intentie:'offerte_meeting' });
+    if(btn){ btn.disabled=false; btn.innerHTML='Aanvraag verstuurd ✓'; }
+  } catch(e){ if(btn){ btn.disabled=false; btn.textContent='Opnieuw proberen'; } }
+}
 function toggleBot(){ const p=$id('botPanel'),f=$id('botFab'); const open=p.classList.toggle('show'); f.style.display=open?'none':'flex'; }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($id('tourScrim')&&$id('tourScrim').classList.contains('show'))endTour(false); else if(state.viewMode==='project')goTab('projecten'); } });
 

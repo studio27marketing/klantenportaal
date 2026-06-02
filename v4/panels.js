@@ -350,19 +350,31 @@ function panelPerformance(){
 function panelMeetings(){
   const days=[['ma','12'],['di','13'],['wo','14'],['do','15'],['vr','16'],['ma','19'],['di','20']];
   const slots=['09:00','09:30','10:00','11:00','13:30','14:00','14:30','16:00'];
-  return hero('blue','Plannen · Meetings',
-    `Jouw <span class="accent">agenda${squig()}</span> met Studio 27`)
-  +`<div class="meet-wrap">
-    <div class="meet-main">
-      <div class="section-head" style="margin-top:0"><h2>Geplande meetings</h2><span class="count">2 gepland</span></div>
-      <div class="meet-list">
-        <div class="meeting-row big"><div class="date-block"><div class="d">14</div><div class="m">mei</div></div>
+  const mt=(window.S27DATA && S27DATA.meetings());
+  const MAAND=['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
+  let meetHtml;
+  if(mt){
+    const up=mt.list.filter(m=>m.dt && m.dt.getTime()>=Date.now()-86400000);
+    meetHtml = up.length ? up.map(m=>{
+      const d=m.dt; const uur=d?(('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)):'';
+      return `<div class="meeting-row big"><div class="date-block"><div class="d">${d?d.getDate():'–'}</div><div class="m">${d?MAAND[d.getMonth()]:''}</div></div>
+        <div class="mr-tx"><span class="mr-type">${esc(m.type)}</span><b>${esc(m.titel)}</b><div class="mr-meta">${ic('clock',14)} ${uur} · ${ic('pin',14)} ${m.link?'Google Meet':'Studio 27'}</div></div>
+        <div class="avstack"><span class="av" style="background:var(--s27-blue)">S27</span></div></div>`;
+    }).join('') : `<div class="empty" style="padding:30px"><p>Nog geen geplande meetings. Plan er hieronder vlot eentje in.</p></div>`;
+  } else {
+    meetHtml = `<div class="meeting-row big"><div class="date-block"><div class="d">14</div><div class="m">mei</div></div>
           <div class="mr-tx"><span class="mr-type">Algemene meeting</span><b>Maandelijkse rapportage</b><div class="mr-meta">${ic('clock',14)} 10:00 · ${ic('pin',14)} Google Meet</div></div>
           <div class="avstack"><span class="av" style="background:var(--s27-blue)">IM</span></div></div>
         <div class="meeting-row big"><div class="date-block"><div class="d">22</div><div class="m">mei</div></div>
           <div class="mr-tx"><span class="mr-type">${ic('video',13)} Nieuw project · video</span><b>Kick-off recruitmentvideo</b><div class="mr-meta">${ic('clock',14)} 14:00 · ${ic('pin',14)} Studio 27, Rijkevorsel</div></div>
-          <div class="avstack"><span class="av" style="background:var(--s27-orange)">AG</span></div></div>
-      </div>
+          <div class="avstack"><span class="av" style="background:var(--s27-orange)">AG</span></div></div>`;
+  }
+  return hero('blue','Plannen · Meetings',
+    `Jouw <span class="accent">agenda${squig()}</span> met Studio 27`)
+  +`<div class="meet-wrap">
+    <div class="meet-main">
+      <div class="section-head" style="margin-top:0"><h2>Geplande meetings</h2><span class="count">${mt?mt.list.length+' gepland':'2 gepland'}</span></div>
+      <div class="meet-list">${meetHtml}</div>
       <div class="section-head"><h2>Recente notulen</h2></div>
       <div class="meet-list">
         ${[['Kick-off merkstrategie','24 apr'],['Maandrapport april','3 mei'],['Strategie-werksessie','11 apr']].map(n=>`
@@ -386,7 +398,7 @@ function panelMeetings(){
         <div class="slotgrid">
           ${slots.map((s,i)=>`<button class="slot ${i===2?'sel':''}" ${i===4?'disabled':''} onclick="selectSlot(this)">${s}</button>`).join('')}
         </div>
-        <button class="btn btn-branch br-blue btn-block" id="meetConfirm" style="margin-top:16px">Bevestig afspraak</button>
+        <button class="btn btn-branch br-blue btn-block" id="meetConfirm" style="margin-top:16px" onclick="confirmMeeting(this)">Bevestig afspraak</button>
       </div>
     </aside>
   </div>`;
@@ -430,7 +442,7 @@ function panelNieuwProject(){
       <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap"><span class="rp-lab">Richtprijs</span><span class="big" id="npPriceVal" style="color:var(--s27-blue-ink)">—</span></div>
       <div class="disclaimer">${ic('info',16)} Dit is een richtprijs — wij kijken ze persoonlijk na.</div>
     </div>
-    <div class="np-actions np-hidden" id="npActions"><button class="btn btn-primary">Vraag offerte aan ${ic('arrow',16)}</button><button class="btn btn-outline">Plan eerst een koffietje</button></div>
+    <div class="np-actions np-hidden" id="npActions"><button class="btn btn-primary" onclick="submitNieuwProject(this)">Vraag offerte aan ${ic('arrow',16)}</button><button class="btn btn-outline" onclick="goTab('meetings')">Plan eerst een koffietje</button></div>
   </div>`;
 }
 
