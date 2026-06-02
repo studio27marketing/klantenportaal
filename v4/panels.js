@@ -470,6 +470,8 @@ function panelHuisstijl(){
 }
 
 function panelFacturatie(){
+  const b=(window.S27DATA && S27DATA.bedrijf())||{};
+  const demo=!_live();
   return hero('green','Mijn bedrijf · Facturatie',
     `Jouw <span class="accent">facturen${squig()}</span> op een rij`,
     'Transparant en zonder kleine lettertjes — je weet exact waarvoor je betaalt.',
@@ -477,11 +479,12 @@ function panelFacturatie(){
   +`<div class="setsec">
     <h3>Bedrijfsgegevens</h3>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:6px">
-      <div class="field"><label>Ondernemingsnummer</label><input value="BE 0123.456.789"></div>
-      <div class="field"><label>Aantal medewerkers</label><input value="24"></div>
-      <div class="field"><label>Facturatie-e-mail</label><input value="boekhouding@testclient.be"></div>
+      <div class="field"><label>Ondernemingsnummer</label><input id="facBtw" value="${esc(b.btw||(demo?'BE 0123.456.789':''))}" placeholder="BE 0xxx.xxx.xxx"></div>
+      <div class="field"><label>Aantal medewerkers</label><input id="facAantal" value="${esc(b.aantal_medewerkers||(demo?'24':''))}"></div>
+      <div class="field"><label>Facturatie-e-mail</label><input id="facEmail" value="${esc(b.facturatie_email||(demo?'boekhouding@testclient.be':''))}" placeholder="boekhouding@…"></div>
       <div class="field"><label>Betaaltermijn</label><select><option>30 dagen</option><option>14 dagen</option></select></div>
     </div>
+    <div style="margin-top:14px"><button class="btn btn-branch br-green btn-sm" onclick="saveBedrijfGegevens(this)">${ic('check',15)} Gegevens opslaan</button></div>
   </div>
   <div class="setsec">
     <h3>Facturen</h3><p class="sdesc">Algemeen overzicht — filter optioneel per project.</p>
@@ -493,14 +496,14 @@ function panelFacturatie(){
 }
 
 function panelInstellingen(){
-  const opts=[['WhatsApp','meldingen via WA','phone',true],['E-mail','klassiek per mail','mail',false],['Beide','niets missen','spark',false],['Geen','rust in je hoofd','flat',false]];
+  const t=(window.S27DATA && S27DATA.team())||{}; const c=(t.contactpersonen&&t.contactpersonen[0])||{}; const vk=c.voorkeur||'Geen'; const demo=!_live();
   return hero('indigo','Mijn bedrijf · Instellingen',
     `Jouw <span class="accent">voorkeuren${squig()}</span>`)
   +`<div class="setsec">
     <h3>Notificatievoorkeuren</h3><p class="sdesc">Hoe en wanneer we je op de hoogte houden.</p>
     <div class="set-grid">
-      <div class="field"><label>Meldingen via</label><select><option>WhatsApp (standaard)</option><option>E-mail</option><option>Beide</option><option>Geen</option></select></div>
-      <div class="field"><label>GSM / WhatsApp-nummer</label><input value="+32 478 12 34 56"></div>
+      <div class="field"><label>Meldingen via</label><select onchange="saveNotifPref(this)">${['Geen','WhatsApp','E-mail','Beide'].map(o=>`<option ${o===vk?'selected':''}>${o}</option>`).join('')}</select></div>
+      <div class="field"><label>GSM / WhatsApp-nummer</label><input value="${esc(c.gsm||(demo?'+32 478 12 34 56':''))}" placeholder="+32 4xx xx xx xx"></div>
     </div>
   </div>
   <div class="setsec">

@@ -344,6 +344,21 @@ async function submitFeedbackReal(choice){
   if(state.demoMode || !state.activeProject) return;
   try { await api(ENDPOINTS.feedbackV2, { task_id:state.activeProject, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[{label:'Project',choice:choice}], algemene_opmerking:'' }); } catch(e){}
 }
+// bedrijfsgegevens opslaan (update_bedrijf)
+async function saveBedrijfGegevens(btn){
+  if(state.demoMode){ if(btn) btn.innerHTML='Opgeslagen ✓'; return; }
+  if(btn){ btn.disabled=true; btn.textContent='Opslaan…'; }
+  try { await api(ENDPOINTS.bedrijfBeheer, { action:'update_bedrijf', bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, ondernemingsnummer:(($id('facBtw')||{}).value||''), aantal_medewerkers:(($id('facAantal')||{}).value||''), website:'' });
+    if(($id('facEmail'))){ try{ await api(ENDPOINTS.facturatieSave, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, facturatie_email:$id('facEmail').value||'' }); }catch(e){} }
+    if(btn){ btn.disabled=false; btn.innerHTML='Opgeslagen ✓'; }
+  } catch(e){ if(btn){ btn.disabled=false; btn.textContent='Opnieuw proberen'; } }
+}
+// notificatievoorkeur opslaan (update_contact)
+async function saveNotifPref(sel){
+  if(state.demoMode) return;
+  const t=(window.S27DATA && S27DATA.team()); const c=(t&&t.contactpersonen&&t.contactpersonen[0])||{};
+  try { await api(ENDPOINTS.bedrijfBeheer, { action:'update_contact', contact_id:c.id||'', bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, voornaam:c.voornaam||'', achternaam:c.achternaam||'', email:c.email||'', gsm:c.gsm||'', rol:c.rol||'', voorkeur:sel.value }); } catch(e){}
+}
 function toggleBot(){ const p=$id('botPanel'),f=$id('botFab'); const open=p.classList.toggle('show'); f.style.display=open?'none':'flex'; }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($id('tourScrim')&&$id('tourScrim').classList.contains('show'))endTour(false); else if(state.viewMode==='project')goTab('projecten'); } });
 
