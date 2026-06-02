@@ -3354,7 +3354,10 @@ function computeFreeSlots(blokken, durMs){
   return slots;
 }
 
-const PLAN_DUR_MS = 90 * 60000;   // 1u30 (v1; time_estimate-gebaseerd = volgende verfijning)
+const PLAN_DUR_MS = 90 * 60000;        // fallback 1u30
+const PLAN_DUR_MAX = 6 * 3600000;      // time_estimate enkel als realistische meetingduur (≤6u), anders fallback
+function planDurMs(taakEst){ const e = Number(taakEst) || 0; return (e > 0 && e <= PLAN_DUR_MAX) ? e : PLAN_DUR_MS; }
+function fmtDur(ms){ const m = Math.round((Number(ms)||0)/60000), h = Math.floor(m/60), r = m % 60; return h ? (h + 'u' + (r ? String(r).padStart(2,'0') : '')) : (r + 'min'); }
 
 async function loadPlanSlots(taskId, proj){
   const box = $('s27-plan-' + taskId);
@@ -3373,8 +3376,9 @@ async function loadPlanSlots(taskId, proj){
     box.innerHTML = '<p class="s27-shoot-info">Beschikbaarheid kon niet geladen worden. <a href="#" data-dm="meeting" data-dm-onderwerp="Afspraak inplannen — ' + esc(proj.naam||'') + '">Stuur ons je voorkeuren</a> en we plannen samen.</p>';
     return;
   }
-  const slots = computeFreeSlots(data.blokken, PLAN_DUR_MS);
-  state.planCtx[taskId] = { assignee: data.assignee_naam || 'je Studio 27-contact', assignee_email: data.assignee_email || '', list_id: data.list_id || '', online: true, sel: null, proj: proj };
+  const durMs = planDurMs(data.taak_est);
+  const slots = computeFreeSlots(data.blokken, durMs);
+  state.planCtx[taskId] = { assignee: data.assignee_naam || 'je Studio 27-contact', assignee_email: data.assignee_email || '', list_id: data.list_id || '', online: true, sel: null, proj: proj, dur: durMs };
   box.innerHTML = renderPlanPicker(taskId, slots);
 }
 
@@ -3399,7 +3403,7 @@ function renderPlanPicker(taskId, slots){
       '</div></div>';
   }).join('');
   return '<div class="s27-plan-picker">' +
-    '<p class="s27-plan-sub">Met <strong>' + esc(ctx.assignee || '') + '</strong> · duur ± 1u30. Kies een moment:</p>' +
+    '<p class="s27-plan-sub">Met <strong>' + esc(ctx.assignee || '') + '</strong> · duur ± ' + esc(fmtDur(ctx.dur || PLAN_DUR_MS)) + '. Kies een moment:</p>' +
     '<div class="s27-plan-mode"><label><input type="radio" name="plan-mode-' + esc(taskId) + '" value="online" checked data-plan-mode="' + esc(taskId) + '"> Online (Google Meet)</label>' +
     '<label><input type="radio" name="plan-mode-' + esc(taskId) + '" value="fysiek" data-plan-mode="' + esc(taskId) + '"> Fysiek bij Studio 27</label></div>' +
     '<div class="s27-plan-days">' + dagen + '</div>' +
@@ -3414,7 +3418,7 @@ async function bookPlanSlot(taskId){
   const stEl = $('s27-plan-state-' + taskId);
   const btn = $('s27-plan-book-' + taskId);
   if(btn){ btn.disabled = true; btn.textContent = 'Inplannen…'; }
-  const start = ctx.sel, eind = ctx.sel + PLAN_DUR_MS;
+  const start = ctx.sel, eind = ctx.sel + (ctx.dur || PLAN_DUR_MS);
   const iso = function(ms){ return new Date(ms).toISOString(); };
   const proj = ctx.proj || {};
   const t = taskScheduleType(proj) || 'meeting';
