@@ -144,3 +144,23 @@ Deze heb ik **niet** vannacht gebouwd — bewust, omdat ze elk een backend nodig
 - `dashboard.js` / `dashboard.css` — de V3-frontend (branch `portal-v3-rework`, commit `354b786`).
 
 *Geen Make-scenario gewijzigd. Geen ClickUp-data gewijzigd. Niets naar main gepusht. Slaap zacht — er staat niets te branden. 🌙*
+
+---
+
+## 8. UPDATE 02-06 — Bedrijf-beheer gebouwd, getest & LIVE
+
+**Wat er nu live staat (main → CDN):** een volwaardige **"Mijn bedrijf"-beheermodule**.
+- **Frontend** (`dashboard.js`/`dashboard.css`): sectie *bedrijfsgegevens* (bewerkbaar: ondernemingsnummer/BTW, **aantal medewerkers**, website → "Gegevens opslaan") + sectie *team & contactpersonen* (lijst met avatar/rol/ondernemingsleider-badge/voorkeur + "+ Contactpersoon" en "Wijzig" → modal met voornaam/achternaam/email/gsm/rol/**notificatie-voorkeur**/ondernemingsleider). On-brand (lowercase titels, scribble, 28px-kaarten). Lokaal geverifieerd in demo.
+- **Backend** — nieuw scenario **`[PORTAL v2] bedrijf-beheer` (6005469)**, sandbox-map 348572, hook `…bf5xp3rkbh7dik9rp6jvue4w9p2moctn`, **ACTIEF**. Drie acties end-to-end getest op TEST CLIENT BV:
+  - `update_bedrijf` → schrijft #medewerkers + ondernemingsnummer + website (geverifieerd: 22 → terug-gelezen 22; nadien hersteld naar 10).
+  - `save_contact` → maakt contactpersoon aan mét alle velden + **koppelt** aan het bedrijf + zet notificatie-voorkeur (geverifieerd op een testcontact; daarna verwijderd).
+  - `get_team` → leest gegevens + contact_count terug; de portal-pagina verrijkt hiermee live de bedrijfsgegevens.
+
+**🔑 Grootste technische doorbraak/les:** `clickup:makeApiCall` POST/PUT **schrijft stilzwijgend niets** (zowel custom-field-waarden als relaties) — het meldt `{ok:true}` maar ClickUp verandert niet. Oplossing = **native ClickUp-modules**: `editATask` (waarden), `createTaskInList` (nieuw record), en `editATaskWithCustomFieldsAdvanced` (de énige manier om **relatie-velden** te zetten via Make). Alles geverifieerd door terug te lezen.
+
+**🔴 ROOD — jouw check vóór je dit op ECHTE klanten loslaat:**
+1. **Beveiliging (belangrijkst):** scenario 6005469 controleert (nog) niet of de `session_token` bij de `bedrijf_id` hoort. De hook staat in de publieke repo en hij *schrijft* in ClickUp. Vóór echte klanten: voeg een scope-guard toe (vergelijk met Klantportaal-token `4474d855`) — laat me dit doen zodra je 't zegt.
+2. **Contactpersonen-lijst in live:** de pagina toont in live (voorlopig) de gegevens wél, maar de bestáánde contactpersonen-lijst nog niet (de live-resolutie was te broos voor een synchrone webhook-respons en is teruggedraaid). Toevoegen/wijzigen schrijft wél correct naar ClickUp. Resolutie van de lijst = volgende stap.
+3. **"Ondernemingsleider"** heeft nog geen ClickUp-veld (nu frontend-only) — wil je dat ik een checkbox-veld op de Contactpersonen-lijst zet?
+
+*Deze keer staat er dus wél iets live (zoals gevraagd: alles in één keer live). De drie ROOD-punten hierboven zijn de enige dingen die je hand nog nodig hebben. 🌙*
