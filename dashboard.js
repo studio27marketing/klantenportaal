@@ -170,11 +170,12 @@ function discStampImg(disc, size){
   const src = stampSrc(disc); size = size || 52;
   return src ? '<img class="s27-stamp" src="' + esc(src) + '" alt="" width="' + size + '" height="' + size + '" loading="lazy">' : '';
 }
-// Is een tak vergrendeld voor deze klant? (voor nav-zichtbaarheid)
-function isDiscLocked(disc){
+// Heeft deze tak GEEN projecten? → verberg 'm uit de "Mijn werk"-dropdown.
+// (Niet meer veld-gestuurd; puur op basis van lopende/recente projecten.)
+function isDiscEmpty(disc){
   const h = DISCIPLINE_HUB.find(x => x.disc === disc);
   if(!h || !state.dashboard) return false;
-  return disciplineState(state.dashboard, h) === 'locked';
+  return disciplineState(state.dashboard, h) === 'leeg';
 }
 // Vul de discipline-nav-items met hun echte mini-merkstempel.
 function injectNavStamps(){
@@ -200,17 +201,15 @@ const DISCIPLINE_HUB = [
   { disc:'opleiding',        moduleKey:'opleidingen', targetTab:'opleidingen',  icon:'s27p-opl',   label:'Opleidingen',        teaser:'Je team sterker maken — ontdek onze opleidingen en workshops.' }
 ];
 
-// Bepaalt of een tak voor deze klant ACTIEF of GELOCKED (teaser) is.
-// Voorrang: expliciete feed-vlag > inferentie (heeft de klant er projecten in?).
-// Zo werkt het nu al (inferentie) én exact zodra de feed alle 8 vlaggen stuurt.
+// Heeft deze klant lopende/recente projecten in deze tak? PUUR data-gedreven.
+// Het ClickUp-veld 'Actieve portaal-modules' wordt hier NIET meer gebruikt: takken
+// worden nooit meer "uitgezet" voor een klant. Een tak met projecten = 'active'
+// (zichtbaar in de "Mijn werk"-dropdown), zonder projecten = 'leeg' (enkel home-hub).
+// (Het veld stuurt voortaan enkel nog dashboards zoals Performance — zie moduleEnabled.)
 function disciplineState(d, h){
-  const m = d && d.modules;
-  if(m && typeof m === 'object' && typeof m[h.moduleKey] === 'boolean'){
-    return m[h.moduleKey] ? 'active' : 'locked';
-  }
   const projs = ((d && d.actieve_projecten) || []).concat((d && d.historie_3mnd) || []);
   const heeft = projs.some(p => p.discipline === h.disc);
-  return heeft ? 'active' : 'locked';
+  return heeft ? 'active' : 'leeg';
 }
 function disciplineCount(d, disc){
   const projs = (d && d.actieve_projecten) || [];
@@ -831,10 +830,11 @@ function renderDienstenGrid(d){
         '<span class="s27-hub-card-desc">' + esc(h.teaser) + '</span>' +
       '</button>';
     }
-    // GELOCKED → subtiele teaser (FOMO by design, niet irritant)
-    return '<button type="button" class="s27-hub-card s27-dienst is-locked" data-dienst-locked="' + esc(h.label) + '" style="--accent:' + col + '">' +
+    // LEEG (nog geen projecten) → vriendelijke ontdek-kaart. GEEN slot/FOMO meer: álle takken
+    // blijven altijd zichtbaar op de home, ongeacht het veld 'Actieve portaal-modules'.
+    // Klik opent een vrijblijvend interesse-bericht (geen harde paywall).
+    return '<button type="button" class="s27-hub-card s27-dienst is-ontdek" data-dienst-locked="' + esc(h.label) + '" style="--accent:' + col + '">' +
       '<span class="s27-dienst-stamp">' + discStampImg(h.disc, 54) + '</span>' +
-      '<span class="s27-dienst-lockbadge"><svg width="10" height="10" viewBox="0 0 24 24"><use href="#s27p-lock"/></svg> Nog niet actief</span>' +
       '<span class="s27-hub-card-title">' + esc(h.label) + '</span>' +
       '<span class="s27-hub-card-desc">' + esc(h.teaser) + '</span>' +
       '<span class="s27-dienst-cta">Meer weten? →</span>' +
@@ -1523,7 +1523,11 @@ document.addEventListener('click', e => {
    nieuw, instellingen) staan bewust NIET in deze lijst — die zijn altijd aan.
    Uitbreiden = sleutel hier toevoegen + label in ClickUp + mapping in Make.
    ================================================================= */
-const PORTAL_MODULES = ['performance', 'socials', 'ads', 'seo', 'opleidingen'];
+// Enkel dashboards die de klant écht aan/uit kan hebben, staan hier (veld-gestuurd via ClickUp).
+// Voor nu enkel Performance; later kan hier social/ander dashboard bij. De takken zelf (strategie,
+// branding, … socials, seo, ads, opleidingen) worden NIET meer veld-gestuurd, maar data-gedreven
+// getoond (enkel als er projecten in lopen) — zie applyModuleVisibility stap 1b.
+const PORTAL_MODULES = ['performance'];
 function moduleEnabled(key){
   if(PORTAL_MODULES.indexOf(key) === -1) return true;            // kern-tab → altijd zichtbaar
   const m = state.dashboard && state.dashboard.modules;
@@ -1536,10 +1540,10 @@ function applyModuleVisibility(){
     const show = moduleEnabled(key);
     document.querySelectorAll('.s27-tab[data-tab="' + key + '"]').forEach(b => { b.style.display = show ? '' : 'none'; });
   });
-  // 1b) Vergrendelde deliverable-takken (strategie/branding/video/webdesign) uit de nav halen
-  ['strategie','branding','video_fotografie','webdesign'].forEach(disc => {
-    const locked = isDiscLocked(disc);
-    document.querySelectorAll('.s27-tab-disc[data-disc="' + disc + '"]').forEach(b => { b.style.display = locked ? 'none' : ''; });
+  // 1b) "Mijn werk"-takken: toon ALLE takken-knoppen waar de klant projecten in heeft, verberg
+  //     de takken zonder lopende/recente projecten. Volledig data-gedreven (niet meer veld-gestuurd).
+  document.querySelectorAll('.s27-tab-disc[data-disc]').forEach(b => {
+    b.style.display = isDiscEmpty(b.getAttribute('data-disc')) ? 'none' : '';
   });
   injectNavStamps();   // echte mini-stempels in de takken-nav
   // 2) Een navigatiegroep verbergen als al z'n tabs weg zijn (bv. lege "Mijn werk")
