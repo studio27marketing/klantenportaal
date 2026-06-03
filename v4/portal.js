@@ -241,7 +241,8 @@ function updateNavBadges(){
     if(mt){ setB('meetings', (mt.list||[]).filter(function(m){return m.dt&&m.dt.getTime()>=Date.now()-86400000;}).length); }
     // berichten + topbar-bel: geen betrouwbare ongelezen-telling -> mock-badge verbergen
     var bb=document.querySelector('.sb-item[data-tab="berichten"] .sb-badge'); if(bb) bb.style.display='none';
-    document.querySelectorAll('.topbar .badge').forEach(function(b){ b.style.display='none'; });
+    var topBer=document.querySelector('.icon-btn[data-topnav="berichten"] .badge'); if(topBer) topBer.style.display='none';
+    var bell=document.querySelector('#bellBtn .badge'); if(bell){ var n=((window.S27DATA&&S27DATA.cockpit())||[]).length; if(n>0){ bell.textContent=n; bell.style.display=''; } else bell.style.display='none'; }
   }catch(e){}
 }
 function needsLoad(name){
@@ -376,7 +377,18 @@ function renderCompanySwitcher(){
 function toggleSidebar(){ const sb=$id('sidebar'); const open=sb.classList.toggle('open'); $id('sbScrim').classList.toggle('show',open); }
 function closeSidebar(){ $id('sidebar').classList.remove('open'); $id('sbScrim').classList.remove('show'); }
 function toggleSwitch(e){ e.stopPropagation(); const m=$id('switchMenu'); const sw=$id('clientSwitch'); const open=m.style.display==='block'; m.style.display=open?'none':'block'; sw.classList.toggle('open',!open); }
-function toggleNotif(e){ e.stopPropagation(); $id('notifPanel').classList.toggle('show'); }
+function toggleNotif(e){ e.stopPropagation(); const np=$id('notifPanel'); if(!np)return; if(!np.classList.contains('show'))renderNotifs(); np.classList.toggle('show'); }
+// echte meldingen uit de cockpit (Voor jou te doen) — klikbaar -> juiste bestemming
+function renderNotifs(){
+  if(state.demoMode) return;
+  const list=document.querySelector('#notifPanel .notif-list'); if(!list) return;
+  const cock=(window.S27DATA&&S27DATA.cockpit())||[];
+  if(!cock.length){ list.innerHTML='<div class="empty" style="padding:30px 16px;text-align:center"><div class="em-ic">'+ic('st_approved',40)+'</div><b style="font-family:var(--font-display);font-size:14px;color:var(--ink-2)">Alles is bij!</b><p style="margin:6px 0 0;font-size:13px;color:var(--ink-3)">Geen openstaande acties — wij werken ondertussen verder.</p></div>'; return; }
+  list.innerHTML=cock.map(function(a){
+    return '<button class="notif br-'+a.br+'" style="width:100%;text-align:left;border:none;border-bottom:1px solid var(--line);background:none;cursor:pointer;display:flex;gap:12px;align-items:flex-start;padding:14px 16px" onclick="notifGo();'+a.action+'"><div class="nic">'+ic(a.icon||'st_feedback',18)+'</div><div class="ntx"><b>'+escapeHtml(a.title)+'</b><p>'+(a.ctx||'')+'</p><div class="ntm">'+escapeHtml(a.tag||'')+'</div></div>'+(a.urgent?'<span class="unread"></span>':'')+'</button>';
+  }).join('');
+}
+function notifGo(){ const np=$id('notifPanel'); if(np)np.classList.remove('show'); }
 function markAllSeen(){ document.querySelectorAll('#notifPanel .notif').forEach(n=>{ n.classList.add('seen'); const u=n.querySelector('.unread'); if(u)u.remove(); }); const b=document.querySelector('#bellBtn .badge'); if(b)b.style.display='none'; }
 document.addEventListener('click',e=>{ if(!e.target.closest('.client-switch-wrap')){ const m=$id('switchMenu'); if(m)m.style.display='none'; const sw=$id('clientSwitch'); if(sw)sw.classList.remove('open'); } if(!e.target.closest('#notifPanel')&&!e.target.closest('#bellBtn')){ const np=$id('notifPanel'); if(np)np.classList.remove('show'); } });
 function filterProjects(status,btn){ document.querySelectorAll('#filterbar .fpill').forEach(p=>p.classList.remove('active')); if(btn)btn.classList.add('active'); document.querySelectorAll('#projList .proj-row').forEach(r=>{ r.style.display=(status==='all'||r.dataset.status===status)?'flex':'none'; }); }
