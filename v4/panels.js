@@ -474,11 +474,8 @@ function panelHuisstijl(){
     </div>
   </div>
   <div class="setsec">
-    <h3>Team &amp; contactpersonen</h3><p class="sdesc">Wie mogen wij contacteren bij ${esc(_bedrijf())}?</p>
-    <div style="display:flex;flex-direction:column;gap:10px">
-      ${teamCards}
-      <button class="btn btn-outline btn-sm" style="align-self:flex-start">${ic('upload',15)} Persoon toevoegen</button>
-    </div>
+    <h3>Team &amp; contactpersonen</h3><p class="sdesc">Je contactpersonen beheer je voortaan centraal bij <b>Instellingen</b> — daar voeg je collega's toe (mét portaaltoegang), wijzig je gegevens of verwijder je iemand.</p>
+    <button class="btn btn-outline btn-sm" onclick="goTab('instellingen')">${ic('arrow',15)} Naar Instellingen</button>
   </div>`;
 }
 
