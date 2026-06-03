@@ -245,6 +245,13 @@
 
   DATA.bedrijf = function(){ return state.data.bedrijf; };
   DATA.team = function(){ return state.data.team; };
+  DATA.loadOffertes = async function(){
+    if(!live()) return false;
+    var res = await api(ENDPOINTS.bedrijfBeheer, base({ action:'get_offertes' }));
+    if(res && res.ok && res.data && res.data.ok && res.data.offertes){ state.data.offertes = res.data.offertes; return true; }
+    state.data.offertes = []; return false;   // leeg ("_raw":"Accepted") = geen offertes
+  };
+  DATA.offertes = function(){ return state.data.offertes; };
   DATA.huisstijl = function(){ return state.data.huisstijl; };
 
   /* ---- relatieve tijd ---- */

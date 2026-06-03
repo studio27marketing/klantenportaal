@@ -9,7 +9,7 @@
 "use strict";
 
 let currentTab = 'start';
-const SECTION_LABEL = { start:'Start', berichten:'Berichten', projecten:'Projecten', socials:'Socials', advertenties:'Advertenties', performance:'Resultaten', diensten:'Onze diensten', meetings:'Meetings', nieuwproject:'Offerte aanvragen', huisstijl:'Huisstijl & bestanden', facturatie:'Facturatie', instellingen:'Instellingen' };
+const SECTION_LABEL = { start:'Start', berichten:'Berichten', projecten:'Projecten', socials:'Socials', advertenties:'Advertenties', performance:'Resultaten', diensten:'Onze diensten', meetings:'Meetings', nieuwproject:'Offerte aanvragen', offertes:'Offertes', huisstijl:'Huisstijl & bestanden', facturatie:'Facturatie', instellingen:'Instellingen' };
 
 function qsp(){ return new URLSearchParams(location.search); }
 function $id(x){ return document.getElementById(x); }
@@ -208,6 +208,7 @@ async function ensureTabData(name){
   if(name==='huisstijl' && !state.data.huisstijl) await S27DATA.loadHuisstijl();
   if((name==='facturatie'||name==='instellingen') && !state.data.bedrijf){ await S27DATA.loadBedrijf(); await S27DATA.loadTeam(); }
   if(name==='performance'){ try{ state.perfUrl=(await S27DATA.performanceUrl())||null; }catch(e){ state.perfUrl=null; } }
+  if(name==='offertes' && !state.data.offertes){ try{ await S27DATA.loadOffertes(); }catch(e){} }
 }
 function renderPanel(name){
   const page=$id('page');
@@ -250,6 +251,7 @@ function needsLoad(name){
   if(name==='meetings' && state.data.meetings) return false;
   if(name==='huisstijl' && state.data.huisstijl) return false;
   if((name==='facturatie'||name==='instellingen') && state.data.bedrijf) return false;
+  if(name==='offertes' && state.data.offertes) return false;
   if(['nieuwproject','performance'].indexOf(name)>=0) return false;
   return true;
 }
@@ -519,6 +521,20 @@ async function removeContact(id, btn){
   try { await api(ENDPOINTS.bedrijfBeheer, { action:'delete_contact', contact_id:id, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token }); state.data.team=null; try{ await S27DATA.loadTeam(); }catch(e){} renderPanel('instellingen'); } catch(e){ if(row){ row.style.opacity=''; row.style.pointerEvents=''; } }
 }
 const MEET_HOSTS={ 'Arne':{email:'arne@studio27.be'}, 'Ilke':{email:'ilke@studio27.be'} };
+/* ---- Offerte: vraag stellen -> komt als comment op de offerte-taak (naar de assignee) ---- */
+function offerteVraag(id, btn){
+  const row=btn&&btn.closest('.filecard'); if(!row||row.querySelector('.off-q'))return;
+  const q=document.createElement('div'); q.className='off-q'; q.style.cssText='flex-basis:100%;width:100%;margin-top:10px;display:flex;flex-direction:column;gap:8px';
+  q.innerHTML='<textarea class="off-qtx" rows="3" placeholder="Je vraag over deze offerte…" style="width:100%;box-sizing:border-box;font-family:var(--font-body);font-size:13.5px;padding:10px;border:1px solid var(--line);border-radius:8px;outline:none;resize:vertical"></textarea><div style="display:flex;gap:8px"><button class="btn btn-primary btn-sm" onclick="sendOfferteVraag(this,\''+escapeHtml(id)+'\')">Versturen '+ic('send',14)+'</button><button class="btn btn-ghost btn-sm" onclick="this.closest(\'.off-q\').remove()">Annuleer</button></div>';
+  row.appendChild(q); var t=q.querySelector('textarea'); if(t)t.focus();
+}
+async function sendOfferteVraag(btn, id){
+  const q=btn&&btn.closest('.off-q'); if(!q)return; const tx=((q.querySelector('.off-qtx')||{}).value||'').trim();
+  if(!tx){ var e=q.querySelector('textarea'); if(e){ e.style.borderColor='var(--s27-orange)'; e.focus(); } return; }
+  q.innerHTML='<div class="fs" style="color:var(--s27-green-ink,#147A50);padding:4px 0">✓ Je vraag is verstuurd naar je Studio 27-contact — je hoort snel iets.</div>';
+  if(state.demoMode) return;
+  try{ await api(ENDPOINTS.chatPost, { task_id:id, bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), comment_text:'[VRAAG OVER OFFERTE · via portaal] '+tx }); }catch(e){}
+}
 function pickMtype(el,who,color,type){
   el.parentElement.querySelectorAll('.mtype').forEach(b=>b.classList.remove('sel')); el.classList.add('sel');
   const ag=$id('meetAgenda'); if(ag)ag.classList.remove('np-hidden');

@@ -509,6 +509,33 @@ function panelFacturatie(){
   </div>`;
 }
 
+/* ===== OFFERTES ===== */
+const OFFERTE_MOCK=[
+  {id:'om1',naam:'Bedrijfsfilm "Onder één dak"',status:'Verstuurd',link:'#',budget:'2950',vervaldatum:''},
+  {id:'om2',naam:'Merkstrategie 2026',status:'Bekeken',link:'#',budget:'3400',vervaldatum:''},
+  {id:'om3',naam:'Website & SEO-traject',status:'Goedgekeurd',link:'#',budget:'6800',vervaldatum:''}
+];
+function offerteAfgerond(st){ return /goedgekeur|approv|completed|done|afgerond|declin|geweiger|verlopen|expired|gefactureerd|gewonnen|verloren/i.test(String(st||'')); }
+function offerteRow(o){
+  var budget=o.budget?('€ '+(Number(String(o.budget).replace(',','.'))||0).toLocaleString('nl-BE')):'';
+  var verval=''; if(o.vervaldatum){ var d=new Date(parseInt(o.vervaldatum,10)||o.vervaldatum); if(!isNaN(d.getTime()))verval='vervalt '+d.toLocaleDateString('nl-BE',{day:'numeric',month:'short',year:'numeric'}); }
+  var meta=[o.status?esc(o.status):'', budget, verval, o.assignee?('via '+esc(o.assignee)):''].filter(Boolean).join(' · ');
+  return '<div class="filecard" style="flex-wrap:wrap"><div class="ft">'+ic('doc',20)+'</div>'
+    +'<div style="flex:1;min-width:170px"><div class="fn">'+esc(o.naam||'Offerte')+'</div><div class="fs">'+meta+'</div></div>'
+    +(o.link&&o.link!=='#'?'<a class="btn btn-branch br-purple btn-sm" href="'+esc(o.link)+'" target="_blank" rel="noopener">Open offerte '+ic('arrow',14)+'</a>':(o.link==='#'?'<button class="btn btn-branch br-purple btn-sm">Open offerte '+ic('arrow',14)+'</button>':''))
+    +'<button class="btn btn-outline btn-sm" onclick="offerteVraag(\''+esc(o.id)+'\',this)">Vraag stellen</button></div>';
+}
+function panelOffertes(){
+  var live=_live(); var offs = live ? S27DATA.offertes() : OFFERTE_MOCK;
+  var head = hero('purple','Plannen · Offertes', 'Jouw <span class="accent">offertes'+squig()+'</span> in één overzicht');
+  if(offs===null||offs===undefined) return head+'<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je offertes worden geladen…</p></div>';
+  if(!offs.length) return head+'<div class="empty" style="padding:50px 20px"><div class="em-ic">'+ic('doc',56)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog geen offertes</b><p style="margin:6px 0 14px">Hier verschijnen je offertes zodra we er één klaarzetten.</p><button class="btn btn-branch br-blue btn-sm" onclick="goTab(\'nieuwproject\')">'+ic('arrow',15)+' Vraag een offerte aan</button></div>';
+  var lopend=offs.filter(function(o){return !offerteAfgerond(o.status);}), afge=offs.filter(function(o){return offerteAfgerond(o.status);});
+  return head
+    +'<p class="sdesc" style="margin:-4px 0 16px;max-width:60ch">Klik een offerte open om ze te bekijken of goed te keuren (PandaDoc). Een vraag? Stel ze per offerte — ze komt rechtstreeks bij je Studio 27-contact terecht.</p>'
+    +(lopend.length?'<div class="section-head" style="margin-top:4px"><h2>Lopend</h2><span class="count">'+lopend.length+'</span></div><div style="display:flex;flex-direction:column;gap:10px">'+lopend.map(offerteRow).join('')+'</div>':'')
+    +(afge.length?'<div class="section-head" style="margin-top:30px"><h2>Goedgekeurd &amp; eerdere</h2><span class="count">'+afge.length+'</span></div><div style="display:flex;flex-direction:column;gap:10px">'+afge.map(offerteRow).join('')+'</div>':'');
+}
 function contactRow(c){
   const nm=((c.voornaam||'')+' '+(c.achternaam||'')).trim()||'Contactpersoon';
   const init=(nm.split(/\s+/).map(x=>x[0]).join('').slice(0,2)||'?').toUpperCase();
@@ -747,8 +774,8 @@ function buildOverlays(){
 const PANELS={
   start:panelStart, berichten:panelBerichten, projecten:panelProjecten, diensten:panelDiensten,
   socials:panelSocials, advertenties:panelAdvertenties, performance:panelPerformance,
-  meetings:panelMeetings, nieuwproject:panelNieuwProject,
+  meetings:panelMeetings, nieuwproject:panelNieuwProject, offertes:panelOffertes,
   huisstijl:panelHuisstijl, facturatie:panelFacturatie, instellingen:panelInstellingen,
 };
-const TAB_BRANCH={start:'blue',berichten:'blue',projecten:'blue',diensten:'blue',socials:'yellow',advertenties:'orange',performance:'purple',meetings:'blue',nieuwproject:'blue',huisstijl:'pink',facturatie:'green',instellingen:'indigo'};
-const TAB_GROUP={projecten:'werk',diensten:'werk',socials:'werk',advertenties:'werk',performance:'werk',meetings:'plannen',nieuwproject:'plannen',huisstijl:'bedrijf',facturatie:'bedrijf',instellingen:'bedrijf'};
+const TAB_BRANCH={start:'blue',berichten:'blue',projecten:'blue',diensten:'blue',socials:'yellow',advertenties:'orange',performance:'purple',meetings:'blue',nieuwproject:'blue',offertes:'purple',huisstijl:'pink',facturatie:'green',instellingen:'indigo'};
+const TAB_GROUP={projecten:'werk',diensten:'werk',socials:'werk',advertenties:'werk',performance:'werk',meetings:'plannen',nieuwproject:'plannen',offertes:'plannen',huisstijl:'bedrijf',facturatie:'bedrijf',instellingen:'bedrijf'};
