@@ -76,7 +76,7 @@ const PROVISION_URL = 'https://hook.eu1.make.com/hjmc9k1w9ry027kom3rfiwci9pejub7
 /* Metricool-posts: GEÏSOLEERD Make-scenario (los van de gateway/bedrijf-beheer).
    Direct aangeroepen met form-encoded body (CORS-safe, geen preflight); leest de
    Metricool-ID server-side uit de bedrijf-taak. Lage gevoeligheid (geplande posts). */
-const METRICOOL_DIRECT = 'https://hook.eu1.make.com/zlfk0g88m761p3nvjllfupe6vcqfdy2z';
+const METRICOOL_DIRECT = 'https://hook.eu1.make.com/a5ndvvcb5ipoivw86byv0a3mfvsfd24v';
 const ENDPOINT_KEYS = Object.keys(ENDPOINTS).reduce(function(m, k){ m[ENDPOINTS[k]] = k; return m; }, {});
 // auth.js wordt relatief naast api.js geladen (CDN of lokaal); fallback = v4-branch.
 const AUTH_JS_URL = (function(){

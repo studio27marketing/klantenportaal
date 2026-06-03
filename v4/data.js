@@ -252,7 +252,9 @@
       state.data.offertes = (res.data.offertes||[]).map(function(o){
         var nm = o.naam || '';
         try{ nm = decodeURIComponent(nm); }catch(e){}   // naam komt encodeURL'd uit Make (JSON-veilig)
-        return { id:o.id, naam:nm, link:o.link||'', budget:o.budget||'', vervaldatum:o.vervaldatum||'', status:o.status||'' };
+        var st = o.status || '';
+        try{ st = decodeURIComponent(st); }catch(e){}
+        return { id:o.id, naam:nm, link:o.link||'', budget:o.budget||'', vervaldatum:o.vervaldatum||'', status:st };
       });
       return true;
     }
@@ -273,17 +275,15 @@
       var t = await r.text(); var j=null; try{ j=JSON.parse(t); }catch(e){}
       if(!j || !j.ok){ state.data.metricool={linked:false,posts:[]}; return false; }
       if(!j.linked){ state.data.metricool={linked:false,posts:[]}; return true; }
-      // Metricool geeft 1 rij per netwerk -> groepeer per post-id
-      var byId={};
-      (j.posts||[]).forEach(function(p){
-        if(!p||!p.id) return;
-        if(!byId[p.id]){
-          var tk=''; try{ tk=decodeURIComponent(p.tekst||''); }catch(e){ tk=p.tekst||''; }
-          byId[p.id]={ id:p.id, datum:p.datum||'', dt:_parseDatum(p.datum), tekst:tk, media:p.media||'', netwerken:[] };
-        }
-        byId[p.id].netwerken.push({ netwerk:(p.netwerk||'').toLowerCase(), status:(p.status||'').toUpperCase(), detail:p.detail||'', url:p.url||'' });
+      // v4: 1 rij per post; netwerken = komma-lijst "facebook,instagram,linkedin"
+      var posts=(j.posts||[]).filter(function(p){return p&&p.id;}).map(function(p){
+        var tk=''; try{ tk=decodeURIComponent(p.tekst||''); }catch(e){ tk=p.tekst||''; }
+        var st=(p.status||'').toUpperCase();
+        var nets=String(p.netwerken||'').split(',').map(function(s){return s.trim().toLowerCase();}).filter(Boolean);
+        return { id:p.id, datum:p.datum||'', dt:_parseDatum(p.datum), tekst:tk, media:p.media||'',
+          draft:(p.draft===true||String(p.draft).toLowerCase()==='true'),
+          netwerken: nets.map(function(n){ return {netwerk:n, status:st, detail:p.detail||'', url:p.url||''}; }) };
       });
-      var posts=Object.keys(byId).map(function(k){return byId[k];});
       posts.sort(function(a,b){ return (a.dt?a.dt.getTime():9e15)-(b.dt?b.dt.getTime():9e15); });
       state.data.metricool={ linked:true, brandId:j.brandId||'', posts:posts };
       return true;

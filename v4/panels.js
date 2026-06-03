@@ -592,19 +592,23 @@ const OFFERTE_MOCK=[
   {id:'om3',naam:'Website & SEO-traject',status:'Goedgekeurd',link:'#',budget:'6800',vervaldatum:''}
 ];
 function offerteAfgerond(st){ return /goedgekeur|approv|completed|done|afgerond|declin|geweiger|verlopen|expired|gefactureerd|gewonnen|verloren/i.test(String(st||'')); }
+// Alleen tonen vanaf 'verzonden' (sent) — concept/to do/draft blijven verborgen
+function offerteVisible(st){ return !/draft|concept|to ?do|todo|backlog|aangevraagd|in afwachting/i.test(String(st||'').trim()); }
+function offerteStatusLabel(st){ var s=String(st||'').toLowerCase().trim(); var m={sent:'Verzonden',viewed:'Bekeken',completed:'Goedgekeurd',approved:'Goedgekeurd',declined:'Geweigerd',expired:'Verlopen',draft:'Concept'}; return m[s]||(st?String(st).charAt(0).toUpperCase()+String(st).slice(1):''); }
 function offerteRow(o){
   var budget=o.budget?('€ '+(Number(String(o.budget).replace(',','.'))||0).toLocaleString('nl-BE')):'';
   var verval=''; if(o.vervaldatum){ var d=new Date(parseInt(o.vervaldatum,10)||o.vervaldatum); if(!isNaN(d.getTime()))verval='vervalt '+d.toLocaleDateString('nl-BE',{day:'numeric',month:'short',year:'numeric'}); }
-  var meta=[o.status?esc(o.status):'', budget, verval, o.assignee?('via '+esc(o.assignee)):''].filter(Boolean).join(' · ');
+  var meta=[o.status?esc(offerteStatusLabel(o.status)):'', budget, verval, o.assignee?('via '+esc(o.assignee)):''].filter(Boolean).join(' · ');
   return '<div class="filecard" style="flex-wrap:wrap"><div class="ft">'+ic('doc',20)+'</div>'
     +'<div style="flex:1;min-width:170px"><div class="fn">'+esc(o.naam||'Offerte')+'</div><div class="fs">'+meta+'</div></div>'
     +(o.link&&o.link!=='#'?'<a class="btn btn-branch br-purple btn-sm" href="'+esc(o.link)+'" target="_blank" rel="noopener">Open offerte '+ic('arrow',14)+'</a>':(o.link==='#'?'<button class="btn btn-branch br-purple btn-sm">Open offerte '+ic('arrow',14)+'</button>':''))
     +'<button class="btn btn-outline btn-sm" onclick="offerteVraag(\''+esc(o.id)+'\',this)">Vraag stellen</button></div>';
 }
 function panelOffertes(){
-  var live=_live(); var offs = live ? S27DATA.offertes() : OFFERTE_MOCK;
+  var live=_live(); var raw = live ? S27DATA.offertes() : OFFERTE_MOCK;
   var head = hero('purple','Plannen · Offertes', 'Jouw <span class="accent">offertes'+squig()+'</span> in één overzicht');
-  if(offs===null||offs===undefined) return head+'<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je offertes worden geladen…</p></div>';
+  if(raw===null||raw===undefined) return head+'<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je offertes worden geladen…</p></div>';
+  var offs = live ? raw.filter(function(o){return offerteVisible(o.status);}) : raw;  // verberg concept/draft
   if(!offs.length) return head+'<div class="empty" style="padding:50px 20px"><div class="em-ic">'+ic('doc',56)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog geen offertes</b><p style="margin:6px 0 14px">Hier verschijnen je offertes zodra we er één klaarzetten.</p><button class="btn btn-branch br-blue btn-sm" onclick="goTab(\'nieuwproject\')">'+ic('arrow',15)+' Vraag een offerte aan</button></div>';
   var lopend=offs.filter(function(o){return !offerteAfgerond(o.status);}), afge=offs.filter(function(o){return offerteAfgerond(o.status);});
   return head
@@ -612,11 +616,13 @@ function panelOffertes(){
     +(lopend.length?'<div class="section-head" style="margin-top:4px"><h2>Lopend</h2><span class="count">'+lopend.length+'</span></div><div style="display:flex;flex-direction:column;gap:10px">'+lopend.map(offerteRow).join('')+'</div>':'')
     +(afge.length?'<div class="section-head" style="margin-top:30px"><h2>Goedgekeurd &amp; eerdere</h2><span class="count">'+afge.length+'</span></div><div style="display:flex;flex-direction:column;gap:10px">'+afge.map(offerteRow).join('')+'</div>':'');
 }
-function contactRow(c){
+function contactRow(c, isMe){
   const nm=((c.voornaam||'')+' '+(c.achternaam||'')).trim()||'Contactpersoon';
   const init=(nm.split(/\s+/).map(x=>x[0]).join('').slice(0,2)||'?').toUpperCase();
   const sub=[c.rol||c.email||'', c.gsm||'', (c.voorkeur&&c.voorkeur!=='Geen')?('meldingen: '+c.voorkeur):''].filter(Boolean).join(' · ');
-  return `<div class="contact-row" data-cid="${esc(c.id||'')}"><span class="cr-av" style="background:var(--s27-indigo,#5B5BD6)">${esc(init)}</span><div class="cr-tx"><b>${esc(nm)}</b><span>${esc(sub)}</span></div><button class="btn btn-ghost btn-sm" onclick="editContact('${esc(c.id||'')}')">Wijzig</button><button class="icon-btn" style="width:32px;height:32px;margin-left:6px" title="Verwijderen" onclick="removeContact('${esc(c.id||'')}',this)">${ic('trash',15)}</button></div>`;
+  const meBadge=isMe?' <span style="font-size:10.5px;font-weight:700;color:#fff;background:var(--s27-indigo,#5B5BD6);border-radius:999px;padding:1px 8px;margin-left:6px">jij</span>':'';
+  const delBtn=isMe?'':`<button class="icon-btn" style="width:32px;height:32px;margin-left:6px" title="Ontkoppelen — toegang tot dit portaal vervalt" onclick="removeContact('${esc(c.id||'')}',this)">${ic('trash',15)}</button>`;
+  return `<div class="contact-row" data-cid="${esc(c.id||'')}"><span class="cr-av" style="background:var(--s27-indigo,#5B5BD6)">${esc(init)}</span><div class="cr-tx"><b>${esc(nm)}${meBadge}</b><span>${esc(sub)}</span></div><button class="btn btn-ghost btn-sm" onclick="editContact('${esc(c.id||'')}')">Wijzig</button>${delBtn}</div>`;
 }
 function contactFormHTML(c){
   c=c||{}; const fld='font-family:var(--font-body);font-size:14px;padding:11px 13px;border:1px solid var(--line);border-radius:var(--r-sm);outline:none;background:#fff';
@@ -633,21 +639,33 @@ function contactFormHTML(c){
   </div>`;
 }
 function panelInstellingen(){
-  const t=(window.S27DATA && S27DATA.team())||{}; const c=(t.contactpersonen&&t.contactpersonen[0])||{}; const vk=c.voorkeur||'Geen'; const demo=!_live();
-  const contacts=(t.contactpersonen||[]);
-  const demoContacts=[{voornaam:'Sarah',achternaam:'Janssens',rol:'Marketing · hoofdcontact',gsm:'+32 478 12 34 56',voorkeur:'WhatsApp',id:'demo1'},{voornaam:'Tom',achternaam:'De Cock',rol:'Zaakvoerder',email:'tom@testclient.be',id:'demo2'}];
-  const contactsHTML = contacts.length ? contacts.map(contactRow).join('') : (demo ? demoContacts.map(contactRow).join('') : '<div class="fs" style="color:var(--ink-4)">Nog geen contactpersonen toegevoegd — voeg je eerste collega toe.</div>');
+  const demo=!_live();
+  const t=(window.S27DATA && S27DATA.team())||{};
+  let contacts=(t.contactpersonen||[]).slice();
+  const demoContacts=[{voornaam:'Sarah',achternaam:'Janssens',rol:'Marketing · hoofdcontact',gsm:'+32 478 12 34 56',email:'sarah@testclient.be',voorkeur:'WhatsApp',id:'demo1'},{voornaam:'Tom',achternaam:'De Cock',rol:'Zaakvoerder',email:'tom@testclient.be',id:'demo2'}];
+  if(demo && !contacts.length) contacts=demoContacts.slice();
+  // "Mij" herkennen op het ingelogde e-mailadres en bovenaan plaatsen
+  const meEmail=((window.state&&state.session&&state.session.email)||'').toLowerCase().trim();
+  let me=null;
+  if(meEmail){ for(var i=0;i<contacts.length;i++){ if(String(contacts[i].email||'').toLowerCase().trim()===meEmail){ me=contacts[i]; break; } } }
+  if(me){ contacts=[me].concat(contacts.filter(function(x){return x!==me;})); }
+  const prof = me || contacts[0] || {}; const vk = prof.voorkeur||'Geen';
+  const contactsHTML = contacts.length ? contacts.map(function(x){return contactRow(x, x===me);}).join('') : '<div class="fs" style="color:var(--ink-4)">Nog geen contactpersonen toegevoegd — voeg je eerste collega toe.</div>';
   return hero('indigo','Mijn bedrijf · Instellingen',
     `Jouw <span class="accent">voorkeuren${squig()}</span>`)
   +`<div class="setsec">
-    <h3>Notificatievoorkeuren</h3><p class="sdesc">Hoe en wanneer we je op de hoogte houden.</p>
+    <h3>Mijn profiel &amp; notificaties</h3><p class="sdesc">Je eigen gegevens — wijzigingen synchroniseren meteen met je contactfiche bij Studio&nbsp;27.</p>
+    <input type="hidden" id="npProfileId" value="${esc(prof.id||'')}">
     <div class="set-grid">
-      <div class="field"><label>Meldingen via</label><select onchange="saveNotifPref(this)">${['Geen','WhatsApp','E-mail','Beide'].map(o=>`<option ${o===vk?'selected':''}>${o}</option>`).join('')}</select></div>
-      <div class="field"><label>GSM / WhatsApp-nummer</label><input value="${esc(c.gsm||(demo?'+32 478 12 34 56':''))}" placeholder="+32 4xx xx xx xx"></div>
+      <div class="field"><label>E-mail</label><input id="npEmail" value="${esc(prof.email||'')}" placeholder="naam@bedrijf.be" onchange="saveProfile()" ${prof.id?'':'disabled'}></div>
+      <div class="field"><label>GSM / WhatsApp-nummer</label><input id="npGsm" value="${esc(prof.gsm||(demo?'+32 478 12 34 56':''))}" placeholder="+32 4xx xx xx xx" onchange="saveProfile()" ${prof.id?'':'disabled'}></div>
+      <div class="field"><label>Meldingen via</label><select id="npVoorkeur" onchange="saveProfile()" ${prof.id?'':'disabled'}>${['Geen','WhatsApp','E-mail','Beide'].map(o=>`<option ${o===vk?'selected':''}>${o}</option>`).join('')}</select></div>
     </div>
+    <div id="npSaved" class="fs" style="color:var(--s27-green-ink,#2e7d32);margin-top:8px;display:none">✓ Opgeslagen — gesynchroniseerd met ClickUp</div>
+    ${(!demo&&!prof.id)?'<p class="fs" style="color:var(--ink-4);margin-top:8px">Je e-mail is nog niet aan een contactpersoon gekoppeld — voeg jezelf hieronder toe om je voorkeuren te bewaren.</p>':''}
   </div>
   <div class="setsec">
-    <h3>Contactpersonen van je bedrijf</h3><p class="sdesc">Iedereen die hier staat kan inloggen én collega's toevoegen of verwijderen. Voeg gerust je hele team toe.</p>
+    <h3>Contactpersonen van je bedrijf</h3><p class="sdesc">Iedereen die hier staat kan inloggen én collega's beheren. Verwijder je iemand, dan vervalt meteen z'n toegang tot dit portaal.</p>
     <div class="contact-list" id="bedrijfContactList">${contactsHTML}</div>
     <button class="btn btn-outline btn-sm" style="margin-top:12px" onclick="addContact()">${ic('upload',15)} Persoon toevoegen</button>
     <div id="contactFormHost"></div>

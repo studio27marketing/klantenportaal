@@ -206,7 +206,7 @@ async function ensureTabData(name){
   if(['start','projecten','diensten','berichten','socials','advertenties'].indexOf(name)>=0){ if(!state.data.dashboard) await S27DATA.loadDashboard(); }
   if(name==='meetings' && !state.data.meetings) await S27DATA.loadMeetings();
   if(name==='huisstijl' && !state.data.huisstijl) await S27DATA.loadHuisstijl();
-  if((name==='facturatie'||name==='instellingen') && !state.data.bedrijf){ await S27DATA.loadBedrijf(); await S27DATA.loadTeam(); }
+  if(name==='facturatie'||name==='instellingen'){ if(!state.data.bedrijf) await S27DATA.loadBedrijf(); if(!state.data.team) await S27DATA.loadTeam(); }
   if(name==='performance'){ try{ state.perfUrl=(await S27DATA.performanceUrl())||null; }catch(e){ state.perfUrl=null; } }
   if(name==='offertes' && !state.data.offertes){ try{ await S27DATA.loadOffertes(); }catch(e){} }
   if(name==='socials' && !state.data.metricool){ try{ await S27DATA.loadMetricool(); }catch(e){} }
@@ -252,7 +252,7 @@ function needsLoad(name){
   if(name==='socials') return !state.data.metricool;   // wacht op Metricool-data
   if(name==='meetings' && state.data.meetings) return false;
   if(name==='huisstijl' && state.data.huisstijl) return false;
-  if((name==='facturatie'||name==='instellingen') && state.data.bedrijf) return false;
+  if((name==='facturatie'||name==='instellingen') && state.data.bedrijf && state.data.team) return false;
   if(name==='offertes' && state.data.offertes) return false;
   if(['nieuwproject','performance'].indexOf(name)>=0) return false;
   return true;
@@ -497,6 +497,19 @@ async function saveNotifPref(sel){
   const t=(window.S27DATA && S27DATA.team()); const c=(t&&t.contactpersonen&&t.contactpersonen[0])||{};
   try { await api(ENDPOINTS.bedrijfBeheer, { action:'update_contact', contact_id:c.id||'', bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, voornaam:c.voornaam||'', achternaam:c.achternaam||'', email:c.email||'', gsm:c.gsm||'', rol:c.rol||'', voorkeur:sel.value }); } catch(e){}
 }
+// Eigen profiel + notificatievoorkeur realtime opslaan -> update_contact -> ClickUp-contactfiche
+async function saveProfile(){
+  if(state.demoMode) return;
+  const id=(($id('npProfileId')||{}).value||'').trim(); if(!id) return;
+  const base=_contactById(id)||{};
+  const g=(x)=>(($id(x)||{}).value||'').trim();
+  try {
+    await api(ENDPOINTS.bedrijfBeheer, { action:'update_contact', contact_id:id, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token,
+      voornaam:base.voornaam||'', achternaam:base.achternaam||'', email:(g('npEmail')||base.email||''), gsm:g('npGsm'), voorkeur:g('npVoorkeur')||'Geen' });
+    const s=$id('npSaved'); if(s){ s.style.display=''; setTimeout(function(){ var x=$id('npSaved'); if(x)x.style.display='none'; }, 2200); }
+    state.data.team=null; try{ await S27DATA.loadTeam(); }catch(e){}
+  } catch(e){}
+}
 /* ---- Contactpersonen-beheer (iedere contactpersoon mag toevoegen/wijzigen/verwijderen) ---- */
 function _contactById(id){ const t=window.S27DATA&&S27DATA.team(); const a=(t&&t.contactpersonen)||[]; for(var i=0;i<a.length;i++){ if(String(a[i].id)===String(id)) return a[i]; } return null; }
 function addContact(){ const host=$id('contactFormHost'); if(!host)return; host.innerHTML=contactFormHTML(null); const f=host.querySelector('input'); if(f)f.focus(); host.scrollIntoView&&host.scrollIntoView({behavior:'smooth',block:'nearest'}); }
@@ -520,7 +533,7 @@ async function removeContact(id, btn){
   if(typeof confirm==='function' && !confirm('Wil je '+nm+' verwijderen uit het bedrijfsdashboard? Deze persoon verliest dan toegang tot het portaal.')) return;
   const row=btn&&btn.closest&&btn.closest('.contact-row'); if(row){ row.style.opacity='.5'; row.style.pointerEvents='none'; }
   if(state.demoMode){ if(row)row.remove(); return; }
-  try { await api(ENDPOINTS.bedrijfBeheer, { action:'delete_contact', contact_id:id, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token }); state.data.team=null; try{ await S27DATA.loadTeam(); }catch(e){} renderPanel('instellingen'); } catch(e){ if(row){ row.style.opacity=''; row.style.pointerEvents=''; } }
+  try { await api(ENDPOINTS.bedrijfBeheer, { action:'delete_contact', contact_id:id, email:(c&&c.email)||'', bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token }); state.data.team=null; try{ await S27DATA.loadTeam(); }catch(e){} renderPanel('instellingen'); } catch(e){ if(row){ row.style.opacity=''; row.style.pointerEvents=''; } }
 }
 const MEET_HOSTS={ 'Arne':{email:'arne@studio27.be'}, 'Ilke':{email:'ilke@studio27.be'} };
 /* ---- Offerte: vraag stellen -> komt als comment op de offerte-taak (naar de assignee) ---- */
