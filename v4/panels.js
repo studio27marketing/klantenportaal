@@ -187,23 +187,27 @@ function panelDiensten(){
   + (inact.length?`<div class="section-head" style="margin-top:36px"><h2>Niet actief</h2><span class="count">${inact.length}</span></div><p style="color:var(--ink-3);font-size:13.5px;margin:-6px 0 18px;max-width:60ch">Diensten die we nu (nog) niet voor je doen. Interesse? Vraag vrijblijvend een offerte aan — geen verplichtingen.</p><div class="svc-grid">${inact.map(svcCard).join('')}</div>`:'');
 }
 
+function berichtChatInner(p){
+  return `<div style="padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:11px">
+    <span class="ber-dot" style="background:var(--c)"></span>
+    <div style="min-width:0"><b style="font-family:var(--font-display);font-size:15px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</b><span class="fs" style="color:var(--ink-4)">${esc(p.disc||'')}</span></div>
+    <button class="btn btn-ghost btn-sm br-${p.br}" style="margin-left:auto;flex:none" onclick="openProject('${esc(p.id)}','berichten')">Open project ${ic('arrow',14)}</button>
+  </div><div style="padding:18px 22px">${chatHTML(p.id)}</div>`;
+}
 function panelBerichten(){
   const projs=_projects(); const first=projs[0];
   const rows = projs.map((p,idx)=>`
-        <button class="proj-row br-${p.br}" style="border:none;border-radius:0;box-shadow:none;border-bottom:1px solid var(--line);${idx===0?'background:var(--paper-2)':''}" onclick="openProject('${esc(p.id)}','berichten');switchModalTab('chat')">
+        <button class="proj-row br-${p.br} bericht-row" data-bid="${esc(p.id)}" style="border:none;border-radius:0;box-shadow:none;border-bottom:1px solid var(--line);${idx===0?'background:var(--paper-2)':''}" onclick="openBerichtChat('${esc(p.id)}',this)">
           <span class="ber-dot" style="background:var(--c)"></span>
           <span class="pr-main"><span class="ber-disc" style="color:var(--c-ink)">${esc(p.disc)}</span><span class="pr-name" style="font-size:14px">${esc(p.name)}</span></span>
           ${p.deliv?`<span class="badge" style="position:static;background:var(--c);color:#fff;border:none;min-width:20px;height:20px;font-size:11px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:800">!</span>`:''}
         </button>`).join('');
   return hero('blue','Berichten', `Even <span class="accent">bijpraten${squig()}</span>?`)
-  +`<div style="display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start" class="berichten-wrap">
+  +`<p class="sdesc" style="margin:-4px 0 14px;max-width:60ch">Klik links een project aan en chat er meteen over — je blijft op deze pagina, enkel het gesprek wisselt. Je kan ook bestanden meesturen.</p>
+  <div style="display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start" class="berichten-wrap">
     <div class="card" style="overflow:hidden">${rows||'<div class="empty" style="padding:30px"><p>Nog geen gesprekken.</p></div>'}</div>
-    <div class="card br-${first?first.br:'blue'}" style="padding:0;overflow:hidden">
-      ${first?`<div style="padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:11px">
-        <div style="width:8px;height:8px;border-radius:3px;background:var(--c)"></div>
-        <b style="font-family:var(--font-display);font-size:15px">${esc(first.name)}</b>
-        <button class="btn btn-ghost btn-sm br-${first.br}" style="margin-left:auto" onclick="openProject('${esc(first.id)}','berichten');switchModalTab('chat')">Open project ${ic('arrow',14)}</button>
-      </div><div style="padding:22px">${chatHTML(first.id)}</div>`:'<div class="empty" style="padding:60px 20px"><div class="em-ic">'+ic('msg',64)+'</div><p>Selecteer links een project om het gesprek te openen.</p></div>'}
+    <div class="card br-${first?first.br:'blue'}" id="berichtChat" style="padding:0;overflow:hidden">
+      ${first?berichtChatInner(first):'<div class="empty" style="padding:60px 20px"><div class="em-ic">'+ic('msg',64)+'</div><p>Selecteer links een project om het gesprek te openen.</p></div>'}
     </div>
   </div>`;
 }
@@ -574,7 +578,7 @@ function chatHTML(taskId){
         <div class="react"><button>👍</button><button>❤️</button><button>🎉</button><button>🙌</button></div></div>
     </div>`).join(''):'<div class="empty" style="padding:30px 10px"><p>Nog geen berichten — stuur ons gerust iets!</p></div>'}
   </div>
-  <div class="chat-input"><input placeholder="Schrijf een bericht…" onkeydown="if(event.key==='Enter')sendChat(this)"><button class="chat-send" onclick="sendChat(this.previousElementSibling)">${ic('send',18)}</button></div>`;
+  <div class="chat-input"><button type="button" class="chat-attach" title="Bestand toevoegen" onclick="document.getElementById('chatFile').click()" style="border:none;background:none;cursor:pointer;color:var(--ink-4);padding:0 4px 0 8px;display:flex;align-items:center;flex:none">${ic('upload',18)}</button><input type="file" id="chatFile" style="display:none" onchange="chatUpload(this,'${taskId||''}')"><input placeholder="Schrijf een bericht…" onkeydown="if(event.key==='Enter')sendChat(this)"><button class="chat-send" onclick="sendChat(this.previousElementSibling)">${ic('send',18)}</button></div>`;
 }
 
 /* =========================================================

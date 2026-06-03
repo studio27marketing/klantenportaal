@@ -226,6 +226,7 @@ async function goTab(name){
   await ensureTabData(name);
   renderPanel(name);
   updateNavBadges();
+  if(name==='berichten' && !state.demoMode){ var _fp=(window.S27DATA&&(S27DATA.projects()||[])[0]); if(_fp) openBerichtChat(_fp.id); }
   closeSidebar(); syncUrl();
 }
 // Zijbalk-badges dynamisch maken (shell.html heeft hardcoded mock-getallen).
@@ -301,6 +302,31 @@ async function sendChat(input){
     return;
   }
   await api(ENDPOINTS.chatPost, { task_id:state.activeProject, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), comment_text:tx });
+}
+/* ---- Berichten: klik op een gesprek -> enkel de chatmodule wisselt (geen navigatie) ---- */
+async function openBerichtChat(id, el){
+  document.querySelectorAll('.bericht-row').forEach(function(r){ r.style.background=''; });
+  var row = el || document.querySelector('.bericht-row[data-bid="'+id+'"]'); if(row)row.style.background='var(--paper-2)';
+  const p=(window.S27DATA&&(S27DATA.projects()||[]).find(function(x){return x.id===id;}))||null; if(!p)return;
+  state.activeProject=id;
+  const host=$id('berichtChat'); if(!host)return;
+  host.className='card br-'+(p.br||'blue');
+  if(!state.demoMode && !((state.data.chats||{})[id])){ host.innerHTML='<div class="empty" style="padding:50px"><div class="brand-spinner" style="margin:0 auto"></div></div>'; try{ await S27DATA.loadChat(id); }catch(e){} }
+  host.innerHTML=berichtChatInner(p);
+}
+/* ---- Bestandsupload in de chat (overal waar chatHTML staat) ---- */
+async function chatUpload(input, taskId){
+  const f=input.files&&input.files[0]; if(!f) return; input.value='';
+  const tid=taskId||state.activeProject; const list=$id('chatList'); let bubble=null;
+  if(list){ bubble=document.createElement('div'); bubble.className='msg me'; bubble.innerHTML='<div class="bubble"><div class="who">Jij</div><div class="tx">'+ic('doc',14)+' '+escapeHtml(f.name)+' <span style="opacity:.6">— uploaden…</span></div><div class="tm">nu</div></div>'; list.appendChild(bubble); list.scrollTop=list.scrollHeight; }
+  const done=(txt)=>{ if(bubble){ var t=bubble.querySelector('.tx'); if(t)t.innerHTML=ic('doc',14)+' '+escapeHtml(f.name)+txt; } };
+  if(state.demoMode){ done(' ✓'); return; }
+  const rd=new FileReader();
+  rd.onload=async function(){ const b64=String(rd.result).split(',')[1]||'';
+    try{ await api(ENDPOINTS.chatAttachment, { task_id:tid, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), filename:f.name, file_data:b64 }); done(' ✓'); }
+    catch(e){ done(' <span style="color:var(--s27-orange-ink)">— mislukt</span>'); }
+  };
+  rd.readAsDataURL(f);
 }
 function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 /* ---- Dringende vraag aan Ilke (accountmanagement) — werkt ook als de projectchat gesloten is ---- */
