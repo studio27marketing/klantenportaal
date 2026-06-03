@@ -291,6 +291,33 @@
   };
   DATA.metricool = function(){ return state.data.metricool; };
 
+  /* ---- Advertenties (Meta-insights, later Google) — geïsoleerd Make-scenario, directe call ---- */
+  DATA.loadAds = async function(){
+    if(!live()){ state.data.ads={linked:false,campaigns:[]}; return false; }
+    var bid = state.activeBedrijf || '';
+    if(!bid){ state.data.ads={linked:false,campaigns:[]}; return false; }
+    try{
+      var r = await fetch(ADS_DIRECT, { method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},   // CORS-safe
+        body:'bedrijf_id='+encodeURIComponent(bid) });
+      var t = await r.text(); var j=null; try{ j=JSON.parse(t); }catch(e){}
+      if(!j || !j.ok){ state.data.ads={linked:false,campaigns:[]}; return false; }
+      if(!j.linked){ state.data.ads={linked:false,campaigns:[]}; return true; }
+      var camps=(j.campaigns||[]).filter(function(c){return c&&c.naam!=='';}).map(function(c){
+        var nm=''; try{ nm=decodeURIComponent(c.naam||''); }catch(e){ nm=c.naam||''; }
+        return { naam:nm, platform:String(c.platform||'meta').toLowerCase(),
+          impressies:parseInt(c.impressies,10)||0, klikken:parseInt(c.klikken,10)||0,
+          budget:parseFloat(String(c.budget).replace(',','.'))||0,
+          ctr:parseFloat(String(c.ctr).replace(',','.'))||0,
+          bereik:parseInt(c.bereik,10)||0, objective:c.objective||'' };
+      });
+      camps.sort(function(a,b){ return b.budget-a.budget; });
+      state.data.ads={ linked:true, campaigns:camps };
+      return true;
+    }catch(e){ state.data.ads={linked:false,campaigns:[]}; return false; }
+  };
+  DATA.ads = function(){ return state.data.ads; };
+
   DATA.huisstijl = function(){ return state.data.huisstijl; };
 
   /* ---- relatieve tijd ---- */

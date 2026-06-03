@@ -367,25 +367,58 @@ function panelSocials(){
   return mcStyleOnce()+head+summary+toggle+body;
 }
 
+/* ---- Advertenties (echte Meta/Google-data) ---- */
+const ADS_PLAT={meta:['Meta','#1877f2'],facebook:['Facebook','#1877f2'],instagram:['Instagram','#d6336c'],google:['Google Ads','#1a73e8'],'google-ads':['Google Ads','#1a73e8'],tiktok:['TikTok','#111827'],linkedin:['LinkedIn','#0a66c2'],snapchat:['Snapchat','#f7b500']};
+function adsPlat(p){ p=String(p||'').toLowerCase(); return ADS_PLAT[p]||[(p?p.charAt(0).toUpperCase()+p.slice(1):'Ads'),'#667684']; }
+function adsObjective(o){ o=String(o||'').toUpperCase(); var m={OUTCOME_LEADS:'Leads',OUTCOME_SALES:'Verkoop',OUTCOME_TRAFFIC:'Verkeer',OUTCOME_AWARENESS:'Naamsbekendheid',OUTCOME_ENGAGEMENT:'Betrokkenheid',OUTCOME_APP_PROMOTION:'App-promotie',LINK_CLICKS:'Klikken',LEAD_GENERATION:'Leads',CONVERSIONS:'Conversies'}; return m[o]||(o?o.replace(/^OUTCOME_/,'').replace(/_/g,' ').toLowerCase():''); }
+function adsNum(n){ return (Number(n)||0).toLocaleString('nl-BE'); }
+function adsEur(n){ return '€ '+(Number(n)||0).toLocaleString('nl-BE',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function setAdsPlatform(p){ state._adsPlatform=p; renderPanel('advertenties'); }
+function campaignCard(c){
+  var pl=adsPlat(c.platform);
+  var metrics=[['Besteed',adsEur(c.budget)],['Vertoningen',adsNum(c.impressies)],['Klikken',adsNum(c.klikken)],['CTR',(Number(c.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%'],['Bereik',adsNum(c.bereik)]];
+  return '<div class="card" style="padding:14px 16px;margin-bottom:10px">'
+    +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:11px"><span style="font-size:11px;font-weight:700;color:'+pl[1]+';background:'+pl[1]+'14;border-radius:999px;padding:2px 9px">'+esc(pl[0])+'</span><b style="font-family:var(--font-display);font-size:15px;flex:1;min-width:130px">'+esc(c.naam||'Campagne')+'</b>'+(c.objective?'<span class="fs" style="color:var(--ink-4)">'+esc(adsObjective(c.objective))+'</span>':'')+'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:10px">'+metrics.map(function(m){return '<div><div style="color:var(--ink-4);font-size:11px;font-weight:600">'+m[0]+'</div><div style="font-family:var(--font-display);font-weight:800;font-size:16px;color:var(--ink)">'+m[1]+'</div></div>';}).join('')+'</div>'
+  +'</div>';
+}
 function panelAdvertenties(){
-  return hero('orange','Mijn werk · Advertenties',
+  const head = hero('orange','Mijn werk · Advertenties',
     `Jouw <span class="accent">campagnes${squig()}</span> die draaien`,
-    'Een live overzicht van je advertenties over alle platformen.',
-    scribble('krabbel-oranje.png','top:-4px;right:8px;width:120px;transform:rotate(-5deg)'))
-  +`<div class="kpi-grid">
-    ${[['orange','Advertentie-uitgaven','€ 2.840','up','binnen budget'],['blue','Vertoningen','318K','up','+18%'],['green','Klikken','7.412','up','+12%'],['purple','Leads','143','up','+27%']].map(k=>`
-      <div class="kpi br-${k[0]}"><div class="kbar"></div><div class="klab">${k[1]}</div><div class="knum">${k[2]}</div><span class="chip chip-up">${ic('up',12)} ${k[4]}</span></div>`).join('')}
-  </div>
-  <div class="section-head"><h2>Actieve campagnes</h2><span class="count">3 live</span></div>
-  <div class="proj-list">
-    ${[['Google Search · Leadgen Q2','blue','€ 1.450 besteed · 89 leads',78],['Meta · Retargeting','blue','€ 820 besteed · 41 leads',64],['TikTok · Lentepromo','purple','€ 570 besteed · 13 leads',92]].map(c=>`
-      <div class="proj-row br-${c[1]}" style="cursor:default">
-        <span class="bar"></span>
-        <span class="pr-main"><span class="pr-name" style="font-size:15px">${c[0]}</span><span style="font-size:13px;color:var(--ink-3)">${c[2]}</span></span>
-        <div style="width:160px"><div class="prog" style="height:8px;border-radius:999px;background:var(--paper-3);overflow:hidden"><i style="display:block;height:100%;width:${c[3]}%;background:var(--c);border-radius:999px"></i></div></div>
-        <span class="pill pill-prog"><span class="pdot"></span>Live</span>
-      </div>`).join('')}
-  </div>`;
+    'Een live overzicht van je advertenties over al je platformen.',
+    scribble('krabbel-oranje.png','top:-4px;right:8px;width:120px;transform:rotate(-5deg)'));
+  if(state.demoMode){
+    return head+`<div class="kpi-grid">
+      ${[['orange','Advertentie-uitgaven','€ 2.840'],['blue','Vertoningen','318K'],['green','Klikken','7.412'],['purple','Campagnes','3']].map(k=>`
+        <div class="kpi br-${k[0]}"><div class="kbar"></div><div class="klab">${k[1]}</div><div class="knum">${k[2]}</div></div>`).join('')}
+    </div>
+    <div class="section-head"><h2>Campagnes</h2><span class="count">3</span></div>
+    <div class="proj-list">
+      ${[['Google Search · Leadgen Q2','blue','€ 1.450 besteed · 12.300 vertoningen · 890 klikken'],['Meta · Retargeting','blue','€ 820 besteed · 64.000 vertoningen · 410 klikken'],['TikTok · Lentepromo','purple','€ 570 besteed · 120.000 vertoningen · 1.300 klikken']].map(c=>`
+        <div class="proj-row br-${c[1]}" style="cursor:default"><span class="bar"></span><span class="pr-main"><span class="pr-name" style="font-size:15px">${c[0]}</span><span style="font-size:13px;color:var(--ink-3)">${c[2]}</span></span><span class="pill pill-prog"><span class="pdot"></span>Live</span></div>`).join('')}
+    </div>`;
+  }
+  var ad=(window.S27DATA&&S27DATA.ads())||null;
+  if(!ad) return head+'<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je campagnes worden geladen…</p></div>';
+  if(!ad.linked) return head+'<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen advertentieaccount gekoppeld</div><div style="color:var(--ink-3);max-width:470px;margin:0 auto;line-height:1.55">Zodra je Meta- of Google Ads-account aan je portaal gekoppeld is, zie je hier al je campagnes met budget, vertoningen en klikken. Vraag gerust je contactpersoon bij Studio&nbsp;27.</div></div>';
+  var camps=ad.campaigns||[];
+  if(!camps.length) return head+'<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Geen actieve campagnes</div><div style="color:var(--ink-3)">Er liepen de afgelopen 90 dagen geen campagnes met activiteit op je gekoppelde account.</div></div>';
+  var plats=[]; camps.forEach(function(c){ if(plats.indexOf(c.platform)<0)plats.push(c.platform); });
+  var sel=state._adsPlatform||'alle'; if(sel!=='alle' && plats.indexOf(sel)<0) sel='alle';
+  var shown = sel==='alle'?camps:camps.filter(function(c){return c.platform===sel;});
+  var totB=shown.reduce(function(a,c){return a+(c.budget||0);},0), totI=shown.reduce(function(a,c){return a+(c.impressies||0);},0), totK=shown.reduce(function(a,c){return a+(c.klikken||0);},0);
+  var kpis='<div class="kpi-grid"><div class="kpi br-orange"><div class="kbar"></div><div class="klab">Advertentie-uitgaven</div><div class="knum">'+adsEur(totB)+'</div></div><div class="kpi br-blue"><div class="kbar"></div><div class="klab">Vertoningen</div><div class="knum">'+adsNum(totI)+'</div></div><div class="kpi br-green"><div class="kbar"></div><div class="klab">Klikken</div><div class="knum">'+adsNum(totK)+'</div></div><div class="kpi br-purple"><div class="kbar"></div><div class="klab">Campagnes</div><div class="knum">'+shown.length+'</div></div></div>';
+  var filterBtns = (plats.length>1) ? ('<span style="display:inline-flex;gap:5px;flex-wrap:wrap"><button class="seg-btn'+(sel==='alle'?' active':'')+'" onclick="setAdsPlatform(\'alle\')">Alle platformen</button>'+plats.map(function(p){ return '<button class="seg-btn'+(sel===p?' active':'')+'" onclick="setAdsPlatform(\''+p+'\')">'+esc(adsPlat(p)[0])+'</button>'; }).join('')+'</span>') : '<span class="count">'+shown.length+'</span>';
+  var groups = sel==='alle'?plats:[sel];
+  var body = groups.map(function(p){
+    var cs=camps.filter(function(c){return c.platform===p;}); if(!cs.length) return '';
+    var pl=adsPlat(p);
+    return '<div class="section-head" style="margin-top:18px"><h2 style="display:flex;align-items:center;gap:8px"><span style="width:11px;height:11px;border-radius:3px;background:'+pl[1]+'"></span>'+esc(pl[0])+'</h2><span class="count">'+cs.length+'</span></div>'+cs.map(campaignCard).join('');
+  }).join('');
+  return head+kpis
+    +'<div class="section-head"><h2>Campagnes</h2>'+filterBtns+'</div>'
+    +'<p class="sdesc" style="margin:-6px 0 8px;max-width:62ch">Cijfers van de afgelopen 90 dagen, rechtstreeks uit je advertentieaccount. Voor de gedetailleerde analyse: zie <b>Resultaten</b>.</p>'
+    +body;
 }
 
 const ADS_ENGINE_URL='https://raw.githack.com/studio27marketing/klantenportaal/main/ads-report-engine.html';

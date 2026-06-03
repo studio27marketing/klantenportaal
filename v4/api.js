@@ -17,7 +17,7 @@ var state = window.S27State = {
   activeBedrijf: '',
   _provisionTried: false,
   _sessionExpiredHandled: false,
-  data: { dashboard:null, details:{}, chats:{}, meetings:null, bedrijf:null, team:null, huisstijl:null, offertes:null, metricool:null },  // gecachte API-data
+  data: { dashboard:null, details:{}, chats:{}, meetings:null, bedrijf:null, team:null, huisstijl:null, offertes:null, metricool:null, ads:null },  // gecachte API-data
 
   route: null                 // deep-link pending route (zie portal.js router)
 };
@@ -77,6 +77,10 @@ const PROVISION_URL = 'https://hook.eu1.make.com/hjmc9k1w9ry027kom3rfiwci9pejub7
    Direct aangeroepen met form-encoded body (CORS-safe, geen preflight); leest de
    Metricool-ID server-side uit de bedrijf-taak. Lage gevoeligheid (geplande posts). */
 const METRICOOL_DIRECT = 'https://hook.eu1.make.com/a5ndvvcb5ipoivw86byv0a3mfvsfd24v';
+/* Advertentie-campagnes (Meta-insights, later Google): GEÏSOLEERD Make-scenario,
+   directe form-encoded call (CORS-safe). Leest de Meta Ads ID + Business ID server-side
+   uit de bedrijf-taak en haalt campagne-insights (90d) op via de facebook-connectie. */
+const ADS_DIRECT = 'https://hook.eu1.make.com/wvb3qfpqpm28kq6ksrduqywwrymokdjv';
 const ENDPOINT_KEYS = Object.keys(ENDPOINTS).reduce(function(m, k){ m[ENDPOINTS[k]] = k; return m; }, {});
 // auth.js wordt relatief naast api.js geladen (CDN of lokaal); fallback = v4-branch.
 const AUTH_JS_URL = (function(){
