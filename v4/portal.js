@@ -9,7 +9,7 @@
 "use strict";
 
 let currentTab = 'start';
-const SECTION_LABEL = { start:'Start', berichten:'Berichten', projecten:'Projecten', socials:'Socials', advertenties:'Advertenties', performance:'Resultaten', diensten:'Onze diensten', meetings:'Meetings', nieuwproject:'Nieuw project', huisstijl:'Huisstijl & bestanden', facturatie:'Facturatie', instellingen:'Instellingen' };
+const SECTION_LABEL = { start:'Start', berichten:'Berichten', projecten:'Projecten', socials:'Socials', advertenties:'Advertenties', performance:'Resultaten', diensten:'Onze diensten', meetings:'Meetings', nieuwproject:'Offerte aanvragen', huisstijl:'Huisstijl & bestanden', facturatie:'Facturatie', instellingen:'Instellingen' };
 
 function qsp(){ return new URLSearchParams(location.search); }
 function $id(x){ return document.getElementById(x); }
@@ -602,7 +602,7 @@ async function bookPlanSlot(taskId){
   try { await api(ENDPOINTS.inplannen,{task_id:taskId,list_id:ctx.list_id,start:iso(start),eind:iso(eind),start_ms:String(start),online:!!ctx.online,titel:'Afspraak — '+(p.name||'Studio 27'),beschrijving:'Ingepland via je Studio 27-portaal met '+(ctx.assignee||'het team')+'.',locatie:ctx.online?'':'Studio 27, Sint-Lenaartsesteenweg, Rijkevorsel',attendees:attendees,assignee_naam:ctx.assignee,client_email:cc.email||'',client_naam:clientNaam,bedrijf_id:state.session.bedrijf_id,session_token:state.session.session_token}); done(); }
   catch(e){ if(btn){btn.disabled=false;btn.textContent='Bevestig afspraak';} }
 }
-function toggleBot(){ const p=$id('botPanel'),f=$id('botFab'); const open=p.classList.toggle('show'); f.style.display=open?'none':'flex'; }
+function toggleBot(){ const p=$id('botPanel'),f=$id('botFab'); const open=p.classList.toggle('show'); f.style.display=open?'none':'flex'; if(open){ const g=$id('botGreet'); if(g){ var nm=(typeof _greetNaam==='function'?_greetNaam():'')||''; g.innerHTML='Hallo '+escapeHtml(nm||'daar')+'! Ik help je graag op weg. Waarmee kan ik je verder helpen?'; } const inp=p.querySelector('.bot-input input'); if(inp)setTimeout(()=>inp.focus(),50); } }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($id('tourScrim')&&$id('tourScrim').classList.contains('show'))endTour(false); else if(state.viewMode==='project')goTab('projecten'); } });
 
 /* ---------- Onboarding tour (1x + opt-out) ---------- */

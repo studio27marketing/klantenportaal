@@ -384,11 +384,6 @@ function panelMeetings(){
     <div class="meet-main">
       <div class="section-head" style="margin-top:0"><h2>Geplande meetings</h2><span class="count">${mt?mt.list.length+' gepland':'2 gepland'}</span></div>
       <div class="meet-list">${meetHtml}</div>
-      <div class="section-head"><h2>Recente notulen</h2></div>
-      <div class="meet-list">
-        ${[['Kick-off merkstrategie','24 apr'],['Maandrapport april','3 mei'],['Strategie-werksessie','11 apr']].map(n=>`
-        <div class="filecard"><div class="ft">${ic('doc',20)}</div><div style="flex:1"><div class="fn">${n[0]}</div><div class="fs">Notulen · ${n[1]} · PDF</div></div><button class="btn btn-outline btn-sm">${ic('download',15)} Download</button></div>`).join('')}
-      </div>
     </div>
     <aside class="card meet-side">
       <h3 class="ms-title">Plan een meeting</h3>
@@ -429,7 +424,7 @@ function npType(){
 function npSetStep(n){document.querySelectorAll('#npSteps .np-step').forEach((s,i)=>s.classList.toggle('on',i<n));}
 function panelNieuwProject(){
   const diensten=Object.keys(NP_OPTIONS);
-  return hero('blue','Plannen · Nieuw project',
+  return hero('blue','Plannen · Offerte aanvragen',
     `Zin in iets <span class="accent">nieuws${squig()}</span>?`)
   +`<div class="card npform">
     <div class="np-steps" id="npSteps"><span class="np-step on">1</span><span class="np-bar"></span><span class="np-step">2</span><span class="np-bar"></span><span class="np-step">3</span></div>
@@ -721,8 +716,8 @@ function buildOverlays(){
   <!-- Chatbot -->
   <button class="bot-fab" id="botFab" onclick="toggleBot()" aria-label="Hulp van Studio 27">${logo27(30)}</button>
   <div class="bot-panel" id="botPanel">
-    <div class="bot-head"><div class="ba">${logo27(24)}</div><div><h3>Vraag het Studio 27</h3><div class="st"><i></i> meestal binnen enkele minuten</div></div><button class="bclose" onclick="toggleBot()"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
-    <div class="bot-msgs" id="botMsgs"><div class="bmsg bot">Hallo Sarah! Ik help je graag op weg. Waarmee kan ik je verder helpen?</div></div>
+    <div class="bot-head"><div class="ba">${logo27(24)}</div><div><h3>Vraag het aan Studio 27</h3><div class="st"><i></i> meestal binnen enkele minuten</div></div><button class="bclose" onclick="toggleBot()"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+    <div class="bot-msgs" id="botMsgs"><div class="bmsg bot" id="botGreet">Hallo! Ik help je graag op weg. Waarmee kan ik je verder helpen?</div></div>
     <div class="bot-chips" id="botChips">
       <button class="bot-chip" onclick="botAsk(this)">Wanneer is mijn volgende meeting?</button>
       <button class="bot-chip" onclick="botAsk(this)">Status van mijn website?</button>
