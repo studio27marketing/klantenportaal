@@ -18,7 +18,8 @@
 
   var REPO   = 'studio27marketing/klantenportaal';
   var BRANCH = 'main';
-  var CDN    = 'https://raw.githack.com/' + REPO + '/' + BRANCH + '/v4';
+  var CDN    = 'https://raw.githack.com/' + REPO + '/' + BRANCH + '/v4';   // primair: auto-fresh per minuut
+  var CDN_FALLBACK = 'https://cdn.jsdelivr.net/gh/' + REPO + '@' + BRANCH + '/v4'; // fallback: robuust als githack hapert (425/CORS)
   var MOUNT_ID = 's27-portal-mount';
 
   // Cache-bust: 60s-granulariteit (auto-fresh elke minuut) of expliciet met ?nocache=1
@@ -90,10 +91,16 @@
       console.error('[Studio 27] Mount element #' + MOUNT_ID + ' niet gevonden op de pagina.');
       return;
     }
-    loadCSS();
     fetchRetry(CDN + '/shell.html' + CB, { cache: 'no-cache' }, 4)
+      .catch(function(githackErr) {
+        // githack hapert (cold-cache 425 / CORS) -> val terug op jsDelivr zodat het portaal toch laadt
+        console.warn('[Studio 27] githack faalde, fallback naar jsDelivr:', githackErr && githackErr.message);
+        CDN = CDN_FALLBACK;
+        return fetchRetry(CDN + '/shell.html', { cache: 'no-cache' }, 3);
+      })
       .then(function(r) { return r.text(); })
       .then(function(html) {
+        loadCSS();             // na CDN-bepaling: CSS + scripts komen van dezelfde werkende bron
         mount.innerHTML = html;
         loadScripts();
       })
