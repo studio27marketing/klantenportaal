@@ -209,6 +209,7 @@ async function ensureTabData(name){
   if((name==='facturatie'||name==='instellingen') && !state.data.bedrijf){ await S27DATA.loadBedrijf(); await S27DATA.loadTeam(); }
   if(name==='performance'){ try{ state.perfUrl=(await S27DATA.performanceUrl())||null; }catch(e){ state.perfUrl=null; } }
   if(name==='offertes' && !state.data.offertes){ try{ await S27DATA.loadOffertes(); }catch(e){} }
+  if(name==='socials' && !state.data.metricool){ try{ await S27DATA.loadMetricool(); }catch(e){} }
 }
 function renderPanel(name){
   const page=$id('page');
@@ -247,7 +248,8 @@ function updateNavBadges(){
   }catch(e){}
 }
 function needsLoad(name){
-  if(state.data.dashboard && ['start','projecten','diensten','berichten','socials','advertenties'].indexOf(name)>=0) return false;
+  if(state.data.dashboard && ['start','projecten','diensten','berichten','advertenties'].indexOf(name)>=0) return false;
+  if(name==='socials') return !state.data.metricool;   // wacht op Metricool-data
   if(name==='meetings' && state.data.meetings) return false;
   if(name==='huisstijl' && state.data.huisstijl) return false;
   if((name==='facturatie'||name==='instellingen') && state.data.bedrijf) return false;
@@ -264,7 +266,7 @@ function setActiveNav(name){
 // lege takken (geen projecten) verbergen in de zijbalk — data-gedreven
 function applyTakVisibility(){
   if(state.demoMode || !state.data.dashboard) return;
-  const map={ socials:'social', advertenties:'ads' };
+  const map={ advertenties:'ads' };   // socials blijft altijd zichtbaar (Metricool-koppeling kan los van social-projecten staan)
   Object.keys(map).forEach(tab=>{
     const item=document.querySelector('.sb-item[data-tab="'+tab+'"]');
     if(item) item.style.display = S27DATA.discActive(map[tab]) ? '' : 'none';

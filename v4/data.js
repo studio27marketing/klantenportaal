@@ -259,6 +259,38 @@
     state.data.offertes = []; return false;   // leeg ("_raw":"Accepted") = geen offertes
   };
   DATA.offertes = function(){ return state.data.offertes; };
+
+  /* ---- Metricool (geplande social posts) — geïsoleerd Make-scenario, directe call ---- */
+  function _parseDatum(s){ if(!s) return null; var d=new Date(String(s).replace(' ','T')); return isNaN(d.getTime())?null:d; }
+  DATA.loadMetricool = async function(){
+    if(!live()){ state.data.metricool={linked:false,posts:[]}; return false; }
+    var bid = state.activeBedrijf || '';
+    if(!bid){ state.data.metricool={linked:false,posts:[]}; return false; }
+    try{
+      var r = await fetch(METRICOOL_DIRECT, { method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},   // CORS-safe: geen preflight
+        body:'bedrijf_id='+encodeURIComponent(bid) });
+      var t = await r.text(); var j=null; try{ j=JSON.parse(t); }catch(e){}
+      if(!j || !j.ok){ state.data.metricool={linked:false,posts:[]}; return false; }
+      if(!j.linked){ state.data.metricool={linked:false,posts:[]}; return true; }
+      // Metricool geeft 1 rij per netwerk -> groepeer per post-id
+      var byId={};
+      (j.posts||[]).forEach(function(p){
+        if(!p||!p.id) return;
+        if(!byId[p.id]){
+          var tk=''; try{ tk=decodeURIComponent(p.tekst||''); }catch(e){ tk=p.tekst||''; }
+          byId[p.id]={ id:p.id, datum:p.datum||'', dt:_parseDatum(p.datum), tekst:tk, media:p.media||'', netwerken:[] };
+        }
+        byId[p.id].netwerken.push({ netwerk:(p.netwerk||'').toLowerCase(), status:(p.status||'').toUpperCase(), detail:p.detail||'', url:p.url||'' });
+      });
+      var posts=Object.keys(byId).map(function(k){return byId[k];});
+      posts.sort(function(a,b){ return (a.dt?a.dt.getTime():9e15)-(b.dt?b.dt.getTime():9e15); });
+      state.data.metricool={ linked:true, brandId:j.brandId||'', posts:posts };
+      return true;
+    }catch(e){ state.data.metricool={linked:false,posts:[]}; return false; }
+  };
+  DATA.metricool = function(){ return state.data.metricool; };
+
   DATA.huisstijl = function(){ return state.data.huisstijl; };
 
   /* ---- relatieve tijd ---- */

@@ -267,29 +267,105 @@ function panelProjecten(){
     <div id="projViewBody">${projDienst()}</div>`;
 }
 
+/* ---- Socials (Metricool) — netwerk/status-helpers + render ---- */
+const MC_NET={linkedin:['LinkedIn','#0a66c2'],facebook:['Facebook','#1877f2'],instagram:['Instagram','#d6336c'],tiktok:['TikTok','#111827'],twitter:['X','#111827'],x:['X','#111827'],youtube:['YouTube','#ff0000'],gbp:['Google','#1a73e8'],google:['Google','#1a73e8'],bluesky:['Bluesky','#1185fe'],pinterest:['Pinterest','#bd081c'],threads:['Threads','#111827']};
+function mcNet(n){ n=(n||'').toLowerCase(); return MC_NET[n]||[(n?n.charAt(0).toUpperCase()+n.slice(1):'Post'),'#667684']; }
+function mcStatus(s){ s=(s||'').toUpperCase();
+  if(s.indexOf('PUBLISH')>=0) return ['Gepubliceerd','#15803d','#dcfce7'];
+  if(/ERROR|FAIL|REJECT/.test(s)) return ['Fout','#b91c1c','#fee2e2'];
+  if(s.indexOf('DRAFT')>=0) return ['Concept','#92740b','#fef3c7'];
+  if(/PEND|SCHEDUL/.test(s)) return ['Gepland','#1e5f9e','#dbeafe'];
+  return [s?(s.charAt(0)+s.slice(1).toLowerCase()):'Gepland','#475569','#e2e8f0']; }
+function mcOverall(p){ var ss=(p.netwerken||[]).map(function(n){return n.status||'';});
+  if(ss.some(function(s){return /ERROR|FAIL|REJECT/i.test(s);})) return mcStatus('ERROR');
+  if(ss.some(function(s){return /PEND|SCHEDUL/i.test(s);})) return mcStatus('PENDING');
+  if(ss.some(function(s){return /PUBLISH/i.test(s);})) return mcStatus('PUBLISHED');
+  return mcStatus(ss[0]||''); }
+function mcStyleOnce(){ return $id('mcStyle')?'':'<style id="mcStyle">.mc-post{cursor:pointer;transition:box-shadow .15s}.mc-post .mc-body{display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--paper-3)}.mc-post.open .mc-body{display:block}.mc-post.open{box-shadow:0 8px 26px rgba(0,0,0,.08)}.mc-txt{white-space:pre-wrap;font-size:13.5px;line-height:1.55;color:var(--ink-2)}.mc-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}.mc-cal .cd{min-height:58px;border-radius:10px;background:var(--paper-2);border:1px solid var(--paper-3);padding:5px 6px;font-size:11px}.mc-cal .cd.muted{opacity:.35}.mc-dot{display:inline-block;width:7px;height:7px;border-radius:99px;margin:1px 1px 0 0}</style>'; }
+function socialNetChips(p){ return (p.netwerken||[]).map(function(nw){ var n=mcNet(nw.netwerk),st=mcStatus(nw.status); return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:'+n[1]+';background:'+n[1]+'14;border-radius:999px;padding:2px 9px">'+esc(n[0])+'<span style="width:6px;height:6px;border-radius:99px;background:'+st[1]+'"></span></span>'; }).join(' '); }
+function socialPostRow(p){
+  var st=mcOverall(p), dt=p.dt;
+  var dd = dt? dt.toLocaleDateString('nl-BE',{weekday:'short',day:'numeric',month:'short'}) : (p.datum||'—');
+  var tt = dt? dt.toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'}) : '';
+  var first=((p.tekst||'').split('\n')[0]||'').slice(0,100);
+  var thumb = p.media? '<img src="'+esc(p.media)+'" alt="" style="width:54px;height:54px;border-radius:10px;object-fit:cover;flex:0 0 auto" loading="lazy">' : '<div style="width:54px;height:54px;border-radius:10px;background:var(--paper-3);flex:0 0 auto"></div>';
+  return '<div class="card mc-post" id="mcp-'+esc(p.id)+'" onclick="toggleSocialPost(\''+esc(p.id)+'\')" style="padding:13px 15px;margin-bottom:9px;display:block">'
+   +'<div style="display:flex;gap:13px;align-items:center">'+thumb
+     +'<div style="flex:1;min-width:0">'
+       +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px"><span style="font-weight:800;font-size:12.5px;color:var(--ink-3)">'+esc(dd)+(tt?' · '+tt:'')+'</span><span style="font-size:11px;font-weight:700;color:'+st[1]+';background:'+st[2]+';border-radius:999px;padding:1px 9px">'+st[0]+'</span></div>'
+       +'<div style="font-size:14px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(first||'(geen tekst)')+'</div>'
+       +'<div style="margin-top:7px;display:flex;gap:5px;flex-wrap:wrap">'+socialNetChips(p)+'</div>'
+     +'</div><span style="color:var(--ink-4);flex:0 0 auto">'+ic('arrow',16)+'</span></div>'
+   +'<div class="mc-body">'
+     +(p.media?'<img src="'+esc(p.media)+'" alt="" style="max-width:260px;width:100%;border-radius:12px;margin-bottom:12px" loading="lazy">':'')
+     +'<div class="mc-txt">'+esc(p.tekst||'')+'</div>'
+     +'<div style="margin-top:12px;display:flex;gap:7px;flex-wrap:wrap">'+(p.netwerken||[]).map(function(nw){ var n=mcNet(nw.netwerk),s=mcStatus(nw.status); return '<span style="font-size:11.5px;font-weight:700;color:'+n[1]+';background:'+n[1]+'12;border-radius:999px;padding:3px 10px">'+esc(n[0])+' · <span style="color:'+s[1]+'">'+s[0]+'</span>'+(nw.url?' · <a href="'+esc(nw.url)+'" target="_blank" rel="noopener" style="color:'+n[1]+'" onclick="event.stopPropagation()">bekijk</a>':'')+'</span>'; }).join('')+'</div>'
+   +'</div></div>';
+}
+function toggleSocialPost(id){ var el=$id('mcp-'+id); if(el) el.classList.toggle('open'); }
+function setSocialView(v){ state._socialView=v; renderPanel('socials'); }
+function socialCalendar(posts){
+  var months={}; posts.forEach(function(p){ if(p.dt){ var k=p.dt.getFullYear()+'-'+p.dt.getMonth(); (months[k]=months[k]||[]).push(p); } });
+  var keys=Object.keys(months).sort(function(a,b){ var A=a.split('-'),B=b.split('-'); return (A[0]-B[0])||(A[1]-B[1]); });
+  if(!keys.length) return '<div class="card" style="padding:24px;text-align:center;color:var(--ink-3)">Geen posts met datum.</div>';
+  var DOW=['ma','di','wo','do','vr','za','zo'];
+  return keys.map(function(k){
+    var parts=k.split('-'), yr=+parts[0], mo=+parts[1];
+    var first=new Date(yr,mo,1), start=(first.getDay()+6)%7, days=new Date(yr,mo+1,0).getDate();
+    var byDay={}; months[k].forEach(function(p){ (byDay[p.dt.getDate()]=byDay[p.dt.getDate()]||[]).push(p); });
+    var cells=''; for(var i=0;i<start;i++) cells+='<div class="cd muted"></div>';
+    for(var d=1;d<=days;d++){ var pp=byDay[d]||[];
+      cells+='<div class="cd"><div style="font-weight:700;color:var(--ink-3)">'+d+'</div>'+pp.map(function(p){ var n=mcNet((p.netwerken[0]||{}).netwerk); return '<span class="mc-dot" title="'+esc((p.tekst||'').replace(/\n/g,' ').slice(0,50))+'" style="background:'+n[1]+'"></span>'; }).join('')+'</div>';
+    }
+    var label=first.toLocaleDateString('nl-BE',{month:'long',year:'numeric'});
+    return '<div style="margin:16px 0 7px;font-weight:800;font-family:var(--font-display);text-transform:capitalize;color:var(--ink-3)">'+esc(label)+'</div><div class="mc-cal">'+DOW.map(function(x){return '<div style="font-size:10.5px;font-weight:700;color:var(--ink-4);text-align:center;padding-bottom:2px">'+x+'</div>';}).join('')+cells+'</div>';
+  }).join('');
+}
 function panelSocials(){
-  const posts=[['ig','Instagram','yellow','Reel · "Achter de schermen"','Gepland · 14 mei 10:00','sent'],
-    ['fb','Facebook','blue','Carrousel · Nieuwe collectie','Gepland · 16 mei 09:00','prog'],
-    ['li','LinkedIn','blue','Vacature · "Kom bij ons team"','Gepubliceerd · 8 mei','done'],
-    ['tt','TikTok','purple','Trend-video · lentepromo','Concept klaar','wait']];
-  return hero('yellow','Mijn werk · Socials',
+  const head = hero('yellow','Mijn werk · Socials',
     `Jouw <span class="accent">socials${squig()}</span>, strak gepland`,
-    'De contentkalender van deze maand. Keur posts goed of geef feedback per item.',
-    scribble('stralen-geel.png','top:-12px;right:8px;width:124px;transform:rotate(6deg)'))
-  +`<div class="mini-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:8px">
-    ${[['Volgers','8.940','up','+4,2%'],['Bereik deze maand','62.300','up','+11%'],['Engagement','5,8%','up','+0,9pt'],['Posts gepland','12','flat','=']].map(k=>`
-      <div class="kpi br-yellow"><div class="kbar"></div><div class="klab">${k[0]}</div><div class="knum">${k[1]}</div><span class="chip chip-${k[2]==='up'?'up':k[2]==='down'?'down':'flat'}">${ic(k[2],12)} ${k[3]}</span></div>`).join('')}
-  </div>
-  <div class="section-head"><h2>Contentkalender · mei</h2><span class="count">4 van 12 getoond</span></div>
-  <div class="proj-list">
-    ${posts.map(p=>{const[lab,cls]=STATUS_LABEL[p[5]];return`
-      <div class="proj-row br-${p[2]}" style="cursor:default">
-        <span class="bar"></span>
-        <span class="pr-main"><span class="pr-disc">${p[1]}</span><span class="pr-name" style="font-size:15px">${p[3]}</span><span style="font-size:12.5px;color:var(--ink-4)">${p[4]}</span></span>
-        ${spill(p[5])}
-        ${p[5]==='wait'||p[5]==='sent'?'<button class="btn btn-branch btn-sm br-green">Goedkeuren</button><button class="btn btn-outline btn-sm">Feedback</button>':''}
-      </div>`}).join('')}
-  </div>`;
+    'Je geplande content over alle kanalen — rechtstreeks uit Metricool.',
+    scribble('stralen-geel.png','top:-12px;right:8px;width:124px;transform:rotate(6deg)'));
+  if(state.demoMode){
+    const posts=[['ig','Instagram','yellow','Reel · "Achter de schermen"','Gepland · 14 mei 10:00','sent'],
+      ['fb','Facebook','blue','Carrousel · Nieuwe collectie','Gepland · 16 mei 09:00','prog'],
+      ['li','LinkedIn','blue','Vacature · "Kom bij ons team"','Gepubliceerd · 8 mei','done'],
+      ['tt','TikTok','purple','Trend-video · lentepromo','Concept klaar','wait']];
+    return head+`<div class="mini-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:8px">
+      ${[['Volgers','8.940','up','+4,2%'],['Bereik deze maand','62.300','up','+11%'],['Engagement','5,8%','up','+0,9pt'],['Posts gepland','12','flat','=']].map(k=>`
+        <div class="kpi br-yellow"><div class="kbar"></div><div class="klab">${k[0]}</div><div class="knum">${k[1]}</div><span class="chip chip-${k[2]==='up'?'up':k[2]==='down'?'down':'flat'}">${ic(k[2],12)} ${k[3]}</span></div>`).join('')}
+    </div>
+    <div class="section-head"><h2>Contentkalender · mei</h2><span class="count">4 van 12 getoond</span></div>
+    <div class="proj-list">
+      ${posts.map(p=>`
+        <div class="proj-row br-${p[2]}" style="cursor:default"><span class="bar"></span>
+          <span class="pr-main"><span class="pr-disc">${p[1]}</span><span class="pr-name" style="font-size:15px">${p[3]}</span><span style="font-size:12.5px;color:var(--ink-4)">${p[4]}</span></span>
+          ${spill(p[5])}
+          ${p[5]==='wait'||p[5]==='sent'?'<button class="btn btn-branch btn-sm br-green">Goedkeuren</button><button class="btn btn-outline btn-sm">Feedback</button>':''}
+        </div>`).join('')}
+    </div>`;
+  }
+  var mc = (window.S27DATA&&S27DATA.metricool())||null;
+  if(!mc || !mc.linked)
+    return head+'<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen Metricool-koppeling</div><div style="color:var(--ink-3);max-width:460px;margin:0 auto;line-height:1.55">Zodra je social-kanalen aan je portaal gekoppeld zijn, zie je hier je volledige contentkalender met geplande posts en hun status. Vraag gerust je contactpersoon bij Studio&nbsp;27.</div></div>';
+  var posts = mc.posts||[];
+  if(!posts.length)
+    return head+'<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen geplande posts</div><div style="color:var(--ink-3)">Er staan momenteel geen posts ingepland voor de komende periode. Zodra Studio&nbsp;27 content inplant, verschijnt die hier.</div></div>';
+  var view = state._socialView||'lijst';
+  var perNet={}; posts.forEach(function(p){ (p.netwerken||[]).forEach(function(nw){ var n=mcNet(nw.netwerk)[0]; perNet[n]=(perNet[n]||0)+1; }); });
+  var summary='<div class="mini-grid" style="grid-template-columns:repeat(auto-fit,minmax(118px,1fr));margin-bottom:10px"><div class="kpi br-yellow"><div class="kbar"></div><div class="klab">Posts gepland</div><div class="knum">'+posts.length+'</div></div>'
+    +Object.keys(perNet).slice(0,4).map(function(n){ return '<div class="kpi br-yellow"><div class="kbar"></div><div class="klab">'+esc(n)+'</div><div class="knum">'+perNet[n]+'</div></div>'; }).join('')+'</div>';
+  var toggle='<div class="section-head"><h2>Contentkalender</h2><span style="display:inline-flex;gap:5px"><button class="seg-btn'+(view==='lijst'?' active':'')+'" onclick="setSocialView(\'lijst\')">Lijst</button><button class="seg-btn'+(view==='kalender'?' active':'')+'" onclick="setSocialView(\'kalender\')">Kalender</button></span></div>';
+  var body;
+  if(view==='kalender'){ body=socialCalendar(posts); }
+  else {
+    var byMonth={}; posts.forEach(function(p){ var k=p.dt?(p.dt.getFullYear()+'-'+('0'+(p.dt.getMonth()+1)).slice(-2)):'zonder'; (byMonth[k]=byMonth[k]||[]).push(p); });
+    body=Object.keys(byMonth).sort().map(function(k){
+      var lab=(k==='zonder')?'Zonder datum':(byMonth[k][0].dt.toLocaleDateString('nl-BE',{month:'long',year:'numeric'}));
+      return '<div style="margin:16px 0 8px;font-weight:800;font-family:var(--font-display);text-transform:capitalize;color:var(--ink-3)">'+esc(lab)+'</div>'+byMonth[k].map(socialPostRow).join('');
+    }).join('');
+  }
+  return mcStyleOnce()+head+summary+toggle+body;
 }
 
 function panelAdvertenties(){

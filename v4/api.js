@@ -17,7 +17,7 @@ var state = window.S27State = {
   activeBedrijf: '',
   _provisionTried: false,
   _sessionExpiredHandled: false,
-  data: { dashboard:null, details:{}, chats:{}, meetings:null, bedrijf:null, team:null, huisstijl:null, offertes:null },  // gecachte API-data
+  data: { dashboard:null, details:{}, chats:{}, meetings:null, bedrijf:null, team:null, huisstijl:null, offertes:null, metricool:null },  // gecachte API-data
 
   route: null                 // deep-link pending route (zie portal.js router)
 };
@@ -73,6 +73,10 @@ const ENDPOINTS = {
 const AUTH_V2 = !/[?&]auth=v1(?:&|$)/.test(location.search);
 const GATEWAY_BASE = 'https://s27-portal-gateway.studio27marketing.workers.dev';
 const PROVISION_URL = 'https://hook.eu1.make.com/hjmc9k1w9ry027kom3rfiwci9pejub78';
+/* Metricool-posts: GEÏSOLEERD Make-scenario (los van de gateway/bedrijf-beheer).
+   Direct aangeroepen met form-encoded body (CORS-safe, geen preflight); leest de
+   Metricool-ID server-side uit de bedrijf-taak. Lage gevoeligheid (geplande posts). */
+const METRICOOL_DIRECT = 'https://hook.eu1.make.com/zlfk0g88m761p3nvjllfupe6vcqfdy2z';
 const ENDPOINT_KEYS = Object.keys(ENDPOINTS).reduce(function(m, k){ m[ENDPOINTS[k]] = k; return m; }, {});
 // auth.js wordt relatief naast api.js geladen (CDN of lokaal); fallback = v4-branch.
 const AUTH_JS_URL = (function(){
