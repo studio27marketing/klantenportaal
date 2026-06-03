@@ -41,6 +41,8 @@
   };
   DATA.status = function(raw){ return STATUS_MAP[norm(raw)] || {key:'prog', label:raw||'Loopt'}; };
   var AFGEROND = ['goedgekeurd','done','klaar_voor_facturatie','gefactureerd'];
+  // projectchat sluit zodra het team de taak niet meer opvolgt: Doorgestuurd of een afgeronde status
+  DATA.isChatClosed = function(raw){ var n=norm(raw); return n==='doorgestuurd' || AFGEROND.indexOf(n)>=0; };
   function isAfgerond(raw){ return AFGEROND.indexOf(norm(raw)) >= 0; }
 
   /* ---- payload-helpers (gateway injecteert bedrijf_id server-side) ---- */

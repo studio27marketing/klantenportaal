@@ -594,6 +594,7 @@ function buildModal(id, from){
   const det=(window.S27DATA && S27DATA.detail(id))||null;
   const isVideo=(p.disc||'').indexOf('Video')===0;
   const needsFeedback=p.status==='wait';
+  const chatClosed = (p.status==='done') || !!(window.S27DATA && S27DATA.isChatClosed && p._raw && S27DATA.isChatClosed(p._raw.status));
   const backTo=(from==='berichten')?'berichten':'projecten';
   const backLabel=(backTo==='berichten')?'berichten':'projecten';
   let SUBTASKS = isVideo ? [
@@ -616,10 +617,7 @@ function buildModal(id, from){
 
   const overview=`<div class="mpane active" data-mpane="overzicht">
     ${needsFeedback?`<div class="fb-banner"><div class="fb-ic">${ic('spark',20)}</div><div class="fb-tx"><b>We wachten op jouw akkoord</b><p>Bekijk de deliverable en laat ons weten of we groen licht hebben.</p></div><div class="fb-act"><button class="btn btn-branch btn-sm br-green" onclick="approveAll(this)">Goedkeuren</button><button class="btn btn-outline btn-sm" onclick="switchModalTab('deliverables')">Bekijk bestanden</button></div></div>`:''}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
-      <div class="card" style="padding:16px"><div class="klab" style="font-family:var(--font-display);font-weight:700;font-size:11px;color:var(--ink-4);text-transform:uppercase;letter-spacing:.05em">Discipline</div><b style="font-family:var(--font-display);font-size:15px">${p.disc}</b></div>
-      <div class="card" style="padding:16px"><div class="klab" style="font-family:var(--font-display);font-weight:700;font-size:11px;color:var(--ink-4);text-transform:uppercase;letter-spacing:.05em">Status</div><div style="margin-top:6px">${spill(p.status)}</div></div>
-    </div>
+    ${scheduleBlock(p)}
     <h4 style="font-family:var(--font-display);font-size:15px;margin:0 0 8px">Tijdlijn</h4>
     <div style="display:flex;flex-direction:column;gap:0">
       ${[['Briefing & kick-off','done'],['Concept & scenario','done'],['Productie / montage','done'],['Jouw review','wait'],['Oplevering','todo']].map((t,i,a)=>`
@@ -632,7 +630,6 @@ function buildModal(id, from){
     <div class="approved-list">
       ${approved.map(t=>`<div class="approved-row"><span class="check-circ">${ic('check',13)}</span><span>${t}</span></div>`).join('')}
     </div>
-    ${scheduleBlock(p)}
   </div>`;
 
   const deliverables=`<div class="mpane" data-mpane="deliverables">
@@ -678,13 +675,14 @@ function buildModal(id, from){
           <button class="mtab active" onclick="switchModalTab('overzicht')">Overzicht</button>
           <button class="mtab" onclick="switchModalTab('deliverables')">Bestanden</button>
           <button class="mtab" onclick="switchModalTab('feedback')">Feedback</button>
-          <button class="mtab mtab-chat" onclick="switchModalTab('chat')">Chat</button>
+          ${chatClosed?'':`<button class="mtab mtab-chat" onclick="switchModalTab('chat')">Chat</button>`}
         </div>
         <div class="detail-body">${overview}${deliverables}${feedback}</div>
       </div>
       <aside class="detail-chat">
-        <div class="dc-head">${ic('msg',16)} Projectchat <span class="dc-sub">met je team</span></div>
-        <div class="dc-body">${chatHTML(id)}</div>
+        <div class="dc-head">${ic('msg',16)} Projectchat <span class="dc-sub">${chatClosed?'afgerond':'met je team'}</span></div>
+        <div class="dc-body" id="dcBody">${chatClosed?`<div class="empty" style="padding:22px 14px;text-align:center"><div class="em-ic">${ic('st_approved',40)}</div><b style="font-family:var(--font-display);font-size:14.5px;color:var(--ink-2)">Dit project is afgerond</b><p style="margin:6px 0 0;font-size:13px;color:var(--ink-3)">De projectchat is gesloten — het team kijkt hier niet meer mee. Een dringende vraag? Stuur ze rechtstreeks naar Ilke.</p><button class="btn btn-branch br-blue btn-sm" style="margin-top:14px" onclick="dringendeVraag('${esc(p.id)}')">${ic('spark',15)} Dringende vraag aan Ilke</button></div>`:chatHTML(id)}</div>
+        ${chatClosed?'':`<div style="padding:2px 12px 12px"><button class="btn btn-ghost btn-sm" style="width:100%;color:var(--s27-orange-ink)" onclick="dringendeVraag('${esc(p.id)}')">${ic('spark',14)} Dringende vraag aan Ilke</button></div>`}
       </aside>
     </div>
   </div>`;
