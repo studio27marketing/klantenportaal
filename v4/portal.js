@@ -388,8 +388,10 @@ function renderCompanySwitcher(){
   const wrap=$id('switchMenu'); const nm=document.querySelector('.sb-client .nm');
   if(nm) nm.textContent = S27DATA.bedrijfsnaam();
   const comps = state.portalCompanies||[];
+  const sw=$id('clientSwitch');
   if(wrap){
-    if(comps.length<2){ wrap.innerHTML=''; const sw=$id('clientSwitch'); if(sw) sw.style.pointerEvents='none'; return; }
+    if(comps.length<2){ wrap.innerHTML=''; if(sw){ sw.style.pointerEvents='none'; sw.classList.remove('has-switch'); } return; }
+    if(sw){ sw.style.pointerEvents=''; sw.classList.add('has-switch'); }   // ≥2 bedrijven -> switcher klikbaar (én reset van een eerdere 1-bedrijf-staat)
     wrap.innerHTML = comps.map(c=>'<button onclick="switchCompany(\''+esc(c.id)+'\')"><span class="av" style="background:var(--s27-blue)">'+esc((c.naam||'?').slice(0,2).toUpperCase())+'</span><span class="nm">'+esc(c.naam)+'</span></button>').join('');
   }
 }
