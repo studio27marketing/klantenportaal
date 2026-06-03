@@ -506,7 +506,7 @@ async function loadMeetSlots(who,color,type){
 }
 function computeFreeFromBusy(busy,durMs){
   const out=[]; const lead=Date.now()+48*3600000;
-  for(let d=0; d<16 && out.length<48; d++){
+  for(let d=0; d<31 && out.length<300; d++){
     const day=new Date(lead+d*86400000); const dow=day.getDay(); if(dow===0||dow===6) continue;
     for(let h=9; h<17; h++){ for(let m=0;m<60;m+=30){
       const s=new Date(day.getFullYear(),day.getMonth(),day.getDate(),h,m,0,0); const st=s.getTime(); const en=st+durMs;
@@ -517,19 +517,37 @@ function computeFreeFromBusy(busy,durMs){
   }
   return out;
 }
-function renderMeetPicker(slots){
-  if(!slots.length) return '<p class="fs" style="color:var(--ink-3);padding:6px 0">Geen vrije momenten in de komende twee weken — stuur ons gerust een berichtje, dan zoeken we samen iets.</p>';
-  const byDay={}; slots.forEach(st=>{ const k=new Date(st); const key=k.getFullYear()+'-'+('0'+(k.getMonth()+1)).slice(-2)+'-'+('0'+k.getDate()).slice(-2); (byDay[key]=byDay[key]||[]).push(st); });
-  const days=Object.keys(byDay).sort().slice(0,7); state.meetCtx.byDay=byDay;
-  const DOW=['zo','ma','di','wo','do','vr','za'];
-  let html='<p class="fs" style="margin:0 0 10px;color:var(--ink-3)">Live uit de agenda van <b>'+escapeHtml(state.meetCtx.who)+'</b> · ± 30 min. Kies een moment:</p>';
-  html+='<label class="ms-label">Kies een dag</label><div class="calstrip">'+days.map((k,i)=>{ const d=new Date(k+'T12:00:00'); return '<button class="calday'+(i===0?' sel':'')+'" data-meetday="'+k+'" onclick="selMeetDay(this)"><div class="dow">'+DOW[d.getDay()]+'</div><div class="dnum">'+d.getDate()+'</div></button>'; }).join('')+'</div>';
-  html+='<label class="ms-label">Tijdslot <span style="font-weight:600;color:var(--ink-4)">(9–17u, werkdagen)</span></label><div class="slotgrid" id="meetSlotGrid">'+meetSlotButtons(byDay[days[0]])+'</div>';
-  html+='<button class="btn btn-branch br-'+state.meetCtx.color+' btn-block" id="meetConfirm" style="margin-top:16px" onclick="confirmMeeting(this)" disabled>Bevestig afspraak met '+escapeHtml(state.meetCtx.who)+'</button>';
-  return html;
+/* ---- week-kalender helpers (gedeeld door meeting- en per-taak-picker) ---- */
+function _dayKey(ms){ const d=new Date(ms); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+function _monday(ms){ const d=new Date(ms); d.setHours(0,0,0,0); const off=(d.getDay()+6)%7; return d.getTime()-off*86400000; }
+const _MA=['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'], _DOW=['ma','di','wo','do','vr','za','zo'];
+function weekStrip(ctx, dayPickFn){
+  const ws=ctx.weekStart;
+  const firstMon=_monday(ctx.slots[0]), lastMon=_monday(ctx.slots[ctx.slots.length-1]);
+  const canPrev=ws>firstMon, canNext=ws<lastMon;
+  const lab=new Date(ws).getDate()+' '+_MA[new Date(ws).getMonth()]+' – '+new Date(ws+6*864e5).getDate()+' '+_MA[new Date(ws+6*864e5).getMonth()];
+  let selDay=ctx.selDay, strip='';
+  for(let i=0;i<7;i++){ const dms=ws+i*864e5, k=_dayKey(dms), has=(ctx.byDay[k]||[]).length>0; if(has&&!selDay)selDay=k; const d=new Date(dms);
+    strip+='<button class="calday'+(k===selDay?' sel':'')+'" '+(has?'':'disabled')+' style="'+(has?'':'opacity:.3;cursor:default')+'" data-k="'+k+'" '+(has?'onclick="'+dayPickFn+'(this)"':'')+'><div class="dow">'+_DOW[i]+'</div><div class="dnum">'+d.getDate()+'</div></button>';
+  }
+  ctx.selDay=selDay;
+  return '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><button class="icon-btn" style="width:34px;height:34px;font-size:22px;font-weight:700;line-height:1" '+(canPrev?'':'disabled')+' onclick="'+ctx.navFn+'(-1)">‹</button><b style="font-family:var(--font-display);font-size:13.5px">'+lab+'</b><button class="icon-btn" style="width:34px;height:34px;font-size:22px;font-weight:700;line-height:1" '+(canNext?'':'disabled')+' onclick="'+ctx.navFn+'(1)">›</button></div><div class="calstrip">'+strip+'</div>';
 }
+function renderMeetPicker(slots){
+  if(!slots.length) return '<p class="fs" style="color:var(--ink-3);padding:6px 0">Geen vrije momenten in de komende maand — stuur ons gerust een berichtje, dan zoeken we samen iets.</p>';
+  const byDay={}; slots.forEach(st=>{ (byDay[_dayKey(st)]=byDay[_dayKey(st)]||[]).push(st); });
+  state.meetCtx.byDay=byDay; state.meetCtx.slots=slots; state.meetCtx.weekStart=_monday(slots[0]); state.meetCtx.selDay=null; state.meetCtx.navFn='meetWeekNav';
+  return '<p class="fs" style="margin:0 0 10px;color:var(--ink-3)">Live uit de agenda van <b>'+escapeHtml(state.meetCtx.who)+'</b> · ± 30 min. Blader per week tot een maand vooruit:</p>'
+    +'<div id="meetWeek">'+meetWeekHTML()+'</div>'
+    +'<button class="btn btn-branch br-'+state.meetCtx.color+' btn-block" id="meetConfirm" style="margin-top:16px" onclick="confirmMeeting(this)" disabled>Bevestig afspraak met '+escapeHtml(state.meetCtx.who)+'</button>';
+}
+function meetWeekHTML(){
+  const c=state.meetCtx;
+  return weekStrip(c,'meetDayPick')+'<label class="ms-label">Tijdslot <span style="font-weight:600;color:var(--ink-4)">(9–17u)</span></label><div class="slotgrid" id="meetSlotGrid">'+(c.selDay?meetSlotButtons(c.byDay[c.selDay]):'<span class="fs" style="color:var(--ink-4)">Geen vrije momenten deze week — blader verder ›</span>')+'</div>';
+}
+function meetWeekNav(dir){ const c=state.meetCtx; if(!c)return; c.weekStart+=dir*7*864e5; c.selDay=null; c.sel=null; const box=$id('meetWeek'); if(box)box.innerHTML=meetWeekHTML(); const cf=$id('meetConfirm'); if(cf)cf.disabled=true; }
+function meetDayPick(el){ const c=state.meetCtx, k=el.dataset.k; c.selDay=k; el.parentElement.querySelectorAll('.calday').forEach(d=>d.classList.remove('sel')); el.classList.add('sel'); const g=$id('meetSlotGrid'); if(g)g.innerHTML=meetSlotButtons(c.byDay[k]); c.sel=null; const cf=$id('meetConfirm'); if(cf)cf.disabled=true; }
 function meetSlotButtons(arr){ return (arr||[]).map(st=>{ const d=new Date(st); const t=('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); return '<button class="slot" data-meetslot="'+st+'" onclick="selMeetSlot(this)">'+t+'</button>'; }).join(''); }
-function selMeetDay(el){ const k=el.dataset.meetday; const strip=el.parentElement; if(strip)strip.querySelectorAll('.calday').forEach(d=>d.classList.remove('sel')); el.classList.add('sel'); const grid=$id('meetSlotGrid'); if(grid)grid.innerHTML=meetSlotButtons(((state.meetCtx||{}).byDay||{})[k]); if(state.meetCtx)state.meetCtx.sel=null; const c=$id('meetConfirm'); if(c)c.disabled=true; }
 function selMeetSlot(el){ const box=$id('meetSlots'); if(box)box.querySelectorAll('.slot').forEach(s=>s.classList.remove('sel')); el.classList.add('sel'); if(state.meetCtx)state.meetCtx.sel=Number(el.dataset.meetslot); const c=$id('meetConfirm'); if(c)c.disabled=false; }
 async function confirmMeeting(btn){
   const ctx=state.meetCtx||{}; const who=ctx.who||'Studio 27';
@@ -567,7 +585,7 @@ function computeFreeSlots(blokken,durMs){
   const busy=[]; (blokken||[]).forEach(b=>{ const s=Number(b.start)||0,d=Number(b.due)||0,e=Number(b.est)||0; let bs=0,be=0;
     if(b.afwezig){bs=s;be=d>s?d:(s+(e||86400000));} else if(e>0){bs=s;be=s+e;} else if(d>s){bs=s;be=d;} if(bs&&be>bs)busy.push([bs,be]); });
   const slots=[]; const now=Date.now(); const day0=new Date(); day0.setHours(0,0,0,0);
-  for(let day=1;day<=21&&slots.length<60;day++){ const dt=new Date(day0.getTime()+day*86400000); const dw=dt.getDay(); if(dw===0||dw===6)continue;
+  for(let day=1;day<=31&&slots.length<150;day++){ const dt=new Date(day0.getTime()+day*86400000); const dw=dt.getDay(); if(dw===0||dw===6)continue;
     for(let m=480;m+durMs/60000<=1020;m+=30){ const ss=new Date(dt); ss.setHours(0,m,0,0); const t0=ss.getTime(),t1=t0+durMs;
       if(t0<now+2*3600000)continue; if(busy.some(iv=>t0<iv[1]&&t1>iv[0]))continue; slots.push(t0); } }
   return slots;
@@ -589,19 +607,19 @@ async function loadPlanSlots(taskId){
 }
 function renderPlanPicker(taskId,slots){
   const ctx=(state.planCtx||{})[taskId]||{};
-  if(!slots.length) return '<p class="fs" style="color:var(--ink-3)">Geen vrije momenten in de komende 3 weken. <a href="#" onclick="goTab(\'meetings\');return false">Plan via Meetings →</a></p>';
-  const byDay={}; slots.forEach(ms=>{ const k=new Date(ms).toISOString().slice(0,10); (byDay[k]=byDay[k]||[]).push(ms); });
-  const dl=ms=>new Date(ms).toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'long'});
-  const uur=ms=>new Date(ms).toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'});
-  const days=Object.keys(byDay).slice(0,8).map(k=>{ const list=byDay[k];
-    return '<div style="margin-bottom:12px"><div class="run-disc" style="margin-bottom:6px;text-transform:capitalize;color:var(--ink-3)">'+escapeHtml(dl(list[0]))+'</div><div class="slotgrid">'+
-      list.slice(0,12).map(ms=>'<button class="slot" data-plan-slot="'+ms+'" data-plan-task="'+escapeHtml(taskId)+'" onclick="pickPlanSlot(this)">'+escapeHtml(uur(ms))+'</button>').join('')+'</div></div>';
-  }).join('');
-  return '<p class="fs" style="margin:0 0 12px;color:var(--ink-3)">Met <b>'+escapeHtml(ctx.assignee||'')+'</b> · duur ± '+escapeHtml(fmtDur(ctx.dur||PLAN_DUR_MS))+'. Kies een moment:</p>'+
-    '<div style="display:flex;gap:16px;margin-bottom:14px"><label class="remember"><input type="radio" name="pm-'+escapeHtml(taskId)+'" value="online" checked onchange="planMode(\''+escapeHtml(taskId)+'\',true)"> Online (Google Meet)</label><label class="remember"><input type="radio" name="pm-'+escapeHtml(taskId)+'" value="fysiek" onchange="planMode(\''+escapeHtml(taskId)+'\',false)"> Fysiek bij Studio 27</label></div>'+
-    days+'<button class="btn btn-branch br-blue btn-block" id="plan-book-'+escapeHtml(taskId)+'" onclick="bookPlanSlot(\''+escapeHtml(taskId)+'\')" disabled style="margin-top:8px">Bevestig afspraak</button>';
+  if(!slots.length) return '<p class="fs" style="color:var(--ink-3)">Geen vrije momenten in de komende maand. <a href="#" onclick="goTab(\'meetings\');return false">Plan via Meetings →</a></p>';
+  const byDay={}; slots.forEach(ms=>{ (byDay[_dayKey(ms)]=byDay[_dayKey(ms)]||[]).push(ms); });
+  ctx.byDay=byDay; ctx.slots=slots; ctx.weekStart=_monday(slots[0]); ctx.selDay=null; ctx.navFn='planWeekNav'; ctx.taskId=taskId; state.planActive=taskId;
+  return '<p class="fs" style="margin:0 0 12px;color:var(--ink-3)">Met <b>'+escapeHtml(ctx.assignee||'')+'</b> · duur ± '+escapeHtml(fmtDur(ctx.dur||PLAN_DUR_MS))+'. Blader per week tot een maand vooruit:</p>'+
+    '<div style="display:flex;gap:16px;margin-bottom:12px"><label class="remember"><input type="radio" name="pm" value="online" checked onchange="planMode(\''+escapeHtml(taskId)+'\',true)"> Online (Google Meet)</label><label class="remember"><input type="radio" name="pm" value="fysiek" onchange="planMode(\''+escapeHtml(taskId)+'\',false)"> Fysiek bij Studio 27</label></div>'+
+    '<div id="planWeekBox">'+planWeekHTML()+'</div>'+
+    '<button class="btn btn-branch br-blue btn-block" id="plan-book" onclick="bookPlanSlot(\''+escapeHtml(taskId)+'\')" disabled style="margin-top:12px">Bevestig afspraak</button>';
 }
-function pickPlanSlot(el){ const tid=el.dataset.planTask; if(state.planCtx&&state.planCtx[tid])state.planCtx[tid].sel=Number(el.dataset.planSlot); const box=$id('s27-plan-'+tid); if(box)box.querySelectorAll('.slot').forEach(s=>s.classList.remove('sel')); el.classList.add('sel'); const b=$id('plan-book-'+tid); if(b)b.disabled=false; }
+function planWeekHTML(){ const c=(state.planCtx||{})[state.planActive]; if(!c)return ''; return weekStrip(c,'planDayPick')+'<label class="ms-label">Tijdslot</label><div class="slotgrid" id="planSlotGrid">'+(c.selDay?planSlotButtons(c.byDay[c.selDay]):'<span class="fs" style="color:var(--ink-4)">Geen vrije momenten deze week — blader verder ›</span>')+'</div>'; }
+function planSlotButtons(arr){ return (arr||[]).map(ms=>{ const t=new Date(ms).toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'}); return '<button class="slot" data-plan-slot="'+ms+'" onclick="pickPlanSlot(this)">'+t+'</button>'; }).join(''); }
+function planWeekNav(dir){ const c=(state.planCtx||{})[state.planActive]; if(!c)return; c.weekStart+=dir*7*864e5; c.selDay=null; c.sel=null; const box=$id('planWeekBox'); if(box)box.innerHTML=planWeekHTML(); const b=$id('plan-book'); if(b)b.disabled=true; }
+function planDayPick(el){ const c=(state.planCtx||{})[state.planActive]; const k=el.dataset.k; c.selDay=k; el.parentElement.querySelectorAll('.calday').forEach(d=>d.classList.remove('sel')); el.classList.add('sel'); const g=$id('planSlotGrid'); if(g)g.innerHTML=planSlotButtons(c.byDay[k]); c.sel=null; const b=$id('plan-book'); if(b)b.disabled=true; }
+function pickPlanSlot(el){ const c=(state.planCtx||{})[state.planActive]; if(c)c.sel=Number(el.dataset.planSlot); const box=$id('planSlotGrid'); if(box)box.querySelectorAll('.slot').forEach(s=>s.classList.remove('sel')); el.classList.add('sel'); const b=$id('plan-book'); if(b)b.disabled=false; }
 function planMode(tid,online){ if(state.planCtx&&state.planCtx[tid])state.planCtx[tid].online=online; }
 async function bookPlanSlot(taskId){
   const ctx=(state.planCtx||{})[taskId]; if(!ctx||!ctx.sel)return;
