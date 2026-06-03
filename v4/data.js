@@ -248,7 +248,14 @@
   DATA.loadOffertes = async function(){
     if(!live()) return false;
     var res = await api(ENDPOINTS.bedrijfBeheer, base({ action:'get_offertes' }));
-    if(res && res.ok && res.data && res.data.ok && res.data.offertes){ state.data.offertes = res.data.offertes; return true; }
+    if(res && res.ok && res.data && res.data.ok && res.data.offertes){
+      state.data.offertes = (res.data.offertes||[]).map(function(o){
+        var nm = o.naam || '';
+        try{ nm = decodeURIComponent(nm); }catch(e){}   // naam komt encodeURL'd uit Make (JSON-veilig)
+        return { id:o.id, naam:nm, link:o.link||'', budget:o.budget||'', vervaldatum:o.vervaldatum||'', status:o.status||'' };
+      });
+      return true;
+    }
     state.data.offertes = []; return false;   // leeg ("_raw":"Accepted") = geen offertes
   };
   DATA.offertes = function(){ return state.data.offertes; };
