@@ -355,10 +355,9 @@ function panelSocials(){
   var perNet={}; posts.forEach(function(p){ (p.netwerken||[]).forEach(function(nw){ var n=mcNet(nw.netwerk)[0]; perNet[n]=(perNet[n]||0)+1; }); });
   var summary='<div class="mini-grid" style="grid-template-columns:repeat(auto-fit,minmax(118px,1fr));margin-bottom:10px"><div class="kpi br-yellow"><div class="kbar"></div><div class="klab">Posts gepland</div><div class="knum">'+posts.length+'</div></div>'
     +Object.keys(perNet).slice(0,4).map(function(n){ return '<div class="kpi br-yellow"><div class="kbar"></div><div class="klab">'+esc(n)+'</div><div class="knum">'+perNet[n]+'</div></div>'; }).join('')+'</div>';
-  var toggle='<div class="section-head"><h2>Contentkalender</h2><span style="display:inline-flex;gap:5px"><button class="seg-btn'+(view==='lijst'?' active':'')+'" onclick="setSocialView(\'lijst\')">Lijst</button><button class="seg-btn'+(view==='kalender'?' active':'')+'" onclick="setSocialView(\'kalender\')">Kalender</button></span></div>';
+  var toggle='<div class="section-head"><h2>Contentkalender</h2><span class="count">'+posts.length+' posts</span></div>';
   var body;
-  if(view==='kalender'){ body=socialCalendar(posts); }
-  else {
+  {
     var byMonth={}; posts.forEach(function(p){ var k=p.dt?(p.dt.getFullYear()+'-'+('0'+(p.dt.getMonth()+1)).slice(-2)):'zonder'; (byMonth[k]=byMonth[k]||[]).push(p); });
     body=Object.keys(byMonth).sort().map(function(k){
       var lab=(k==='zonder')?'Zonder datum':(byMonth[k][0].dt.toLocaleDateString('nl-BE',{month:'long',year:'numeric'}));
@@ -502,11 +501,9 @@ function npType(){
   npSetStep(3);
 }
 function npSetStep(n){document.querySelectorAll('#npSteps .np-step').forEach((s,i)=>s.classList.toggle('on',i<n));}
-function panelNieuwProject(){
+function offerteRequestForm(){
   const diensten=Object.keys(NP_OPTIONS);
-  return hero('blue','Plannen · Offerte aanvragen',
-    `Zin in iets <span class="accent">nieuws${squig()}</span>?`)
-  +`<div class="card npform">
+  return `<div class="card npform">
     <div class="np-steps" id="npSteps"><span class="np-step on">1</span><span class="np-bar"></span><span class="np-step">2</span><span class="np-bar"></span><span class="np-step">3</span></div>
     <div class="field"><label>Welke dienst heb je in gedachten?</label>
       <select id="npDienst" onchange="npDienst()"><option value="">Kies een dienst…</option>${diensten.map(d=>`<option>${d}</option>`).join('')}</select></div>
@@ -521,6 +518,10 @@ function panelNieuwProject(){
     <div class="np-actions np-hidden" id="npActions"><button class="btn btn-primary" onclick="submitNieuwProject(this)">Vraag offerte aan ${ic('arrow',16)}</button><button class="btn btn-outline" onclick="goTab('meetings')">Plan eerst een koffietje</button></div>
   </div>`;
 }
+function panelNieuwProject(){
+  return hero('blue','Plannen · Offerte aanvragen',
+    `Zin in iets <span class="accent">nieuws${squig()}</span>?`) + offerteRequestForm();
+}
 
 function panelHuisstijl(){
   const sw=[['Blauw','#3083DC'],['Roze','#F697CE'],['Paars','#9441DB'],['Groen','#12AC4E'],['Oranje','#F66131']];
@@ -530,8 +531,6 @@ function panelHuisstijl(){
   const fileMeta=(f)=>{ const p=[]; const b=fmtBytes(f.size); if(b)p.push(b); if(f.modified){ const d=new Date(f.modified); if(!isNaN(d.getTime()))p.push(d.toLocaleDateString('nl-BE',{day:'numeric',month:'short',year:'numeric'})); } return p.join(' · '); };
   const fileCards = files ? (files.length ? files.map(f=>`<div class="filecard" style="min-width:240px"><div class="ft">${ic(mimeIc(f.mime),20)}</div><div style="flex:1;min-width:0"><div class="fn" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</div><div class="fs">${esc(fileMeta(f))}</div></div><a class="icon-btn" style="width:34px;height:34px" href="${esc(f.url||'#')}" target="_blank" rel="noopener">${ic('download',16)}</a></div>`).join('') : '<div class="fs" style="color:var(--ink-4)">Nog geen bestanden in je Huisstijl-map. Sleep hieronder een bestand om te beginnen.</div>')
     : `<div class="filecard" style="min-width:240px"><div class="ft">${ic('img',20)}</div><div style="flex:1"><div class="fn">logo-tc-fullcolor.svg</div><div class="fs">Vector · 24 KB</div></div><button class="icon-btn" style="width:34px;height:34px">${ic('download',16)}</button></div><div class="filecard" style="min-width:240px"><div class="ft">${ic('img',20)}</div><div style="flex:1"><div class="fn">logo-tc-wit.png</div><div class="fs">PNG · 180 KB</div></div><button class="icon-btn" style="width:34px;height:34px">${ic('download',16)}</button></div>`;
-  const teamCards = (team && team.contactpersonen) ? (team.contactpersonen.length ? team.contactpersonen.map(c=>{const nm=((c.voornaam||'')+' '+(c.achternaam||'')).trim()||'Contact';return `<div class="filecard"><div class="ft" style="border-radius:50%;background:var(--s27-blue);color:#fff;font-family:var(--font-display);font-weight:800">${esc(nm.split(' ').map(x=>x[0]).join('').slice(0,2))}</div><div style="flex:1"><div class="fn">${esc(nm)}</div><div class="fs">${esc(c.rol||c.email||'')}</div></div><button class="btn btn-ghost btn-sm">Wijzig</button></div>`;}).join('') : '<div class="fs" style="color:var(--ink-4)">Nog geen contactpersonen.</div>')
-    : [['Sarah Janssens','Marketing · hoofdcontact','blue'],['Tom De Cock','Zaakvoerder','green']].map(t=>`<div class="filecard"><div class="ft" style="border-radius:50%;background:var(--s27-${t[2]});color:#fff;font-family:var(--font-display);font-weight:800">${t[0].split(' ').map(x=>x[0]).join('')}</div><div style="flex:1"><div class="fn">${t[0]}</div><div class="fs">${t[1]}</div></div><button class="btn btn-ghost btn-sm">Wijzig</button></div>`).join('');
   return hero('pink','Mijn bedrijf · Huisstijl',
     `Jouw <span class="accent">merk${squig()}</span> &amp; bestanden`,
     'Alles wat we nodig hebben om consistent voor je te werken, netjes bij elkaar.',
@@ -552,10 +551,6 @@ function panelHuisstijl(){
       <div class="filecard" style="min-width:220px"><div class="ft" style="font-family:var(--font-display);font-weight:900;color:var(--ink)">Aa</div><div><div class="fn">Montserrat</div><div class="fs">Display · 700–900</div></div></div>
       <div class="filecard" style="min-width:220px"><div class="ft" style="font-family:var(--font-body);font-weight:800;color:var(--ink)">Aa</div><div><div class="fn">Nunito</div><div class="fs">Body · 400–700</div></div></div>
     </div>
-  </div>
-  <div class="setsec">
-    <h3>Team &amp; contactpersonen</h3><p class="sdesc">Je contactpersonen beheer je voortaan centraal bij <b>Instellingen</b> — daar voeg je collega's toe (mét portaaltoegang), wijzig je gegevens of verwijder je iemand.</p>
-    <button class="btn btn-outline btn-sm" onclick="goTab('instellingen')">${ic('arrow',15)} Naar Instellingen</button>
   </div>`;
 }
 
@@ -609,12 +604,14 @@ function panelOffertes(){
   var head = hero('purple','Plannen · Offertes', 'Jouw <span class="accent">offertes'+squig()+'</span> in één overzicht');
   if(raw===null||raw===undefined) return head+'<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je offertes worden geladen…</p></div>';
   var offs = live ? raw.filter(function(o){return offerteVisible(o.status);}) : raw;  // verberg concept/draft
-  if(!offs.length) return head+'<div class="empty" style="padding:50px 20px"><div class="em-ic">'+ic('doc',56)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog geen offertes</b><p style="margin:6px 0 14px">Hier verschijnen je offertes zodra we er één klaarzetten.</p><button class="btn btn-branch br-blue btn-sm" onclick="goTab(\'nieuwproject\')">'+ic('arrow',15)+' Vraag een offerte aan</button></div>';
+  var formSection = '<div class="section-head" style="margin-top:36px"><h2>Nieuwe offerte aanvragen</h2></div><p class="sdesc" style="margin:-4px 0 14px;max-width:60ch">Vertel ons kort wat je nodig hebt — je krijgt meteen een richtprijs en wij kijken alles persoonlijk na.</p>'+offerteRequestForm();
+  if(!offs.length) return head+'<div class="empty" style="padding:40px 20px"><div class="em-ic">'+ic('doc',52)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog geen offertes</b><p style="margin:6px 0 0">Hier verschijnen je verzonden offertes zodra we er één klaarzetten — of vraag er hieronder meteen één aan.</p></div>'+formSection;
   var lopend=offs.filter(function(o){return !offerteAfgerond(o.status);}), afge=offs.filter(function(o){return offerteAfgerond(o.status);});
   return head
     +'<p class="sdesc" style="margin:-4px 0 16px;max-width:60ch">Klik een offerte open om ze te bekijken of goed te keuren (PandaDoc). Een vraag? Stel ze per offerte — ze komt rechtstreeks bij je Studio 27-contact terecht.</p>'
     +(lopend.length?'<div class="section-head" style="margin-top:4px"><h2>Lopend</h2><span class="count">'+lopend.length+'</span></div><div style="display:flex;flex-direction:column;gap:10px">'+lopend.map(offerteRow).join('')+'</div>':'')
-    +(afge.length?'<div class="section-head" style="margin-top:30px"><h2>Goedgekeurd &amp; eerdere</h2><span class="count">'+afge.length+'</span></div><div style="display:flex;flex-direction:column;gap:10px">'+afge.map(offerteRow).join('')+'</div>':'');
+    +(afge.length?'<div class="section-head" style="margin-top:30px"><h2>Goedgekeurd &amp; eerdere</h2><span class="count">'+afge.length+'</span></div><div style="display:flex;flex-direction:column;gap:10px">'+afge.map(offerteRow).join('')+'</div>':'')
+    +formSection;
 }
 function contactRow(c, isMe){
   const nm=((c.voornaam||'')+' '+(c.achternaam||'')).trim()||'Contactpersoon';
@@ -649,7 +646,7 @@ function panelInstellingen(){
   let me=null;
   if(meEmail){ for(var i=0;i<contacts.length;i++){ if(String(contacts[i].email||'').toLowerCase().trim()===meEmail){ me=contacts[i]; break; } } }
   if(me){ contacts=[me].concat(contacts.filter(function(x){return x!==me;})); }
-  const prof = me || contacts[0] || {}; const vk = prof.voorkeur||'Geen';
+  const prof = demo ? (contacts[0]||{}) : (me||{}); const vk = prof.voorkeur||'Geen';  // enkel het ingelogde contact, geen terugval op een willekeurig contact
   const contactsHTML = contacts.length ? contacts.map(function(x){return contactRow(x, x===me);}).join('') : '<div class="fs" style="color:var(--ink-4)">Nog geen contactpersonen toegevoegd — voeg je eerste collega toe.</div>';
   return hero('indigo','Mijn bedrijf · Instellingen',
     `Jouw <span class="accent">voorkeuren${squig()}</span>`)
@@ -674,8 +671,9 @@ function panelInstellingen(){
     <h3>Jouw contactpersonen bij Studio 27</h3><p class="sdesc">Drie vaste gezichten — altijd bereikbaar.</p>
     <div class="contact-list">
       ${[['Ilke Meeusen','Accountmanager','blue'],['Arne Goetschalckx','Vertegenwoordiger','orange'],['Vincent Verleije','Zaakvoerder','purple']].map(c=>`
-      <div class="contact-row"><span class="cr-av" style="background:var(--s27-${c[2]})">${c[0].split(' ').map(x=>x[0]).join('')}</span><div class="cr-tx"><b>${c[0]}</b><span>${c[1]}</span></div><button class="btn btn-ghost btn-sm br-${c[2]}">${ic('msg',15)} Bericht</button></div>`).join('')}
+      <div class="contact-row"><span class="cr-av" style="background:var(--s27-${c[2]})">${c[0].split(' ').map(x=>x[0]).join('')}</span><div class="cr-tx"><b>${c[0]}</b><span>${c[1]}</span></div><button class="btn btn-ghost btn-sm br-${c[2]}" onclick="s27Message('${c[0]}',this)">${ic('msg',15)} Bericht</button></div>`).join('')}
     </div>
+    <div id="s27MsgHost"></div>
   </div>
   <div class="accordion" style="margin-top:8px"><button class="acc-head" onclick="toggleAcc(this)">Geavanceerd <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button><div class="acc-body"><div style="padding:0 18px 18px;color:var(--ink-3);font-size:14px;display:flex;flex-direction:column;gap:12px"><label class="remember"><input type="checkbox" checked> Wekelijkse samenvatting per mail</label><label class="remember"><input type="checkbox"> Toon mij bèta-functies van het portaal</label><button class="btn btn-ghost btn-sm" style="color:var(--s27-orange-ink);align-self:flex-start">Account-data exporteren</button></div></div></div>
   <div class="setsec" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">

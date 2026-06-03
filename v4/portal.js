@@ -350,6 +350,22 @@ async function sendDringend(btn, id){
   try{ await api(ENDPOINTS.directMessage, { bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), onderwerp:'Dringende vraag — '+naam, bericht:'[DRINGEND · via projectpagina] '+tx, project:naam }); }catch(e){}
 }
 
+/* ---- Bericht aan een Studio 27-contact (Ilke/Arne/Vincent) -> komt in ClickUp terecht ---- */
+function s27Message(naam, btn){
+  const host=$id('s27MsgHost'); if(!host) return;
+  const safe=String(naam||'').replace(/'/g,'');
+  host.innerHTML='<div class="setsec" style="background:var(--paper-2,#FAF7F2);border:1px solid var(--line);margin-top:12px"><h3 style="font-size:15px">Bericht aan '+escapeHtml(naam)+'</h3><textarea id="s27MsgTx" rows="3" placeholder="Typ je bericht… '+escapeHtml(naam.split(" ")[0])+' krijgt het rechtstreeks binnen en antwoordt je zo snel mogelijk." style="width:100%;box-sizing:border-box;font-family:var(--font-body);font-size:14px;padding:11px 13px;border:1px solid var(--line);border-radius:var(--r-sm);outline:none;resize:vertical"></textarea><div style="display:flex;gap:10px;margin-top:10px"><button class="btn btn-branch br-blue btn-sm" onclick="sendS27Message(this,\''+safe+'\')">'+ic('send',15)+' Versturen</button><button class="btn btn-ghost btn-sm" onclick="var h=$id(\'s27MsgHost\');if(h)h.innerHTML=\'\'">Annuleer</button></div></div>';
+  var t=$id('s27MsgTx'); if(t)t.focus();
+}
+async function sendS27Message(btn, naam){
+  const tx=(($id('s27MsgTx')||{}).value||'').trim(); if(!tx){ var e=$id('s27MsgTx'); if(e){ e.style.borderColor='var(--s27-orange)'; e.focus(); } return; }
+  if(btn){ btn.disabled=true; btn.textContent='Versturen…'; }
+  const done=function(){ const h=$id('s27MsgHost'); if(h)h.innerHTML='<div class="fs" style="color:var(--s27-green-ink,#2e7d32);padding:10px 2px">'+ic('st_approved',16)+' Je bericht is bezorgd bij '+escapeHtml(naam)+' — je hoort snel iets terug.</div>'; };
+  if(state.demoMode){ done(); return; }
+  try{ await api(ENDPOINTS.directMessage, { bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), onderwerp:'Bericht voor '+naam+' (via portaal)', bericht:'[Voor '+naam+'] '+tx, project:'' }); done(); }
+  catch(e){ if(btn){ btn.disabled=false; btn.textContent='Opnieuw proberen'; } }
+}
+
 const BOT_ANSWERS={'Wanneer is mijn volgende meeting?':'Je vindt al je geplande meetings onder <b>Meetings</b> in de zijbalk. Wil je er een verzetten? Laat het hier weten.','Status van mijn website?':'Open je webdesign-project onder <b>Projecten</b> — daar zie je live de status en de laatste deliverables.','Hoe geef ik feedback?':'Open een project en ga naar het tabblad <b>Bestanden</b>. Per bestand kan je apart goedkeuren of feedback geven (met de weg waarlangs je het doorgaf) — alles passen we gratis aan!'};
 function botAsk(btn){ pushBot(btn.textContent,'user'); const q=btn.textContent; const c=$id('botChips'); if(c)c.style.display='none'; botReply(q); }
 function botSend(){ const inp=$id('botInput'); const tx=(inp.value||'').trim(); if(!tx) return; pushBot(tx,'user'); inp.value=''; botReply(tx); }
