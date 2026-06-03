@@ -169,12 +169,14 @@ function enterDemo(){
 async function loadAndEnter(){
   playLoader(); showApp();
   state._sessionExpiredHandled=false;
-  try { await loadCompaniesAndLink(); } catch(e){}
-  await S27DATA.loadDashboard();
-  try { await S27DATA.loadBedrijf(); } catch(e){}   // voor de begroeting (voornaam)
-  await applyRoute();
-  afterEnter();
-  renderCompanySwitcher();
+  try {
+    try { await loadCompaniesAndLink(); } catch(e){}
+    await S27DATA.loadDashboard();
+    try { await S27DATA.loadBedrijf(); } catch(e){}   // voor de begroeting (voornaam)
+    await applyRoute();
+    afterEnter();
+    renderCompanySwitcher();
+  } finally { hideLoader(); }   // loader blijft staan tot alles gerenderd is -> geen template-flits
 }
 function afterEnter(){
   applyTakVisibility();
@@ -185,7 +187,9 @@ function afterEnter(){
 /* ---- app/login tonen + loader ---- */
 function showApp(){ $id('app').classList.add('show'); const l=$id('login'); l.classList.add('hide'); l.style.opacity=''; window.scrollTo(0,0); }
 function showLogin(){ $id('app').classList.remove('show'); const l=$id('login'); l.classList.remove('hide'); l.style.opacity='1'; }
-function playLoader(){ const loader=$id('loader'); if(!loader) return; loader.style.opacity='1'; loader.classList.add('show'); setTimeout(()=>{ loader.style.opacity='0'; setTimeout(()=>loader.classList.remove('show'),460); },1500); }
+function playLoader(){ const loader=$id('loader'); if(!loader) return; state._loaderAt=Date.now(); loader.style.opacity='1'; loader.classList.add('show'); }
+// Loader pas verbergen wanneer de inhoud écht klaar is (geen mock-flits meer). Min. 900ms tegen geflikker.
+function hideLoader(){ const loader=$id('loader'); if(!loader) return; const wait=Math.max(0, 900-(Date.now()-(state._loaderAt||0))); setTimeout(()=>{ loader.style.opacity='0'; setTimeout(()=>{ try{loader.classList.remove('show');}catch(e){} },460); }, wait); }
 function onSessionExpired(msg){
   const b=document.createElement('div');
   b.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#fef2f2;color:#991b1b;border:1px solid #fecaca;padding:14px 22px;border-radius:12px;font:700 14px/1.4 var(--font-display);z-index:99999;box-shadow:var(--sh-md)';
