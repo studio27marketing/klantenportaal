@@ -13,6 +13,8 @@ import { readFileSync } from 'node:fs';
 import {
   projectDetailV2, chatList, bedrijfContent, dashboard, meetingsList,
   getTeam, getOffertes,
+  metricool, metricoolApprove, offerteGenereren, buildPandadocCreate,
+  cu, FIELD, OFFERTE_LIST, PANDADOC_TEMPLATE_OFFERTE, PANDADOC_PRICING_TABLE_NAME, PANDADOC_PM,
 } from './handlers.mjs';
 
 const BEDRIJF = process.env.TEST_BEDRIJF || '86c9yv1wy';
@@ -20,13 +22,19 @@ const BEDRIJF = process.env.TEST_BEDRIJF || '86c9yv1wy';
 /* ---- .dev.vars laden (KEY=value per regel) ---- */
 function loadDevVars() {
   const env = { ...process.env };
-  try {
-    const txt = readFileSync(new URL('./.dev.vars', import.meta.url), 'utf8');
-    for (const line of txt.split(/\r?\n/)) {
-      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-      if (m && env[m[1]] == null) env[m[1]] = m[2];
-    }
-  } catch (e) { /* geen .dev.vars; val terug op process.env */ }
+  const readEnvFile = (p) => {
+    try {
+      const txt = readFileSync(p, 'utf8');
+      for (const line of txt.split(/\r?\n/)) {
+        const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+        if (m && env[m[1]] == null) env[m[1]] = m[2];
+      }
+    } catch (e) { /* bestand bestaat niet; negeer */ }
+  };
+  readEnvFile(new URL('./.dev.vars', import.meta.url));
+  // PANDADOC_API_KEY / METRICOOL_API_KEY / METRICOOL_USER_ID staan in /tmp/s27v2/keys.env
+  // (worden in productie als Worker-secrets gezet). Enkel voor de live read-tests hier.
+  readEnvFile('/tmp/s27v2/keys.env');
   return env;
 }
 const env = loadDevVars();
@@ -230,6 +238,104 @@ async function run() {
     check('meeting keys', keyDiff(r.body.meetings[0], ['meeting_id', 'titel', 'datum', 'status', 'link']).length === 0);
   }
   console.log(`     #meetings=${r.body.meetings.length} (server-side gefilterd op Bedrijf - kan 0 zijn als veld niet gevuld is)`);
+
+  /* ---- METRICOOL (live read; kost geen credits) ---- */
+  console.log('\n[metricool]  (live v2-API read, blogId uit veld 40f6ccd2)');
+  if (env.METRICOOL_API_KEY) {
+    r = await metricool(BEDRIJF, {}, env);
+    check('status 200', r.status === 200, 'got ' + r.status);
+    check('top-level keys {ok,linked,posts}', keyDiff(r.body, ['ok', 'linked', 'posts']).length === 0, 'missing: ' + keyDiff(r.body, ['ok', 'linked', 'posts']).join(','));
+    check('ok true', r.body.ok === true);
+    check('linked is boolean', typeof r.body.linked === 'boolean');
+    check('posts is array', Array.isArray(r.body.posts));
+    if (r.body.linked && r.body.posts[0]) {
+      const p = r.body.posts[0];
+      check('post keys (data.js-shape)', keyDiff(p, ['id', 'datum', 'tekst', 'media', 'netwerken', 'status', 'draft', 'detail', 'url']).length === 0,
+        'missing: ' + keyDiff(p, ['id', 'datum', 'tekst', 'media', 'netwerken', 'status', 'draft', 'detail', 'url']).join(','));
+      check('id non-empty string', typeof p.id === 'string' && p.id !== '');
+      check('netwerken is csv-string', typeof p.netwerken === 'string');
+      check('draft is boolean', typeof p.draft === 'boolean');
+      let dec = ''; try { dec = decodeURIComponent(p.tekst); } catch (e) {}
+      check('tekst is url-encoded (decodeerbaar)', typeof p.tekst === 'string');
+      console.log('     sample post:', preview(p), '| tekst decoded:', dec.slice(0, 60));
+    }
+    console.log(`     linked=${r.body.linked}, brandId=${r.body.brandId || '-'}, #posts=${(r.body.posts || []).length}`);
+  } else { console.log('   (overgeslagen: geen METRICOOL_API_KEY in env/keys.env)'); }
+
+  /* ---- metricoolApprove: defensieve guards (geen echte mutatie van een live post) ---- */
+  console.log('\n[metricoolApprove]  (defensieve guards - muteert GEEN live post)');
+  let ra = await metricoolApprove(BEDRIJF, {}, env);
+  check('missing post_id -> 400 missing_post_id', ra.status === 400 && ra.body.error === 'missing_post_id', 'got ' + ra.status + '/' + (ra.body && ra.body.error));
+  ra = await metricoolApprove('zzzNONEXISTbedrijf', { id: '999999999' }, env);
+  check('niet-gekoppeld bedrijf -> 403 not_linked', ra.status === 403 && ra.body.error === 'not_linked', 'got ' + ra.status + '/' + (ra.body && ra.body.error));
+
+  /* ---- buildPandadocCreate: payload-shape (geen create-call) ---- */
+  console.log('\n[buildPandadocCreate]  (payload-shape, 0 PandaDoc-credits)');
+  const pdItems = [
+    { sku: '194952645361', naam: 'Camerateam (3 personen) - hele dag', prijs: 1800, aantal: 1, regel_totaal: 1800 },
+    { sku: 'TEST2', naam: 'Tweede item', prijs: 250.5, aantal: 2, regel_totaal: 501 },
+  ];
+  const pdCall = buildPandadocCreate(env, {
+    docName: 'Offerte TEST', items: pdItems,
+    klant: { company: 'TEST CLIENT BV', first_name: 'Jan', last_name: 'Janssens', email: 'jan@testclient.be' },
+    pm: PANDADOC_PM,
+  });
+  check('url == /public/v1/documents', pdCall.url === 'https://api.pandadoc.com/public/v1/documents', pdCall.url);
+  check('method POST', pdCall.method === 'POST');
+  check('Authorization API-Key header', /^API-Key /.test(pdCall.headers.Authorization || ''), pdCall.headers.Authorization);
+  check('template_uuid juist', pdCall.body.template_uuid === PANDADOC_TEMPLATE_OFFERTE, pdCall.body.template_uuid);
+  check('2 recipients (PM+Klant)', Array.isArray(pdCall.body.recipients) && pdCall.body.recipients.length === 2);
+  check('rol Projectmanager aanwezig', pdCall.body.recipients.some((x) => x.role === 'Projectmanager'));
+  check('rol Klant aanwezig', pdCall.body.recipients.some((x) => x.role === 'Klant'));
+  check('tokens bevat Klant.Company', pdCall.body.tokens.some((t) => t.name === 'Klant.Company' && t.value === 'TEST CLIENT BV'));
+  check('tokens bevat Projectmanager.Email', pdCall.body.tokens.some((t) => t.name === 'Projectmanager.Email'));
+  check('pricing_tables[0].name == sectie-naam', pdCall.body.pricing_tables[0].name === PANDADOC_PRICING_TABLE_NAME, pdCall.body.pricing_tables[0].name);
+  check('pricing_tables data_merge true', pdCall.body.pricing_tables[0].data_merge === true);
+  check('2 rijen met SKU+Price+QTY', pdCall.body.pricing_tables[0].sections[0].rows.length === 2 &&
+    pdCall.body.pricing_tables[0].sections[0].rows.every((rw) => rw.data && rw.data.SKU !== undefined && rw.data.Price !== undefined && rw.data.QTY !== undefined));
+  check('geen send-veld (concept by default)', !('send' in pdCall.body));
+  console.log('     pricing rows:', preview(pdCall.body.pricing_tables[0].sections[0].rows));
+
+  /* ---- offerteGenereren: LIVE ClickUp-create + verify + DELETE (PandaDoc create UIT) ---- */
+  console.log('\n[offerteGenereren]  (LIVE ClickUp-taak; PANDADOC_CREATE_ENABLED uit -> 0 credits)');
+  const offEnv = { ...env }; delete offEnv.PANDADOC_CREATE_ENABLED; // forceer: GEEN PandaDoc-create
+  // guard: lege items -> 400
+  let ro = await offerteGenereren(BEDRIJF, { items: [] }, offEnv);
+  check('lege items -> 400 no_items', ro.status === 400 && ro.body.error === 'no_items', 'got ' + ro.status + '/' + (ro.body && ro.body.error));
+  // echte create
+  ro = await offerteGenereren(BEDRIJF, {
+    items: [
+      { sku: '194952645361', naam: 'Camerateam (3 personen) - hele dag', prijs: 1800, aantal: 1 },
+      { sku: '194952627803', naam: 'Camerateam (3 personen) - halve dag', prijs: 1200, aantal: 2 },
+    ],
+    opmerking: 'AUTOMATED REGRESSION TEST - mag verwijderd worden',
+  }, offEnv);
+  check('status 200', ro.status === 200, 'got ' + ro.status + ' ' + preview(ro.body));
+  check('top-level keys {ok,offerte_task_id,offerte_task_url,pandadoc_id,message}',
+    keyDiff(ro.body, ['ok', 'offerte_task_id', 'offerte_task_url', 'pandadoc_id', 'message']).length === 0,
+    'missing: ' + keyDiff(ro.body, ['ok', 'offerte_task_id', 'offerte_task_url', 'pandadoc_id', 'message']).join(','));
+  check('ok true', ro.body.ok === true);
+  check('offerte_task_id non-empty', typeof ro.body.offerte_task_id === 'string' && ro.body.offerte_task_id !== '');
+  check('pandadoc_id leeg (create uit -> 0 credits)', ro.body.pandadoc_id === '');
+  check('_pandadoc_create payload meegegeven (create uit)', !!ro.body._pandadoc_create && ro.body._pandadoc_create.body.template_uuid === PANDADOC_TEMPLATE_OFFERTE);
+  const offId = ro.body.offerte_task_id;
+  if (offId) {
+    // verify: taak bestaat, hangt aan dit bedrijf (4b1fb333), budget = 1800 + 2*1200 = 4200
+    const vr = await cu.get(offEnv, `/task/${offId}`);
+    check('aangemaakte taak ophaalbaar', vr.ok && vr.data && vr.data.id === offId, 'get ' + (vr && vr.status));
+    if (vr.ok && vr.data) {
+      const relField = (vr.data.custom_fields || []).find((f) => f.id === FIELD.bedrijf);
+      const relIds = relField && Array.isArray(relField.value) ? relField.value.map((x) => String(x && x.id ? x.id : x)) : [];
+      check('Bedrijf-relatie == bedrijfId', relIds.includes(String(BEDRIJF)), 'rel=' + JSON.stringify(relIds));
+      check('in offertes-lijst', String(vr.data.list && vr.data.list.id) === String(OFFERTE_LIST), 'list=' + (vr.data.list && vr.data.list.id));
+      const budgetField = (vr.data.custom_fields || []).find((f) => f.id === FIELD.offerteBudget);
+      check('budget == 4200', budgetField && Number(budgetField.value) === 4200, 'budget=' + (budgetField && budgetField.value));
+    }
+    // opruimen: taak weer verwijderen (laat de testlijst schoon achter)
+    const dr = await fetch('https://api.clickup.com/api/v2/task/' + offId, { method: 'DELETE', headers: { Authorization: offEnv.CLICKUP_TOKEN } });
+    check('test-offertetaak verwijderd (cleanup)', dr.ok, 'DELETE http ' + dr.status);
+    console.log('     aangemaakt+verwijderd offerte_task_id=' + offId);
+  }
 
   console.log(`\n=== RESULTAAT: ${pass} pass, ${fail} fail ===\n`);
   process.exit(fail > 0 ? 1 : 0);

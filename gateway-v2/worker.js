@@ -96,7 +96,7 @@ const SENSITIVE = new Set([
   'uploadProject', 'uploadAlg', 'bedrijfUpload', 'huisstijlUpload', 'huisstijlDelete',
   'chatAttachment', 'chatPost', 'directMessage', 'feedbackV2', 'newProjectIntake',
   'facturatieSave', 'projectFacturatieSave', 'bedrijfVoorkeuren', 'bedrijfContact',
-  'bedrijfBeheer', 'inplannen',
+  'bedrijfBeheer', 'inplannen', 'offerteGenereren', 'metricoolApprove',
 ]);
 const LIMIT_SENSITIVE = 15; // per minuut, per gebruiker
 const LIMIT_DEFAULT   = 80;
@@ -307,7 +307,8 @@ async function tryHandle(path, bedrijfId, body, claims, env, ctx, ch, noCache) {
   if (WRITE_HANDLERS[path]) {
     const res = await WRITE_HANDLERS[path](bedrijfId, body, env);
     // writes op de bedrijf-taak bust de read-caches van dat bedrijf
-    if (path === 'bedrijfVoorkeuren' || path === 'facturatieSave' || path === 'bedrijfUpload') {
+    // (offerteGenereren voegt een offerte toe -> raakt dashboard/get_offertes-views)
+    if (path === 'bedrijfVoorkeuren' || path === 'facturatieSave' || path === 'bedrijfUpload' || path === 'offerteGenereren') {
       bustCache(env, ctx, bedrijfId);
     }
     return json(res.body, res.status, ch);

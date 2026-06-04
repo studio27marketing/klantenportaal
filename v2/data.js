@@ -320,27 +320,44 @@
   };
   DATA.offertes = function(){ return state.data.offertes; };
 
-  /* ---- Metricool (geplande social posts), geïsoleerd Make-scenario, directe call ---- */
+  /* ---- Metricool (geplande social posts), via de gateway-endpoint (api()), bedrijf_id server-side ----
+     Gateway-contract (handler 'metricool'): { ok, linked, posts:[{id,datum,tekst,media,
+     netwerken:[{netwerk,status}]}] }. api() levert de {ok,status,data}-wrap; data = bovenstaand object.
+     We blijven tolerant voor de oude vorm (netwerken als komma-string + 1 globale status per post). */
   function _parseDatum(s){ if(!s) return null; var d=new Date(String(s).replace(' ','T')); return isNaN(d.getTime())?null:d; }
+  function _mcNetwerken(p){
+    var raw = p.netwerken;
+    // nieuwe vorm: array van {netwerk,status,(detail,url)}
+    if(Array.isArray(raw)){
+      return raw.map(function(nw){
+        if(nw && typeof nw==='object'){
+          return { netwerk:String(nw.netwerk||nw.network||'').trim().toLowerCase(),
+                   status:String(nw.status||p.status||'').toUpperCase(),
+                   detail:nw.detail||p.detail||'', url:nw.url||p.url||'' };
+        }
+        return { netwerk:String(nw||'').trim().toLowerCase(), status:String(p.status||'').toUpperCase(), detail:p.detail||'', url:p.url||'' };
+      }).filter(function(n){ return n.netwerk; });
+    }
+    // oude vorm: komma-string "facebook,instagram,linkedin" + 1 globale status
+    var st=(p.status||'').toUpperCase();
+    return String(raw||'').split(',').map(function(s){return s.trim().toLowerCase();}).filter(Boolean)
+      .map(function(n){ return { netwerk:n, status:st, detail:p.detail||'', url:p.url||'' }; });
+  }
   DATA.loadMetricool = async function(){
     if(!live()){ state.data.metricool={linked:false,posts:[]}; return false; }
     var bid = state.activeBedrijf || '';
     if(!bid){ state.data.metricool={linked:false,posts:[]}; return false; }
     try{
-      var r = await fetch(METRICOOL_DIRECT, { method:'POST',
-        headers:{'Content-Type':'application/x-www-form-urlencoded'},   // CORS-safe: geen preflight
-        body:'bedrijf_id='+encodeURIComponent(bid) });
-      var t = await r.text(); var j=null; try{ j=JSON.parse(t); }catch(e){}
+      var res = await api(ENDPOINTS.metricool, base({ bedrijf_id:bid }));
+      var j = (res && res.ok && res.data) ? res.data : null;
       if(!j || !j.ok){ state.data.metricool={linked:false,posts:[]}; return false; }
       if(!j.linked){ state.data.metricool={linked:false,posts:[]}; return true; }
-      // v4: 1 rij per post; netwerken = komma-lijst "facebook,instagram,linkedin"
       var posts=(j.posts||[]).filter(function(p){return p&&p.id;}).map(function(p){
         var tk=''; try{ tk=decodeURIComponent(p.tekst||''); }catch(e){ tk=p.tekst||''; }
-        var st=(p.status||'').toUpperCase();
-        var nets=String(p.netwerken||'').split(',').map(function(s){return s.trim().toLowerCase();}).filter(Boolean);
         return { id:p.id, datum:p.datum||'', dt:_parseDatum(p.datum), tekst:tk, media:p.media||'',
           draft:(p.draft===true||String(p.draft).toLowerCase()==='true'),
-          netwerken: nets.map(function(n){ return {netwerk:n, status:st, detail:p.detail||'', url:p.url||''}; }) };
+          approved:(p.approved===true||String(p.approved).toLowerCase()==='true'),
+          netwerken: _mcNetwerken(p) };
       });
       posts.sort(function(a,b){ return (a.dt?a.dt.getTime():9e15)-(b.dt?b.dt.getTime():9e15); });
       state.data.metricool={ linked:true, brandId:j.brandId||'', posts:posts };
@@ -348,6 +365,11 @@
     }catch(e){ state.data.metricool={linked:false,posts:[]}; return false; }
   };
   DATA.metricool = function(){ return state.data.metricool; };
+  // markeer een post lokaal als goedgekeurd (na een geslaagde metricoolApprove-call)
+  DATA.markMetricoolApproved = function(postId){
+    var mc = state.data.metricool; if(!mc || !mc.posts) return;
+    mc.posts.forEach(function(p){ if(String(p.id)===String(postId)) p.approved=true; });
+  };
 
   /* ---- Advertenties (Meta-insights, later Google), geïsoleerd Make-scenario, directe call ---- */
   DATA.loadAds = async function(){

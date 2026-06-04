@@ -40,6 +40,10 @@ const I = {
   clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   pin:'<path d="M12 21s7-5.5 7-11a7 7 0 0 0-14 0c0 5.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
   person:'<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  minus:'<path d="M5 12h14"/>',
+  cart:'<circle cx="9" cy="21" r="1.6"/><circle cx="18" cy="21" r="1.6"/><path d="M2 3h3l2.6 13.4a1.6 1.6 0 0 0 1.6 1.3h8.7a1.6 1.6 0 0 0 1.6-1.3L23 7H6"/>',
 };
 const ic = (n,w=20)=>`<svg viewBox="0 0 24 24" width="${w}" height="${w}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${I[n]}</svg>`;
 const logo27 = (w=28)=>`<svg class="logo27" viewBox="782 34 210 130" width="${w}" height="${Math.round(w*0.62)}" fill="currentColor" aria-hidden="true"><path d="M788.07,158.63v-24.58l42.88-39.66c2.71-2.6,4.71-4.86,6.02-6.78,1.3-1.92,2.17-3.64,2.63-5.17,.45-1.52,.68-2.97,.68-4.32,0-2.94-.96-5.22-2.88-6.86-1.92-1.64-4.8-2.46-8.64-2.46-3.5,0-6.84,.93-10,2.8-3.16,1.86-5.65,4.61-7.46,8.22l-30.17-15.08c4.29-8.13,10.73-14.74,19.32-19.83,8.59-5.09,19.26-7.63,32.03-7.63,9.38,0,17.68,1.53,24.91,4.58,7.23,3.05,12.88,7.35,16.95,12.88,4.07,5.54,6.1,12.09,6.1,19.66,0,3.84-.48,7.68-1.44,11.52-.96,3.84-2.91,7.88-5.85,12.12-2.94,4.24-7.29,8.96-13.05,14.15l-32.2,29.32-6.27-13.9h61.52v31.01h-95.08Z"/><path d="M908.23,158.63l44.74-104.4,10.68,16.78h-56.27l15.59-18.13v35.42h-33.05V40h101.52v24.58l-39.49,94.06h-43.72Z"/></svg>`;
@@ -315,8 +319,41 @@ function mcOverall(p){ var ss=(p.netwerken||[]).map(function(n){return n.status|
   if(ss.some(function(s){return /PEND|SCHEDUL/i.test(s);})) return mcStatus('PENDING');
   if(ss.some(function(s){return /PUBLISH/i.test(s);})) return mcStatus('PUBLISHED');
   return mcStatus(ss[0]||''); }
-function mcStyleOnce(){ return $id('mcStyle')?'':'<style id="mcStyle">.mc-post{cursor:pointer;transition:box-shadow .15s}.mc-post .mc-body{display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--paper-3)}.mc-post.open .mc-body{display:block}.mc-post.open{box-shadow:0 8px 26px rgba(0,0,0,.08)}.mc-txt{white-space:pre-wrap;font-size:13.5px;line-height:1.55;color:var(--ink-2)}.mc-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}.mc-cal .cd{min-height:58px;border-radius:10px;background:var(--paper-2);border:1px solid var(--paper-3);padding:5px 6px;font-size:11px}.mc-cal .cd.muted{opacity:.35}.mc-dot{display:inline-block;width:7px;height:7px;border-radius:99px;margin:1px 1px 0 0}</style>'; }
+function mcStyleOnce(){ return $id('mcStyle')?'':('<style id="mcStyle">.mc-post{cursor:pointer;transition:box-shadow .15s}.mc-post .mc-body{display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--paper-3)}.mc-post.open .mc-body{display:block}.mc-post.open{box-shadow:0 8px 26px rgba(0,0,0,.08)}.mc-txt{white-space:pre-wrap;font-size:13.5px;line-height:1.55;color:var(--ink-2)}.mc-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}.mc-cal .cd{min-height:58px;border-radius:10px;background:var(--paper-2);border:1px solid var(--paper-3);padding:5px 6px;font-size:11px}.mc-cal .cd.muted{opacity:.35}.mc-dot{display:inline-block;width:7px;height:7px;border-radius:99px;margin:1px 1px 0 0}'
+  +'.mc-actions{margin-top:14px;padding-top:12px;border-top:1px dashed var(--paper-3)}'
+  +'.mc-actrow{display:flex;gap:8px;flex-wrap:wrap}'
+  +'.mc-fb{margin-top:10px}'
+  +'.mc-fb textarea{width:100%;box-sizing:border-box;font-family:var(--font-body);font-size:13.5px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;outline:none;resize:vertical}'
+  +'.mc-fb textarea:focus{border-color:var(--s27-yellow,#F2C14E)}'
+  +'.mc-fbact{display:flex;gap:8px;margin-top:8px}'
+  +'.mc-approved{margin-top:14px;padding:11px 13px;border-top:1px dashed var(--paper-3);display:flex;align-items:center;gap:9px;font-family:var(--font-display);font-weight:700;font-size:13.5px;color:#15803d}'
+  +'.mc-approved svg{flex:0 0 auto}'
+  +'</style>'); }
 function socialNetChips(p){ return (p.netwerken||[]).map(function(nw){ var n=mcNet(nw.netwerk),st=mcStatus(nw.status); return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:'+n[1]+';background:'+n[1]+'14;border-radius:999px;padding:2px 9px">'+esc(n[0])+'<span style="width:6px;height:6px;border-radius:99px;background:'+st[1]+'"></span></span>'; }).join(' '); }
+// een post is "goed te keuren" zolang die nog niet gepubliceerd/mislukt is (concept of gepland)
+function mcApprovable(p){
+  var ss=(p.netwerken||[]).map(function(n){return String(n.status||'').toUpperCase();});
+  if(ss.some(function(s){return s.indexOf('PUBLISH')>=0;})) return false;   // al live
+  return true;
+}
+// goedkeur-/feedbackblok per post (klant keurt geplande content goed of geeft notitie)
+function socialApproveBlock(p){
+  if(state._mcApproved && state._mcApproved[p.id]) p.approved=true;   // lokaal onthouden over rerenders
+  if(p.approved){
+    return '<div class="mc-approved" id="mca-'+esc(p.id)+'">'+ic('check',16)+'<span>Goedgekeurd, bedankt! We plannen deze post zo verder in.</span></div>';
+  }
+  if(!mcApprovable(p)) return '';   // gepubliceerde posts: niets goed te keuren
+  return '<div class="mc-actions" id="mca-'+esc(p.id)+'" onclick="event.stopPropagation()">'
+    +'<div class="mc-actrow">'
+      +'<button class="btn btn-branch br-green btn-sm" onclick="metricoolApprove(\''+esc(p.id)+'\',this)">'+ic('check',15)+' Goedkeuren</button>'
+      +'<button class="btn btn-outline btn-sm" onclick="toggleSocialFeedback(\''+esc(p.id)+'\')">'+ic('msg',15)+' Feedback</button>'
+    +'</div>'
+    +'<div class="mc-fb" id="mcfb-'+esc(p.id)+'" style="display:none">'
+      +'<textarea id="mcfbtx-'+esc(p.id)+'" rows="3" placeholder="Je opmerking of aanpassing bij deze post…"></textarea>'
+      +'<div class="mc-fbact"><button class="btn btn-primary btn-sm" onclick="metricoolFeedback(\''+esc(p.id)+'\',this)">'+ic('send',14)+' Versturen</button><button class="btn btn-ghost btn-sm" onclick="toggleSocialFeedback(\''+esc(p.id)+'\')">Annuleer</button></div>'
+    +'</div>'
+  +'</div>';
+}
 function socialPostRow(p){
   var st=mcOverall(p), dt=p.dt;
   var dd = dt? dt.toLocaleDateString('nl-BE',{weekday:'short',day:'numeric',month:'short'}) : (p.datum||'-');
@@ -326,7 +363,7 @@ function socialPostRow(p){
   return '<div class="card mc-post" id="mcp-'+esc(p.id)+'" onclick="toggleSocialPost(\''+esc(p.id)+'\')" style="padding:13px 15px;margin-bottom:9px;display:block">'
    +'<div style="display:flex;gap:13px;align-items:center">'+thumb
      +'<div style="flex:1;min-width:0">'
-       +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px"><span style="font-weight:800;font-size:12.5px;color:var(--ink-3)">'+esc(dd)+(tt?' · '+tt:'')+'</span><span style="font-size:11px;font-weight:700;color:'+st[1]+';background:'+st[2]+';border-radius:999px;padding:1px 9px">'+st[0]+'</span></div>'
+       +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px"><span style="font-weight:800;font-size:12.5px;color:var(--ink-3)">'+esc(dd)+(tt?' · '+tt:'')+'</span><span style="font-size:11px;font-weight:700;color:'+st[1]+';background:'+st[2]+';border-radius:999px;padding:1px 9px">'+st[0]+'</span>'+((p.approved||(state._mcApproved&&state._mcApproved[p.id]))?'<span style="font-size:11px;font-weight:700;color:#15803d;background:#dcfce7;border-radius:999px;padding:1px 9px">'+ic('check',12)+' Goedgekeurd</span>':'')+'</div>'
        +'<div style="font-size:14px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(first||'(geen tekst)')+'</div>'
        +'<div style="margin-top:7px;display:flex;gap:5px;flex-wrap:wrap">'+socialNetChips(p)+'</div>'
      +'</div><span style="color:var(--ink-4);flex:0 0 auto">'+ic('arrow',16)+'</span></div>'
@@ -334,9 +371,11 @@ function socialPostRow(p){
      +(p.media?'<img src="'+esc(p.media)+'" alt="" style="max-width:260px;width:100%;border-radius:12px;margin-bottom:12px" loading="lazy">':'')
      +'<div class="mc-txt">'+esc(p.tekst||'')+'</div>'
      +'<div style="margin-top:12px;display:flex;gap:7px;flex-wrap:wrap">'+(p.netwerken||[]).map(function(nw){ var n=mcNet(nw.netwerk),s=mcStatus(nw.status); return '<span style="font-size:11.5px;font-weight:700;color:'+n[1]+';background:'+n[1]+'12;border-radius:999px;padding:3px 10px">'+esc(n[0])+' · <span style="color:'+s[1]+'">'+s[0]+'</span>'+(nw.url?' · <a href="'+esc(nw.url)+'" target="_blank" rel="noopener" style="color:'+n[1]+'" onclick="event.stopPropagation()">bekijk</a>':'')+'</span>'; }).join('')+'</div>'
+     +socialApproveBlock(p)
    +'</div></div>';
 }
 function toggleSocialPost(id){ var el=$id('mcp-'+id); if(el) el.classList.toggle('open'); }
+function toggleSocialFeedback(id){ var b=$id('mcfb-'+id); if(b){ var open=b.style.display!=='none'; b.style.display=open?'none':'block'; if(!open){ var t=$id('mcfbtx-'+id); if(t&&t.focus) t.focus(); } } }
 function panelSocials(){
   const head = hero('yellow','Mijn werk · Socials',
     `Jouw <span class="accent">socials${squig()}</span>, strak gepland`,
@@ -687,6 +726,195 @@ function facturatieBlock(){
     +'<div style="margin-top:14px"><button class="btn btn-branch br-green btn-sm" onclick="saveBedrijfGegevens(this)">'+ic('check',15)+' Facturatiegegevens opslaan</button></div>'
     +'</div>';
 }
+
+/* =============================================================================
+   OFFERTE-SAMENSTELLER, klant stelt zelf een offerte samen uit de catalogus
+   -----------------------------------------------------------------------------
+   Bron: window.S27_CATALOG (catalog-data.js, offline). Winkelmand leeft in
+   state._offerteCart (sku -> aantal). Live deelrender via renderOfferteBuilder()
+   in de #offBuilder-container (geen volledige panel-rerender -> scroll blijft).
+   Verzenden: offerteSubmit() in portal.js -> api(ENDPOINTS.offerteGenereren,...).
+   ============================================================================= */
+function offCatalog(){ return (typeof window!=='undefined' && window.S27_CATALOG && window.S27_CATALOG.length) ? window.S27_CATALOG : []; }
+function offEur(n){ return '€ '+(Number(n)||0).toLocaleString('nl-BE',{minimumFractionDigits:0,maximumFractionDigits:2}); }
+function offCart(){ if(!state._offerteCart) state._offerteCart={}; return state._offerteCart; }
+function offBySku(sku){ var c=offCatalog(); for(var i=0;i<c.length;i++){ if(String(c[i].sku)===String(sku)) return c[i]; } return null; }
+// vaste tabvolgorde (meest gevraagde groepen vooraan); alleen groepen die echt bestaan worden getoond
+const OFF_GROUP_ORDER=['Content & video','Webdesign','Social media','Branding & grafisch','Fotografie','Audio','Adverteren','Strategie','Opleidingen','Overig'];
+function offGroups(){
+  var seen={}, cat=offCatalog(); cat.forEach(function(p){ seen[p.group]=1; });
+  var ordered=OFF_GROUP_ORDER.filter(function(g){ return seen[g]; });
+  Object.keys(seen).forEach(function(g){ if(ordered.indexOf(g)<0) ordered.push(g); });   // onbekende groepen achteraan
+  return ordered;
+}
+function offCartCount(){ var c=offCart(),n=0; Object.keys(c).forEach(function(k){ n+=c[k]||0; }); return n; }
+function offCartTotal(){ var c=offCart(),t=0; Object.keys(c).forEach(function(sku){ var p=offBySku(sku); if(p) t+=(Number(p.price)||0)*(c[sku]||0); }); return t; }
+// platte tekst uit desc_html (eerste zin), voor een korte regel onder de productnaam
+function offDescShort(html){
+  var t=String(html||'').replace(/<li>/gi,' · ').replace(/<[^>]*>/g,' ').replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/\s+/g,' ').trim();
+  t=t.replace(/^ · /,''); return t.length>120 ? t.slice(0,118)+'…' : t;
+}
+// 1 productregel met aantal-stepper (compact). showGroup toont de subgroep-tag (bij zoeken/populair).
+function offProductRow(p, showGroup){
+  var c=offCart(), qty=c[p.sku]||0;
+  var sub=(showGroup? (p.group+(p.sub?(' · '+p.sub):'')) : (p.sub||''));
+  var priceTxt = (Number(p.price)>0) ? offEur(p.price) : 'op maat';
+  var stepper = qty>0
+    ? '<div class="off-step"><button class="off-stepbtn" aria-label="Minder" onclick="offQty(\''+esc(p.sku)+'\',-1)">'+ic('minus',15)+'</button><span class="off-qty" id="offq-'+esc(p.sku)+'">'+qty+'</span><button class="off-stepbtn" aria-label="Meer" onclick="offQty(\''+esc(p.sku)+'\',1)">'+ic('plus',15)+'</button></div>'
+    : '<button class="btn btn-branch br-purple btn-sm off-addbtn" onclick="offAdd(\''+esc(p.sku)+'\')">'+ic('plus',14)+' Toevoegen</button>';
+  return '<div class="off-prow'+(qty>0?' in-cart':'')+'" data-sku="'+esc(p.sku)+'" data-name="'+esc((p.name||'').toLowerCase())+'" data-group="'+esc(p.group)+'">'
+    +'<div class="off-pinfo"><div class="off-pname">'+esc(p.name)+'</div>'
+    +(sub?'<div class="off-psub">'+esc(sub)+'</div>':'')
+    +(offDescShort(p.desc_html)?'<div class="off-pdesc">'+esc(offDescShort(p.desc_html))+'</div>':'')
+    +'</div>'
+    +'<div class="off-pright"><div class="off-pprice">'+priceTxt+'</div>'+stepper+'</div>'
+  +'</div>';
+}
+// winkelmand-zijkant (lopend totaal + verzendknop)
+function offCartPanel(){
+  var c=offCart(), skus=Object.keys(c).filter(function(k){return c[k]>0;}), total=offCartTotal();
+  var rows = skus.length ? skus.map(function(sku){
+    var p=offBySku(sku); if(!p) return '';
+    var line=(Number(p.price)||0)*(c[sku]||0);
+    return '<div class="off-citem"><div class="off-citx"><div class="off-ciname">'+esc(p.name)+'</div><div class="off-ciqty">'+c[sku]+' × '+( (Number(p.price)>0)?offEur(p.price):'op maat')+'</div></div>'
+      +'<div class="off-cilinewrap"><span class="off-ciline">'+( (Number(p.price)>0)?offEur(line):'op maat')+'</span><button class="off-cirm" aria-label="Verwijder" onclick="offRemove(\''+esc(sku)+'\')">'+ic('trash',14)+'</button></div></div>';
+  }).join('') : '<div class="off-cempty">'+ic('cart',26)+'<p>Je winkelmand is nog leeg. Voeg producten toe om je offerte samen te stellen.</p></div>';
+  var hasOpMaat = skus.some(function(sku){ var p=offBySku(sku); return p && !(Number(p.price)>0); });
+  return '<aside class="off-cart card" id="offCart">'
+    +'<div class="off-carthead">'+ic('cart',18)+'<b>Jouw selectie</b><span class="off-cartn" id="offCartN">'+offCartCount()+'</span></div>'
+    +'<div class="off-citems" id="offCartItems">'+rows+'</div>'
+    +'<div class="off-carttotal"><span>Totaal</span><b id="offCartTotal">'+offEur(total)+'</b></div>'
+    +(hasOpMaat?'<div class="off-cartnote">Items "op maat" prijzen we persoonlijk in je offerte.</div>':'')
+    +'<div class="field" style="margin-top:12px"><label for="offOpm">Opmerking (optioneel)</label><textarea id="offOpm" rows="2" placeholder="Context, timing of een specifieke wens…" style="font-family:var(--font-body);font-size:13.5px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-sm);outline:none;background:#fff;resize:vertical">'+esc(state._offerteOpm||'')+'</textarea></div>'
+    +'<button class="btn btn-primary btn-block off-submit" id="offSubmitBtn" onclick="offerteSubmit(this)"'+(skus.length?'':' disabled')+'>'+ic('send',16)+' Offerte aanvragen</button>'
+    +'<p class="off-cartdisc">'+ic('info',14)+' Je krijgt meteen een richtprijs, wij kijken alles persoonlijk na voor je definitieve offerte.</p>'
+    +'<div class="off-result" id="offResult" style="display:none"></div>'
+  +'</aside>';
+}
+// de eigenlijke samensteller (populair + tabs + zoek + productlijst + winkelmand)
+function offBuilderInner(){
+  var groups=offGroups();
+  var active=state._offerteGroup; if(groups.indexOf(active)<0) active=groups[0]||'';
+  state._offerteGroup=active;
+  var q=String(state._offerteSearch||'').trim().toLowerCase();
+  var cat=offCatalog();
+  var popular=cat.filter(function(p){return p.popular;});
+  // populair-strip (alleen tonen als er niet gezocht wordt)
+  var popHTML = (!q && popular.length) ? ('<div class="off-popular"><div class="off-poplab">'+ic('spark',15)+' Meest gevraagd</div><div class="off-poprow">'+popular.map(function(p){ return offProductRow(p,true); }).join('')+'</div></div>') : '';
+  var tabs='<div class="off-tabs" id="offTabs" role="tablist">'+groups.map(function(g){
+    var n=cat.filter(function(p){return p.group===g;}).length;
+    return '<button class="off-tab'+(g===active?' active':'')+'" role="tab" onclick="offSetGroup(\''+esc(g)+'\')">'+esc(g)+'<span class="off-tabn">'+n+'</span></button>';
+  }).join('')+'</div>';
+  var search='<div class="off-search"><span class="off-searchic">'+ic('search',16)+'</span><input id="offSearch" type="search" placeholder="Zoek een product of dienst…" value="'+esc(state._offerteSearch||'')+'" oninput="offSearch(this.value)"></div>';
+  // productlijst: bij zoeken over de hele catalogus, anders enkel de actieve groep
+  var list, shown;
+  if(q){
+    shown=cat.filter(function(p){ return (p.name||'').toLowerCase().indexOf(q)>=0 || (p.sub||'').toLowerCase().indexOf(q)>=0 || (p.group||'').toLowerCase().indexOf(q)>=0; });
+    list = shown.length ? shown.map(function(p){return offProductRow(p,true);}).join('') : '<div class="off-noresult">Geen producten gevonden voor "'+esc(state._offerteSearch||'')+'". Probeer een andere zoekterm of kies een categorie.</div>';
+  } else {
+    shown=cat.filter(function(p){return p.group===active;});
+    // binnen de groep groeperen op subgroep voor nette tussenkopjes
+    var bySub={}; shown.forEach(function(p){ var k=p.sub||'Algemeen'; (bySub[k]=bySub[k]||[]).push(p); });
+    list=Object.keys(bySub).map(function(k){
+      return (Object.keys(bySub).length>1?'<div class="off-subhead">'+esc(k)+'</div>':'')+bySub[k].map(function(p){return offProductRow(p,false);}).join('');
+    }).join('');
+  }
+  var listWrap='<div class="off-list" id="offList">'+list+'</div>';
+  return '<div class="off-grid">'
+    +'<div class="off-main">'+search+popHTML+tabs+listWrap+'</div>'
+    +offCartPanel()
+  +'</div>';
+}
+function offBuilderStyleOnce(){ return $id('offStyle')?'':('<style id="offStyle">'
+  +'.off-section-intro{margin:-2px 0 14px;max-width:64ch}'
+  +'.off-grid{display:grid;grid-template-columns:1fr 340px;gap:18px;align-items:start}'
+  +'@media(max-width:900px){.off-grid{grid-template-columns:1fr}}'
+  +'.off-search{position:relative;margin-bottom:14px}'
+  +'.off-search input{width:100%;box-sizing:border-box;font-family:var(--font-body);font-size:14.5px;padding:12px 14px 12px 42px;border:1px solid var(--line);border-radius:999px;outline:none;background:#fff}'
+  +'.off-search input:focus{border-color:var(--s27-purple);box-shadow:0 0 0 3px rgba(148,65,219,.12)}'
+  +'.off-searchic{position:absolute;left:15px;top:50%;transform:translateY(-50%);color:var(--ink-4);pointer-events:none}'
+  +'.off-popular{margin-bottom:16px}'
+  +'.off-poplab{display:flex;align-items:center;gap:6px;font-family:var(--font-display);font-weight:800;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--s27-purple-ink);margin-bottom:8px}'
+  +'.off-poprow{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px}'
+  +'.off-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}'
+  +'.off-tab{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-display);font-weight:700;font-size:13px;color:var(--ink-3);background:var(--paper-2,#FAF7F2);border:1px solid var(--line);padding:8px 14px;border-radius:999px;cursor:pointer;transition:background .18s,color .18s,border-color .18s}'
+  +'.off-tab:hover{border-color:var(--s27-purple)}'
+  +'.off-tab.active{background:var(--s27-purple);border-color:var(--s27-purple);color:#fff}'
+  +'.off-tabn{font-size:11px;font-weight:800;background:rgba(0,0,0,.08);border-radius:999px;padding:0 7px;min-width:18px;text-align:center}'
+  +'.off-tab.active .off-tabn{background:rgba(255,255,255,.28)}'
+  +'.off-subhead{font-family:var(--font-display);font-weight:800;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-4);margin:14px 0 7px}'
+  +'.off-list{display:flex;flex-direction:column;gap:8px}'
+  +'.off-prow{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px;transition:border-color .15s,box-shadow .15s}'
+  +'.off-prow.in-cart{border-color:var(--s27-purple);box-shadow:0 2px 10px rgba(148,65,219,.10)}'
+  +'.off-pinfo{flex:1;min-width:0}'
+  +'.off-pname{font-family:var(--font-display);font-weight:800;font-size:14px;color:var(--ink);line-height:1.25}'
+  +'.off-psub{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-4);margin-top:2px}'
+  +'.off-pdesc{font-size:12.5px;color:var(--ink-3);margin-top:4px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}'
+  +'.off-pright{display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:0 0 auto}'
+  +'.off-pprice{font-family:var(--font-display);font-weight:800;font-size:14.5px;color:var(--s27-purple-ink);white-space:nowrap}'
+  +'.off-step{display:inline-flex;align-items:center;gap:2px;background:var(--paper-2,#FAF7F2);border:1px solid var(--line);border-radius:999px;padding:2px}'
+  +'.off-stepbtn{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid var(--line);color:var(--s27-purple-ink);cursor:pointer;transition:background .15s}'
+  +'.off-stepbtn:hover{background:var(--s27-purple);color:#fff;border-color:var(--s27-purple)}'
+  +'.off-qty{min-width:26px;text-align:center;font-family:var(--font-display);font-weight:800;font-size:14px;color:var(--ink)}'
+  +'.off-noresult,.off-cempty p{color:var(--ink-3);font-size:13.5px;line-height:1.5}'
+  +'.off-noresult{padding:22px;text-align:center;background:var(--paper-2,#FAF7F2);border:1px dashed var(--line);border-radius:14px}'
+  +'.off-cart{position:sticky;top:14px;padding:16px 16px 18px;display:flex;flex-direction:column}'
+  +'.off-carthead{display:flex;align-items:center;gap:8px;font-family:var(--font-display);font-weight:800;font-size:15px;color:var(--ink);padding-bottom:12px;border-bottom:1px solid var(--line)}'
+  +'.off-cartn{margin-left:auto;font-size:12px;font-weight:800;color:#fff;background:var(--s27-purple);border-radius:999px;min-width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}'
+  +'.off-citems{display:flex;flex-direction:column;gap:10px;margin:12px 0;max-height:300px;overflow:auto}'
+  +'.off-citem{display:flex;gap:10px;align-items:flex-start}'
+  +'.off-citx{flex:1;min-width:0}'
+  +'.off-ciname{font-family:var(--font-display);font-weight:700;font-size:13px;line-height:1.3}'
+  +'.off-ciqty{font-size:11.5px;color:var(--ink-4);margin-top:1px}'
+  +'.off-cilinewrap{display:flex;align-items:center;gap:6px;flex:0 0 auto}'
+  +'.off-ciline{font-family:var(--font-display);font-weight:800;font-size:13px;color:var(--ink);white-space:nowrap}'
+  +'.off-cirm{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--ink-4);background:transparent;border:none;cursor:pointer;transition:background .15s,color .15s}'
+  +'.off-cirm:hover{background:var(--s27-orange-soft,rgba(246,97,49,.12));color:var(--s27-orange-ink,#C44514)}'
+  +'.off-cempty{text-align:center;padding:24px 8px;color:var(--ink-4)}'
+  +'.off-cempty p{margin:8px 0 0}'
+  +'.off-carttotal{display:flex;align-items:baseline;justify-content:space-between;padding-top:12px;border-top:1px solid var(--line);font-family:var(--font-display)}'
+  +'.off-carttotal span{font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-4)}'
+  +'.off-carttotal b{font-weight:900;font-size:22px;color:var(--ink)}'
+  +'.off-cartnote{font-size:11.5px;color:var(--ink-4);margin-top:6px;line-height:1.4}'
+  +'.off-cartdisc{display:flex;gap:6px;font-size:11.5px;color:var(--ink-4);margin:10px 0 0;line-height:1.45}'
+  +'.off-cartdisc svg{flex:0 0 auto;margin-top:1px}'
+  +'.off-result{margin-top:12px;padding:14px;border-radius:12px;background:var(--s27-green-soft,rgba(18,172,78,.10));border:1px solid rgba(18,172,78,.28);font-size:13.5px;line-height:1.5;color:var(--ink-2)}'
+  +'.off-result.err{background:var(--s27-orange-soft,rgba(246,97,49,.10));border-color:rgba(246,97,49,.30)}'
+  +'.off-result a{color:var(--s27-purple-ink);font-weight:800}'
+  +'</style>'); }
+// volledige samensteller-sectie (kop + container die we live herrenderen)
+function offerteSamensteller(){
+  if(!offCatalog().length) return '';   // geen catalogus geladen -> sectie weglaten
+  return offBuilderStyleOnce()
+    +'<div class="section-head" style="margin-top:40px"><h2>Stel zelf je offerte samen</h2></div>'
+    +'<p class="sdesc off-section-intro">Blader door onze diensten, voeg toe wat je nodig hebt en zie meteen je richtprijs. Klaar? Vraag je offerte met één klik aan, wij werken ze persoonlijk voor je uit.</p>'
+    +'<div id="offBuilder">'+offBuilderInner()+'</div>';
+}
+/* ---- live deelrenders van de samensteller (geen volledige panel-rerender) ---- */
+function renderOfferteBuilder(){ var box=$id('offBuilder'); if(box) box.innerHTML=offBuilderInner(); }
+// alleen de winkelmand-zijkant verversen (na qty-wijziging vanuit de productlijst)
+function refreshOfferteCart(){
+  var cart=$id('offCart'); if(cart && cart.parentNode){ var tmp=document.createElement('div'); tmp.innerHTML=offCartPanel(); var fresh=tmp.firstChild; cart.parentNode.replaceChild(fresh,cart); }
+}
+// 1 productregel verversen (stepper/cart-knop) zonder de hele lijst te herbouwen
+function refreshOfferteRow(sku){
+  var p=offBySku(sku); if(!p) return;
+  document.querySelectorAll('.off-prow[data-sku="'+(window.CSS&&CSS.escape?CSS.escape(sku):sku)+'"]').forEach(function(row){
+    var showGroup = row.closest('.off-poprow') || $id('offSearch') && String((($id('offSearch')||{}).value)||'').trim().length>0;
+    var tmp=document.createElement('div'); tmp.innerHTML=offProductRow(p, !!showGroup); var fresh=tmp.firstChild;
+    if(row.parentNode) row.parentNode.replaceChild(fresh,row);
+  });
+}
+function offSetGroup(g){ state._offerteGroup=g; state._offerteSearch=''; renderOfferteBuilder(); }
+function offSearch(v){
+  state._offerteSearch=v;
+  // debounce-licht: direct herrenderen van enkel de lijst+populair (de zijkant blijft)
+  if(state._offSearchT) clearTimeout(state._offSearchT);
+  state._offSearchT=setTimeout(function(){ renderOfferteBuilder(); var s=$id('offSearch'); if(s){ try{ s.focus(); var L=s.value.length; s.setSelectionRange(L,L); }catch(e){} } }, 120);
+}
+function offAdd(sku){ var c=offCart(); c[sku]=(c[sku]||0)+1; refreshOfferteRow(sku); refreshOfferteCart(); }
+function offQty(sku,delta){ var c=offCart(); var n=(c[sku]||0)+delta; if(n<=0){ delete c[sku]; } else { c[sku]=n; } refreshOfferteRow(sku); refreshOfferteCart(); }
+function offRemove(sku){ var c=offCart(); delete c[sku]; refreshOfferteRow(sku); refreshOfferteCart(); }
 function panelOffertes(){
   var live=_live(); var raw = live ? S27DATA.offertes() : OFFERTE_MOCK;
   var head = hero('purple','Plannen · Offertes', 'Jouw <span class="accent">offertes'+squig()+'</span> in één overzicht');
@@ -694,7 +922,10 @@ function panelOffertes(){
   var offs = live ? raw.filter(function(o){return offerteVisible(o.status);}) : raw;  // verberg concept/draft
   // Kennismaking / koffiegesprek -> automatisch bij Arne (link naar de meetingpagina, vooraf op "Nieuw project" met Arne)
   var koffieCard = '<div class="card koffie-card br-orange" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:14px"><span class="koffie-ic">'+ic('msg',22)+'</span><div style="flex:1;min-width:200px"><b style="font-family:var(--font-display);font-size:15.5px;display:block">Liever eerst even kennismaken?</b><span class="fs" style="color:var(--ink-3)">Plan een vrijblijvend koffiegesprek met Arne, dan bekijken we samen wat je nodig hebt.</span></div><button class="btn btn-branch br-orange btn-sm" onclick="koffieMetArne()">'+ic('cal',15)+' Koffiegesprek met Arne</button></div>';
-  var formSection = '<div class="section-head" style="margin-top:36px"><h2>Nieuwe offerte aanvragen</h2></div><p class="sdesc" style="margin:-4px 0 14px;max-width:60ch">Vertel ons kort wat je nodig hebt, je krijgt meteen een richtprijs en wij kijken alles persoonlijk na.</p>'+koffieCard+offerteRequestForm()+facturatieBlock();
+  // Nieuwe offerte aanvragen: (1) zelf samenstellen uit de catalogus, (2) snel een richtprijs via het
+  // 3-staps-formuliertje, (3) liever eerst kennismaken. Facturatiegegevens onderaan.
+  var quickForm = '<div class="section-head" style="margin-top:40px"><h2>Of vraag snel een richtprijs</h2></div><p class="sdesc" style="margin:-4px 0 14px;max-width:60ch">Weet je nog niet precies wat je nodig hebt? Vertel ons kort je richting, dan denken wij met je mee.</p>'+koffieCard+offerteRequestForm();
+  var formSection = offerteSamensteller()+quickForm+facturatieBlock();
   if(!offs.length) return head+'<div class="empty" style="padding:40px 20px"><div class="em-ic">'+ic('doc',52)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog geen offertes</b><p style="margin:6px 0 0">Hier verschijnen je verzonden offertes zodra we er één klaarzetten, of vraag er hieronder meteen één aan.</p></div>'+formSection;
   var lopend=offs.filter(function(o){return !offerteAfgerond(o.status);}), afge=offs.filter(function(o){return offerteAfgerond(o.status);});
   return head

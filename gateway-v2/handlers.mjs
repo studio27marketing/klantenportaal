@@ -77,6 +77,10 @@ export const FIELD = {
   offerteLink:    '36264fc2-f348-4e14-b81c-063045ce1264',
   offerteBudget:  'c8d2dd2c-2428-4236-ba37-a3f3cd90c9ec',
   offerteVervaldatum:'317437a7-2508-453f-a7b9-faf040c541a9',
+  offertePandadocId:'748009c1-6e97-4b87-b6bd-fadeeaa24701', // short_text 'PandaDoc Offerte ID' (offertes-lijst)
+  offerteBedrijfsnaam:'8da934b5-7747-4ad3-ac2f-cc53cf2985e8', // short_text 'Bedrijfsnaam' (offertes-lijst)
+  // bedrijf-velden (extra) - Metricool blogId/brandId op de bedrijf-taak
+  metricoolId:    '40f6ccd2-b25e-4385-bbca-3bfdf602e542', // short_text 'Metricool ID'
   // project-facturatie
   factuurNote:    '42a0fd8e-5e24-4018-a698-5f76f87e6449',
 };
@@ -1931,6 +1935,406 @@ async function deleteContact(bedrijfId, body, env, contactEmail) {
 }
 
 /* =============================================================================
+   OFFERTE GENEREREN (WRITE) - ClickUp-offertetaak + PandaDoc CONCEPT-document
+   -----------------------------------------------------------------------------
+   FE-contract:  api(ENDPOINTS.offerteGenereren, { items:[{sku,naam,prijs,aantal}], opmerking })
+   BE-respons:   { ok, offerte_task_id, offerte_task_url, pandadoc_id, message }
+
+   Flow:
+     1. valideer items[] + bereken budget = Σ(prijs*aantal).
+     2. lees de bedrijf-taak (Company-naam + 1e contact voor de Klant-tokens).
+     3. maak een ClickUp-offertetaak in lijst 901520180289, met:
+          - Bedrijf-relatie 4b1fb333 = bedrijfId (scope-guard + backlink Offertes)
+          - Budget c8d2dd2c = budget (currency)
+          - Bedrijfsnaam 8da934b5 = Company
+          - omschrijving = de gekozen items + totaal
+     4. maak een PandaDoc CONCEPT-document (NIET verzonden) van template
+        HQRvZ3sdrEm2GcuNsdP2Uf, met de items als pricing-table-rijen (data_merge),
+        en schrijf de PandaDoc-id terug naar de offertetaak (veld 748009c1).
+
+   PANDADOC create-call: zie buildPandadocCreate() -> { url, method, headers, body }.
+   KRITIEKE CREDIT-LIMIET: de create wordt ENKEL uitgevoerd als
+   env.PANDADOC_CREATE_ENABLED === 'true' (default UIT). Staat hij uit, dan bouwt de
+   handler de payload wel (en geeft hem terug onder _pandadoc_create voor inspectie),
+   maar maakt GEEN document aan -> 0 credits. In productie zet je de flag op 'true'.
+   ============================================================================= */
+export const OFFERTE_LIST = LIST.offertes;                  // 901520180289
+export const PANDADOC_BASE = 'https://api.pandadoc.com/public/v1';
+export const PANDADOC_TEMPLATE_OFFERTE = 'HQRvZ3sdrEm2GcuNsdP2Uf'; // 'Offerte template + vraag voor facturatiegegevens'
+// Rollen op de template (uit /templates/.../details): Projectmanager + Klant.
+export const PANDADOC_ROLE_PM = 'Projectmanager';
+export const PANDADOC_ROLE_KLANT = 'Klant';
+// Quote-sectie-naam in de template (pricing.quotes[0].sections[0].name). pricing_tables[].name
+// moet matchen met de pricing-table/quote-naam in de template; de enige sectie heet 'Adverteren'.
+export const PANDADOC_PRICING_TABLE_NAME = 'Adverteren';
+// Vaste Projectmanager-recipient/token-bron (Studio 27). Eén bron zodat de rol altijd
+// preassigned is; tokens vullen het PM-blok in de offerte.
+export const PANDADOC_PM = {
+  email: 'ilke@studio27.be',
+  first_name: 'Ilke',
+  last_name: 'Meeusen',
+  phone: '',
+};
+
+const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+// Normaliseer + valideer de inkomende items[]. Geeft { items, budget } of null bij leeg.
+function normalizeOfferteItems(raw) {
+  const arr = Array.isArray(raw) ? raw : [];
+  const items = [];
+  for (const it of arr) {
+    if (!it || typeof it !== 'object') continue;
+    const naam = str(it.naam).trim();
+    const sku = str(it.sku).trim();
+    const prijs = num(it.prijs);
+    const aantal = Math.max(0, Math.round(num(it.aantal)) || 0);
+    if (!naam && !sku) continue;
+    if (aantal <= 0) continue;
+    items.push({ sku, naam: naam || sku, prijs: round2(prijs), aantal, regel_totaal: round2(prijs * aantal) });
+  }
+  if (items.length === 0) return null;
+  const budget = round2(items.reduce((s, i) => s + i.regel_totaal, 0));
+  return { items, budget };
+}
+
+// Klant-token-bron: Company = bedrijf-naam; FirstName/LastName = 1e gekoppeld contact.
+function deriveKlantFromTasks(bedrijfTask, contactTask) {
+  const company = str(bedrijfTask && bedrijfTask.name).trim();
+  let first = '', last = '', email = '';
+  if (contactTask) {
+    first = str(getCF(contactTask, FIELD.voornaam)).trim();
+    last = str(getCF(contactTask, FIELD.achternaam)).trim();
+    email = str(getCF(contactTask, FIELD.email)).trim();
+    // fallback: contact-taaknaam 'Voornaam Achternaam' splitsen
+    if (!first && !last) {
+      const parts = str(contactTask.name).trim().split(/\s+/);
+      if (parts.length) { first = parts[0]; last = parts.slice(1).join(' '); }
+    }
+  }
+  return { company, first_name: first, last_name: last, email };
+}
+
+// Bouw EXACT de PandaDoc create-call (POST /public/v1/documents). Wordt 1:1 gebruikt
+// door fetch() én teruggegeven voor inspectie. Documenten worden ALTIJD als concept
+// aangemaakt (geen 'send' in de body; verzenden is een aparte POST /documents/{id}/send).
+export function buildPandadocCreate(env, { docName, items, klant, pm }) {
+  const rows = items.map((it) => ({
+    options: { qty_editable: false, optional: false, optional_selected: true },
+    data: {
+      Name: it.naam,
+      Description: '',
+      Price: it.prijs,
+      QTY: it.aantal,            // data_merge-kolom 'Quantity' heet in de API-merge 'QTY'
+      SKU: it.sku,
+    },
+  }));
+  const body = {
+    name: docName,
+    template_uuid: PANDADOC_TEMPLATE_OFFERTE,
+    recipients: [
+      { role: PANDADOC_ROLE_PM, email: pm.email, first_name: pm.first_name, last_name: pm.last_name },
+      // Klant-recipient: e-mail alleen meesturen als we er een hebben (anders rol zonder e-mail,
+      // wat PandaDoc toelaat bij een concept; de klant-gegevens komen verder uit de tokens).
+      Object.assign({ role: PANDADOC_ROLE_KLANT }, klant.email ? { email: klant.email } : {},
+        klant.first_name ? { first_name: klant.first_name } : {},
+        klant.last_name ? { last_name: klant.last_name } : {}),
+    ],
+    tokens: [
+      { name: 'Klant.Company', value: klant.company || '' },
+      { name: 'Klant.FirstName', value: klant.first_name || '' },
+      { name: 'Klant.LastName', value: klant.last_name || '' },
+      { name: 'Projectmanager.FirstName', value: pm.first_name || '' },
+      { name: 'Projectmanager.LastName', value: pm.last_name || '' },
+      { name: 'Projectmanager.Email', value: pm.email || '' },
+      { name: 'Projectmanager.Phone', value: pm.phone || '' },
+    ],
+    pricing_tables: [
+      {
+        name: PANDADOC_PRICING_TABLE_NAME,
+        data_merge: true,
+        sections: [
+          { title: PANDADOC_PRICING_TABLE_NAME, default: true, rows },
+        ],
+      },
+    ],
+  };
+  return {
+    url: `${PANDADOC_BASE}/documents`,
+    method: 'POST',
+    headers: { Authorization: `API-Key ${str(env && env.PANDADOC_API_KEY)}`, 'Content-Type': 'application/json' },
+    body,
+  };
+}
+
+// Voer de PandaDoc-create UIT (alleen als de flag aan staat). Geeft { id } of { error }.
+async function pandadocCreate(env, call) {
+  if (str(env && env.PANDADOC_CREATE_ENABLED) !== 'true') {
+    return { skipped: true, id: '', reason: 'create_disabled' };
+  }
+  let r;
+  try {
+    r = await fetch(call.url, { method: call.method, headers: call.headers, body: JSON.stringify(call.body) });
+  } catch (e) {
+    return { error: 'network', id: '' };
+  }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || !data || !data.id) return { error: 'pandadoc_' + r.status, id: '', detail: data };
+  return { id: str(data.id), status: str(data.status) };
+}
+
+export async function offerteGenereren(bedrijfId, body, env) {
+  // (1) items valideren + budget
+  const norm = normalizeOfferteItems(body && body.items);
+  if (!norm) {
+    return { status: 400, body: { ok: false, error: 'no_items', message: 'Selecteer minstens één product met een aantal.' } };
+  }
+  const { items, budget } = norm;
+  const opmerking = str(body && body.opmerking).trim();
+
+  // (2) bedrijf-taak + 1e contact (voor Company/FirstName/LastName-tokens)
+  const br = await cu.get(env, `/task/${bedrijfId}`);
+  const bedrijfTask = br.ok && br.data ? br.data : null;
+  if (!bedrijfTask || !bedrijfTask.id) {
+    return { status: 404, body: { ok: false, error: 'company_not_found', message: 'Bedrijf niet gevonden.' } };
+  }
+  const contactIds = getRelationIds(bedrijfTask, FIELD.contact);
+  let contactTask = null;
+  if (contactIds.length) {
+    const cr = await cu.get(env, `/task/${contactIds[0]}`);
+    if (cr.ok && cr.data) contactTask = cr.data;
+  }
+  const klant = deriveKlantFromTasks(bedrijfTask, contactTask);
+  const company = klant.company || `Klant ${bedrijfId}`;
+
+  // (3) ClickUp-offertetaak. Bedrijf-relatie 4b1fb333 = bedrijfId (scope-guard + Offertes-backlink).
+  const datum = fmtDateNL();
+  const taskName = `Offerte ${company} - ${datum}`;
+  const regelsTekst = items
+    .map((i) => `• ${i.aantal}x ${i.naam}${i.sku ? ` (${i.sku})` : ''} - €${i.prijs.toFixed(2)} = €${i.regel_totaal.toFixed(2)}`)
+    .join('\n');
+  const omschrijving =
+    `Offerte aangevraagd via het klantenportaal op ${fmtDateTime()}.\n\n` +
+    `Gekozen producten:\n${regelsTekst}\n\n` +
+    `Totaal (excl. btw): €${budget.toFixed(2)}` +
+    (opmerking ? `\n\nOpmerking van de klant:\n${opmerking}` : '');
+
+  const created = await cu.post(env, `/list/${OFFERTE_LIST}/task`, {
+    name: taskName,
+    description: omschrijving,
+    custom_fields: [
+      { id: FIELD.bedrijf, value: { add: [String(bedrijfId)], rem: [] } }, // relatie -> bedrijf
+      { id: FIELD.offerteBudget, value: budget },                          // currency
+      { id: FIELD.offerteBedrijfsnaam, value: company },                   // short_text
+    ],
+  });
+  if (!created.ok || !created.data || !created.data.id) {
+    return { status: 502, body: { ok: false, error: 'clickup_create_failed', message: 'Offertetaak kon niet worden aangemaakt - probeer het later opnieuw.' } };
+  }
+  const offerteTaskId = str(created.data.id);
+  const offerteTaskUrl = str(created.data.url) || `https://app.clickup.com/t/${offerteTaskId}`;
+
+  // (3b) Bedrijf-relatie nazetten via het dedicated relation-endpoint (custom_fields bij create
+  // zet relaties niet altijd betrouwbaar; idempotent + best-effort, mirror van de cu.field-gotcha).
+  await cu.relation(env, offerteTaskId, FIELD.bedrijf, { add: [String(bedrijfId)] }).catch(() => {});
+
+  // (4) PandaDoc CONCEPT-document. Payload ALTIJD bouwen; create alleen bij flag (0 credits default).
+  const docName = `Offerte ${company} - ${datum}`;
+  const pdCall = buildPandadocCreate(env, { docName, items, klant, pm: PANDADOC_PM });
+  const pd = await pandadocCreate(env, pdCall);
+  const pandadocId = str(pd.id);
+
+  // (4b) PandaDoc-id terugschrijven naar de offertetaak (veld 748009c1) - alleen als we er een hebben.
+  if (pandadocId) {
+    await cu.field(env, offerteTaskId, FIELD.offertePandadocId, pandadocId).catch(() => {});
+  }
+
+  const message = pandadocId
+    ? 'Je offerte-aanvraag is ontvangen. We bezorgen je binnenkort de definitieve offerte.'
+    : 'Je offerte-aanvraag is ontvangen. Studio 27 stelt je offerte op en bezorgt ze je binnenkort.';
+
+  const out = {
+    ok: true,
+    offerte_task_id: offerteTaskId,
+    offerte_task_url: offerteTaskUrl,
+    pandadoc_id: pandadocId,
+    message,
+  };
+  // Bij uitgeschakelde create geven we de exacte payload mee voor inspectie/debug (geen secret:
+  // de Authorization-header wordt geredigeerd). In productie (flag aan) blijft dit veld weg.
+  if (str(env && env.PANDADOC_CREATE_ENABLED) !== 'true') {
+    out._pandadoc_create_disabled = true;
+    out._pandadoc_create = {
+      url: pdCall.url,
+      method: pdCall.method,
+      headers: { ...pdCall.headers, Authorization: 'API-Key ***redacted***' },
+      body: pdCall.body,
+    };
+  }
+  return { status: 200, body: out };
+}
+
+/* =============================================================================
+   METRICOOL (READ) - geplande/concept social posts, directe v2-API (geen Make)
+   -----------------------------------------------------------------------------
+   FE-contract (data.js loadMetricool): { ok, linked, brandId, posts:[ {
+     id, datum, tekst(url-encoded), media, netwerken("a,b,c"-csv), status, draft, detail, url } ] }
+
+   - blogId/brandId komt uit ClickUp-veld 40f6ccd2 op de bedrijf-taak. Geen veld -> linked:false.
+   - GET https://app.metricool.com/api/v2/scheduler/posts?blogId=<id>&userId=<uid>
+       &start=<-31d>&end=<+90d>&timezone=Europe/Brussels   header X-Mc-Auth: <key>
+   - userId is OPTIONEEL (de call werkt identiek zonder), maar we sturen hem mee als we
+     hem kennen: auto-discovery via /api/admin/simpleProfiles (match op brand-id), met
+     fallback env.METRICOOL_USER_ID. Lukt geen van beide -> we laten userId weg (werkt nog).
+   ============================================================================= */
+export const METRICOOL_BASE = 'https://app.metricool.com/api/v2';
+export const METRICOOL_ADMIN = 'https://app.metricool.com/api';
+export const METRICOOL_TZ = 'Europe/Brussels';
+
+function mcHeaders(env) {
+  return { 'X-Mc-Auth': str(env && env.METRICOOL_API_KEY), Accept: 'application/json' };
+}
+// ISO zonder ms/zone, zoals de scheduler-API verwacht (lokale wandklok).
+function mcStamp(ms) { return new Date(ms).toISOString().slice(0, 19); }
+
+// Achterhaal de userId die bij een brand hoort. (1) env.METRICOOL_USER_ID wint;
+// (2) anders /api/admin/simpleProfiles -> match op id==blogId -> userId/ownerUserId.
+// Gecachet per isolate zodat we het niet elke call opnieuw doen.
+let _mcUserCache = { byBlog: new Map(), all: null, allExp: 0 };
+async function metricoolUserId(env, blogId) {
+  const fromEnv = str(env && env.METRICOOL_USER_ID).trim();
+  if (fromEnv) return fromEnv;
+  if (_mcUserCache.byBlog.has(String(blogId))) return _mcUserCache.byBlog.get(String(blogId));
+  let list = _mcUserCache.all;
+  const now = Date.now();
+  if (!list || now > _mcUserCache.allExp) {
+    try {
+      const r = await fetch(`${METRICOOL_ADMIN}/admin/simpleProfiles`, { headers: mcHeaders(env) });
+      const data = await r.json().catch(() => null);
+      list = Array.isArray(data) ? data : (data && Array.isArray(data.data) ? data.data : []);
+      _mcUserCache.all = list; _mcUserCache.allExp = now + 10 * 60 * 1000;
+    } catch (e) { list = []; }
+  }
+  let uid = '';
+  for (const b of list || []) {
+    if (String(b && (b.id != null ? b.id : '')) === String(blogId)) {
+      uid = str(b.userId || b.ownerUserId || '');
+      break;
+    }
+  }
+  // als de brand niet in de lijst zit maar er is precies 1 account, neem die userId.
+  if (!uid && list && list.length === 1) uid = str(list[0].userId || list[0].ownerUserId || '');
+  _mcUserCache.byBlog.set(String(blogId), uid);
+  return uid;
+}
+
+// Eén Metricool-post -> de platte FE-shape (data.js parseert verder).
+function mcMapPost(p) {
+  const providers = Array.isArray(p && p.providers) ? p.providers : [];
+  const netwerken = providers.map((x) => str(x && x.network).toLowerCase()).filter(Boolean).join(',');
+  // overall status: PUBLISHED als alles published; ERROR/FAILED domineert; anders 1e provider-status;
+  // valt terug op DRAFT/PENDING. data.js doet .toUpperCase().
+  let status = '';
+  const sts = providers.map((x) => str(x && x.status).toUpperCase()).filter(Boolean);
+  if (sts.length) {
+    if (sts.some((s) => s.includes('ERROR') || s.includes('FAIL'))) status = sts.find((s) => s.includes('ERROR') || s.includes('FAIL'));
+    else if (sts.every((s) => s === 'PUBLISHED')) status = 'PUBLISHED';
+    else status = sts[0];
+  }
+  if (!status) status = p && p.draft ? 'DRAFT' : 'PENDING';
+  // publieke URL/detail (eerste provider die er een heeft).
+  let url = '';
+  for (const x of providers) { if (x && x.publicUrl) { url = str(x.publicUrl); break; } }
+  const media = Array.isArray(p && p.media) ? str(p.media[0]) : str(p && p.media);
+  const datum = (p && p.publicationDate && str(p.publicationDate.dateTime)) || '';
+  return {
+    id: str(p && p.id),
+    datum,                                   // "YYYY-MM-DDTHH:mm:ss" (FE _parseDatum verwerkt dit)
+    tekst: encodeURIComponent(str(p && p.text)),  // FE doet decodeURIComponent
+    media,
+    netwerken,                               // CSV "facebook,instagram"
+    status,                                  // FE .toUpperCase()
+    draft: !!(p && p.draft),
+    detail: '',
+    url,
+  };
+}
+
+export async function metricool(bedrijfId, body, env) {
+  // (1) blogId/brandId uit de bedrijf-taak (veld 40f6ccd2).
+  const br = await cu.get(env, `/task/${bedrijfId}`);
+  const blogId = br.ok && br.data ? str(getCF(br.data, FIELD.metricoolId)).trim() : '';
+  if (!blogId) {
+    return { status: 200, body: { ok: true, linked: false, posts: [] } };
+  }
+  if (!str(env && env.METRICOOL_API_KEY)) {
+    // geen key -> behandel als 'niet gekoppeld' i.p.v. fout (read fail-open).
+    return { status: 200, body: { ok: true, linked: false, posts: [] } };
+  }
+
+  // (2) userId (optioneel) + venster -31d .. +90d.
+  const userId = await metricoolUserId(env, blogId).catch(() => '');
+  const start = mcStamp(Date.now() - 31 * 86400000);
+  const end = mcStamp(Date.now() + 90 * 86400000);
+  const qs = new URLSearchParams({ blogId: String(blogId), start, end, timezone: METRICOOL_TZ });
+  if (userId) qs.set('userId', String(userId));
+
+  let r;
+  try {
+    r = await fetch(`${METRICOOL_BASE}/scheduler/posts?${qs.toString()}`, { headers: mcHeaders(env) });
+  } catch (e) {
+    // upstream onbereikbaar -> read fail-open: gekoppeld maar (tijdelijk) geen posts.
+    return { status: 200, body: { ok: true, linked: true, brandId: blogId, posts: [] } };
+  }
+  if (!r.ok) {
+    return { status: 200, body: { ok: true, linked: true, brandId: blogId, posts: [] } };
+  }
+  const data = await r.json().catch(() => null);
+  const arr = data && Array.isArray(data.data) ? data.data
+    : (Array.isArray(data) ? data : (data && Array.isArray(data.posts) ? data.posts : []));
+  const posts = (arr || []).filter((p) => p && p.id != null).map(mcMapPost);
+  return { status: 200, body: { ok: true, linked: true, brandId: blogId, posts } };
+}
+
+/* ---- metricoolApprove (WRITE) - keur een geplande concept-post goed -------- */
+// PUT /api/v2/scheduler/posts/{id}/approval { status:"approved" } (per onderzoeksrapport).
+// Defensief: bij elk niet-2xx / onbevestigd endpoint -> { ok:false, error:'approval_unsupported' }
+// i.p.v. falen. We muteren NOOIT zonder een geldige scope (blogId van de bedrijf-taak).
+export async function metricoolApprove(bedrijfId, body, env) {
+  const postId = str(body && (body.id || body.post_id)).trim();
+  if (!postId) {
+    return { status: 400, body: { ok: false, error: 'missing_post_id' } };
+  }
+  // scope-guard: de bedrijf-taak moet een Metricool-koppeling hebben (anders geen recht te muteren).
+  const br = await cu.get(env, `/task/${bedrijfId}`);
+  const blogId = br.ok && br.data ? str(getCF(br.data, FIELD.metricoolId)).trim() : '';
+  if (!blogId) {
+    return { status: 403, body: { ok: false, error: 'not_linked', message: 'Geen Metricool-koppeling voor dit bedrijf.' } };
+  }
+  if (!str(env && env.METRICOOL_API_KEY)) {
+    return { status: 200, body: { ok: false, error: 'approval_unsupported' } };
+  }
+  const userId = await metricoolUserId(env, blogId).catch(() => '');
+  const qs = new URLSearchParams({ blogId: String(blogId) });
+  if (userId) qs.set('userId', String(userId));
+  let r;
+  try {
+    r = await fetch(`${METRICOOL_BASE}/scheduler/posts/${encodeURIComponent(postId)}/approval?${qs.toString()}`, {
+      method: 'PUT',
+      headers: { ...mcHeaders(env), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'approved' }),
+    });
+  } catch (e) {
+    return { status: 200, body: { ok: false, error: 'approval_unsupported' } };
+  }
+  if (!r.ok) {
+    // endpoint onbevestigd of niet toegestaan -> defensief, niet falen.
+    return { status: 200, body: { ok: false, error: 'approval_unsupported' } };
+  }
+  return { status: 200, body: { ok: true, id: postId, status: 'approved' } };
+}
+
+/* =============================================================================
    Handler-registry voor de router-shim + node-harness.
    READ_HANDLERS: testbaar zonder Firebase met (bedrijfId, body, env).
    ============================================================================= */
@@ -1945,6 +2349,8 @@ export const READ_HANDLERS = {
   // Google Drive (directe API v3, geen Make). driveEnsure idempotent; huisstijlList GET.
   huisstijlList,
   driveEnsure,
+  // Metricool (directe v2-API, geen Make). Leest blogId uit veld 40f6ccd2 op de bedrijf-taak.
+  metricool,
 };
 export const WRITE_HANDLERS = {
   bedrijfVoorkeuren,
@@ -1956,6 +2362,10 @@ export const WRITE_HANDLERS = {
   directMessage,
   feedbackV2,
   inplannen,
+  // Offerte genereren (ClickUp-offertetaak + PandaDoc CONCEPT-document, geen Make).
+  offerteGenereren,
+  // Metricool concept-post goedkeuren (defensief; onbevestigd endpoint -> approval_unsupported).
+  metricoolApprove,
   // Google Drive writes (directe API v3, geen Make).
   huisstijlUpload,
   huisstijlDelete,

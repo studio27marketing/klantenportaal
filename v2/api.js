@@ -25,6 +25,10 @@ var state = window.S27State = {
 /* ---- UI-hooks (portal.js vult deze in) ---- */
 var S27 = window.S27 = { onSessionExpired: null, reloadDashboard: null, onSwitchFailed: null, closeSwitchMenu: null, stopChatPoll: null };
 
+/* Cloudflare-gateway-basis (de v2-handlers achter Firebase-auth). Vooraan gedeclareerd
+   zodat ENDPOINTS hieronder de gateway-gerouteerde endpoints kan opbouwen. */
+const GATEWAY_BASE = 'https://s27-portal-gateway-v2.studio27marketing.workers.dev';
+
 /* ---- Endpoints (EXACT uit dashboard.js, backend ongewijzigd) ---- */
 const ENDPOINTS = {
   // v1, folder 12 KLANTPORTAAL (legacy)
@@ -66,16 +70,23 @@ const ENDPOINTS = {
   bedrijfBeheer:     'https://hook.eu1.make.com/bf5xp3rkbh7dik9rp6jvue4w9p2moctn',
   // Agenda (beschikbaarheid + inplannen), scope-guard server-side actief
   beschikbaarheid:   'https://hook.eu1.make.com/jn1ael12s6b4xp6fsdqd49x9p27v8cht',
-  inplannen:         'https://hook.eu1.make.com/4r3y6ba68spfgcgng7v0lvso11il6p6u'
+  inplannen:         'https://hook.eu1.make.com/4r3y6ba68spfgcgng7v0lvso11il6p6u',
+  // Offerte-samensteller: klant stelt zelf een offerte samen (catalogus -> PandaDoc via Make).
+  // BE-contract: { items:[{sku,naam,prijs,aantal}], opmerking } -> { ok, offerte_task_id, offerte_task_url, pandadoc_id, message }.
+  offerteGenereren:  GATEWAY_BASE + '/offerteGenereren',
+  // Metricool (geplande social posts) via de gateway i.p.v. de directe Make-hook.
+  // BE-contract: { ok, linked, posts:[{id,datum,tekst,media,netwerken:[{netwerk,status}]}] }.
+  metricool:         GATEWAY_BASE + '/metricool',
+  // Metricool post goedkeuren vanuit het portaal: { post_id } -> { ok, message }.
+  metricoolApprove:  GATEWAY_BASE + '/metricoolApprove'
 };
 
 /* AUTH v2 (Firebase + Cloudflare-gateway) is de DEFAULT. ?auth=v1 = legacy-vangnet. */
 const AUTH_V2 = !/[?&]auth=v1(?:&|$)/.test(location.search);
-const GATEWAY_BASE = 'https://s27-portal-gateway-v2.studio27marketing.workers.dev';
+/* GATEWAY_BASE staat hierboven gedeclareerd (vóór ENDPOINTS). */
 const PROVISION_URL = 'https://hook.eu1.make.com/hjmc9k1w9ry027kom3rfiwci9pejub78';
-/* Metricool-posts: GEÏSOLEERD Make-scenario (los van de gateway/bedrijf-beheer).
-   Direct aangeroepen met form-encoded body (CORS-safe, geen preflight); leest de
-   Metricool-ID server-side uit de bedrijf-taak. Lage gevoeligheid (geplande posts). */
+/* Metricool-posts: LEGACY directe Make-hook. De frontend gebruikt nu ENDPOINTS.metricool
+   (via de gateway) i.p.v. deze hook; bewaard als vangnet/referentie, niet meer aangeroepen. */
 const METRICOOL_DIRECT = 'https://hook.eu1.make.com/a5ndvvcb5ipoivw86byv0a3mfvsfd24v';
 /* Advertentie-campagnes (Meta-insights, later Google): GEÏSOLEERD Make-scenario,
    directe form-encoded call (CORS-safe). Leest de Meta Ads ID + Business ID server-side

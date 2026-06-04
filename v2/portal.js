@@ -810,6 +810,84 @@ async function submitNieuwProject(btn){
     if(btn){ btn.disabled=false; btn.innerHTML='Aanvraag verstuurd ✓'; }
   } catch(e){ if(btn){ btn.disabled=false; btn.textContent='Opnieuw proberen'; } }
 }
+/* ---- Offerte-samensteller: winkelmand -> gateway (PandaDoc via Make) ----
+   Contract: api(ENDPOINTS.offerteGenereren, { items:[{sku,naam,prijs,aantal}], opmerking })
+   -> { ok, offerte_task_id, offerte_task_url, pandadoc_id, message }. */
+function offerteResultBox(){ return $id('offResult'); }
+function showOfferteResult(html, isErr){
+  const box=offerteResultBox(); if(!box) return;
+  box.className='off-result'+(isErr?' err':''); box.style.display='block'; box.innerHTML=html;
+  if(box.scrollIntoView) try{ box.scrollIntoView({behavior:'smooth',block:'nearest'}); }catch(e){}
+}
+async function offerteSubmit(btn){
+  const cart=(state._offerteCart)||{};
+  const skus=Object.keys(cart).filter(s=>cart[s]>0);
+  if(!skus.length){ showOfferteResult('Je winkelmand is nog leeg. Voeg eerst een product toe.', true); return; }
+  // items in het FE->BE-contract: [{sku, naam, prijs, aantal}]
+  const items=skus.map(function(sku){ const p=offBySku(sku)||{}; return { sku:sku, naam:p.name||'', prijs:Number(p.price)||0, aantal:cart[sku] }; });
+  const opm=(($id('offOpm')||{}).value||'').trim();
+  state._offerteOpm=opm;   // bewaren zodat een rerender de tekst behoudt
+  if(state.demoMode){
+    showOfferteResult('<b>Bedankt!</b> In je echte portaal sturen we deze selectie ('+items.length+' '+(items.length===1?'product':'producten')+') meteen door en krijg je hier de link naar je offerte. Dit is de voorbeeldweergave.', false);
+    if(btn){ btn.disabled=false; btn.innerHTML=ic('send',16)+' Offerte aanvragen'; }
+    return;
+  }
+  if(btn){ btn.disabled=true; btn.innerHTML='Offerte aanmaken…'; }
+  showOfferteResult('<span class="brand-spinner" style="width:18px;height:18px;display:inline-block;vertical-align:-3px;margin-right:8px"></span>We stellen je offerte samen, even geduld…', false);
+  try{
+    const res=await api(ENDPOINTS.offerteGenereren, { items:items, opmerking:opm });
+    const d=(res&&res.data)||{};
+    if(res&&res.ok&&d&&d.ok!==false&&(d.offerte_task_url||d.offerte_task_id||d.pandadoc_id)){
+      const url=d.offerte_task_url||'';
+      const link=url?(' <a href="'+escapeHtml(url)+'" target="_blank" rel="noopener">Bekijk je offerte '+ic('arrow',13)+'</a>'):'';
+      const msg=d.message?escapeHtml(d.message):'Je offerte is aangemaakt en staat klaar.';
+      const okHtml=ic('check',16)+' <b>Gelukt!</b> '+msg+link+'<div style="margin-top:6px;font-size:12px;color:var(--ink-4)">We kijken alles nog persoonlijk na voor je definitieve offerte.</div>';
+      // winkelmand legen na succes; offertes-cache stale maken zodat de lijst hierboven later bijwerkt
+      state._offerteCart={}; state._offerteOpm=''; state.data.offertes=null;
+      renderOfferteBuilder();        // herrender met lege mand (#offResult wordt opnieuw opgebouwd)
+      showOfferteResult(okHtml, false);   // resultaat terugzetten na de rerender
+    } else {
+      const m=(d&&d.message)?escapeHtml(d.message):'Er liep iets mis bij het aanmaken van je offerte. Probeer het zo opnieuw, of stuur ons gerust een berichtje.';
+      showOfferteResult(m, true);
+      if(btn){ btn.disabled=false; btn.innerHTML=ic('send',16)+' Offerte aanvragen'; }
+    }
+  }catch(e){
+    showOfferteResult('Er liep iets mis bij het aanmaken van je offerte. Probeer het zo opnieuw, of stuur ons gerust een berichtje.', true);
+    if(btn){ btn.disabled=false; btn.innerHTML=ic('send',16)+' Offerte aanvragen'; }
+  }
+}
+/* ---- Metricool: post goedkeuren + feedback geven vanuit het portaal ----
+   Goedkeuren: api(ENDPOINTS.metricoolApprove, { post_id }). Lukt de backend het (nog) niet,
+   dan tonen we een nette "binnenkort"-staat. Feedback gaat via directMessage (chatkanaal). */
+function _mcMarkApprovedLocal(id){ state._mcApproved=state._mcApproved||{}; state._mcApproved[id]=true; if(window.S27DATA&&S27DATA.markMetricoolApproved) S27DATA.markMetricoolApproved(id); }
+function _mcReplaceActions(id, html){ var box=$id('mca-'+id); if(box) box.outerHTML=html; }
+async function metricoolApprove(id, btn){
+  if(btn){ btn.disabled=true; btn.innerHTML='Bezig…'; }
+  if(state.demoMode){ _mcMarkApprovedLocal(id); _mcReplaceActions(id, '<div class="mc-approved" id="mca-'+escapeHtml(id)+'">'+ic('check',16)+'<span>Goedgekeurd, bedankt! (voorbeeldweergave)</span></div>'); return; }
+  try{
+    const res=await api(ENDPOINTS.metricoolApprove, { post_id:id });
+    const d=(res&&res.data)||{};
+    if(res&&res.ok&&d&&d.ok!==false){
+      _mcMarkApprovedLocal(id);
+      _mcReplaceActions(id, '<div class="mc-approved" id="mca-'+escapeHtml(id)+'">'+ic('check',16)+'<span>Goedgekeurd, bedankt! We plannen deze post zo verder in.</span></div>');
+    } else {
+      // backend kan de goedkeuring (nog) niet verwerken -> nette "binnenkort"-staat
+      _mcReplaceActions(id, '<div class="mc-actions" id="mca-'+escapeHtml(id)+'" onclick="event.stopPropagation()"><div class="fs" style="color:var(--ink-3);line-height:1.5">Goedkeuren via het portaal kan hier binnenkort. Geef je akkoord voorlopig even via je Studio 27-contact, of laat hieronder een berichtje na.</div><div class="mc-actrow" style="margin-top:8px"><button class="btn btn-outline btn-sm" onclick="toggleSocialFeedback(\''+escapeHtml(id)+'\')">'+ic('msg',15)+' Bericht achterlaten</button></div><div class="mc-fb" id="mcfb-'+escapeHtml(id)+'" style="display:none"><textarea id="mcfbtx-'+escapeHtml(id)+'" rows="3" placeholder="Je opmerking bij deze post…"></textarea><div class="mc-fbact"><button class="btn btn-primary btn-sm" onclick="metricoolFeedback(\''+escapeHtml(id)+'\',this)">'+ic('send',14)+' Versturen</button></div></div></div>');
+    }
+  }catch(e){
+    if(btn){ btn.disabled=false; btn.innerHTML=ic('check',15)+' Goedkeuren'; }
+  }
+}
+async function metricoolFeedback(id, btn){
+  const t=$id('mcfbtx-'+id); const tx=((t&&t.value)||'').trim();
+  if(!tx){ if(t){ t.style.borderColor='var(--s27-orange)'; t.focus(); } return; }
+  const box=$id('mcfb-'+id);
+  if(box) box.innerHTML='<div class="fs" style="color:var(--s27-green-ink,#147A50);padding:4px 0">'+ic('check',14)+' Je feedback is verstuurd naar je Studio 27-contact, dankjewel!</div>';
+  if(state.demoMode) return;
+  try{
+    await api(ENDPOINTS.directMessage, { bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), onderwerp:'Feedback social post (via portaal)', bericht:'Feedback op geplande post '+id+': '+tx });
+  }catch(e){}
+}
 async function uploadHuisstijl(input){
   const f=input.files&&input.files[0]; if(!f) return;
   if(state.demoMode){ return; }
