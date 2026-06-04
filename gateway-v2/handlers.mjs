@@ -365,6 +365,214 @@ export const cu = {
 };
 
 /* =============================================================================
+   GOOGLE DRIVE (v3) - directe port van de Make huisstijl-scenario's (zonder Make)
+   -----------------------------------------------------------------------------
+   1:1 met LEARNINGS #11. Auth = SA-JWT via mintGoogleToken(env, env.GDRIVE_SUBJECT,
+   DRIVE_SCOPE) (domain-wide delegation namens arne@studio27.be). We werken in de
+   GEDEELDE drive 'S27 - Drive' (DRIVE_SHARED_ID), dus elke call draagt
+   supportsAllDrives=true&includeItemsFromAllDrives=true; list-queries ook
+   corpora=drive&driveId=<shared>.
+   Structuur per bedrijf: S27-Drive -> <Bedrijf> (company-folder, ClickUp-veld
+   0a0781cc op de bedrijf-taak) -> 'Huisstijl' (subfolder).
+   ============================================================================= */
+export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
+export const DRIVE_SHARED_ID = '0AKAHMRq7JrrEUk9PVA'; // gedeelde drive 'S27 - Drive'
+// ClickUp URL-customfield 'Drive-map' op de Bedrijven-taak (wijst naar de company-folder).
+const FIELD_DRIVE_MAP = '0a0781cc-a10a-4949-82b9-ab099956214a';
+const HUISSTIJL_FOLDER_NAME = 'Huisstijl';
+const DRIVE_FILES = 'https://www.googleapis.com/drive/v3/files';
+const DRIVE_UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files';
+// shared-drive query-suffix (op ELKE call). 'fields' apart toevoegen per call.
+const DRIVE_SD = 'supportsAllDrives=true&includeItemsFromAllDrives=true';
+
+// company-folder-id uit een Drive-map-URL (of kale id). Robuust tegen
+// https://drive.google.com/drive/folders/<id>?... én tegen een al-kale id.
+function driveFolderIdFromUrl(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  const m = s.match(/\/folders\/([^/?#]+)/);
+  if (m) return m[1];
+  if (/^https?:\/\//i.test(s)) return ''; // andere URL-vorm -> geen id
+  return s.replace(/^\/+|\/+$/g, ''); // kale id
+}
+
+// één Drive-fetch met SA-token. Gooit NOOIT (geeft {ok,status,data}); reads fail-open.
+async function driveFetch(env, url, init) {
+  let token;
+  try { token = await mintGoogleToken(env, str(env.GDRIVE_SUBJECT), DRIVE_SCOPE); }
+  catch (e) { return { ok: false, status: 0, data: null, error: 'drive_auth' }; }
+  const headers = { Authorization: 'Bearer ' + token, ...((init && init.headers) || {}) };
+  let r;
+  try { r = await fetch(url, { ...(init || {}), headers }); }
+  catch (e) { return { ok: false, status: 0, data: null, error: 'network' }; }
+  let data = null;
+  const text = await r.text().catch(() => '');
+  if (text) { try { data = JSON.parse(text); } catch (e) { data = { _raw: text }; } }
+  return { ok: r.ok, status: r.status, data };
+}
+
+// Drive-map (company-folder-id) van de bedrijf-taak lezen via ClickUp.
+async function driveCompanyFolderId(env, bedrijfId) {
+  const br = await cu.get(env, `/task/${bedrijfId}`);
+  if (!br.ok || !br.data) return '';
+  return driveFolderIdFromUrl(getCF(br.data, FIELD_DRIVE_MAP));
+}
+
+// Maak een map in de shared drive onder parentId (makeApiCall-POST-equivalent).
+// Geeft de nieuwe folder-id (of '' bij fout).
+async function driveCreateFolder(env, name, parentId) {
+  const body = { name: name || 'Map', mimeType: 'application/vnd.google-apps.folder', parents: [parentId] };
+  const r = await driveFetch(env, `${DRIVE_FILES}?${DRIVE_SD}&fields=id`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return r.ok && r.data && r.data.id ? str(r.data.id) : '';
+}
+
+// Vind (of maak) de 'Huisstijl'-subfolder onder de company-folder. '' bij fout.
+async function driveHuisstijlFolderId(env, companyFolderId, { create = false } = {}) {
+  if (!companyFolderId) return '';
+  const q = `'${companyFolderId}' in parents and name = '${HUISSTIJL_FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+  const url = `${DRIVE_FILES}?${DRIVE_SD}&corpora=drive&driveId=${DRIVE_SHARED_ID}&q=${encodeURIComponent(q)}&fields=files(id,name)`;
+  const r = await driveFetch(env, url, { method: 'GET' });
+  const found = r.ok && r.data && Array.isArray(r.data.files) && r.data.files[0];
+  if (found && found.id) return str(found.id);
+  if (create) return driveCreateFolder(env, HUISSTIJL_FOLDER_NAME, companyFolderId);
+  return '';
+}
+
+// driveEnsure: zorg dat de bedrijf-taak een company-folder + Huisstijl-subfolder heeft.
+// Leest de Drive-map (0a0781cc); ontbreekt die -> maak een nieuwe klant-map AAN in de
+// shared drive (productie-doel: alle klantmappen automatisch in S27-Drive) en schrijf de
+// folder-URL terug naar ClickUp. Idempotent. Fail-open (200 + ensured-flag).
+async function driveEnsure(bedrijfId, body, env) {
+  let companyFolderId = await driveCompanyFolderId(env, bedrijfId);
+  let created = false;
+  if (!companyFolderId) {
+    // bedrijfsnaam als mapnaam (val terug op de taaknaam, anders het id).
+    const br = await cu.get(env, `/task/${bedrijfId}`);
+    const naam = (br.ok && br.data && str(br.data.name).trim()) || `Klant ${bedrijfId}`;
+    companyFolderId = await driveCreateFolder(env, naam, DRIVE_SHARED_ID);
+    if (companyFolderId) {
+      created = true;
+      // Drive-map-URL terugschrijven naar ClickUp (url-customfield).
+      const url = `https://drive.google.com/drive/folders/${companyFolderId}`;
+      await cu.field(env, bedrijfId, FIELD_DRIVE_MAP, url);
+    }
+  }
+  if (!companyFolderId) return { status: 200, body: { ok: true, ensured: false } };
+  const hsId = await driveHuisstijlFolderId(env, companyFolderId, { create: true });
+  return { status: 200, body: { ok: true, ensured: !!hsId, created, company_folder_id: companyFolderId, huisstijl_folder_id: hsId } };
+}
+
+// één Drive-file -> output-shape die v2/data.js loadHuisstijl + panels.js verwachten
+// ({name/filename, url, mime, size, modified, id}). 'name' is wat panels.js leest;
+// 'filename' meegegeven omdat de spec dat noemt.
+function driveFileOut(f) {
+  const name = str(f && f.name);
+  const link = (f && (f.webViewLink || f.webContentLink)) || '';
+  return {
+    id: str(f && f.id),
+    name,
+    filename: name,
+    url: str(link),
+    mime: str(f && f.mimeType),
+    size: f && f.size != null ? Number(f.size) : null,
+    modified: str(f && f.modifiedTime),
+  };
+}
+
+// huisstijlList: GET de bestanden in de Huisstijl-folder. Fail-open: {files:[]} bij iets mis.
+async function huisstijlList(bedrijfId, body, env) {
+  const companyFolderId = await driveCompanyFolderId(env, bedrijfId);
+  const hsId = await driveHuisstijlFolderId(env, companyFolderId, { create: false });
+  if (!hsId) return { status: 200, body: { ok: true, files: [] } };
+  const q = `'${hsId}' in parents and trashed = false`;
+  const fields = 'files(id,name,mimeType,size,modifiedTime,webViewLink,webContentLink,iconLink,thumbnailLink)';
+  const url = `${DRIVE_FILES}?${DRIVE_SD}&corpora=drive&driveId=${DRIVE_SHARED_ID}&orderBy=folder,name&q=${encodeURIComponent(q)}&fields=${encodeURIComponent(fields)}`;
+  const r = await driveFetch(env, url, { method: 'GET' });
+  const files = (r.ok && r.data && Array.isArray(r.data.files)) ? r.data.files : [];
+  // mappen niet tonen als bestand
+  const out = files
+    .filter((f) => f.mimeType !== 'application/vnd.google-apps.folder')
+    .map(driveFileOut);
+  return { status: 200, body: { ok: true, files: out } };
+}
+
+// huisstijlUpload: multipart/related upload naar de Huisstijl-folder. body.filename +
+// body.file_data (base64). We bouwen de multipart-body ZELF in de Worker. Fail-closed-ish:
+// geeft ok:false als de upload niet lukt, maar nooit een 5xx.
+async function huisstijlUpload(bedrijfId, body, env) {
+  const filename = str(body && body.filename) || 'bestand';
+  const b64 = str(body && body.file_data);
+  if (!b64) return { status: 200, body: { ok: false, error: 'no_file' } };
+  // company + Huisstijl-folder garanderen (maakt aan indien nodig).
+  let companyFolderId = await driveCompanyFolderId(env, bedrijfId);
+  if (!companyFolderId) { const e = await driveEnsure(bedrijfId, {}, env); companyFolderId = (e.body && e.body.company_folder_id) || ''; }
+  const hsId = await driveHuisstijlFolderId(env, companyFolderId, { create: true });
+  if (!hsId) return { status: 200, body: { ok: false, error: 'no_folder' } };
+
+  // base64 -> bytes
+  let bytes;
+  try {
+    const clean = b64.replace(/^data:[^;]+;base64,/, '');
+    const bin = atob(clean);
+    bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  } catch (e) { return { status: 200, body: { ok: false, error: 'bad_base64' } }; }
+
+  // multipart/related: deel 1 = metadata (JSON), deel 2 = de ruwe bytes.
+  const boundary = 's27bnd' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const meta = { name: filename, parents: [hsId] };
+  const enc = new TextEncoder();
+  const pre = enc.encode(
+    `--${boundary}\r\n` +
+    'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+    JSON.stringify(meta) + '\r\n' +
+    `--${boundary}\r\n` +
+    'Content-Type: application/octet-stream\r\n\r\n'
+  );
+  const post = enc.encode(`\r\n--${boundary}--\r\n`);
+  const payload = new Uint8Array(pre.length + bytes.length + post.length);
+  payload.set(pre, 0);
+  payload.set(bytes, pre.length);
+  payload.set(post, pre.length + bytes.length);
+
+  const url = `${DRIVE_UPLOAD}?uploadType=multipart&${DRIVE_SD}&fields=id,name,mimeType,size,modifiedTime,webViewLink,webContentLink`;
+  const r = await driveFetch(env, url, {
+    method: 'POST',
+    headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+    body: payload,
+  });
+  if (!r.ok || !r.data || !r.data.id) return { status: 200, body: { ok: false, error: 'upload_failed' } };
+  return { status: 200, body: { ok: true, file: driveFileOut(r.data) } };
+}
+
+// huisstijlDelete: soft-delete (trashed:true). SECURITY (LEARNINGS #11): eerst de parents
+// van de file ophalen en bevestigen dat de file IN de Huisstijl-folder van DIT bedrijf zit
+// vóór trashen - zo kan een klant geen vreemde Drive-file verwijderen via een gespoofte id.
+async function huisstijlDelete(bedrijfId, body, env) {
+  const fileId = str(body && (body.file_id || body.id));
+  if (!fileId) return { status: 200, body: { ok: false, error: 'no_file_id' } };
+  const companyFolderId = await driveCompanyFolderId(env, bedrijfId);
+  const hsId = await driveHuisstijlFolderId(env, companyFolderId, { create: false });
+  if (!hsId) return { status: 403, body: { ok: false, error: 'scope_violation' } };
+  // parents van de file ophalen + check
+  const meta = await driveFetch(env, `${DRIVE_FILES}/${encodeURIComponent(fileId)}?${DRIVE_SD}&fields=id,parents`, { method: 'GET' });
+  const parents = (meta.ok && meta.data && Array.isArray(meta.data.parents)) ? meta.data.parents : [];
+  if (!parents.includes(hsId)) return { status: 403, body: { ok: false, error: 'scope_violation' } };
+  // soft-delete (recoverable), NIET hard DELETE
+  const r = await driveFetch(env, `${DRIVE_FILES}/${encodeURIComponent(fileId)}?${DRIVE_SD}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ trashed: true }),
+  });
+  if (!r.ok) return { status: 200, body: { ok: false, error: 'delete_failed' } };
+  return { status: 200, body: { ok: true, deleted: true, file_id: fileId } };
+}
+
+/* =============================================================================
    Gedeelde helpers
    ============================================================================= */
 // page=0,1,2... tot last_page===true; accumuleert .tasks. Fixt Make's page0-bug.
@@ -588,18 +796,30 @@ export function deliverableType(url) {
   return 'bestand';
 }
 
-// label = laatste betekenisvolle URL-segment, anders host, anders de rauwe URL.
+// label = sprekend label per bron (1:1 met v2/data.js urlLabel zodat de getoonde
+// tekst niet meer afhangt van wie wint - frontend of backend). Een kaal URL-segment
+// ('000111', '1187258957') is enkel het laatste redmiddel.
 function deliverableLabel(url) {
   const raw = String(url || '').trim();
+  const u = raw.toLowerCase();
+  if (u.includes('vimeo')) return 'Bekijk video (Vimeo)';
+  if (u.includes('youtu')) return 'Bekijk video (YouTube)';
+  if (u.includes('webflow')) return 'Bekijk website (Webflow)';
+  if (u.includes('figma')) return 'Bekijk ontwerp (Figma)';
+  if (u.includes('drive.google')) return 'Open in Drive';
   try {
     const p = new URL(raw);
     const segs = p.pathname.split('/').filter(Boolean);
     const last = segs.length ? decodeURIComponent(segs[segs.length - 1]) : '';
-    if (last && !/^(view|edit|videos)$/i.test(last)) return last;
-    if (segs.length >= 2) return decodeURIComponent(segs[segs.length - 2]);
+    // kaal nummeriek/kort segment = onleesbaar -> val terug op host i.p.v. '000111'
+    if (last && !/^(view|edit|videos)$/i.test(last) && !/^\d+$/.test(last)) return last;
+    if (segs.length >= 2) {
+      const prev = decodeURIComponent(segs[segs.length - 2]);
+      if (prev && !/^\d+$/.test(prev)) return prev;
+    }
     return p.hostname.replace(/^www\./, '');
   } catch (e) {
-    return raw;
+    return raw || 'Open bestand';
   }
 }
 
@@ -1645,7 +1865,9 @@ async function saveContact(bedrijfId, body, env, contactEmail) {
       await cu.field(env, bedrijfId, FIELD.portaalToegang, nieuw);
     }
   }
-  return { status: 200, body: { ok: true, contact_id: contactId, toegang_verleend: true } };
+  // toegang_verleend weerspiegelt of er een CSV-mutatie was: enkel waar als er een
+  // contact-email is (zonder email = geen toegang toegevoegd).
+  return { status: 200, body: { ok: true, contact_id: contactId, toegang_verleend: !!contactEmail } };
 }
 
 // IDOR-preflight: contact moet aan dit bedrijf hangen (4b1fb333), anders 403.
@@ -1661,12 +1883,33 @@ async function updateContact(bedrijfId, body, env, contactEmail) {
   if (!contactId) return { status: 200, body: { ok: true, updated: true, contact_id: '' } };
   const allowed = await assertContactInBedrijf(bedrijfId, contactId, env);
   if (!allowed) return { status: 403, body: { ok: false, error: 'scope_violation' } };
+  // CRITICAL: lees de HUIDIGE contact-email VOOR we het email-veld overschrijven, zodat we
+  // de oude waarde uit de Portaal-toegang-CSV (f0de5c6c) van de bedrijf-taak kunnen halen.
+  // Zonder dit blijft de oude email als orphan-toegang hangen (zie audit, live geverifieerd).
+  const cr = await cu.get(env, `/task/${contactId}`);
+  const oudEmail = cr.ok && cr.data ? str(getCF(cr.data, FIELD.email)).trim() : '';
   // naam NIET herschrijven (1:1 Make); enkel custom_fields.
   // LET OP: PUT /task met custom_fields-array persisteert NIET - ClickUp geeft 200 maar
   // negeert de waarden stilzwijgend (live geverifieerd op email-veld d453a72f). Zet elk
   // veld via POST /task/{id}/field/{fieldId}, dat WEL persisteert.
   const cfs = contactCustomFields(body, contactEmail);
   await Promise.allSettled(cfs.map((f) => cu.field(env, contactId, f.id, f.value)));
+  // read-modify-write op de toegang-CSV: vervang OUD door NIEUW (idempotent, ontdubbelt).
+  // Enkel als er een nieuwe email meekomt en die afwijkt van de oude (anders niets te doen).
+  const nieuwEmail = str(contactEmail).trim();
+  if (nieuwEmail && nieuwEmail.toLowerCase() !== oudEmail.toLowerCase()) {
+    const br = await cu.get(env, `/task/${bedrijfId}`);
+    const huidig = br.ok && br.data ? str(getCF(br.data, FIELD.portaalToegang)) : '';
+    const parts = huidig.split(',').map((s) => s.trim()).filter(Boolean);
+    // strip de oude email + elk bestaand voorkomen van de nieuwe (ontdubbelen), voeg nieuwe toe
+    const kept = parts.filter((s) => {
+      const lo = s.toLowerCase();
+      return lo !== oudEmail.toLowerCase() && lo !== nieuwEmail.toLowerCase();
+    });
+    kept.push(nieuwEmail);
+    const nieuw = kept.join(', ');
+    if (nieuw !== huidig) await cu.field(env, bedrijfId, FIELD.portaalToegang, nieuw);
+  }
   return { status: 200, body: { ok: true, updated: true, contact_id: contactId } };
 }
 
@@ -1699,6 +1942,9 @@ export const READ_HANDLERS = {
   meetingsList,
   beschikbaarheid,
   meetingAvailability,
+  // Google Drive (directe API v3, geen Make). driveEnsure idempotent; huisstijlList GET.
+  huisstijlList,
+  driveEnsure,
 };
 export const WRITE_HANDLERS = {
   bedrijfVoorkeuren,
@@ -1710,6 +1956,9 @@ export const WRITE_HANDLERS = {
   directMessage,
   feedbackV2,
   inplannen,
+  // Google Drive writes (directe API v3, geen Make).
+  huisstijlUpload,
+  huisstijlDelete,
 };
 // bedrijfBeheer sub-acties (read vs write split voor cache/rate-decisions in de shell)
 export const BEDRIJFBEHEER_READ_ACTIONS = { get_team: getTeam, get_offertes: getOffertes };

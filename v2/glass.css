@@ -29,6 +29,11 @@ body{background:var(--glass-grad);background-attachment:fixed;}
 .sb-client:hover{background:var(--glass-fill-strong);}
 .switch-menu{background:var(--glass-fill-strong);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid var(--glass-border);box-shadow:var(--glass-sh-lg);}
 
+/* ---- liquid-glass nav-highlight: glijdende pill achter het actieve/gehoverde zijbalk-item (initSbGlass) ---- */
+.sb-nav{position:relative;}
+.sb-nav .sb-item{position:relative;z-index:1;}
+.sb-glass{position:absolute;left:12px;right:12px;top:0;height:0;border-radius:var(--r-md);background:var(--glass-fill);border:1px solid var(--glass-border);box-shadow:var(--glass-sh),inset 0 1px 0 rgba(255,255,255,.55);opacity:0;pointer-events:none;z-index:0;transition:top .22s var(--ease),height .22s var(--ease),opacity .18s var(--ease);}
+
 /* ---- generic card surfaces: translucent, no blur (cheap) ---- */
 .card,.action-card,.svc-card,.kpi,.chart-card,.accordion,.meeting-row,
 .setsec,.filecard,.contact-card,.optcard,.qopt,.richtprijs,.deliv-item,

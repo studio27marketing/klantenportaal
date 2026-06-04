@@ -193,10 +193,10 @@
       var st = norm(p.status); var br = DATA.disc(p.discipline);
       if(st==='doorgestuurd' || p.feedback_link){
         out.push({ br:br.br, cat:br.label, title:'Review nodig', ctx:'Er staat iets klaar voor jou bij <b>'+esc(p.naam)+'</b>. Geef je akkoord of je feedback.',
-          cta:'Bekijk', action:"openProject('"+esc(p.task_id)+"','projecten')", tag:'nu', urgent:true, icon:'st_feedback' });
-      } else if(st==='to_do' && !p.opleverdatum && !p.shoot_gepland){
+          cta:'Bekijk', action:"openProject('"+esc(p.task_id)+"','projecten')", urgent:true, icon:'st_feedback' });
+      } else if(st==='to_do' && !p.opleverdatum){
         out.push({ br:br.br, cat:br.label, title:'Moment inplannen', ctx:'<b>'+esc(p.naam)+'</b> wacht om ingepland te worden. Prik een moment dat jou past.',
-          cta:'Plan in', action:"openProject('"+esc(p.task_id)+"','projecten')", tag:'binnenkort', urgent:false, icon:'st_plan' });
+          cta:'Plan in', action:"openProject('"+esc(p.task_id)+"','projecten')", urgent:false, icon:'st_plan' });
       }
     });
     return out;
@@ -256,33 +256,27 @@
     };
   };
 
-  // Chat → bubble-vorm voor chatHTML
-  function decodeMake(s){ return String(s||'').replace(/\\n/g,'\n').replace(/\\r/g,'').replace(/\\t/g,'\t').replace(/\\"/g,'"').replace(/\\\\/g,'\\'); }
+  // Chat → bubble-vorm voor chatHTML.
+  // loadChat() slaat al display-klare objecten op via mapChatComment ({av,who,color,tx,tm,me,attachments}).
+  // DATA.chat() is daarom een PASSTHROUGH: niet opnieuw mappen (de rauwe ClickUp-velden bestaan hier
+  // niet meer). [INTERN]-comments worden server-side al weggefilterd (handlers.mjs chatList); als zacht
+  // vangnet houden we hier nog een filter op de display-tekst.
   DATA.chat = function(taskId){
     var arr = state.data.chats[taskId]; if(!arr) return null;
-    return arr.filter(function(c){ return !(String(c.tekst||c.text||'').indexOf('[INTERN]')===0); }).map(function(c){
-      var tekst = decodeMake(c.tekst||c.text||c.comment_text||'');
-      var me = c.is_klant===true || /^💬 \[Klant/.test(tekst);
-      var who = me ? 'Jij' : (c.auteur||c.author||'Studio 27');
-      tekst = tekst.replace(/^💬 \[Klant:[^\]]*\]\s*/,'');
-      return { me:me, who:who, color:'blue', tx:esc(tekst), tm:DATA.relTime(c.datum||c.date), av:(who||'S').slice(0,2).toUpperCase() };
-    });
+    return arr.filter(function(c){ return String(c.tx||'').indexOf('[INTERN]') !== 0; });
   };
 
   DATA.meetings = function(){
     var m = state.data.meetings; if(!m) return null;
-    // ENKEL meetings van deze klant: de scenario geeft alle S27-meetings terug,
-    // we filteren op de bedrijfsnaam in de titel (zoals dashboard.js).
-    var naam = String(DATA.bedrijfsnaam()||'').toUpperCase().trim();
-    var raw = (m.meetings||[]).filter(function(x){
-      if(!naam || naam==='JE BEDRIJF') return true;
-      return String(x.titel||'').toUpperCase().indexOf(naam) >= 0;
-    });
-    var list = raw.map(function(x){
+    // meetingsList scope't al server-side op het Bedrijf-relatieveld (gezaghebbend, security-fix);
+    // GEEN extra client-side titel-substringfilter meer (die verborg correcte meetings zonder de
+    // bedrijfsnaam letterlijk in de titel). Ongeldige datums vallen weg; chronologisch gesorteerd.
+    var list = (m.meetings||[]).map(function(x){
       var ms = parseInt(x.datum,10); var dt = ms>1e9 ? new Date(ms) : new Date(x.datum);
       return { id:x.meeting_id, titel:x.titel, dt:dt, status:x.status, link:x.link,
                type:/kickoff/i.test(x.titel||'')?'Kickoff':'Meeting' };
-    });
+    }).filter(function(x){ return x.dt && !isNaN(x.dt.getTime()); });
+    list.sort(function(a,b){ return a.dt.getTime()-b.dt.getTime(); });
     return { list:list, bookingUrl:m.booking_url||'' };
   };
 
@@ -322,7 +316,7 @@
       });
       return true;
     }
-    state.data.offertes = []; return false;   // leeg ("_raw":"Accepted") = geen offertes
+    state.data.offertes = []; return false;   // geen offertes voor dit bedrijf
   };
   DATA.offertes = function(){ return state.data.offertes; };
 

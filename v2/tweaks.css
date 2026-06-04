@@ -104,7 +104,7 @@
 .meet-side-accent #s27-plan-host .fs{color:rgba(255,255,255,.9)!important;}
 
 /* OFFERTES, koffiegesprek-kaart */
-.koffie-card .koffie-ic{width:46px;height:46px;border-radius:13px;background:var(--s27-orange-soft,rgba(246,97,49,.12));color:var(--s27-orange-ink,#C2410C);display:flex;align-items:center;justify-content:center;flex:none;}
+.koffie-card .koffie-ic{width:46px;height:46px;border-radius:13px;background:var(--s27-orange-soft,rgba(246,97,49,.12));color:var(--s27-orange-ink,#C44514);display:flex;align-items:center;justify-content:center;flex:none;}
 
 /* INSTELLINGEN, compacte 2-koloms voorkeuren */
 .set-cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;}

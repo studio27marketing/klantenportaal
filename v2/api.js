@@ -23,7 +23,7 @@ var state = window.S27State = {
 };
 
 /* ---- UI-hooks (portal.js vult deze in) ---- */
-var S27 = window.S27 = { onSessionExpired: null, reloadDashboard: null };
+var S27 = window.S27 = { onSessionExpired: null, reloadDashboard: null, onSwitchFailed: null, closeSwitchMenu: null, stopChatPoll: null };
 
 /* ---- Endpoints (EXACT uit dashboard.js, backend ongewijzigd) ---- */
 const ENDPOINTS = {
@@ -198,16 +198,23 @@ async function loadCompaniesAndLink(){
   } catch(e){}
 }
 // Wissel van actief bedrijf (>1 bedrijf): verse claim + herlaad dashboard via hook.
+// localStorage wordt PAS geschreven na een bevestigde provision (d.ok && d.bedrijf_id); zo blijft een
+// geweigerd bedrijf niet als "laatst gekozen" hangen. Bij falen: nette melding, geen reload.
 async function switchCompany(id){
   if(!id || id === state.activeBedrijf) return;
-  try { localStorage.setItem('s27_active_bedrijf', id); } catch(e){}
+  // menu sluiten + chat-poll stoppen aan het begin (los van slagen/falen)
+  if(typeof S27.closeSwitchMenu === 'function') S27.closeSwitchMenu();
+  if(typeof S27.stopChatPoll === 'function') S27.stopChatPoll();
   const token = window.S27Auth ? await window.S27Auth.token() : null;
-  if(!token) return;
+  if(!token){ if(typeof S27.onSwitchFailed === 'function') S27.onSwitchFailed('Je bent niet meer ingelogd. Log opnieuw in om van bedrijf te wisselen.'); return; }
   const d = await provisionFetch(token, id);
-  if(d && d.ok){
+  if(d && d.ok && d.bedrijf_id){
+    try { localStorage.setItem('s27_active_bedrijf', d.bedrijf_id); } catch(e){}
     if(window.S27Auth) await window.S27Auth.token(true);   // verse claim met het nieuwe bedrijf
     state._provisionTried = false;
-    if(typeof S27.reloadDashboard === 'function') S27.reloadDashboard();
+    if(typeof S27.reloadDashboard === 'function') S27.reloadDashboard(true);   // skipLink: niet dubbel provisionen
+  } else {
+    if(typeof S27.onSwitchFailed === 'function') S27.onSwitchFailed('Wisselen van bedrijf lukte niet. Probeer het zo opnieuw.');
   }
 }
 
