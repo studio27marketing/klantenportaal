@@ -1,5 +1,5 @@
 /* =============================================================================
- * gateway-v2 — node-harness
+ * gateway-v2 - node-harness
  * -----------------------------------------------------------------------------
  * Roept elke READ-handler aan voor het test-bedrijf 86c9yv1wy met de CLICKUP_TOKEN
  * uit .dev.vars (of env) en print de output-shape. Vergelijkt top-level sleutels
@@ -71,7 +71,7 @@ function preview(obj) {
 }
 
 async function run() {
-  console.log(`\n=== gateway-v2 read-harness — bedrijf ${BEDRIJF} ===\n`);
+  console.log(`\n=== gateway-v2 read-harness - bedrijf ${BEDRIJF} ===\n`);
 
   /* dashboard */
   console.log('[dashboard]');
@@ -109,7 +109,7 @@ async function run() {
   // een afgerond-item met bestanden (heeft_bestanden=true) bewijst de parsing-koppeling
   const afgMetBestanden = (r.body.afgerond_60d || []).find((a) => a.heeft_bestanden);
   check('≥1 afgerond_60d met heeft_bestanden=true (live-bewijs)', !!afgMetBestanden,
-    'geen afgeronde taak met bestanden — controleer veld b071307b op de done-taken');
+    'geen afgeronde taak met bestanden - controleer veld b071307b op de done-taken');
   console.log(`     #actieve_projecten=${r.body.actieve_projecten.length}, #afgerond_60d=${(r.body.afgerond_60d || []).length}, modules.performance=${r.body.modules.performance}, modules.seo=${r.body.modules.seo}`);
   const firstTaskId = (r.body.actieve_projecten[0] || {}).task_id || '';
 
@@ -229,7 +229,7 @@ async function run() {
   if (r.body.meetings[0]) {
     check('meeting keys', keyDiff(r.body.meetings[0], ['meeting_id', 'titel', 'datum', 'status', 'link']).length === 0);
   }
-  console.log(`     #meetings=${r.body.meetings.length} (server-side gefilterd op Bedrijf — kan 0 zijn als veld niet gevuld is)`);
+  console.log(`     #meetings=${r.body.meetings.length} (server-side gefilterd op Bedrijf - kan 0 zijn als veld niet gevuld is)`);
 
   console.log(`\n=== RESULTAAT: ${pass} pass, ${fail} fail ===\n`);
   process.exit(fail > 0 ? 1 : 0);

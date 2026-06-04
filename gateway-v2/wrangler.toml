@@ -4,7 +4,7 @@ compatibility_date = "2024-11-01"
 
 # Plain vars (geen secrets). Secrets (GATEWAY_SECRET, CLICKUP_TOKEN, ADMIN_SECRET,
 # SA_CLIENT_EMAIL, SA_PRIVATE_KEY) zet je via `wrangler secret put <NAME>` of in de
-# Cloudflare-dashboard — NOOIT hier.
+# Cloudflare-dashboard - NOOIT hier.
 [vars]
 PROJECT_ID = "studio27-cloud"
 # Productie-origins + test-origins (raw.githack / raw.githubusercontent voor v4-preview).
