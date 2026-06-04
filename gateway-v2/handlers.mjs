@@ -30,6 +30,24 @@ export const LIST = {
   portaalInbox:    '901520180314',
 };
 
+// S27-Planning (folder 901513606896): 8 discipline-lijsten + Payroll(afwezigheid).
+// 1:1 met Make-scenario 6014538 (module 4 list_ids[]). Volgorde behouden zoals in
+// de blueprint-URL. Payroll-lijst (afwezigheid) markeert blokken als 'afwezig'.
+// LET OP: bij een nieuwe disciplinelijst in deze folder MOET die hier (en in Make)
+// handmatig worden toegevoegd — er is geen folder-discovery (zie spec 'gaps').
+export const PLANNING_LISTS = [
+  '901520180314', // (Make module 4, idx 0)
+  '901520180306',
+  '901520180316',
+  '901520180322',
+  '901520180312',
+  '901520180307',
+  '901520180311',
+  '901520180326',
+  '901520180360', // Payroll = afwezigheid
+];
+export const PAYROLL_LIST = '901520180360';
+
 export const FIELD = {
   bedrijf:        '4b1fb333-f47a-41bb-a976-dce63ed36657', // relatie 'Bedrijf' (scope-guard)
   contact:        '1bce8db8-717f-4e94-abdc-64feb241087c', // relatie 'Contactpersonen' op bedrijf-taak
@@ -627,6 +645,81 @@ export async function meetingsList(bedrijfId, body, env) {
   };
 }
 
+/* ---- beschikbaarheid (Agenda-slotpicker; port van Make-scenario 6014538) --
+ * 2 ClickUp-reads, zero-dep, fail-OPEN:
+ *  1) GET /task/{task_id}            -> assignees, list.id, time_estimate, scope-veld.
+ *  2) GET /team/{TEAM_ID}/task?...   -> bezet-blokken van die assignees over de 9
+ *     S27-Planning-lijsten binnen [van, tot] (due_date_gt/lt = epoch-ms, 1:1).
+ * Output 1:1 met wat portal.js loadPlanSlots/computeFreeSlots leest:
+ *   { ok, assignee_id, assignee_email, assignee_emails, assignee_naam,
+ *     list_id, taak_est, blokken:[{start,due,est,afwezig}] }   (start/due/est = ms).
+ * Cache: GEEN — planning wijzigt vaak; een 60s-cache zou een net-geboekt/verwijderd
+ *   blok 1 minuut verbergen en zo dubbele-boekingen of valse vrije slots geven.
+ *   (de router-shim cachet dit pad dan ook niet; rate-limit blijft LIMIT_DEFAULT.)
+ */
+export async function beschikbaarheid(bedrijfId, body, env) {
+  const taskId = str(body && body.task_id);
+  const van = str(body && body.van);   // epoch-ms, 1:1 doorgeven (geen conversie)
+  const tot = str(body && body.tot);
+
+  // (1) doel-taak ophalen; bij fout -> leeg fallback-object (Make onerror-Resume).
+  let task = { list: { id: '' }, assignees: [], custom_fields: [], time_estimate: null };
+  if (taskId) {
+    const r = await cu.get(env, `/task/${taskId}`);
+    if (r.ok && r.data) task = r.data;
+  }
+
+  // scope-guard op veld 'Bedrijf' 4b1fb333 (read => fail-open: leeg Bedrijf = toestaan).
+  const sc = scopeCheckTask(task, bedrijfId, SCOPE_FAIL_CLOSED.read);
+  if (!sc.ok) {
+    return { status: 403, body: { ok: false, error: 'scope_mismatch', message: 'Geen toegang tot deze taak.' } };
+  }
+
+  // assignee-afgeleiden (1:1 met Make SetVariables module 3).
+  const assignees = Array.isArray(task.assignees) ? task.assignees : [];
+  const assigneeIds = assignees.map((a) => str(a && a.id)).filter(Boolean);
+  const assigneeEmails = assignees.map((a) => str(a && a.email)).filter(Boolean);
+  const assigneeNamen = assignees.map((a) => str(a && a.username)).filter(Boolean);
+  const aid = assigneeIds[0] || '';
+  const amail = assigneeEmails[0] || '';
+  const alist = str(task.list && task.list.id);
+  const tek = Number(task.time_estimate) || 0;
+
+  // (2) bezet-blokken over de 9 planning-lijsten voor deze assignee(s) in [van, tot].
+  //     KRITIEK: list_ids[] én assignees[] als HERHAALDE query-params (ClickUp OR),
+  //     elk encodeURIComponent. Zonder assignees -> geen 2e call (geen blokken).
+  let blokken = [];
+  if (assigneeIds.length > 0) {
+    let qs = PLANNING_LISTS.map((id) => `list_ids%5B%5D=${encodeURIComponent(id)}`).join('&');
+    qs += '&' + assigneeIds.map((id) => `assignees%5B%5D=${encodeURIComponent(id)}`).join('&');
+    if (van) qs += `&due_date_gt=${encodeURIComponent(van)}`;
+    if (tot) qs += `&due_date_lt=${encodeURIComponent(tot)}`;
+    qs += '&subtasks=true&include_closed=false';
+    const tr = await cu.get(env, `/team/${TEAM_ID}/task?${qs}`);
+    const tasks = tr.ok && tr.data && Array.isArray(tr.data.tasks) ? tr.data.tasks : []; // onerror -> []
+    blokken = tasks.map((t) => ({
+      start: Number(t.start_date) || 0,
+      due: Number(t.due_date) || 0,
+      est: Number(t.time_estimate) || 0,
+      afwezig: str(t.list && t.list.id) === PAYROLL_LIST,
+    }));
+  }
+
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      assignee_id: aid,
+      assignee_email: amail,
+      assignee_emails: assigneeEmails.join(','),
+      assignee_naam: assigneeNamen.join(' & '),
+      list_id: alist,
+      taak_est: tek,
+      blokken,
+    },
+  };
+}
+
 /* =============================================================================
    WRITE-HANDLERS (puur ClickUp). reads fail-open, writes fail-CLOSED.
    ============================================================================= */
@@ -917,8 +1010,10 @@ async function updateBedrijf(bedrijfId, body, env) {
   ];
   const aantal = body && body.aantal_medewerkers;
   const n = parseInt(str(aantal), 10);
-  if (Number.isFinite(n)) cfs.push({ id: FIELD.aantalMedewerkers, value: n });
-  await cu.put(env, `/task/${bedrijfId}`, { custom_fields: cfs }); // best-effort
+  if (Number.isFinite(n)) cfs.push({ id: FIELD.aantalMedewerkers, value: n }); // number-veld
+  // LET OP: PUT /task met custom_fields-array persisteert NIET — ClickUp geeft 200 maar
+  // negeert de waarden stilzwijgend. Zet elk veld via POST /task/{id}/field/{fieldId}.
+  await Promise.allSettled(cfs.map((f) => cu.field(env, bedrijfId, f.id, f.value))); // best-effort
   return { status: 200, body: { ok: true, saved: true } };
 }
 
@@ -960,8 +1055,12 @@ async function updateContact(bedrijfId, body, env, contactEmail) {
   if (!contactId) return { status: 200, body: { ok: true, updated: true, contact_id: '' } };
   const allowed = await assertContactInBedrijf(bedrijfId, contactId, env);
   if (!allowed) return { status: 403, body: { ok: false, error: 'scope_violation' } };
-  // naam NIET herschrijven (1:1 Make); enkel custom_fields
-  await cu.put(env, `/task/${contactId}`, { custom_fields: contactCustomFields(body, contactEmail) });
+  // naam NIET herschrijven (1:1 Make); enkel custom_fields.
+  // LET OP: PUT /task met custom_fields-array persisteert NIET — ClickUp geeft 200 maar
+  // negeert de waarden stilzwijgend (live geverifieerd op email-veld d453a72f). Zet elk
+  // veld via POST /task/{id}/field/{fieldId}, dat WEL persisteert.
+  const cfs = contactCustomFields(body, contactEmail);
+  await Promise.allSettled(cfs.map((f) => cu.field(env, contactId, f.id, f.value)));
   return { status: 200, body: { ok: true, updated: true, contact_id: contactId } };
 }
 
@@ -992,6 +1091,7 @@ export const READ_HANDLERS = {
   bedrijfContent,
   dashboard,
   meetingsList,
+  beschikbaarheid,
 };
 export const WRITE_HANDLERS = {
   bedrijfVoorkeuren,

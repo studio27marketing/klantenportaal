@@ -194,12 +194,13 @@ function playLoader(){ const loader=$id('loader'); if(!loader) return; state._lo
 // Loader pas verbergen wanneer de inhoud écht klaar is (geen mock-flits meer). Min. 900ms tegen geflikker.
 function hideLoader(){ const loader=$id('loader'); if(!loader) return; const wait=Math.max(0, 900-(Date.now()-(state._loaderAt||0))); setTimeout(()=>{ loader.style.opacity='0'; setTimeout(()=>{ try{loader.classList.remove('show');}catch(e){} },460); }, wait); }
 function onSessionExpired(msg){
+  stopChatPoll();
   const b=document.createElement('div');
   b.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#fef2f2;color:#991b1b;border:1px solid #fecaca;padding:14px 22px;border-radius:12px;font:700 14px/1.4 var(--font-display);z-index:99999;box-shadow:var(--sh-md)';
   b.textContent=msg||'Je sessie is verlopen — log opnieuw in.'; document.body.appendChild(b);
   setTimeout(()=>{ try{b.remove();}catch(e){} state.session=null; state.viewMode='login'; showLogin(); if(AUTH_V2) initRealAuth(); }, 1700);
 }
-function logout(){ try{ if(window.S27Auth) window.S27Auth.logout(); }catch(e){} state.session=null; state.data={dashboard:null,details:{},chats:{},meetings:null,bedrijf:null,team:null,huisstijl:null}; showLogin(); if(AUTH_V2 && !state.demoMode) initRealAuth(); else renderLogin(state.demoMode?'demo':'v1'); }
+function logout(){ stopChatPoll(); try{ if(window.S27Auth) window.S27Auth.logout(); }catch(e){} state.session=null; state.data={dashboard:null,details:{},chats:{},meetings:null,bedrijf:null,team:null,huisstijl:null}; showLogin(); if(AUTH_V2 && !state.demoMode) initRealAuth(); else renderLogin(state.demoMode?'demo':'v1'); }
 
 /* =============================================================================
    ROUTING — lazy-load per tab, dan renderen
@@ -226,6 +227,7 @@ function renderLoading(name){
 }
 async function goTab(name){
   if(!PANELS[name]) return;
+  stopChatPoll();   // tab-wissel/modal-sluiten -> chat-poller stoppen (berichten herstart 'm hieronder)
   currentTab=name; state.viewMode='tab'; state.activeProject=null;
   setActiveNav(name);
   if(!state.demoMode && needsLoad(name)) renderLoading(name);
@@ -248,7 +250,7 @@ function updateNavBadges(){
     // berichten + topbar-bel: geen betrouwbare ongelezen-telling -> mock-badge verbergen
     var bb=document.querySelector('.sb-item[data-tab="berichten"] .sb-badge'); if(bb) bb.style.display='none';
     var topBer=document.querySelector('.icon-btn[data-topnav="berichten"] .badge'); if(topBer) topBer.style.display='none';
-    var bell=document.querySelector('#bellBtn .badge'); if(bell){ var n=((window.S27DATA&&S27DATA.cockpit())||[]).length; if(n>0){ bell.textContent=n; bell.style.display=''; } else bell.style.display='none'; }
+    var bell=document.querySelector('#bellBtn .badge'); if(bell){ var n=unseenCount(); if(n>0){ bell.textContent=n; bell.style.display=''; } else bell.style.display='none'; }
   }catch(e){}
 }
 function needsLoad(name){
@@ -286,6 +288,7 @@ function applyTakVisibility(){
    ============================================================================= */
 async function openProject(id, from){
   const f=(from==='berichten')?'berichten':'projecten';
+  stopChatPoll();
   state.viewMode='project'; state.activeProject=id; state._mtab='overzicht';
   document.querySelectorAll('.sb-item').forEach(t=>t.classList.remove('active'));
   const item=document.querySelector('.sb-item[data-tab="'+f+'"]'); if(item) item.classList.add('active');
@@ -296,6 +299,7 @@ async function openProject(id, from){
   window.scrollTo({top:0,behavior:'auto'});
   const tt=$id('topbarTitle'); if(tt&&p) tt.textContent=p.name;
   closeSidebar(); syncUrl();
+  if($id('chatList')) startChatPoll(id);   // projectchat staat in de DOM (tenzij afgerond) -> auto-refresh
 }
 function closeModal(){ goTab('projecten'); }
 
@@ -312,18 +316,98 @@ async function sendChat(input){
     setTimeout(()=>{ const r=document.createElement('div'); r.className='msg flash'; r.innerHTML='<span class="av" style="background:var(--s27-blue)">IM</span><div class="bubble"><div class="who">Ilke Meeusen</div><div class="tx">Top, ik neem het mee!</div><div class="tm">nu</div></div>'; list.appendChild(r); list.scrollTop=list.scrollHeight; setTimeout(()=>r.classList.remove('flash'),700); },1100);
     return;
   }
-  await api(ENDPOINTS.chatPost, { task_id:state.activeProject, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), comment_text:tx });
+  const tid=state.activeProject;
+  try { await api(ENDPOINTS.chatPost, { task_id:tid, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), comment_text:tx }); }
+  catch(e){}
+  // cache verversen + chat herrenderen zodat het ECHTE ClickUp-bericht in de cache zit
+  // (geen duplicaat met de optimistische bubble bij terug-schakelen tussen chats)
+  await refreshChatCache(tid);
+}
+/* ---- Chat-cache verversen voor één taak + de open chat herrenderen ---- */
+async function refreshChatCache(taskId){
+  if(state.demoMode || !taskId) return;
+  try { state.data.chats[taskId]=null; await S27DATA.loadChat(taskId); } catch(e){}
+  if(state.activeProject===taskId) rerenderActiveChat(true);
+}
+/* ---- De op-dit-moment-zichtbare chat opnieuw renderen (Berichten-host of projectdetail).
+       stickBottom=true -> altijd naar onder scrollen (na eigen bericht); anders scrollpositie
+       behouden tenzij de gebruiker al (bijna) onderaan stond. ---- */
+function rerenderActiveChat(stickBottom){
+  const id=state.activeProject; if(!id) return;
+  const oldList=$id('chatList');
+  const atBottom = oldList ? (oldList.scrollHeight-oldList.scrollTop-oldList.clientHeight < 60) : true;
+  const prevTop = oldList ? oldList.scrollTop : 0;
+  // een lopend concept in het tekstvak niet wegklikken bij een poll-herrender
+  const oldInp=document.querySelector('.chat-input input'); const draft=oldInp?oldInp.value:'';
+  const p=(window.S27DATA&&(S27DATA.projects()||[]).find(function(x){return x.id===id;}))||null;
+  const berHost=$id('berichtChat');
+  const dcBody=$id('dcBody');
+  if(berHost && p && !dcBody){
+    berHost.innerHTML=berichtChatInner(p);
+  } else if(dcBody){
+    // projectdetail-chat: enkel de chat-body verversen (laat de tabs/overzicht ongemoeid)
+    const closed=!!(window.S27DATA && S27DATA.isChatClosed && p && p._raw && S27DATA.isChatClosed(p._raw.status));
+    if(!closed) dcBody.innerHTML=chatHTML(id);
+    else return;
+  } else { return; }
+  if(draft){ const newInp=document.querySelector('.chat-input input'); if(newInp) newInp.value=draft; }
+  const newList=$id('chatList'); if(!newList) return;
+  if(stickBottom || atBottom) newList.scrollTop=newList.scrollHeight;
+  else newList.scrollTop=prevTop;
+}
+
+/* =============================================================================
+   CHAT AUTO-REFRESH — poll de open chat (~9s) en herrender enkel bij nieuwe comments.
+   Stopt bij tab-wissel, chat-wissel, modal-sluiten en logout.
+   ============================================================================= */
+const CHAT_POLL_MS = 9000;
+// handtekening van de gecachete chat: aantal + laatste comment (tijd + begin-tekst) -> flicker-vrij vergelijken
+function chatSig(taskId){
+  const arr=(state.data.chats||{})[taskId]; if(!Array.isArray(arr)) return '';
+  const last=arr[arr.length-1]||{};
+  return arr.length+'|'+(last.tm||'')+'|'+String(last.tx||'').slice(0,40);
+}
+function startChatPoll(taskId){
+  stopChatPoll();
+  if(state.demoMode || !taskId) return;
+  state._chatPoll={ id:taskId, sig:chatSig(taskId), busy:false };
+  state._chatPollTimer=setInterval(function(){ pollChatOnce(taskId); }, CHAT_POLL_MS);
+}
+function stopChatPoll(){
+  if(state._chatPollTimer){ clearInterval(state._chatPollTimer); state._chatPollTimer=null; }
+  state._chatPoll=null;
+}
+async function pollChatOnce(taskId){
+  const pc=state._chatPoll;
+  if(!pc || pc.id!==taskId || pc.busy) return;
+  // chat niet meer open (andere tab/project) -> poller opruimen
+  if(state.activeProject!==taskId || (!$id('chatList'))){ stopChatPoll(); return; }
+  pc.busy=true;
+  try { await S27DATA.loadChat(taskId); } catch(e){ pc.busy=false; return; }
+  pc.busy=false;
+  if(!state._chatPoll || state._chatPoll.id!==taskId) return;   // tussentijds gestopt/gewisseld
+  const sig=chatSig(taskId);
+  if(sig!==pc.sig){ pc.sig=sig; if(state.activeProject===taskId) rerenderActiveChat(false); }
 }
 /* ---- Berichten: klik op een gesprek -> enkel de chatmodule wisselt (geen navigatie) ---- */
 async function openBerichtChat(id, el){
   document.querySelectorAll('.bericht-row').forEach(function(r){ r.style.background=''; });
   var row = el || document.querySelector('.bericht-row[data-bid="'+id+'"]'); if(row)row.style.background='var(--paper-2)';
   const p=(window.S27DATA&&(S27DATA.projects()||[]).find(function(x){return x.id===id;}))||null; if(!p)return;
+  stopChatPoll();              // chat-wissel -> oude poller stoppen
   state.activeProject=id;
   const host=$id('berichtChat'); if(!host)return;
   host.className='card br-'+(p.br||'blue');
-  if(!state.demoMode && !((state.data.chats||{})[id])){ host.innerHTML='<div class="empty" style="padding:50px"><div class="brand-spinner" style="margin:0 auto"></div></div>'; try{ await S27DATA.loadChat(id); }catch(e){} }
+  // ALTIJD verse data ophalen bij openen (niet blind de cache vertrouwen) -> verzonden berichten
+  // en antwoorden van het team staan meteen in de historie bij terug-schakelen tussen chats.
+  if(!state.demoMode){
+    if(!((state.data.chats||{})[id])) host.innerHTML='<div class="empty" style="padding:50px"><div class="brand-spinner" style="margin:0 auto"></div></div>';
+    try{ state.data.chats[id]=null; await S27DATA.loadChat(id); }catch(e){}
+    if(state.activeProject!==id) return;   // tussentijds van chat gewisseld
+  }
   host.innerHTML=berichtChatInner(p);
+  const list=$id('chatList'); if(list) list.scrollTop=list.scrollHeight;
+  startChatPoll(id);
 }
 /* ---- Bestandsupload in de chat (overal waar chatHTML staat) ---- */
 async function chatUpload(input, taskId){
@@ -334,7 +418,9 @@ async function chatUpload(input, taskId){
   if(state.demoMode){ done(' ✓'); return; }
   const rd=new FileReader();
   rd.onload=async function(){ const b64=String(rd.result).split(',')[1]||'';
-    try{ await api(ENDPOINTS.chatAttachment, { task_id:tid, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), filename:f.name, file_data:b64 }); done(' ✓'); }
+    try{ await api(ENDPOINTS.chatAttachment, { task_id:tid, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), filename:f.name, file_data:b64 }); done(' ✓');
+      await refreshChatCache(tid);   // echte attachment-comment uit ClickUp in de cache (geen duplicaat met de optimistische bubble)
+    }
     catch(e){ done(' <span style="color:var(--s27-orange-ink)">— mislukt</span>'); }
   };
   rd.readAsDataURL(f);
@@ -406,18 +492,72 @@ function toggleSidebar(){ const sb=$id('sidebar'); const open=sb.classList.toggl
 function closeSidebar(){ $id('sidebar').classList.remove('open'); $id('sbScrim').classList.remove('show'); }
 function toggleSwitch(e){ e.stopPropagation(); const m=$id('switchMenu'); const sw=$id('clientSwitch'); const open=m.style.display==='block'; m.style.display=open?'none':'block'; sw.classList.toggle('open',!open); }
 function toggleNotif(e){ e.stopPropagation(); const np=$id('notifPanel'); if(!np)return; if(!np.classList.contains('show'))renderNotifs(); np.classList.toggle('show'); }
+
+/* =============================================================================
+   MELDINGEN-SEEN-STATE — persistent (localStorage), per bedrijf gescoped.
+   - bel-badge = aantal ONGEZIENE acties (zie updateNavBadges)
+   - klik op een melding markeert díe als gezien; klik "Alles gezien" markeert alles
+   - stabiele key per actie (taak-id uit action + categorie) zodat 'gezien' gezien blijft
+   - verdwijnt de onderliggende actie, dan ruimen we de key op (pruneSeen)
+   ============================================================================= */
+function _bedrijfScope(){ return state.activeBedrijf || (state.session&&state.session.bedrijf_id) || 'x'; }
+function _seenKey(){ return 's27_notif_seen_'+_bedrijfScope(); }
+// stabiele identiteit van een cockpit-actie: taak-id (uit action) + categorie + titel-type
+function notifId(a){
+  var m=String(a&&a.action||'').match(/openProject\('([^']+)'/);
+  var tid=m?m[1]:String(a&&a.title||'');
+  var raw=tid+'::'+String(a&&a.cat||'')+'::'+String(a&&a.title||'');
+  // sanitize -> identieke key in HTML-attr (escapeHtml), JS-string (onclick) én localStorage;
+  // anders mismatcht 'SEO & GEO' (& -> &amp;) en daalt de bel-badge niet bij die melding.
+  return raw.replace(/[^A-Za-z0-9:_-]+/g,'_');
+}
+function _readSeen(){ try{ return JSON.parse(localStorage.getItem(_seenKey())||'{}')||{}; }catch(e){ return {}; } }
+function _writeSeen(o){ try{ localStorage.setItem(_seenKey(), JSON.stringify(o||{})); }catch(e){} }
+// houd enkel keys die nog overeenkomen met een bestaande actie (pragmatisch: gezien=gezien, anders opruimen)
+function pruneSeen(ids){
+  var seen=_readSeen(), live={}, changed=false;
+  (ids||[]).forEach(function(id){ if(seen[id]) live[id]=seen[id]; });
+  for(var k in seen){ if(seen.hasOwnProperty(k) && !live[k]) changed=true; }
+  if(changed || Object.keys(live).length!==Object.keys(seen).length) _writeSeen(live);
+  return live;
+}
+function isSeen(a){ return !!_readSeen()[notifId(a)]; }
+function markSeen(a){ var s=_readSeen(); s[notifId(a)]=Date.now(); _writeSeen(s); }
+// aantal ongeziene acties (voor de bel-badge) — met opruiming van verdwenen acties
+function unseenCount(){
+  if(state.demoMode) return 0;
+  var cock=(window.S27DATA&&S27DATA.cockpit())||[];
+  var seen=pruneSeen(cock.map(notifId));
+  return cock.filter(function(a){ return !seen[notifId(a)]; }).length;
+}
+
 // echte meldingen uit de cockpit (Voor jou te doen) — klikbaar -> juiste bestemming
 function renderNotifs(){
   if(state.demoMode) return;
   const list=document.querySelector('#notifPanel .notif-list'); if(!list) return;
   const cock=(window.S27DATA&&S27DATA.cockpit())||[];
+  pruneSeen(cock.map(notifId));
   if(!cock.length){ list.innerHTML='<div class="empty" style="padding:30px 16px;text-align:center"><div class="em-ic">'+ic('st_approved',40)+'</div><b style="font-family:var(--font-display);font-size:14px;color:var(--ink-2)">Alles is bij!</b><p style="margin:6px 0 0;font-size:13px;color:var(--ink-3)">Geen openstaande acties — wij werken ondertussen verder.</p></div>'; return; }
-  list.innerHTML=cock.map(function(a){
-    return '<button class="notif br-'+a.br+'" style="width:100%;text-align:left;border:none;border-bottom:1px solid var(--line);background:none;cursor:pointer;display:flex;gap:12px;align-items:flex-start;padding:14px 16px" onclick="notifGo();'+a.action+'"><div class="nic">'+ic(a.icon||'st_feedback',18)+'</div><div class="ntx"><b>'+escapeHtml(a.title)+'</b><p>'+(a.ctx||'')+'</p><div class="ntm">'+escapeHtml(a.tag||'')+'</div></div>'+(a.urgent?'<span class="unread"></span>':'')+'</button>';
+  // ongeziene bovenaan, geziene (gedimd) onderaan
+  const sorted=cock.slice().sort(function(a,b){ return (isSeen(a)?1:0)-(isSeen(b)?1:0); });
+  list.innerHTML=sorted.map(function(a){
+    var seen=isSeen(a); var nid=escapeHtml(notifId(a));
+    return '<button class="notif br-'+a.br+(seen?' seen':'')+'" data-nid="'+nid+'" style="width:100%;text-align:left;border:none;border-bottom:1px solid var(--line);background:none;cursor:pointer;display:flex;gap:12px;align-items:flex-start;padding:14px 16px'+(seen?';opacity:.55':'')+'" onclick="notifGo(\''+nid+'\');'+a.action+'"><div class="nic">'+ic(a.icon||'st_feedback',18)+'</div><div class="ntx"><b>'+escapeHtml(a.title)+'</b><p>'+(a.ctx||'')+'</p><div class="ntm">'+escapeHtml(a.tag||'')+'</div></div>'+((a.urgent&&!seen)?'<span class="unread"></span>':'')+'</button>';
   }).join('');
 }
-function notifGo(){ const np=$id('notifPanel'); if(np)np.classList.remove('show'); }
-function markAllSeen(){ document.querySelectorAll('#notifPanel .notif').forEach(n=>{ n.classList.add('seen'); const u=n.querySelector('.unread'); if(u)u.remove(); }); const b=document.querySelector('#bellBtn .badge'); if(b)b.style.display='none'; }
+// klik op één melding -> markeer díe als gezien + werk de badge meteen bij
+function notifGo(nid){
+  const np=$id('notifPanel'); if(np)np.classList.remove('show');
+  if(nid){ var s=_readSeen(); s[nid]=Date.now(); _writeSeen(s); updateNavBadges(); }
+}
+function markAllSeen(){
+  if(!state.demoMode){
+    var cock=(window.S27DATA&&S27DATA.cockpit())||[]; var s=_readSeen();
+    cock.forEach(function(a){ s[notifId(a)]=Date.now(); }); _writeSeen(s);
+  }
+  document.querySelectorAll('#notifPanel .notif').forEach(n=>{ n.classList.add('seen'); n.style.opacity='.55'; const u=n.querySelector('.unread'); if(u)u.remove(); });
+  const b=document.querySelector('#bellBtn .badge'); if(b)b.style.display='none';
+}
 document.addEventListener('click',e=>{ if(!e.target.closest('.client-switch-wrap')){ const m=$id('switchMenu'); if(m)m.style.display='none'; const sw=$id('clientSwitch'); if(sw)sw.classList.remove('open'); } if(!e.target.closest('#notifPanel')&&!e.target.closest('#bellBtn')){ const np=$id('notifPanel'); if(np)np.classList.remove('show'); } });
 function filterProjects(status,btn){ document.querySelectorAll('#filterbar .fpill').forEach(p=>p.classList.remove('active')); if(btn)btn.classList.add('active'); document.querySelectorAll('#projList .proj-row').forEach(r=>{ r.style.display=(status==='all'||r.dataset.status===status)?'flex':'none'; }); }
 function filterDienst(disc,btn){ document.querySelectorAll('.proj-filter .fchip').forEach(c=>c.classList.remove('active')); if(btn)btn.classList.add('active'); const body=$id('projViewBody'); if(!body)return; body.querySelectorAll('.dienst-group').forEach(g=>{ g.style.display=(disc==='all'||g.dataset.disc===disc)?'':'none'; }); }
@@ -521,7 +661,10 @@ async function saveNotifPref(sel){
   const t=(window.S27DATA && S27DATA.team()); const c=(t&&t.contactpersonen&&t.contactpersonen[0])||{};
   try { await api(ENDPOINTS.bedrijfBeheer, { action:'update_contact', contact_id:c.id||'', bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, voornaam:c.voornaam||'', achternaam:c.achternaam||'', email:c.email||'', gsm:c.gsm||'', rol:c.rol||'', voorkeur:sel.value }); } catch(e){}
 }
-// Eigen profiel + notificatievoorkeur realtime opslaan -> update_contact -> ClickUp-contactfiche
+// Eigen profiel + notificatievoorkeur realtime opslaan -> update_contact -> ClickUp-contactfiche.
+// Schrijft UITSLUITEND naar de eigen (ingelogde) contactfiche — npProfileId is per definitie
+// de "me"-contactpersoon (zie panelInstellingen). De e-mail van het eigen account sturen we
+// hier mee als contact-email; dit raakt nooit een ander contact (dat loopt via saveContact).
 async function saveProfile(){
   if(state.demoMode) return;
   const id=(($id('npProfileId')||{}).value||'').trim(); if(!id) return;
@@ -529,7 +672,7 @@ async function saveProfile(){
   const g=(x)=>(($id(x)||{}).value||'').trim();
   try {
     await api(ENDPOINTS.bedrijfBeheer, { action:'update_contact', contact_id:id, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token,
-      voornaam:base.voornaam||'', achternaam:base.achternaam||'', email:(g('npEmail')||base.email||''), gsm:g('npGsm'), voorkeur:g('npVoorkeur')||'Geen' });
+      voornaam:base.voornaam||'', achternaam:base.achternaam||'', email:(g('npEmail')||base.email||''), gsm:(g('npGsm')||base.gsm||''), voorkeur:g('npVoorkeur')||base.voorkeur||'Geen' });
     const s=$id('npSaved'); if(s){ s.style.display=''; setTimeout(function(){ var x=$id('npSaved'); if(x)x.style.display='none'; }, 2200); }
     state.data.team=null; try{ await S27DATA.loadTeam(); }catch(e){}
   } catch(e){}
@@ -541,7 +684,17 @@ function editContact(id){ const host=$id('contactFormHost'); if(!host)return; ho
 function closeContactForm(){ const host=$id('contactFormHost'); if(host) host.innerHTML=''; }
 async function saveContact(id, btn){
   const g=(x)=>(($id(x)||{}).value||'').trim();
-  const payload={ voornaam:g('cfVoor'), achternaam:g('cfAchter'), email:g('cfEmail'), gsm:g('cfGsm'), voorkeur:g('cfVoorkeur')||'Geen' };
+  // Bij wijzigen: anker op het ECHTE contactrecord van dit id. Zo reizen contact_id en e-mail
+  // altijd samen mee en kan het bewerken van contact A nooit het e-mailadres van een ander
+  // contact (bv. de ingelogde gebruiker) wegschrijven; lege velden blanken bestaande data niet.
+  const ref = id ? (_contactById(id)||{}) : {};
+  const payload={
+    voornaam: g('cfVoor') || ref.voornaam || '',
+    achternaam: g('cfAchter') || ref.achternaam || '',
+    email: g('cfEmail') || ref.email || '',
+    gsm: g('cfGsm') || ref.gsm || '',
+    voorkeur: g('cfVoorkeur') || ref.voorkeur || 'Geen'
+  };
   if(!payload.voornaam && !payload.email){ const e=$id('cfVoor'); if(e){ e.style.borderColor='var(--s27-orange)'; e.focus(); } return; }
   if(btn){ btn.disabled=true; btn.textContent='Opslaan…'; }
   if(state.demoMode){ closeContactForm(); return; }
@@ -716,7 +869,8 @@ function pickPlanSlot(el){ const c=(state.planCtx||{})[state.planActive]; if(c)c
 function planMode(tid,online){ if(state.planCtx&&state.planCtx[tid])state.planCtx[tid].online=online; }
 async function bookPlanSlot(taskId){
   const ctx=(state.planCtx||{})[taskId]; if(!ctx||!ctx.sel)return;
-  const btn=$id('plan-book-'+taskId); if(btn){btn.disabled=true;btn.textContent='Inplannen…';}
+  if(ctx._booking) return; ctx._booking=true;   // dubbel-submit-guard: voorkomt 2 agenda-events bij snelle dubbelklik
+  const btn=$id('plan-book'); if(btn){btn.disabled=true;btn.textContent='Inplannen…';}
   const start=ctx.sel,eind=ctx.sel+(ctx.dur||PLAN_DUR_MS); const iso=ms=>new Date(ms).toISOString();
   const p=(S27DATA.projects()||[]).find(x=>x.id===taskId)||{name:'Afspraak'};
   const cc=(state.data.bedrijf&&state.data.bedrijf.contact)||{};
@@ -726,7 +880,7 @@ async function bookPlanSlot(taskId){
   const done=()=>{ if(box)box.innerHTML='<div class="empty" style="padding:24px"><div class="em-ic">'+ic('st_approved',56)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Afspraak ingepland!</b><p style="margin:6px 0 0">'+escapeHtml(new Date(start).toLocaleString('nl-BE',{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'}))+' met '+escapeHtml(ctx.assignee||'Studio 27')+'.</p><p class="fs" style="color:var(--ink-4)">Je krijgt zo een agenda-uitnodiging'+(ctx.online?' met een Google Meet-link':' (fysiek bij Studio 27)')+'.</p></div>'; };
   if(state.demoMode){ done(); return; }
   try { await api(ENDPOINTS.inplannen,{task_id:taskId,list_id:ctx.list_id,start:iso(start),eind:iso(eind),start_ms:String(start),online:!!ctx.online,titel:'Afspraak — '+(p.name||'Studio 27'),beschrijving:'Ingepland via je Studio 27-portaal met '+(ctx.assignee||'het team')+'.',locatie:ctx.online?'':'Studio 27, Sint-Lenaartsesteenweg, Rijkevorsel',attendees:attendees,assignee_naam:ctx.assignee,client_email:cc.email||'',client_naam:clientNaam,bedrijf_id:state.session.bedrijf_id,session_token:state.session.session_token}); done(); }
-  catch(e){ if(btn){btn.disabled=false;btn.textContent='Bevestig afspraak';} }
+  catch(e){ ctx._booking=false; if(btn){btn.disabled=false;btn.textContent='Bevestig afspraak';} }
 }
 function toggleBot(){ const p=$id('botPanel'),f=$id('botFab'); const open=p.classList.toggle('show'); f.style.display=open?'none':'flex'; if(open){ const g=$id('botGreet'); if(g){ var nm=(typeof _greetNaam==='function'?_greetNaam():'')||''; g.innerHTML='Hallo '+escapeHtml(nm||'daar')+'! Ik help je graag op weg. Waarmee kan ik je verder helpen?'; } const inp=p.querySelector('.bot-input input'); if(inp)setTimeout(()=>inp.focus(),50); } }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($id('tourScrim')&&$id('tourScrim').classList.contains('show'))endTour(false); else if(state.viewMode==='project')goTab('projecten'); } });

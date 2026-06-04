@@ -57,6 +57,13 @@ const MAKE_ENDPOINTS = {
   newProjectIntake:      'https://hook.eu1.make.com/kbomkcljmi9b2oyphmk938wb1qgwll1j',
   aiStatusBot:           'https://hook.eu1.make.com/3uor4cy6vmhe77sh2uvujg9iufoewj3u',
   pandadocPricelist:     'https://hook.eu1.make.com/uw2974b7b2yurygsgcn2i97x4lh9h86e',
+  // shootAvailability: LEGACY/DOOD. De hook hangt aan GEEN actief Make-scenario meer
+  // (niet in hooks_list van team 507999) en het v2-frontend roept hem NERGENS aan
+  // (api.js definieert de key wel, maar geen enkele callsite). Shoots gebruiken
+  // GEEN aparte beschikbaarheid-engine: een shoot-/video-taak is een gewone
+  // planning-taak met de content-creators als assignees, dus de geporte
+  // 'beschikbaarheid'-handler dekt shoots al (assignees = video/foto-team uit ClickUp).
+  // We laten de entry staan als inert vangnet; geen port nodig. Zie report/openIssues.
   shootAvailability:     'https://hook.eu1.make.com/c1aekp5r567tqvgvp4e2a4juu3npanap',
   huisstijlList:         'https://hook.eu1.make.com/v3z3t67otw7d96s37qciedt3uykimiru',
   huisstijlUpload:       'https://hook.eu1.make.com/3eqyxbkejfhyz8w2kl62lp1lsxwfr2d0',
@@ -66,7 +73,12 @@ const MAKE_ENDPOINTS = {
   projectFacturatieSave: 'https://hook.eu1.make.com/cmqf97ej6aewxokt9g23tbff6gxg7frm',
   performance:           'https://hook.eu1.make.com/chmsfitxr12m8cpjp4x3fb8ru1nqr7gg',
   bedrijfBeheer:         'https://hook.eu1.make.com/bf5xp3rkbh7dik9rp6jvue4w9p2moctn',
+  // beschikbaarheid: GEPORT naar ClickUp (READ_HANDLERS.beschikbaarheid). De
+  // router-shim vangt dit pad af vóór de forward; deze Make-hook is enkel nog een
+  // inert vangnet. NIET gecachet (planning wijzigt vaak — zie handler-comment).
   beschikbaarheid:       'https://hook.eu1.make.com/jn1ael12s6b4xp6fsdqd49x9p27v8cht',
+  // inplannen: NIET porten — maakt een Google-Calendar-event (vereist GCal-credentials),
+  // valt bewust door naar Make (scenario 6014783).
   inplannen:             'https://hook.eu1.make.com/4r3y6ba68spfgcgng7v0lvso11il6p6u',
 };
 
