@@ -169,6 +169,9 @@ function enterDemo(){
 async function loadAndEnter(){
   playLoader(); showApp();
   state._sessionExpiredHandled=false;
+  // CRUCIAAL bij bedrijf-switch: wis alle gecachete data van het vorige bedrijf, anders blijven team/meetings/huisstijl/offertes/metricool/ads/facturatie hangen
+  state.data = { dashboard:null, details:{}, chats:{}, meetings:null, bedrijf:null, team:null, huisstijl:null, offertes:null, metricool:null, ads:null };
+  state.perfUrl = null;
   try {
     try { await loadCompaniesAndLink(); } catch(e){}
     await S27DATA.loadDashboard();
