@@ -125,6 +125,210 @@ async function cuFetch(url, init, env, _retried) {
 }
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
+/* =============================================================================
+   Google service-account token (RS256-JWT met domain-wide delegation)
+   -----------------------------------------------------------------------------
+   Spiegelt het worker.js getGoogleAccessToken/importPkcs8/b64url-patroon, maar:
+     - impersonatie via "sub" (subject) — DWD namens no-reply@studio27.be e.d.
+     - generieke scope-param (calendar.readonly voor free/busy, calendar.events voor write)
+     - cache per (subject|scope) i.p.v. één globale token (worker.js _saToken).
+   globalThis.crypto.subtle werkt in Workers EN node18+, dus testbaar in de node-harness.
+   PEM uit env.SA_PRIVATE_KEY (\\n -> newline + headers strippen, net als importPkcs8).
+   ============================================================================= */
+const _gTokens = new Map(); // key = subject + '|' + scope -> { token, exp(sec) }
+
+function _b64urlBytes(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+async function _importSaKey(pem) {
+  const b64 = String(pem || '')
+    .replace(/\\n/g, '\n')
+    .replace(/-----BEGIN [^-]+-----/, '')
+    .replace(/-----END [^-]+-----/, '')
+    .replace(/[^A-Za-z0-9+/=]/g, '');
+  const bin = atob(b64);
+  const der = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) der[i] = bin.charCodeAt(i);
+  return globalThis.crypto.subtle.importKey('pkcs8', der.buffer, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+}
+
+// mintGoogleToken(env, subject, scope) -> access_token (string). Gooit een nette
+// Error bij ontbrekende SA-config of als Google geen token teruggeeft (caller vangt).
+export async function mintGoogleToken(env, subject, scope) {
+  if (!env || !env.SA_CLIENT_EMAIL || !env.SA_PRIVATE_KEY) {
+    throw new Error('sa_not_configured');
+  }
+  const sub = String(subject || '');
+  const cacheKey = sub + '|' + scope;
+  const now = Math.floor(Date.now() / 1000);
+  const cached = _gTokens.get(cacheKey);
+  if (cached && cached.token && now < cached.exp - 60) return cached.token;
+
+  const claims = {
+    iss: env.SA_CLIENT_EMAIL,
+    sub: sub,                 // impersonatie (domain-wide delegation)
+    scope: scope,
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now,
+    exp: now + 3600,
+  };
+  const enc = (o) => _b64urlBytes(new TextEncoder().encode(JSON.stringify(o)));
+  const unsigned = enc({ alg: 'RS256', typ: 'JWT' }) + '.' + enc(claims);
+  const key = await _importSaKey(env.SA_PRIVATE_KEY);
+  const sig = await globalThis.crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(unsigned));
+  const jwt = unsigned + '.' + _b64urlBytes(new Uint8Array(sig));
+
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=' + encodeURIComponent(jwt),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!data || !data.access_token) {
+    throw new Error('geen access_token: ' + JSON.stringify(data || {}));
+  }
+  _gTokens.set(cacheKey, { token: data.access_token, exp: now + (data.expires_in || 3600) });
+  return data.access_token;
+}
+
+// Google Calendar scope. LET OP: de domain-wide-delegation-config van dit SA staat
+// ENKEL de brede scope '.../auth/calendar' toe — de granulaire calendar.readonly /
+// calendar.events geven 'unauthorized_client' (live geverifieerd). Eén constante voor
+// zowel free/busy (read) als event-create (write); breder is hier de enige optie die werkt.
+const GCAL_SCOPE_READONLY = 'https://www.googleapis.com/auth/calendar';
+const GCAL_SCOPE_EVENTS = 'https://www.googleapis.com/auth/calendar';
+// free/busy-hosts (1:1 met Make-scenario 5945987 items[] + hosts[]-output).
+const GCAL_FREEBUSY_ITEMS = ['ilke@studio27.be', 'arne@studio27.be'];
+const GCAL_HOSTS = [
+  { key: 'ilke', email: 'ilke@studio27.be', naam: 'Ilke Meeusen', rol: 'Accountmanager' },
+  { key: 'arne', email: 'arne@studio27.be', naam: 'Arne Goetschalckx', rol: 'Zaakvoerder' },
+];
+// formatDate(...;"YYYY-MM-DDTHH:mm:ssZ") equivalent (UTC, sec-precisie, 'Z'-suffix).
+function gcalTime(ms) {
+  return new Date(Number(ms)).toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+/* =============================================================================
+   SCHEDULING — pool/specifiek-beschikbaarheid (doorsnede Agenda ∩ ClickUp)
+   -----------------------------------------------------------------------------
+   Vastgelegd ontwerp van de eigenaar:
+   - Vrij = vrij in Google Agenda EN in ClickUp-planning (doorsnede bron-blokken).
+   - Trigger specifiek-vs-pool = de ClickUp-ASSIGNEE van de taak (geen custom field).
+   - POOL-modus ENKEL voor discipline VIDEO/FOTOGRAFIE (planning-lijst 901520180316)
+     ALS de taak GEEN assignee heeft. Pool = de 4 content creators hieronder.
+     Een slot is boekbaar zodra >=1 poollid vrij is; we tonen HOEVEEL er vrij zijn.
+   - SPECIFIEK-modus voor de rest (en video-taken MET assignee): enkel de assignee(s)
+     van de taak; een slot is vrij enkel als ELKE assignee vrij is (in Agenda EN ClickUp).
+   ============================================================================= */
+// Video/fotografie-planning-lijst (= PLANNING_LISTS[2]). Pool-trigger.
+export const VIDEO_LIST = '901520180316';
+// Content-creators-pool (id = ClickUp user-id; email = Google-agenda voor freeBusy).
+export const VIDEO_POOL = [
+  { id: '36583478', email: 'guus@studio27.be',   naam: 'Guus' },
+  { id: '54339680', email: 'ines@studio27.be',   naam: 'Ines' },
+  { id: '36583476', email: 'bjorn@studio27.be',  naam: 'Bjorn' },
+  { id: '82624365', email: 'viktor@studio27.be', naam: 'Viktor' },
+];
+
+// Werkuren/slot-raster 1:1 met v2/portal.js computeFreeSlots (live-logica is leidend):
+//   weekdagen, 08:00–17:00 lokale tijd, 30-min raster, slot moet binnen 17:00 eindigen,
+//   minstens now+2u, horizon t/m 31 dagen, cap 150 slots. Default-duur 90min (cap 6u).
+const PLAN_DUR_MS = 90 * 60000;
+const PLAN_DUR_MAX = 6 * 3600000;
+function planDurMs(est) { const e = Number(est) || 0; return (e > 0 && e <= PLAN_DUR_MAX) ? e : PLAN_DUR_MS; }
+// Kandidaat-slots (start-ms) over het raster — identiek aan de frontend, zodat de
+// server-telling exact de slots dekt die de picker straks toont.
+function candidateSlots(durMs) {
+  const slots = [];
+  const now = Date.now();
+  const day0 = new Date(); day0.setHours(0, 0, 0, 0);
+  for (let day = 1; day <= 31 && slots.length < 150; day++) {
+    const dt = new Date(day0.getTime() + day * 86400000);
+    const dw = dt.getDay();
+    if (dw === 0 || dw === 6) continue;
+    for (let m = 480; m + durMs / 60000 <= 1020; m += 30) {
+      const ss = new Date(dt); ss.setHours(0, m, 0, 0);
+      const t0 = ss.getTime();
+      if (t0 < now + 2 * 3600000) continue;
+      slots.push(t0);
+    }
+  }
+  return slots;
+}
+// Eén busy-interval [s,e] uit een ClickUp-planning-blok (zelfde regel als de frontend:
+// afwezig = hele blok; anders est vanaf start; anders start→due). Geeft null bij geen span.
+function blokToInterval(b) {
+  const s = Number(b.start) || 0, d = Number(b.due) || 0, e = Number(b.est) || 0;
+  let bs = 0, be = 0;
+  if (b.afwezig) { bs = s; be = d > s ? d : (s + (e || 86400000)); }
+  else if (e > 0) { bs = s; be = s + e; }
+  else if (d > s) { bs = s; be = d; }
+  return (bs && be > bs) ? [bs, be] : null;
+}
+const overlaps = (t0, t1, iv) => t0 < iv[1] && t1 > iv[0];
+
+// ClickUp planning-blokken voor één set assignee-ids over de 9 S27-Planning-lijsten in
+// [van,tot]. 1:1 met de bestaande beschikbaarheid-query (herhaalde list_ids[]/assignees[],
+// subtasks, include_closed=false). Fail-open: bij fout → []. Geeft rauwe {start,due,est,afwezig}.
+async function cuPlanningBlocks(env, assigneeIds, van, tot) {
+  if (!assigneeIds || assigneeIds.length === 0) return [];
+  let qs = PLANNING_LISTS.map((id) => `list_ids%5B%5D=${encodeURIComponent(id)}`).join('&');
+  qs += '&' + assigneeIds.map((id) => `assignees%5B%5D=${encodeURIComponent(id)}`).join('&');
+  if (van) qs += `&due_date_gt=${encodeURIComponent(van)}`;
+  if (tot) qs += `&due_date_lt=${encodeURIComponent(tot)}`;
+  qs += '&subtasks=true&include_closed=false';
+  const tr = await cu.get(env, `/team/${TEAM_ID}/task?${qs}`);
+  const tasks = tr.ok && tr.data && Array.isArray(tr.data.tasks) ? tr.data.tasks : [];
+  return tasks.map((t) => ({
+    start: Number(t.start_date) || 0,
+    due: Number(t.due_date) || 0,
+    est: Number(t.time_estimate) || 0,
+    afwezig: str(t.list && t.list.id) === PAYROLL_LIST,
+  }));
+}
+
+// Google-Agenda busy-intervallen voor een set e-mails: ÉÉN freeBusy-call (items = alle
+// e-mails) over [van,tot] (epoch-ms). Geeft Map<email -> [[startMs,endMs],...]>. Fail-open:
+// bij ontbrekende SA-config / token-fout / API-fout → lege intervallen per e-mail (geen busy),
+// zodat de beschikbaarheid nooit 5xx geeft (consistent met de Make onerror-Resume).
+async function gcalBusyForEmails(env, emails, van, tot) {
+  const out = new Map();
+  const uniq = [...new Set((emails || []).map((e) => String(e || '').trim()).filter(Boolean))];
+  for (const e of uniq) out.set(e, []);
+  if (uniq.length === 0) return out;
+  if (!env || !env.SA_CLIENT_EMAIL || !env.SA_PRIVATE_KEY) return out;
+  const timeMin = gcalTime(Number(van) || Date.now());
+  const timeMax = gcalTime(Number(tot) || (Date.now() + 21 * 86400000));
+  let token;
+  try { token = await mintGoogleToken(env, str(env.GCAL_SUBJECT), GCAL_SCOPE_READONLY); }
+  catch (e) { return out; } // fail-open
+  try {
+    const r = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ timeMin, timeMax, items: uniq.map((id) => ({ id })) }),
+    });
+    const data = await r.json().catch(() => ({}));
+    const cals = (r.ok && data && data.calendars) ? data.calendars : {};
+    for (const e of uniq) {
+      const busy = (cals[e] && Array.isArray(cals[e].busy)) ? cals[e].busy : [];
+      out.set(e, busy.map((b) => [Date.parse(b.start) || 0, Date.parse(b.end) || 0]).filter((iv) => iv[1] > iv[0]));
+    }
+  } catch (e) { /* fail-open: behoud lege intervallen */ }
+  return out;
+}
+
+// Gecombineerde busy-intervallen (Agenda ∪ ClickUp) voor één lid.
+// cuBlocks = rauwe ClickUp-planning-blokken van dat lid; gcalIv = [[s,e],...] uit freeBusy.
+function memberBusyIntervals(cuBlocks, gcalIv) {
+  const iv = [];
+  for (const b of (cuBlocks || [])) { const x = blokToInterval(b); if (x) iv.push(x); }
+  for (const g of (gcalIv || [])) { if (g && g[1] > g[0]) iv.push([g[0], g[1]]); }
+  return iv;
+}
+
 export const cu = {
   get: (env, path) =>
     cuFetch(CU_BASE + path, { method: 'GET', headers: cuHeaders(env) }, env),
@@ -645,17 +849,30 @@ export async function meetingsList(bedrijfId, body, env) {
   };
 }
 
-/* ---- beschikbaarheid (Agenda-slotpicker; port van Make-scenario 6014538) --
- * 2 ClickUp-reads, zero-dep, fail-OPEN:
- *  1) GET /task/{task_id}            -> assignees, list.id, time_estimate, scope-veld.
- *  2) GET /team/{TEAM_ID}/task?...   -> bezet-blokken van die assignees over de 9
- *     S27-Planning-lijsten binnen [van, tot] (due_date_gt/lt = epoch-ms, 1:1).
- * Output 1:1 met wat portal.js loadPlanSlots/computeFreeSlots leest:
- *   { ok, assignee_id, assignee_email, assignee_emails, assignee_naam,
- *     list_id, taak_est, blokken:[{start,due,est,afwezig}] }   (start/due/est = ms).
+/* ---- beschikbaarheid (Agenda-slotpicker; doorsnede Agenda ∩ ClickUp) -------
+ * Vrij = vrij in Google Agenda EN in de ClickUp-planning. Twee modi (trigger = de
+ * ClickUp-ASSIGNEE van de taak, NIET een custom field):
+ *
+ *  SPECIFIEK (default; ook video-taken MET assignee): relevante leden = de assignees.
+ *    blokken = UNIE van elk lid zijn (Agenda ∪ ClickUp) busy → computeFreeSlots in de
+ *    frontend levert enkel slots waar IEDEREEN vrij is (doorsnede der vrije tijd).
+ *
+ *  POOL (enkel discipline video/fotografie = lijst 901520180316 ÉN geen assignee):
+ *    relevante leden = de 4 content creators (VIDEO_POOL). Een slot is boekbaar zodra
+ *    >=1 poollid vrij is, dus blokken = DOORSNEDE van busy (een slot is enkel "bezet"
+ *    als ALLE poolleden bezet zijn). Daarnaast tellen we per kandidaat-slot hoeveel
+ *    poolleden vrij zijn en geven pool:true + vrij_count (max over de getoonde slots)
+ *    + vrij_per_slot (start-ms -> aantal) + pool_naam, zodat de picker "X content
+ *    creators beschikbaar" kan tonen.
+ *
+ * Stappen: 1 task-read (assignees/list/est/scope) + 1 ClickUp-planning-query PER
+ * relevant lid + 1 gedeelde Google-freeBusy-call (alle relevante e-mails). Fail-OPEN:
+ * elke deelfout → die bron levert geen busy (nooit 5xx; consistent met Make-Resume).
+ * Output behoudt de bestaande vorm {ok, assignee_*, list_id, taak_est, blokken:[{start,
+ * due,est,afwezig}]} en voegt in pool-modus optioneel pool/vrij_count/vrij_per_slot/
+ * pool_naam toe (negeerbaar door oudere frontends).
  * Cache: GEEN — planning wijzigt vaak; een 60s-cache zou een net-geboekt/verwijderd
  *   blok 1 minuut verbergen en zo dubbele-boekingen of valse vrije slots geven.
- *   (de router-shim cachet dit pad dan ook niet; rate-limit blijft LIMIT_DEFAULT.)
  */
 export async function beschikbaarheid(bedrijfId, body, env) {
   const taskId = str(body && body.task_id);
@@ -675,49 +892,140 @@ export async function beschikbaarheid(bedrijfId, body, env) {
     return { status: 403, body: { ok: false, error: 'scope_mismatch', message: 'Geen toegang tot deze taak.' } };
   }
 
-  // assignee-afgeleiden (1:1 met Make SetVariables module 3).
+  // assignee-afgeleiden van de taak.
   const assignees = Array.isArray(task.assignees) ? task.assignees : [];
   const assigneeIds = assignees.map((a) => str(a && a.id)).filter(Boolean);
   const assigneeEmails = assignees.map((a) => str(a && a.email)).filter(Boolean);
   const assigneeNamen = assignees.map((a) => str(a && a.username)).filter(Boolean);
-  const aid = assigneeIds[0] || '';
-  const amail = assigneeEmails[0] || '';
   const alist = str(task.list && task.list.id);
   const tek = Number(task.time_estimate) || 0;
 
-  // (2) bezet-blokken over de 9 planning-lijsten voor deze assignee(s) in [van, tot].
-  //     KRITIEK: list_ids[] én assignees[] als HERHAALDE query-params (ClickUp OR),
-  //     elk encodeURIComponent. Zonder assignees -> geen 2e call (geen blokken).
-  let blokken = [];
-  if (assigneeIds.length > 0) {
-    let qs = PLANNING_LISTS.map((id) => `list_ids%5B%5D=${encodeURIComponent(id)}`).join('&');
-    qs += '&' + assigneeIds.map((id) => `assignees%5B%5D=${encodeURIComponent(id)}`).join('&');
-    if (van) qs += `&due_date_gt=${encodeURIComponent(van)}`;
-    if (tot) qs += `&due_date_lt=${encodeURIComponent(tot)}`;
-    qs += '&subtasks=true&include_closed=false';
-    const tr = await cu.get(env, `/team/${TEAM_ID}/task?${qs}`);
-    const tasks = tr.ok && tr.data && Array.isArray(tr.data.tasks) ? tr.data.tasks : []; // onerror -> []
-    blokken = tasks.map((t) => ({
-      start: Number(t.start_date) || 0,
-      due: Number(t.due_date) || 0,
-      est: Number(t.time_estimate) || 0,
-      afwezig: str(t.list && t.list.id) === PAYROLL_LIST,
-    }));
+  // (2) modusbepaling: video-lijst ÉN geen assignee -> POOL, anders SPECIFIEK.
+  const isPool = (alist === VIDEO_LIST) && (assigneeIds.length === 0);
+
+  // relevante leden = {id,email,naam}. SPECIFIEK uit de taak-assignees; POOL = VIDEO_POOL.
+  const leden = isPool
+    ? VIDEO_POOL.slice()
+    : assignees.map((a) => ({ id: str(a && a.id), email: str(a && a.email), naam: str(a && a.username) })).filter((m) => m.id);
+
+  // SPECIFIEK zonder geldig teamlid (bv. nog niemand toegewezen aan een webdesign-project):
+  // NIET alles-vrij tonen. Eén bezet-blok over het hele venster -> 0 slots -> de picker stuurt
+  // de klant naar 'Plan via Meetings'. (Pool valt hier nooit onder: die heeft altijd 4 leden.)
+  if (!isPool && leden.length === 0) {
+    const vanN = Number(van) || Date.now();
+    const totN = Number(tot) || (vanN + 31 * 86400000);
+    return { status: 200, body: { ok: true, assignee_id: '', assignee_email: '', assignee_emails: '', assignee_naam: '', list_id: alist, taak_est: tek, blokken: [{ start: vanN, due: totN, est: 0, afwezig: true }], no_member: true } };
+  }
+
+  // (3) bron-busy verzamelen PER lid: ClickUp-planning (1 query/lid) + Google-Agenda
+  //     (1 gedeelde freeBusy-call voor alle e-mails). Beide fail-open.
+  const ledenEmails = leden.map((m) => m.email).filter(Boolean);
+  const [gcalMap, ...cuPerLid] = await Promise.all([
+    gcalBusyForEmails(env, ledenEmails, van, tot),
+    ...leden.map((m) => cuPlanningBlocks(env, [m.id], van, tot)),
+  ]);
+
+  // per lid: gecombineerde busy-intervallen (Agenda ∪ ClickUp) + behoud rauwe CU-blokken.
+  const memberBusy = [];      // [[s,e],...] per lid (voor pool-telling)
+  const allCuBlocks = [];     // rauwe ClickUp-blokken (voor de SPECIFIEK-blokken-output)
+  leden.forEach((m, i) => {
+    const cuBlocks = cuPerLid[i] || [];
+    allCuBlocks.push(...cuBlocks);
+    memberBusy.push(memberBusyIntervals(cuBlocks, gcalMap.get(m.email) || []));
+  });
+
+  // (4a) SPECIFIEK: blokken = UNIE van alle leden hun busy als generieke {start,due}-blokken
+  //      (est=0, due=einde → de frontend leest dit 1:1 als bezet-interval). computeFreeSlots
+  //      laat dan enkel slots over waar ELKE assignee vrij is.
+  // (4b) POOL: blokken = DOORSNEDE van busy → een slot is enkel bezet als ALLE poolleden
+  //      bezet zijn. Bereken die doorsnede-intervallen op het kandidaat-slot-raster.
+  let blokken;
+  let extra = {};
+  if (!isPool) {
+    blokken = [];
+    for (const iv of memberBusy) for (const x of iv) blokken.push({ start: x[0], due: x[1], est: 0, afwezig: false });
+  } else {
+    const durMs = planDurMs(tek);
+    const slots = candidateSlots(durMs);
+    const vrijPerSlot = {};
+    let maxVrij = 0;
+    const busySlots = []; // slots waar ALLE poolleden bezet zijn -> als bezet-blok terug
+    for (const t0 of slots) {
+      const t1 = t0 + durMs;
+      let vrij = 0;
+      for (const iv of memberBusy) { if (!iv.some((b) => overlaps(t0, t1, b))) vrij++; }
+      vrijPerSlot[t0] = vrij;
+      if (vrij > maxVrij) maxVrij = vrij;
+      if (vrij === 0) busySlots.push([t0, t1]);
+    }
+    // doorsnede-bezet als generieke blokken (est=0): dekt exact de slots waar niemand vrij is.
+    blokken = busySlots.map(([s, e]) => ({ start: s, due: e, est: 0, afwezig: false }));
+    extra = {
+      pool: true,
+      pool_naam: VIDEO_POOL.map((m) => m.naam).join(', '),
+      vrij_count: maxVrij,            // headline: max # content creators vrij over de getoonde slots
+      vrij_per_slot: vrijPerSlot,     // start-ms -> # vrije creators (voor per-slot weergave)
+    };
   }
 
   return {
     status: 200,
     body: {
       ok: true,
-      assignee_id: aid,
-      assignee_email: amail,
-      assignee_emails: assigneeEmails.join(','),
-      assignee_naam: assigneeNamen.join(' & '),
+      assignee_id: assigneeIds[0] || '',
+      assignee_email: assigneeEmails[0] || '',
+      assignee_emails: (isPool ? VIDEO_POOL.map((m) => m.email) : assigneeEmails).join(','),
+      assignee_naam: isPool ? 'een content creator' : assigneeNamen.join(' & '),
       list_id: alist,
       taak_est: tek,
       blokken,
+      ...extra,
     },
   };
+}
+
+/* ---- meetingAvailability (Google free/busy; port van Make-scenario 5945987) --
+ * GEEN ClickUp, GEEN task-scope: dit is de ALGEMENE S27-beschikbaarheid (Ilke/Arne),
+ * niet klantspecifiek. De gateway-shell heeft al een geldig Firebase-token + een
+ * bedrijf-koppeling geverifieerd (dat vervangt de session_token>10-check uit Make).
+ *
+ * Mint een token namens env.GCAL_SUBJECT (no-reply@studio27.be, DWD) en POST naar
+ * Calendar freeBusy voor [now+48h, now+21d] op ilke@/arne@ — exact het venster en
+ * de kalenders uit de blueprint. De gcal-`calendars`-map gaat 1:1 door zodat de
+ * frontend (loadMeetSlots/computeFreeFromBusy) res.data.calendars[email].busy
+ * ([{start,end}] ISO) ongewijzigd kan lezen. Fail-OPEN: bij elke fout → lege
+ * calendars (200) i.p.v. 5xx, net als de Make onerror-Resume.
+ */
+export async function meetingAvailability(bedrijfId, body, env) {
+  if (!env || !env.SA_CLIENT_EMAIL || !env.SA_PRIVATE_KEY) {
+    // SA niet geconfigureerd → nette lege respons (frontend valt terug op "geen momenten"), geen crash.
+    return { status: 200, body: { ok: false, error: 'sa_not_configured', message: 'Beschikbaarheid tijdelijk niet beschikbaar.', calendars: {}, hosts: GCAL_HOSTS } };
+  }
+  const subject = str(env.GCAL_SUBJECT);
+  const timeMin = gcalTime(Date.now() + 48 * 3600000); // now + 48h
+  const timeMax = gcalTime(Date.now() + 21 * 86400000); // now + 21d
+
+  let token;
+  try {
+    token = await mintGoogleToken(env, subject, GCAL_SCOPE_READONLY);
+  } catch (e) {
+    return { status: 200, body: { ok: false, error: 'token_mint_failed', calendars: {}, hosts: GCAL_HOSTS } };
+  }
+
+  let calendars = {};
+  try {
+    const r = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ timeMin, timeMax, items: GCAL_FREEBUSY_ITEMS.map((id) => ({ id })) }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (r.ok && data && data.calendars && typeof data.calendars === 'object') {
+      calendars = data.calendars; // 1:1 doorgeven (per email: { busy:[{start,end}] })
+    }
+  } catch (e) { /* fail-open: lege calendars */ }
+
+  return { status: 200, body: { ok: true, calendars, hosts: GCAL_HOSTS } };
 }
 
 /* =============================================================================
@@ -979,6 +1287,166 @@ export async function feedbackV2(bedrijfId, body, env) {
   };
 }
 
+/* ---- inplannen (Google-Calendar-event + ClickUp due_date; port van 6014783) --
+ * WRITE → scope-guard fail-CLOSED op body.task_id (veld Bedrijf 4b1fb333). LET OP:
+ * Make is hier fail-OPEN (geen Bedrijf-koppeling = toestaan); wij sluiten dit dicht
+ * (403 bij count==0) conform de verplichte write-beslissing (SCOPE_FAIL_CLOSED.write).
+ *
+ * Stappen:
+ *  1) GET /task/{task_id} → scope-check. Bij mismatch/leeg → 403 scope_mismatch.
+ *  2) mint token namens env.GCAL_SUBJECT (DWD) met calendar.events-scope.
+ *  2b) POOL-AUTO-ASSIGN: als dit een pool-shoot is (video-lijst 901520180316 ÉN geen
+ *      assignee), kies een poollid dat op [start,eind] vrij is (Agenda EN ClickUp), zet
+ *      die als ClickUp-assignee (PUT /task {assignees:{add:[id]}}) en voeg die toe als
+ *      event-attendee. Bij SPECIFIEK ongewijzigd (bestaande assignee blijft).
+ *  3) POST events op de primary-kalender van GCAL_SUBJECT met conferenceDataVersion=1 &
+ *     sendUpdates=all; summary/description/location/start/end/attendees uit body +
+ *     conferenceData (Google Meet) ALS body.online truthy is. Event-fout = fail-open:
+ *     lege event-velden, maar ga door naar de ClickUp-update.
+ *  4) PUT /task/{task_id} { due_date:Number(start_ms), due_date_time:true } — native
+ *     velden persisteren WEL via PUT (anders dan custom_fields). Best-effort.
+ * Output: { ok:true, event_id, meet_link, html_link, assigned_member? }.
+ */
+export async function inplannen(bedrijfId, body, env) {
+  const taskId = str(body && body.task_id);
+
+  // (1) scope-guard fail-CLOSED. Geen task_id → behandelen als lege task = 403.
+  let task = { custom_fields: [] };
+  if (taskId) {
+    const tr = await cu.get(env, `/task/${taskId}`);
+    if (tr.ok && tr.data) task = tr.data;
+  }
+  const sc = scopeCheckTask(task, bedrijfId, SCOPE_FAIL_CLOSED.write);
+  if (!sc.ok) {
+    return { status: 403, body: { ok: false, error: 'scope_mismatch', message: 'Geen toegang tot deze taak.' } };
+  }
+
+  if (!env || !env.SA_CLIENT_EMAIL || !env.SA_PRIVATE_KEY) {
+    return { status: 500, body: { ok: false, error: 'sa_not_configured', message: 'Inplannen tijdelijk niet beschikbaar.' } };
+  }
+  const subject = str(env.GCAL_SUBJECT);
+
+  // (2) token (events-scope).
+  let token;
+  try {
+    token = await mintGoogleToken(env, subject, GCAL_SCOPE_EVENTS);
+  } catch (e) {
+    return { status: 500, body: { ok: false, error: 'token_mint_failed', message: 'Inplannen tijdelijk niet beschikbaar.' } };
+  }
+
+  // (3) Google-Calendar-event op de primary-kalender van GCAL_SUBJECT.
+  const start = str(body && body.start);   // ISO (frontend stuurt iso(start))
+  const eind = str(body && body.eind);     // ISO
+  const online = !!(body && body.online);
+  const attendeesIn = Array.isArray(body && body.attendees) ? body.attendees : [];
+  const attendees = attendeesIn
+    .map((a) => {
+      if (!a) return null;
+      const email = str(a.email);
+      if (!email) return null;
+      const o = { email };
+      if (a.displayName) o.displayName = str(a.displayName);
+      return o;
+    })
+    .filter(Boolean);
+
+  // (2b) POOL-AUTO-ASSIGN. Pool-shoot = video-lijst ÉN geen assignee op de taak.
+  let assignedMember = null;
+  const taakAssignees = Array.isArray(task.assignees) ? task.assignees : [];
+  const isPoolShoot = (str(task.list && task.list.id) === VIDEO_LIST) && (taakAssignees.length === 0);
+  if (isPoolShoot && taskId) {
+    // compare-before-write: re-lees vlak vóór de boeking. Staat er intussen al een assignee
+    // of due_date (iemand anders boekte deze shoot net), dan niet dubbel boeken/inplannen.
+    const fresh = await cu.get(env, `/task/${taskId}`);
+    if (fresh.ok && fresh.data && ((Array.isArray(fresh.data.assignees) && fresh.data.assignees.length > 0) || fresh.data.due_date)) {
+      return { status: 200, body: { ok: true, already_booked: true, message: 'Deze shoot is zonet al ingepland.', event_id: '', meet_link: '', html_link: '', assigned_member: null } };
+    }
+    const startMsSel = Date.parse(start) || Number(body && body.start_ms) || 0;
+    const eindMsSel = Date.parse(eind) || (startMsSel ? startMsSel + (planDurMs(task.time_estimate)) : 0);
+    if (startMsSel && eindMsSel > startMsSel) {
+      // venster iets verbreed zodat freeBusy/planning-query het slot zeker dekt.
+      const qVan = String(startMsSel - 86400000);
+      const qTot = String(eindMsSel + 86400000);
+      const poolEmails = VIDEO_POOL.map((m) => m.email);
+      const [gcalMap, ...cuPerLid] = await Promise.all([
+        gcalBusyForEmails(env, poolEmails, qVan, qTot),
+        ...VIDEO_POOL.map((m) => cuPlanningBlocks(env, [m.id], qVan, qTot)),
+      ]);
+      // kies het EERSTE poollid dat op [start,eind] vrij is (Agenda ∪ ClickUp geen overlap).
+      for (let i = 0; i < VIDEO_POOL.length; i++) {
+        const m = VIDEO_POOL[i];
+        const busy = memberBusyIntervals(cuPerLid[i] || [], gcalMap.get(m.email) || []);
+        if (!busy.some((b) => overlaps(startMsSel, eindMsSel, b))) { assignedMember = m; break; }
+      }
+      if (assignedMember) {
+        // zet als ClickUp-assignee (additief) — native veld, persisteert via PUT.
+        await cu.put(env, `/task/${taskId}`, { assignees: { add: [Number(assignedMember.id)], rem: [] } });
+        // voeg toe als event-attendee als die e-mail nog niet in de lijst staat.
+        if (!attendees.some((a) => a.email.toLowerCase() === assignedMember.email.toLowerCase())) {
+          attendees.push({ email: assignedMember.email, displayName: assignedMember.naam });
+        }
+      }
+    }
+  }
+
+  const event = {
+    summary: str(body && body.titel),
+    description: str(body && body.beschrijving),
+    location: str(body && body.locatie),
+    start: { dateTime: start },
+    end: { dateTime: eind },
+    attendees,
+  };
+  if (online) {
+    event.conferenceData = {
+      createRequest: {
+        // unieke request-id; Google maakt hierop een Meet-link aan.
+        requestId: 's27-' + (taskId || 'evt') + '-' + Date.now(),
+        conferenceSolutionKey: { type: 'hangoutsMeet' },
+      },
+    };
+  }
+
+  let eventId = '';
+  let meetLink = '';
+  let htmlLink = '';
+  try {
+    const calId = encodeURIComponent(subject || 'primary');
+    const r = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${calId}/events?conferenceDataVersion=1&sendUpdates=all`,
+      {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify(event),
+      }
+    );
+    const data = await r.json().catch(() => ({}));
+    if (r.ok && data) {
+      eventId = str(data.id);
+      htmlLink = str(data.htmlLink);
+      meetLink = str(data.hangoutLink);
+    }
+  } catch (e) { /* fail-open (Make Resume): lege event-velden, ga door */ }
+
+  // (4) ClickUp due_date op de planning-taak (native veld; PUT persisteert WEL).
+  const startMs = Number(body && body.start_ms) || Date.parse(start) || 0;
+  if (taskId && Number.isFinite(startMs) && startMs > 0) {
+    await cu.put(env, `/task/${taskId}`, { due_date: startMs, due_date_time: true });
+  }
+
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      event_id: eventId,
+      meet_link: meetLink,
+      html_link: htmlLink,
+      // bij een pool-shoot: het automatisch toegewezen poollid (id/email/naam), anders null.
+      assigned_member: assignedMember ? { id: assignedMember.id, email: assignedMember.email, naam: assignedMember.naam } : null,
+    },
+  };
+}
+
 /* ---- bedrijfBeheer:contacts (4 routes; IDOR-fix; contact-email apart) ---- */
 // LET OP: contactEmail komt apart binnen (NIET de gateway-geïnjecteerde account-email).
 export async function bedrijfBeheerContacts(bedrijfId, body, env, contactEmail) {
@@ -1092,6 +1560,7 @@ export const READ_HANDLERS = {
   dashboard,
   meetingsList,
   beschikbaarheid,
+  meetingAvailability,
 };
 export const WRITE_HANDLERS = {
   bedrijfVoorkeuren,
@@ -1102,6 +1571,7 @@ export const WRITE_HANDLERS = {
   chatAttachment,
   directMessage,
   feedbackV2,
+  inplannen,
 };
 // bedrijfBeheer sub-acties (read vs write split voor cache/rate-decisions in de shell)
 export const BEDRIJFBEHEER_READ_ACTIONS = { get_team: getTeam, get_offertes: getOffertes };

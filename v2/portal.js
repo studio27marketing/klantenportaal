@@ -840,7 +840,7 @@ async function loadPlanSlots(taskId){
   const box=$id('s27-plan-'+taskId); if(!box) return;
   box.innerHTML='<div class="empty" style="padding:20px"><div class="brand-spinner" style="margin:0 auto 10px"></div>Beschikbare momenten ophalen…</div>';
   let data=null;
-  if(!state.demoMode){ const van=Date.now(),tot=Date.now()+22*86400000;
+  if(!state.demoMode){ const van=Date.now(),tot=Date.now()+31*86400000;   // horizon = de volledige maand die de picker toont (busy-data dekt nu alle slots)
     const res=await api(ENDPOINTS.beschikbaarheid,{task_id:taskId,van:String(van),tot:String(tot),bedrijf_id:state.session.bedrijf_id,session_token:state.session.session_token});
     data=(res&&res.ok&&res.data&&res.data.ok)?res.data:null;
   } else { data={assignee_naam:'Guus Van den Heuvel',assignee_emails:'guus@studio27.be',list_id:'demo',taak_est:0,blokken:[{start:Date.now()+2*86400000,due:0,est:7200000,afwezig:false}]}; }
@@ -848,7 +848,7 @@ async function loadPlanSlots(taskId){
   const durMs=planDurMs(data.taak_est); const slots=computeFreeSlots(data.blokken,durMs);
   const aEmails=String(data.assignee_emails||data.assignee_email||'').split(',').map(s=>s.trim()).filter(Boolean);
   state.planCtx=state.planCtx||{};
-  state.planCtx[taskId]={assignee:data.assignee_naam||'je Studio 27-contact',assignee_emails:aEmails,list_id:data.list_id||'',online:true,sel:null,dur:durMs};
+  state.planCtx[taskId]={assignee:data.assignee_naam||'je Studio 27-contact',assignee_emails:aEmails,list_id:data.list_id||'',online:true,sel:null,dur:durMs,pool:!!data.pool,vrijCount:Number(data.vrij_count)||0};
   box.innerHTML=renderPlanPicker(taskId,slots);
 }
 function renderPlanPicker(taskId,slots){
@@ -856,7 +856,9 @@ function renderPlanPicker(taskId,slots){
   if(!slots.length) return '<p class="fs" style="color:var(--ink-3)">Geen vrije momenten in de komende maand. <a href="#" onclick="goTab(\'meetings\');return false">Plan via Meetings →</a></p>';
   const byDay={}; slots.forEach(ms=>{ (byDay[_dayKey(ms)]=byDay[_dayKey(ms)]||[]).push(ms); });
   ctx.byDay=byDay; ctx.slots=slots; ctx.weekStart=_monday(slots[0]); ctx.selDay=null; ctx.navFn='planWeekNav'; ctx.taskId=taskId; state.planActive=taskId;
-  return '<p class="fs" style="margin:0 0 12px;color:var(--ink-3)">Met <b>'+escapeHtml(ctx.assignee||'')+'</b> · duur ± '+escapeHtml(fmtDur(ctx.dur||PLAN_DUR_MS))+'. Blader per week tot een maand vooruit:</p>'+
+  // pool-shoot: toon subtiel hoeveel content creators beschikbaar zijn (>=1 = boekbaar; wij wijzen er één toe).
+  const poolBadge=(ctx.pool&&ctx.vrijCount>0)?' <span class="fs" style="color:var(--ink-4)">· '+ctx.vrijCount+' content creator'+(ctx.vrijCount===1?'':'s')+' beschikbaar</span>':'';
+  return '<p class="fs" style="margin:0 0 12px;color:var(--ink-3)">Met <b>'+escapeHtml(ctx.assignee||'')+'</b> · duur ± '+escapeHtml(fmtDur(ctx.dur||PLAN_DUR_MS))+poolBadge+'. Blader per week tot een maand vooruit:</p>'+
     '<div style="display:flex;gap:16px;margin-bottom:12px"><label class="remember"><input type="radio" name="pm" value="online" checked onchange="planMode(\''+escapeHtml(taskId)+'\',true)"> Online (Google Meet)</label><label class="remember"><input type="radio" name="pm" value="fysiek" onchange="planMode(\''+escapeHtml(taskId)+'\',false)"> Fysiek bij Studio 27</label></div>'+
     '<div id="planWeekBox">'+planWeekHTML()+'</div>'+
     '<button class="btn btn-branch br-blue btn-block" id="plan-book" onclick="bookPlanSlot(\''+escapeHtml(taskId)+'\')" disabled style="margin-top:12px">Bevestig afspraak</button>';

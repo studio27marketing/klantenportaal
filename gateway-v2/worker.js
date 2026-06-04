@@ -48,6 +48,9 @@ const MAKE_ENDPOINTS = {
   bedrijfUpload:         'https://hook.eu1.make.com/vdi231a5w9c8wronm71panyc2okq716y',
   bedrijfContact:        'https://hook.eu1.make.com/459dayjdq34xgkt9bcbv8g1nxd9r9ubs',
   meetingsList:          'https://hook.eu1.make.com/5vkfigdkwwowpmhbmicsyddkjt5k18f5',
+  // meetingAvailability: GEPORT naar de gateway (READ_HANDLERS.meetingAvailability —
+  // Google free/busy via SA + domain-wide delegation, port van Make-scenario 5945987).
+  // De router-shim vangt dit pad af vóór de forward; deze hook is enkel nog vangnet.
   meetingAvailability:   'https://hook.eu1.make.com/s4tuw763p9x4dc7o8n1h9sm48vhs77rb',
   chatPost:              'https://hook.eu1.make.com/vi12objw9nkrjg1i8ve13jwj354pvg9n',
   chatList:              'https://hook.eu1.make.com/a43sc5vjuic6lpjdehq8pvhn8sjftbn3',
@@ -59,11 +62,11 @@ const MAKE_ENDPOINTS = {
   pandadocPricelist:     'https://hook.eu1.make.com/uw2974b7b2yurygsgcn2i97x4lh9h86e',
   // shootAvailability: LEGACY/DOOD. De hook hangt aan GEEN actief Make-scenario meer
   // (niet in hooks_list van team 507999) en het v2-frontend roept hem NERGENS aan
-  // (api.js definieert de key wel, maar geen enkele callsite). Shoots gebruiken
-  // GEEN aparte beschikbaarheid-engine: een shoot-/video-taak is een gewone
-  // planning-taak met de content-creators als assignees, dus de geporte
-  // 'beschikbaarheid'-handler dekt shoots al (assignees = video/foto-team uit ClickUp).
-  // We laten de entry staan als inert vangnet; geen port nodig. Zie report/openIssues.
+  // (api.js definieert de key wel, maar geen enkele callsite). Shoots lopen via de
+  // geporte 'beschikbaarheid'-handler: een video-taak ZONDER assignee (lijst
+  // 901520180316) krijgt POOL-modus (de 4 content creators, doorsnede Agenda∩ClickUp,
+  // met vrij_count); een video-taak MÉT assignee valt in SPECIFIEK-modus. We laten de
+  // entry staan als inert vangnet; geen port nodig. Zie report/openIssues.
   shootAvailability:     'https://hook.eu1.make.com/c1aekp5r567tqvgvp4e2a4juu3npanap',
   huisstijlList:         'https://hook.eu1.make.com/v3z3t67otw7d96s37qciedt3uykimiru',
   huisstijlUpload:       'https://hook.eu1.make.com/3eqyxbkejfhyz8w2kl62lp1lsxwfr2d0',
@@ -73,12 +76,18 @@ const MAKE_ENDPOINTS = {
   projectFacturatieSave: 'https://hook.eu1.make.com/cmqf97ej6aewxokt9g23tbff6gxg7frm',
   performance:           'https://hook.eu1.make.com/chmsfitxr12m8cpjp4x3fb8ru1nqr7gg',
   bedrijfBeheer:         'https://hook.eu1.make.com/bf5xp3rkbh7dik9rp6jvue4w9p2moctn',
-  // beschikbaarheid: GEPORT naar ClickUp (READ_HANDLERS.beschikbaarheid). De
-  // router-shim vangt dit pad af vóór de forward; deze Make-hook is enkel nog een
-  // inert vangnet. NIET gecachet (planning wijzigt vaak — zie handler-comment).
+  // beschikbaarheid: GEPORT naar de gateway (READ_HANDLERS.beschikbaarheid). Doorsnede
+  // Google-Agenda ∩ ClickUp-planning. Trigger pool/specifiek = de ClickUp-assignee:
+  // video-lijst 901520180316 ZONDER assignee → POOL (4 content creators, vrij_count);
+  // anders SPECIFIEK (enkel de assignees, slot vrij als IEDEREEN vrij is). Gebruikt SA
+  // (freeBusy via DWD, fail-open). De router-shim vangt dit pad af vóór de forward; deze
+  // Make-hook is enkel nog vangnet. NIET gecachet (planning wijzigt vaak).
   beschikbaarheid:       'https://hook.eu1.make.com/jn1ael12s6b4xp6fsdqd49x9p27v8cht',
-  // inplannen: NIET porten — maakt een Google-Calendar-event (vereist GCal-credentials),
-  // valt bewust door naar Make (scenario 6014783).
+  // inplannen: GEPORT naar de gateway (WRITE_HANDLERS.inplannen — Google-Calendar-event
+  // via SA + domain-wide delegation + ClickUp due_date). Bij een POOL-shoot (video-lijst
+  // zonder assignee) wijst de handler AUTOMATISCH een op dat slot vrij poollid toe als
+  // ClickUp-assignee + event-attendee (assigned_member in de respons). De router-shim
+  // vangt dit pad af vóór de forward; deze hook is enkel nog vangnet.
   inplannen:             'https://hook.eu1.make.com/4r3y6ba68spfgcgng7v0lvso11il6p6u',
 };
 
