@@ -1,0 +1,19 @@
+name = "s27-portal-gateway-v2"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+# Plain vars (geen secrets). Secrets (GATEWAY_SECRET, CLICKUP_TOKEN, ADMIN_SECRET,
+# SA_CLIENT_EMAIL, SA_PRIVATE_KEY) zet je via `wrangler secret put <NAME>` of in de
+# Cloudflare-dashboard — NOOIT hier.
+[vars]
+PROJECT_ID = "studio27-cloud"
+# Productie-origins + test-origins (raw.githack / raw.githubusercontent voor v4-preview).
+ALLOWED_ORIGINS = "https://www.studio27.be,https://studio27.be,https://raw.githack.com,https://raw.githubusercontent.com"
+
+# KV-namespace voor rate-limiting + read-cache (TTL 60s).
+# De namespace maak ik bij deploy aan met:
+#   wrangler kv:namespace create KV
+# en plak dan het echte id hieronder.
+[[kv_namespaces]]
+binding = "KV"
+id = "dcbe89a0ed8a4256a6ab1db50ac47940"

@@ -5,3 +5,8 @@ _adsdata_test.json
 
 _htest.cjs
 v4/_htest.cjs
+
+# Cloudflare Worker dev-secrets — NOOIT committen (bevat CLICKUP_TOKEN)
+.dev.vars
+**/.dev.vars
+gateway-v2/.dev.vars
