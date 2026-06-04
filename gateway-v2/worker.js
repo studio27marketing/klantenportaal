@@ -1,5 +1,5 @@
 /* =============================================================================
- * Studio 27 Klantenportaal — Auth Gateway V2 (Cloudflare Worker)
+ * Studio 27 Klantenportaal - Auth Gateway V2 (Cloudflare Worker)
  * -----------------------------------------------------------------------------
  * Behoudt de bestaande auth/CORS/rate-limit-shell van de v1-gateway, maar serveert
  * de ClickUp-native endpoints RECHTSTREEKS uit de ClickUp REST v2-API (zie
@@ -48,7 +48,7 @@ const MAKE_ENDPOINTS = {
   bedrijfUpload:         'https://hook.eu1.make.com/vdi231a5w9c8wronm71panyc2okq716y',
   bedrijfContact:        'https://hook.eu1.make.com/459dayjdq34xgkt9bcbv8g1nxd9r9ubs',
   meetingsList:          'https://hook.eu1.make.com/5vkfigdkwwowpmhbmicsyddkjt5k18f5',
-  // meetingAvailability: GEPORT naar de gateway (READ_HANDLERS.meetingAvailability —
+  // meetingAvailability: GEPORT naar de gateway (READ_HANDLERS.meetingAvailability -
   // Google free/busy via SA + domain-wide delegation, port van Make-scenario 5945987).
   // De router-shim vangt dit pad af vóór de forward; deze hook is enkel nog vangnet.
   meetingAvailability:   'https://hook.eu1.make.com/s4tuw763p9x4dc7o8n1h9sm48vhs77rb',
@@ -83,7 +83,7 @@ const MAKE_ENDPOINTS = {
   // (freeBusy via DWD, fail-open). De router-shim vangt dit pad af vóór de forward; deze
   // Make-hook is enkel nog vangnet. NIET gecachet (planning wijzigt vaak).
   beschikbaarheid:       'https://hook.eu1.make.com/jn1ael12s6b4xp6fsdqd49x9p27v8cht',
-  // inplannen: GEPORT naar de gateway (WRITE_HANDLERS.inplannen — Google-Calendar-event
+  // inplannen: GEPORT naar de gateway (WRITE_HANDLERS.inplannen - Google-Calendar-event
   // via SA + domain-wide delegation + ClickUp due_date). Bij een POOL-shoot (video-lijst
   // zonder assignee) wijst de handler AUTOMATISCH een op dat slot vrij poollid toe als
   // ClickUp-assignee + event-attendee (assigned_member in de respons). De router-shim
@@ -239,7 +239,7 @@ async function handleAdminLink(request, env, cors) {
   if (!lookupRes.ok) return json({ ok: false, error: 'lookup_failed', detail: await lookupRes.text() }, 502, cors);
   const lookup = await lookupRes.json();
   const user = lookup && lookup.users && lookup.users[0];
-  if (!user) return json({ ok: false, error: 'user_not_found', message: 'Geen account met dat e-mailadres — laat de klant eerst één keer inloggen.' }, 404, cors);
+  if (!user) return json({ ok: false, error: 'user_not_found', message: 'Geen account met dat e-mailadres - laat de klant eerst één keer inloggen.' }, 404, cors);
 
   const updRes = await fetch('https://identitytoolkit.googleapis.com/v1/projects/' + env.PROJECT_ID + '/accounts:update', {
     method: 'POST',

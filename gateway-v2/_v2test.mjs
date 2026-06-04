@@ -37,16 +37,20 @@ if (!env.CLICKUP_TOKEN) {
 
 /* ---- verwachte top-level sleutels uit v4/data.js ---- */
 const EXPECT = {
-  dashboard:        ['klant', 'stats', 'actieve_projecten', 'historie_3mnd', 'aankomende_meetings', 'contact', 'modules'],
-  projectDetailV2:  ['ok', 'task_id', 'naam', 'status', 'beschrijving', 'deliverables_raw', 'has_contact', 'has_bedrijf', 'taken', 'comments'],
+  dashboard:        ['klant', 'stats', 'actieve_projecten', 'afgerond_60d', 'historie_3mnd', 'aankomende_meetings', 'contact', 'modules'],
+  projectDetailV2:  ['ok', 'task_id', 'naam', 'status', 'beschrijving', 'deliverables_raw', 'deliverables', 'sae', 'has_contact', 'has_bedrijf', 'taken', 'comments'],
   chatList:         ['ok', 'comments'],
-  bedrijfContent:   ['ok', 'algemene_voorkeuren', 'btw', 'facturatie_email', 'facturatie_opmerkingen', 'website', 'contact', 'attachments', 'categorieen'],
+  bedrijfContent:   ['ok', 'algemene_voorkeuren', 'btw', 'ondernemingsnummer', 'facturatie_email', 'facturatie_opmerkingen', 'website', 'contact', 'attachments', 'categorieen'],
   meetingsList:     ['ok', 'meetings', 'booking_url'],
   get_team:         ['ok', 'aantal_medewerkers', 'btw', 'website', 'contactpersonen'],
-  get_offertes:     ['ok', 'offertes'],
+  get_offertes:     ['ok', 'offertes', 'facturatie'],
 };
 const COMMENT_KEYS = ['id', 'auteur', 'is_klant', 'tekst', 'datum', 'attachments'];
-const PROJECT_KEYS = ['task_id', 'naam', 'discipline', 'status', 'status_label', 'voortgang_pct', 'type', 'opleverdatum', 'laatst_geupdatet', 'feedback_link'];
+const PROJECT_KEYS = ['task_id', 'naam', 'discipline', 'status', 'status_label', 'voortgang_pct', 'type', 'opleverdatum', 'laatst_geupdatet', 'feedback_link', 'sae'];
+const AFGEROND_KEYS = ['task_id', 'naam', 'discipline', 'opleverdatum', 'heeft_bestanden'];
+const DELIVERABLE_KEYS = ['label', 'url', 'type'];
+const SAE_KEYS = ['naam', 'initialen'];
+const FACT_KEYS = ['ondernemingsnummer', 'facturatie_email', 'facturatie_opmerkingen'];
 const CONTACT_KEYS = ['id', 'voornaam', 'achternaam', 'email', 'gsm', 'voorkeur'];
 const OFFERTE_KEYS = ['id', 'naam', 'status', 'link', 'budget', 'vervaldatum'];
 const MODULE_KEYS  = ['performance', 'socials', 'ads', 'seo', 'opleidingen', 'strategie', 'branding', 'video_fotografie', 'webdesign'];
@@ -85,9 +89,28 @@ async function run() {
     check('project keys', keyDiff(p, PROJECT_KEYS).length === 0, 'missing: ' + keyDiff(p, PROJECT_KEYS).join(','));
     check('project.discipline non-empty', p.discipline !== '', 'discipline empty (should be filtered)');
     check('project.voortgang_pct is number', typeof p.voortgang_pct === 'number');
+    check('project.sae is array', Array.isArray(p.sae));
     console.log('     sample project:', preview(p));
   }
-  console.log(`     #actieve_projecten=${r.body.actieve_projecten.length}, modules.performance=${r.body.modules.performance}, modules.seo=${r.body.modules.seo}`);
+  // afgerond_60d (contract: [{task_id, naam, discipline, opleverdatum(ms), heeft_bestanden}])
+  check('afgerond_60d is array', Array.isArray(r.body.afgerond_60d));
+  check('actieve ∩ afgerond_60d leeg (geen dubbeltelling)',
+    !r.body.actieve_projecten.some((p) => (r.body.afgerond_60d || []).some((a) => a.task_id === p.task_id)),
+    'een taak zit zowel in actief als afgerond');
+  if ((r.body.afgerond_60d || [])[0]) {
+    const a = r.body.afgerond_60d[0];
+    check('afgerond keys', keyDiff(a, AFGEROND_KEYS).length === 0, 'missing: ' + keyDiff(a, AFGEROND_KEYS).join(','));
+    check('afgerond.opleverdatum is ms-number', typeof a.opleverdatum === 'number' && a.opleverdatum > 1e12, 'got ' + a.opleverdatum);
+    check('afgerond.heeft_bestanden is boolean', typeof a.heeft_bestanden === 'boolean');
+    const within60 = Date.now() - a.opleverdatum <= 60 * 86400000 + 86400000;
+    check('afgerond.opleverdatum binnen 60d', within60, new Date(a.opleverdatum).toISOString());
+    console.log('     sample afgerond:', preview(a));
+  }
+  // een afgerond-item met bestanden (heeft_bestanden=true) bewijst de parsing-koppeling
+  const afgMetBestanden = (r.body.afgerond_60d || []).find((a) => a.heeft_bestanden);
+  check('≥1 afgerond_60d met heeft_bestanden=true (live-bewijs)', !!afgMetBestanden,
+    'geen afgeronde taak met bestanden — controleer veld b071307b op de done-taken');
+  console.log(`     #actieve_projecten=${r.body.actieve_projecten.length}, #afgerond_60d=${(r.body.afgerond_60d || []).length}, modules.performance=${r.body.modules.performance}, modules.seo=${r.body.modules.seo}`);
   const firstTaskId = (r.body.actieve_projecten[0] || {}).task_id || '';
 
   /* projectDetailV2 */
@@ -99,10 +122,32 @@ async function run() {
     check('top-level keys', miss.length === 0, 'missing: ' + miss.join(','));
     check('all scalar fields are strings', ['task_id', 'naam', 'status', 'beschrijving', 'deliverables_raw', 'time_estimate', 'type_job'].every((k) => typeof r.body[k] === 'string'));
     check('has_contact yes|no', r.body.has_contact === 'yes' || r.body.has_contact === 'no');
+    check('deliverables is array', Array.isArray(r.body.deliverables));
+    check('sae is array', Array.isArray(r.body.sae));
     check('taken is array', Array.isArray(r.body.taken));
+    if (r.body.taken[0]) {
+      check('taak heeft_bestanden is boolean', typeof r.body.taken[0].heeft_bestanden === 'boolean');
+      check('taak bestanden is array', Array.isArray(r.body.taken[0].bestanden));
+    }
     check('comments === []', Array.isArray(r.body.comments) && r.body.comments.length === 0);
     console.log('     sample:', preview({ ...r.body, taken: '[' + r.body.taken.length + ']' }));
   } else { console.log('   (overgeslagen: geen project-task gevonden)'); }
+
+  /* projectDetailV2 deliverables-parsing op een ECHT project met bestanden */
+  const projMetBestanden = afgMetBestanden ? afgMetBestanden.task_id : '';
+  console.log('\n[projectDetailV2 deliverables]  (project met bestanden=' + (projMetBestanden || 'n/a') + ')');
+  if (projMetBestanden) {
+    r = await projectDetailV2(BEDRIJF, { task_id: projMetBestanden }, env);
+    check('status 200', r.status === 200, 'got ' + r.status);
+    check('deliverables non-empty', Array.isArray(r.body.deliverables) && r.body.deliverables.length > 0, '#=' + (r.body.deliverables || []).length);
+    if ((r.body.deliverables || [])[0]) {
+      const d = r.body.deliverables[0];
+      check('deliverable keys {label,url,type}', keyDiff(d, DELIVERABLE_KEYS).length === 0, 'missing: ' + keyDiff(d, DELIVERABLE_KEYS).join(','));
+      check('deliverable.url is http(s)', /^https?:\/\//.test(d.url), 'url="' + d.url + '"');
+      check('deliverable.type in {video,img,doc,bestand}', ['video', 'img', 'doc', 'bestand'].includes(d.type), 'type="' + d.type + '"');
+      console.log('     deliverables:', preview(r.body.deliverables));
+    }
+  } else { console.log('   (overgeslagen: geen project met bestanden gevonden)'); }
 
   /* projectDetailV2 scope-mismatch: een task van een ander bedrijf moet 403 geven */
   console.log('\n[projectDetailV2 scope-guard]  (vreemd bedrijf moet 403)');
@@ -157,6 +202,13 @@ async function run() {
   check('status 200', r.status === 200, 'got ' + r.status);
   check('top-level keys', keyDiff(r.body, EXPECT.get_offertes).length === 0);
   check('offertes is array', Array.isArray(r.body.offertes));
+  // offerte-facturatie (contract: {ondernemingsnummer, facturatie_email, facturatie_opmerkingen})
+  check('facturatie object', r.body.facturatie && typeof r.body.facturatie === 'object');
+  if (r.body.facturatie) {
+    check('facturatie keys', keyDiff(r.body.facturatie, FACT_KEYS).length === 0, 'missing: ' + keyDiff(r.body.facturatie, FACT_KEYS).join(','));
+    check('facturatie velden zijn strings', FACT_KEYS.every((k) => typeof r.body.facturatie[k] === 'string'));
+    console.log('     facturatie:', preview(r.body.facturatie));
+  }
   if (r.body.offertes[0]) {
     const o = r.body.offertes[0];
     check('offerte keys', keyDiff(o, OFFERTE_KEYS).length === 0, 'missing: ' + keyDiff(o, OFFERTE_KEYS).join(','));

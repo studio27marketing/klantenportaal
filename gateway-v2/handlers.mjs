@@ -1,5 +1,5 @@
 /* =============================================================================
- * Studio 27 Klantenportaal — Gateway V2 — ClickUp-client + handlers
+ * Studio 27 Klantenportaal - Gateway V2 - ClickUp-client + handlers
  * -----------------------------------------------------------------------------
  * Pure-ClickUp REST v2 herbouw van de v2-PORTAL Make-scenario's. Geen Firebase
  * hierin: elke handler krijgt (bedrijfId, body, env) en is daarmee TESTBAAR met
@@ -9,7 +9,7 @@
  *   1. ClickUp-auth = header Authorization: env.CLICKUP_TOKEN  (KALE token, GEEN "Bearer").
  *   2. Bouw output met JS-objecten + 1x JSON.stringify (de gateway-shell stringify't).
  *      NIET Make's handmatige \/\"-escaping nabootsen (zou dubbel escapen).
- *   3. reads fail-OPEN, writes fail-CLOSED (403 scope_mismatch bij count==0) — via SCOPE_FAIL_CLOSED.
+ *   3. reads fail-OPEN, writes fail-CLOSED (403 scope_mismatch bij count==0) - via SCOPE_FAIL_CLOSED.
  *   4. Handlers zetten GEEN eigen CORS-header; ze geven {status, body} terug en de shell
  *      levert de origin-allowlist-CORS.
  *   5. Nooit 5xx waar Make 200+lege-data gaf (reads). Token NOOIT in een respons-body.
@@ -34,7 +34,7 @@ export const LIST = {
 // 1:1 met Make-scenario 6014538 (module 4 list_ids[]). Volgorde behouden zoals in
 // de blueprint-URL. Payroll-lijst (afwezigheid) markeert blokken als 'afwezig'.
 // LET OP: bij een nieuwe disciplinelijst in deze folder MOET die hier (en in Make)
-// handmatig worden toegevoegd — er is geen folder-discovery (zie spec 'gaps').
+// handmatig worden toegevoegd - er is geen folder-discovery (zie spec 'gaps').
 export const PLANNING_LISTS = [
   '901520180314', // (Make module 4, idx 0)
   '901520180306',
@@ -98,7 +98,7 @@ const DM_ONTVANGERS = {
 export const SCOPE_FAIL_CLOSED = { read: false, write: true };
 
 /* =============================================================================
-   ClickUp-client (cu) — kale token, gestructureerde fouten i.p.v. throw
+   ClickUp-client (cu) - kale token, gestructureerde fouten i.p.v. throw
    ============================================================================= */
 function cuHeaders(env) {
   return { Authorization: env.CLICKUP_TOKEN };
@@ -129,7 +129,7 @@ const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
    Google service-account token (RS256-JWT met domain-wide delegation)
    -----------------------------------------------------------------------------
    Spiegelt het worker.js getGoogleAccessToken/importPkcs8/b64url-patroon, maar:
-     - impersonatie via "sub" (subject) — DWD namens no-reply@studio27.be e.d.
+     - impersonatie via "sub" (subject) - DWD namens no-reply@studio27.be e.d.
      - generieke scope-param (calendar.readonly voor free/busy, calendar.events voor write)
      - cache per (subject|scope) i.p.v. één globale token (worker.js _saToken).
    globalThis.crypto.subtle werkt in Workers EN node18+, dus testbaar in de node-harness.
@@ -194,7 +194,7 @@ export async function mintGoogleToken(env, subject, scope) {
 }
 
 // Google Calendar scope. LET OP: de domain-wide-delegation-config van dit SA staat
-// ENKEL de brede scope '.../auth/calendar' toe — de granulaire calendar.readonly /
+// ENKEL de brede scope '.../auth/calendar' toe - de granulaire calendar.readonly /
 // calendar.events geven 'unauthorized_client' (live geverifieerd). Eén constante voor
 // zowel free/busy (read) als event-create (write); breder is hier de enige optie die werkt.
 const GCAL_SCOPE_READONLY = 'https://www.googleapis.com/auth/calendar';
@@ -211,7 +211,7 @@ function gcalTime(ms) {
 }
 
 /* =============================================================================
-   SCHEDULING — pool/specifiek-beschikbaarheid (doorsnede Agenda ∩ ClickUp)
+   SCHEDULING - pool/specifiek-beschikbaarheid (doorsnede Agenda ∩ ClickUp)
    -----------------------------------------------------------------------------
    Vastgelegd ontwerp van de eigenaar:
    - Vrij = vrij in Google Agenda EN in ClickUp-planning (doorsnede bron-blokken).
@@ -238,7 +238,7 @@ export const VIDEO_POOL = [
 const PLAN_DUR_MS = 90 * 60000;
 const PLAN_DUR_MAX = 6 * 3600000;
 function planDurMs(est) { const e = Number(est) || 0; return (e > 0 && e <= PLAN_DUR_MAX) ? e : PLAN_DUR_MS; }
-// Kandidaat-slots (start-ms) over het raster — identiek aan de frontend, zodat de
+// Kandidaat-slots (start-ms) over het raster - identiek aan de frontend, zodat de
 // server-telling exact de slots dekt die de picker straks toont.
 function candidateSlots(durMs) {
   const slots = [];
@@ -344,7 +344,7 @@ export const cu = {
       headers: { ...cuHeaders(env), 'Content-Type': 'application/json' },
       body: JSON.stringify(jsonBody || {}),
     }, env),
-  // POST /task/{id}/field/{fieldId} — generiek custom-field-zetten.
+  // POST /task/{id}/field/{fieldId} - generiek custom-field-zetten.
   field: (env, taskId, fieldId, value) =>
     cu.post(env, `/task/${taskId}/field/${fieldId}`, { value }),
   // relatie add/rem op een task-relatieveld
@@ -445,6 +445,29 @@ export function statusMapper(statusObj) {
   return { key, label: LABELS[key] || 'Afgerond', pct: PCT[key] != null ? PCT[key] : 100 };
 }
 
+// "afgerond"-statussen voor afgerond_60d: enkel {done, goedgekeurd, klaar voor
+// facturatie, gefactureerd}. Matcht op de RAUWE ClickUp-status-string (substring,
+// lowercase) zodat 'klaar voor facturatie'/'gefactureerd' ook pakken. LET OP:
+// 'doorgestuurd' valt hier bewust BUITEN (ook al is status.type==='done').
+export function isAfgerondStatus(statusObj) {
+  const label = String((statusObj && statusObj.status) || '').toLowerCase();
+  if (!label) return false;
+  if (label.includes('doorgestuur')) return false;           // expliciet NIET (review-status)
+  if (label.includes('goedgekeur')) return true;             // goedgekeurd
+  if (label.includes('gefactureer')) return true;            // gefactureerd
+  if (label.includes('facturati')) return true;              // (klaar voor) facturatie
+  return label === 'done';                                    // ClickUp default done-status
+}
+
+// "afgerond/opgeleverd"-tijdstip van een taak (ms): date_done > date_closed > due_date.
+// Gebruikt om de 60-dagen-cutoff op te leggen voor afgerond_60d.
+export function afgerondMs(task) {
+  const dd = Number(task && task.date_done) || 0;
+  const dc = Number(task && task.date_closed) || 0;
+  const du = Number(task && task.due_date) || 0;
+  return dd || dc || du || 0;
+}
+
 // monthKey(ms) = YYYY-MM (UTC-consistent met Make formatDate).
 export function monthKey(ms) {
   const d = new Date(Number(ms));
@@ -518,7 +541,7 @@ export function base64ToBytes(b64) {
   return out;
 }
 
-// now-ISO helper (let op: 'Z' i.p.v. tz-offset — functioneel ok voor de frontend).
+// now-ISO helper (let op: 'Z' i.p.v. tz-offset - functioneel ok voor de frontend).
 export const nowISO = () => new Date().toISOString();
 // datum 'YYYY-MM-DD HH:mm' (server-tijd) voor comment-templates.
 function fmtDateTime(d = new Date()) {
@@ -547,6 +570,75 @@ function fmtDateTimeFromMs(ms) {
 }
 
 const str = (v) => (v == null ? '' : String(v));
+
+/* =============================================================================
+   Deliverables-parser + SAE (assignees) - gedeeld door dashboard + projectDetailV2.
+   ============================================================================= */
+
+// type-classificatie van een deliverable-URL (contract: video/img/doc/bestand).
+//   video  -> vimeo / youtu(.be|be.com)
+//   img    -> google drive / .jpg/.jpeg/.png/.gif/.webp
+//   doc    -> figma / webflow
+//   bestand-> al de rest (fallback)
+export function deliverableType(url) {
+  const u = String(url || '').toLowerCase();
+  if (u.includes('vimeo') || u.includes('youtu')) return 'video';
+  if (u.includes('drive.google') || /\.(jpe?g|png|gif|webp)(\?|#|$)/.test(u)) return 'img';
+  if (u.includes('figma') || u.includes('webflow')) return 'doc';
+  return 'bestand';
+}
+
+// label = laatste betekenisvolle URL-segment, anders host, anders de rauwe URL.
+function deliverableLabel(url) {
+  const raw = String(url || '').trim();
+  try {
+    const p = new URL(raw);
+    const segs = p.pathname.split('/').filter(Boolean);
+    const last = segs.length ? decodeURIComponent(segs[segs.length - 1]) : '';
+    if (last && !/^(view|edit|videos)$/i.test(last)) return last;
+    if (segs.length >= 2) return decodeURIComponent(segs[segs.length - 2]);
+    return p.hostname.replace(/^www\./, '');
+  } catch (e) {
+    return raw;
+  }
+}
+
+// Parse het ClickUp-veld 'bestanden' (deliverablesRaw b071307b) -> [{label,url,type}].
+// Bron is een vrije tekst met URL's gescheiden door whitespace/newlines (live-vorm).
+// Robuust: pak alle http(s)-URL's; geen URL's -> []. Nooit gooien.
+export function parseDeliverables(rawValue) {
+  const text = String(rawValue == null ? '' : rawValue);
+  if (!text.trim()) return [];
+  const urls = text.match(/https?:\/\/[^\s<>"')]+/gi) || [];
+  const out = [];
+  const seen = new Set();
+  for (const u of urls) {
+    const url = u.replace(/[.,;]+$/, ''); // strip trailing leestekens
+    if (seen.has(url)) continue;
+    seen.add(url);
+    out.push({ label: deliverableLabel(url), url, type: deliverableType(url) });
+  }
+  return out;
+}
+
+// initialen uit een naam: eerste letter van de eerste 2 woorden (uppercase).
+function initialenVan(naam) {
+  const words = String(naam || '').trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+}
+
+// SAE = assignees van een taak -> [{naam, initialen}]. naam = username; initialen
+// uit de naam (val terug op ClickUp's eigen .initials als de naam leeg is).
+export function buildSae(task) {
+  const assignees = (task && Array.isArray(task.assignees)) ? task.assignees : [];
+  return assignees.map((a) => {
+    const naam = str(a && a.username);
+    const initialen = initialenVan(naam) || str(a && a.initials);
+    return { naam, initialen };
+  });
+}
 
 /* =============================================================================
    KV-cache-wrapper (TTL 60s) voor reads dashboard/bedrijfContent/get_team.
@@ -597,16 +689,25 @@ export async function projectDetailV2(bedrijfId, body, env) {
     return { status: 403, body: { ok: false, error: 'scope_mismatch', message: 'Geen toegang tot dit project.', taken: [], comments: [] } };
   }
   const beschrijving = str(task.description).replace(/\r?\n/g, '\\n');
-  const taken = (task.subtasks || []).map((s) => ({
-    task_id: str(s.id),
-    naam: str(s.name),
-    status: str(s.status && s.status.status),
-    status_color: str((s.status && s.status.color) || '#cccccc'),
-    datum: str(s.due_date),
-    start_date: str(s.start_date),
-    orderindex: str(s.orderindex != null ? s.orderindex : '0'),
-    url: str(s.url),
-  }));
+  // deliverables van het project zelf, geparset uit het veld 'bestanden' (b071307b).
+  const deliverables = parseDeliverables(getCF(task, FIELD.deliverablesRaw));
+  const taken = (task.subtasks || []).map((s) => {
+    // subtasks in de parent-payload bevatten WEL custom_fields (live geverifieerd),
+    // dus per subtaak kunnen we het veld 'bestanden' parsen zonder extra call.
+    const subDeliv = parseDeliverables(getCF(s, FIELD.deliverablesRaw));
+    return {
+      task_id: str(s.id),
+      naam: str(s.name),
+      status: str(s.status && s.status.status),
+      status_color: str((s.status && s.status.color) || '#cccccc'),
+      datum: str(s.due_date),
+      start_date: str(s.start_date),
+      orderindex: str(s.orderindex != null ? s.orderindex : '0'),
+      url: str(s.url),
+      heeft_bestanden: subDeliv.length > 0,                   // goedgekeurde subtaak met bestanden = klikbaar in de tijdlijn
+      bestanden: subDeliv,                                    // [{label, url, type}]
+    };
+  });
   const out = {
     ok: true,
     task_id: str(task.id || taskId),
@@ -619,6 +720,7 @@ export async function projectDetailV2(bedrijfId, body, env) {
     date_created: str(task.date_created),
     url: str(task.url),
     deliverables_raw: str(getCF(task, FIELD.deliverablesRaw)).replace(/\r?\n/g, ' '),
+    deliverables,                                             // [{label, url, type}] geparset uit het veld bestanden
     feedback_link: str(getCF(task, FIELD.feedbackLink)),
     budget: str(getCF(task, FIELD.budget)),
     time_estimate: str(task.time_estimate),
@@ -627,6 +729,7 @@ export async function projectDetailV2(bedrijfId, body, env) {
     shootlink: str(getCF(task, FIELD.shootlink)),
     has_contact: getRelationIds(task, FIELD.contact).length > 0 ? 'yes' : 'no',
     has_bedrijf: getRelationIds(task, FIELD.bedrijf).length > 0 ? 'yes' : 'no',
+    sae: buildSae(task),                                      // assignees [{naam, initialen}]
     taken,
     comments: [],
   };
@@ -636,9 +739,9 @@ function detailSkeleton(taskId, err) {
   return {
     ok: true, task_id: str(taskId), naam: '', status: '', status_color: '#cccccc',
     beschrijving: '', due_date: '', start_date: '', date_created: '', url: '',
-    deliverables_raw: '', feedback_link: '', budget: '', time_estimate: '',
+    deliverables_raw: '', deliverables: [], feedback_link: '', budget: '', time_estimate: '',
     content_creators: '', type_job: '', shootlink: '', has_contact: 'no', has_bedrijf: 'no',
-    taken: [], comments: [], __ERROR__: err,
+    sae: [], taken: [], comments: [], __ERROR__: err,
   };
 }
 
@@ -685,6 +788,7 @@ export async function bedrijfContent(bedrijfId, body, env) {
     ok: true,
     algemene_voorkeuren: voorkeuren,
     btw: str(getCF(b, FIELD.btw)),
+    ondernemingsnummer: str(getCF(b, FIELD.btw)),             // alias (contract-naam) - zelfde veld 034f4443
     facturatie_email: str(getCF(b, FIELD.facturatieEmail)),
     facturatie_opmerkingen: str(getCF(b, FIELD.facturatieOpm)),
     website: str(getCF(b, FIELD.website)),
@@ -766,7 +870,16 @@ export async function getOffertes(bedrijfId, body, env) {
       vervaldatum: str(getCF(o, FIELD.offerteVervaldatum)),
     });
   }
-  return { status: 200, body: { ok: true, offertes } };
+  // Offerte-facturatie voor de Offertes-pagina (zelfde bron als bedrijfContent; de
+  // bedrijf-taak is hier al opgehaald). ondernemingsnummer=034f4443, facturatie_email=
+  // 9613b4aa, facturatie_opmerkingen=36d11828. facturatie_opmerkingen is schrijfbaar
+  // via facturatieSave (POST /task/{id}/field/{id}). Additief - bestaande shape intact.
+  const facturatie = {
+    ondernemingsnummer: str(getCF(bedrijf, FIELD.btw)),
+    facturatie_email: str(getCF(bedrijf, FIELD.facturatieEmail)),
+    facturatie_opmerkingen: str(getCF(bedrijf, FIELD.facturatieOpm)),
+  };
+  return { status: 200, body: { ok: true, offertes, facturatie } };
 }
 
 /* ---- dashboard ----------------------------------------------------------- */
@@ -782,14 +895,37 @@ export async function dashboard(bedrijfId, body, env) {
   const mods = cr.ok && cr.data ? normalizeModuleLabels(getCF(cr.data, FIELD.modules)) : [];
 
   const now = Date.now();
+  const cutoff60 = now - 60 * 86400000;
   const actieve = [];
+  const afgerond60 = [];
   for (const t of tasks) {
     // her-check scope per taak (bedrijf_match), 1:1 met Make filter 12
     const rel = getRelationIds(t, FIELD.bedrijf);
     if (!rel.includes(String(bedrijfId))) continue;
     const discipline = disciplineMapper(getCF(t, FIELD.typeJob));
+
+    // (A) afgerond_60d: status in {done, goedgekeurd, klaar voor facturatie, gefactureerd}
+    //     EN afgerond/opgeleverd (date_done>date_closed>due_date) in de laatste 60 dagen.
+    //     Onafhankelijk van het discipline-filter - een opgeleverde taak telt mee, ook als
+    //     er (nog) geen TYPE JOB is. ENKEL echte project-/productietaken (discipline-lijst);
+    //     contact/offerte/meeting-lijsten hebben geen TYPE JOB en vallen vanzelf weg via 'isAfgerondStatus'.
+    if (isAfgerondStatus(t.status)) {
+      const opMs = afgerondMs(t);
+      if (opMs && opMs >= cutoff60) {
+        afgerond60.push({
+          task_id: str(t.id),
+          naam: str(t.name),
+          discipline,
+          opleverdatum: opMs,                                   // epoch-ms (contract)
+          heeft_bestanden: parseDeliverables(getCF(t, FIELD.deliverablesRaw)).length > 0,
+        });
+      }
+    }
+
+    // (B) actieve_projecten: enkel OPEN/lopende projecten (goedgekeurde/afgeronde apart in (A)).
     if (discipline === '') continue;                          // disc != ''
     if (!showVisible(discipline, t.due_date, now)) continue;  // show == yes
+    if (isAfgerondStatus(t.status)) continue;                 // done/goedgekeurd/facturatie → afgerond_60d, niet actief
     const st = statusMapper(t.status);
     actieve.push({
       task_id: str(t.id),
@@ -802,13 +938,15 @@ export async function dashboard(bedrijfId, body, env) {
       opleverdatum: fmtDateFromMs(t.due_date),
       laatst_geupdatet: fmtDateTimeFromMs(t.date_updated),
       feedback_link: st.key === 'doorgestuurd' ? `https://studio27.be/design-feedback?taskId=${t.id}` : '',
+      sae: buildSae(t),                                        // assignees [{naam, initialen}]
     });
   }
 
   const out = {
     klant: { bedrijfsnaam: 'Klant', klantcode: '', account_manager: 'Ilke Meeusen' },
-    stats: { actieve_projecten: actieve.length, openstaande_feedback: 0, deze_week: 0, opgeleverd_30d: 0 },
+    stats: { actieve_projecten: actieve.length, openstaande_feedback: 0, deze_week: 0, opgeleverd_30d: afgerond60.length },
     actieve_projecten: actieve,
+    afgerond_60d: afgerond60,
     historie_3mnd: [],
     aankomende_meetings: [],
     contact: { am_naam: 'Ilke Meeusen', am_email: 'ilke@studio27.be', am_rol: 'Account manager Studio 27' },
@@ -871,7 +1009,7 @@ export async function meetingsList(bedrijfId, body, env) {
  * Output behoudt de bestaande vorm {ok, assignee_*, list_id, taak_est, blokken:[{start,
  * due,est,afwezig}]} en voegt in pool-modus optioneel pool/vrij_count/vrij_per_slot/
  * pool_naam toe (negeerbaar door oudere frontends).
- * Cache: GEEN — planning wijzigt vaak; een 60s-cache zou een net-geboekt/verwijderd
+ * Cache: GEEN - planning wijzigt vaak; een 60s-cache zou een net-geboekt/verwijderd
  *   blok 1 minuut verbergen en zo dubbele-boekingen of valse vrije slots geven.
  */
 export async function beschikbaarheid(bedrijfId, body, env) {
@@ -990,7 +1128,7 @@ export async function beschikbaarheid(bedrijfId, body, env) {
  * bedrijf-koppeling geverifieerd (dat vervangt de session_token>10-check uit Make).
  *
  * Mint een token namens env.GCAL_SUBJECT (no-reply@studio27.be, DWD) en POST naar
- * Calendar freeBusy voor [now+48h, now+21d] op ilke@/arne@ — exact het venster en
+ * Calendar freeBusy voor [now+48h, now+21d] op ilke@/arne@ - exact het venster en
  * de kalenders uit de blueprint. De gcal-`calendars`-map gaat 1:1 door zodat de
  * frontend (loadMeetSlots/computeFreeFromBusy) res.data.calendars[email].busy
  * ([{start,end}] ISO) ongewijzigd kan lezen. Fail-OPEN: bij elke fout → lege
@@ -1037,7 +1175,7 @@ export async function bedrijfVoorkeuren(bedrijfId, body, env) {
   const voorkeuren = str(body && body.voorkeuren);
   const r = await cu.put(env, `/task/${bedrijfId}`, { description: voorkeuren });
   if (!r.ok) {
-    return { status: 500, body: { ok: false, message: 'Voorkeuren konden niet worden opgeslagen — probeer het opnieuw.' } };
+    return { status: 500, body: { ok: false, message: 'Voorkeuren konden niet worden opgeslagen - probeer het opnieuw.' } };
   }
   return { status: 200, body: { ok: true, message: 'Voorkeuren opgeslagen', task_id: str((r.data && r.data.id) || bedrijfId), saved_at: nowISO() } };
 }
@@ -1055,14 +1193,14 @@ export async function facturatieSave(bedrijfId, body, env) {
     `• Ondernemingsnummer / BTW: ${ondernemingsnummer || '-'}\n` +
     `• Facturatie-e-mail: ${facturatie_email || '-'}\n` +
     `• Facturatie-opmerkingen: ${facturatie_opmerkingen || '-'}\n\n` +
-    '@ilke @arne — gelieve dit bij te werken in de administratie + PandaDoc-template + boekhouding.';
+    '@ilke @arne - gelieve dit bij te werken in de administratie + PandaDoc-template + boekhouding.';
   await Promise.allSettled([
     cu.field(env, bedrijfId, FIELD.btw, ondernemingsnummer),
     cu.field(env, bedrijfId, FIELD.facturatieEmail, facturatie_email),
     cu.field(env, bedrijfId, FIELD.facturatieOpm, facturatie_opmerkingen),
     cu.comment(env, bedrijfId, comment, true),
   ]);
-  return { status: 200, body: { ok: true, message: 'Facturatiegegevens opgeslagen — Ilke en Arne verwerken dit in de administratie.' } };
+  return { status: 200, body: { ok: true, message: 'Facturatiegegevens opgeslagen - Ilke en Arne verwerken dit in de administratie.' } };
 }
 
 /* ---- projectFacturatieSave (project-niveau, GET+2 best-effort) ----------- */
@@ -1082,11 +1220,11 @@ export async function projectFacturatieSave(bedrijfId, body, env) {
   }
   const note = (`BTW: ${onr || '-'} · Mail: ${mail || '-'}` + (opm ? ` · ${opm}` : '') + ` (via portaal ${fmtDateNL()})`).trim();
   const comment =
-    '🧾 [FACTURATIE — PROJECT GOEDGEKEURD VIA PORTAAL]\n\n' +
+    '🧾 [FACTURATIE - PROJECT GOEDGEKEURD VIA PORTAAL]\n\n' +
     `Klant: ${klant_naam}\nProject: ${project_naam}\nDatum: ${fmtDateTime()}\n\n` +
     'Bevestigde facturatiegegevens voor dit project:\n' +
     `• Ondernemingsnummer/BTW: ${onr || '-'}\n• Facturatie-e-mail: ${mail || '-'}\n• Opmerking: ${opm || '-'}\n\n` +
-    '@ilke @arne — controleer of dit afwijkt van de standaard bedrijfsgegevens vóór facturatie.';
+    '@ilke @arne - controleer of dit afwijkt van de standaard bedrijfsgegevens vóór facturatie.';
   await Promise.allSettled([
     cu.field(env, taskId, FIELD.factuurNote, note),
     cu.comment(env, taskId, comment, true),
@@ -1099,15 +1237,15 @@ export async function bedrijfUpload(bedrijfId, body, env) {
   const filename = str(body && body.filename);
   const raw = (body && (body.file_data != null ? body.file_data : body.data)) || '';
   if (!filename || !raw) {
-    return { status: 500, body: { ok: false, message: 'Upload mislukt — controleer bestand en probeer opnieuw.' } };
+    return { status: 500, body: { ok: false, message: 'Upload mislukt - controleer bestand en probeer opnieuw.' } };
   }
   let bytes;
   try { bytes = base64ToBytes(raw); } catch (e) {
-    return { status: 500, body: { ok: false, message: 'Upload mislukt — controleer bestand en probeer opnieuw.' } };
+    return { status: 500, body: { ok: false, message: 'Upload mislukt - controleer bestand en probeer opnieuw.' } };
   }
   const r = await cu.uploadAttachment(env, bedrijfId, bytes, filename);
   if (!r.ok || !r.data) {
-    return { status: 500, body: { ok: false, message: 'Upload mislukt — controleer bestand en probeer opnieuw.' } };
+    return { status: 500, body: { ok: false, message: 'Upload mislukt - controleer bestand en probeer opnieuw.' } };
   }
   return {
     status: 200,
@@ -1129,7 +1267,7 @@ export async function chatPost(bedrijfId, body, env) {
   const commentBody = `💬 [Klant: ${klantNaam}]\n\n${commentText}`;
   const r = await cu.comment(env, taskId, commentBody, true);
   if (!r.ok) {
-    return { status: 500, body: { ok: false, message: 'Bericht kon niet geplaatst worden — probeer het opnieuw.' } };
+    return { status: 500, body: { ok: false, message: 'Bericht kon niet geplaatst worden - probeer het opnieuw.' } };
   }
   return { status: 200, body: { ok: true, comment_id: str((r.data && r.data.id) || 'posted'), posted_at: nowISO() } };
 }
@@ -1203,13 +1341,13 @@ export async function directMessage(bedrijfId, body, env) {
     if (!relSet) { await cu.relation(env, created.id, FIELD.bedrijf, { add: [bedrijfId], rem: [] }); }
   }
   if (!r.ok || !r.data) {
-    return { status: 500, body: { ok: false, message: 'Bericht kon niet bezorgd worden — probeer opnieuw of bel ons rechtstreeks op +32 14 70 50 27.' } };
+    return { status: 500, body: { ok: false, message: 'Bericht kon niet bezorgd worden - probeer opnieuw of bel ons rechtstreeks op +32 14 70 50 27.' } };
   }
   return {
     status: 200,
     body: {
       ok: true,
-      message: `Bericht ontvangen — ${ont.naam} ziet het direct in ${ont.pron} planning en reageert binnenkort.`,
+      message: `Bericht ontvangen - ${ont.naam} ziet het direct in ${ont.pron} planning en reageert binnenkort.`,
       task_id: str(r.data.id),
       task_url: str(r.data.url),
       ontvanger: ont.naam,
@@ -1248,7 +1386,7 @@ export async function feedbackV2(bedrijfId, body, env) {
   const listId = task.list && task.list.id;
   if (feedback > 0 && listId) {
     writes.push(cu.post(env, `/list/${listId}/task`, {
-      name: `Feedback ronde 1 — ${klant_naam}`,
+      name: `Feedback ronde 1 - ${klant_naam}`,
       content:
         `Feedbackronde ingediend via klantportaal.\n\nGoedgekeurd: ${approved}/${total}\nFeedback: ${feedback}/${total}` +
         (feedbackSummary ? `\n\nDeliverables met feedback: ${feedbackSummary}` : '') +
@@ -1267,7 +1405,7 @@ export async function feedbackV2(bedrijfId, body, env) {
     `💬 [Klant: ${klant_naam}]\n\nFeedback ronde 1 ingediend via klantportaal.\n\n` +
     `Goedgekeurd: ${approved}/${total}\nFeedback: ${feedback}/${total}\n\n` +
     (allApproved
-      ? '✅ Alles goedgekeurd — status automatisch op goedgekeurd gezet.'
+      ? '✅ Alles goedgekeurd - status automatisch op goedgekeurd gezet.'
       : '📝 Deliverables met feedback: ' + feedbackSummary) +
     `\n\n📲 Doorgegeven via: ${viaKanaal}` + (opmerkingen ? `\n📝 Opmerking: ${opmerkingen}` : '');
   writes.push(cu.comment(env, taskId, comment, true));
@@ -1303,7 +1441,7 @@ export async function feedbackV2(bedrijfId, body, env) {
  *     sendUpdates=all; summary/description/location/start/end/attendees uit body +
  *     conferenceData (Google Meet) ALS body.online truthy is. Event-fout = fail-open:
  *     lege event-velden, maar ga door naar de ClickUp-update.
- *  4) PUT /task/{task_id} { due_date:Number(start_ms), due_date_time:true } — native
+ *  4) PUT /task/{task_id} { due_date:Number(start_ms), due_date_time:true } - native
  *     velden persisteren WEL via PUT (anders dan custom_fields). Best-effort.
  * Output: { ok:true, event_id, meet_link, html_link, assigned_member? }.
  */
@@ -1379,7 +1517,7 @@ export async function inplannen(bedrijfId, body, env) {
         if (!busy.some((b) => overlaps(startMsSel, eindMsSel, b))) { assignedMember = m; break; }
       }
       if (assignedMember) {
-        // zet als ClickUp-assignee (additief) — native veld, persisteert via PUT.
+        // zet als ClickUp-assignee (additief) - native veld, persisteert via PUT.
         await cu.put(env, `/task/${taskId}`, { assignees: { add: [Number(assignedMember.id)], rem: [] } });
         // voeg toe als event-attendee als die e-mail nog niet in de lijst staat.
         if (!attendees.some((a) => a.email.toLowerCase() === assignedMember.email.toLowerCase())) {
@@ -1479,7 +1617,7 @@ async function updateBedrijf(bedrijfId, body, env) {
   const aantal = body && body.aantal_medewerkers;
   const n = parseInt(str(aantal), 10);
   if (Number.isFinite(n)) cfs.push({ id: FIELD.aantalMedewerkers, value: n }); // number-veld
-  // LET OP: PUT /task met custom_fields-array persisteert NIET — ClickUp geeft 200 maar
+  // LET OP: PUT /task met custom_fields-array persisteert NIET - ClickUp geeft 200 maar
   // negeert de waarden stilzwijgend. Zet elk veld via POST /task/{id}/field/{fieldId}.
   await Promise.allSettled(cfs.map((f) => cu.field(env, bedrijfId, f.id, f.value))); // best-effort
   return { status: 200, body: { ok: true, saved: true } };
@@ -1524,7 +1662,7 @@ async function updateContact(bedrijfId, body, env, contactEmail) {
   const allowed = await assertContactInBedrijf(bedrijfId, contactId, env);
   if (!allowed) return { status: 403, body: { ok: false, error: 'scope_violation' } };
   // naam NIET herschrijven (1:1 Make); enkel custom_fields.
-  // LET OP: PUT /task met custom_fields-array persisteert NIET — ClickUp geeft 200 maar
+  // LET OP: PUT /task met custom_fields-array persisteert NIET - ClickUp geeft 200 maar
   // negeert de waarden stilzwijgend (live geverifieerd op email-veld d453a72f). Zet elk
   // veld via POST /task/{id}/field/{fieldId}, dat WEL persisteert.
   const cfs = contactCustomFields(body, contactEmail);

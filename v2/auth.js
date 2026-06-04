@@ -1,5 +1,5 @@
 /* =============================================================================
- * Studio 27 Klantenportaal — Firebase Auth module (v2)
+ * Studio 27 Klantenportaal, Firebase Auth module (v2)
  * -----------------------------------------------------------------------------
  * Magic link (wachtwoordloos) + Google sign-in + VERPLICHTE TOTP-2FA.
  * Zie ../klantendashboard/AUTH_UPGRADE_PLAN.md.
@@ -7,7 +7,7 @@
  * Wordt EERST los gevalideerd via auth-v2-test.html en raakt dashboard.js niet.
  * Pas na validatie integreren we dit in de widget (taak #7).
  *
- * ⚠️ Nog niet end-to-end getest (Firebase kan niet vanaf hier draaien) — we
+ * ⚠️ Nog niet end-to-end getest (Firebase kan niet vanaf hier draaien), we
  *    valideren samen; ik fix wat tijdens de eerste run opduikt.
  *
  * Publieke API (window.S27Auth, ook als ES-module-export):
@@ -59,14 +59,14 @@ function friendly(e) {
   const map = {
     'auth/invalid-email': 'Ongeldig e-mailadres.',
     'auth/popup-closed-by-user': 'Het Google-venster werd gesloten.',
-    'auth/popup-blocked': 'Pop-up geblokkeerd — sta pop-ups toe of gebruik de e-maillink.',
+    'auth/popup-blocked': 'Pop-up geblokkeerd, sta pop-ups toe of gebruik de e-maillink.',
     'auth/invalid-verification-code': 'De code klopt niet. Probeer opnieuw.',
     'auth/unauthorized-domain': 'Dit domein staat niet in Firebase → Authentication → Settings → Authorized domains.',
     'auth/operation-not-allowed': 'Deze inlogmethode staat nog uit in Firebase (Sign-in method).',
     'auth/invalid-action-code': 'Deze inloglink is verlopen of al gebruikt. Vraag een nieuwe aan.',
     'auth/too-many-enrollment-attempts': 'Te veel pogingen. Wacht ~15 min, log opnieuw in en gebruik de 6-cijfercode uit je app (niet de sleutel).',
     'auth/missing-code': 'Vul de 6-cijfercode uit je authenticator-app in.',
-    'auth/requires-recent-login': 'Je sessie is te oud voor deze actie — je bent uitgelogd. Log opnieuw in en stel meteen 2FA in.',
+    'auth/requires-recent-login': 'Je sessie is te oud voor deze actie, je bent uitgelogd. Log opnieuw in en stel meteen 2FA in.',
   };
   return map[c] || ('Er ging iets mis' + (c ? ' (' + c + ')' : '') + '.');
 }

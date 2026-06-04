@@ -1,10 +1,10 @@
 /* =============================================================================
-   Studio 27 Klantenportaal v4 — API / AUTH-laag
+   Studio 27 Klantenportaal v4, API / AUTH-laag
    -----------------------------------------------------------------------------
    1:1 geport uit dashboard.js (ONGEWIJZIGDE backend: Make/ClickUp/gateway).
    Framework-agnostisch: GEEN UI hierin. portal.js zet de hooks:
-     S27.onSessionExpired(msg)   — toon melding + terug naar login
-     S27.reloadDashboard()       — herlaad de dashboarddata (na bedrijf-switch)
+     S27.onSessionExpired(msg), toon melding + terug naar login
+     S27.reloadDashboard(), herlaad de dashboarddata (na bedrijf-switch)
    Laadvolgorde in index.html: api.js  →  assets-data.js  →  panels.js  →  portal.js
    ============================================================================= */
 
@@ -25,16 +25,16 @@ var state = window.S27State = {
 /* ---- UI-hooks (portal.js vult deze in) ---- */
 var S27 = window.S27 = { onSessionExpired: null, reloadDashboard: null };
 
-/* ---- Endpoints (EXACT uit dashboard.js — backend ongewijzigd) ---- */
+/* ---- Endpoints (EXACT uit dashboard.js, backend ongewijzigd) ---- */
 const ENDPOINTS = {
-  // v1 — folder 12 KLANTPORTAAL (legacy)
+  // v1, folder 12 KLANTPORTAAL (legacy)
   login:           'https://hook.eu1.make.com/gk7fxusnnrwkyfhcpyup8w39ygoz5m5u',
   dashboard:       'https://hook.eu1.make.com/q1hklcvhum7m14ie57p6t6ci7l6un48e',
   projectDetail:   'https://hook.eu1.make.com/1mmhcsa0sie22po3kbwcx423dakidc44',
   calendar:        'https://hook.eu1.make.com/5e1chj9seh9jlw7nejhytwjg66i7vzyd',
   uploadProject:   'https://hook.eu1.make.com/rk5ui1ueb4j42hiqye8dfzfmka0gf318',
   uploadAlg:       'https://hook.eu1.make.com/hyf7ejtbskq743d56nveucv9xto5yo8c',
-  // v2 — folder 13 KLANTPORTAAL v2 (robuust, native modules, session-validatie)
+  // v2, folder 13 KLANTPORTAAL v2 (robuust, native modules, session-validatie)
   bedrijfContent:    'https://hook.eu1.make.com/o1gvlndn934h2u77vug6k59xgt2qgz6g',
   bedrijfVoorkeuren: 'https://hook.eu1.make.com/fhenjvxv47ldoea5k8h646ovn5gzvgnv',
   bedrijfUpload:     'https://hook.eu1.make.com/vdi231a5w9c8wronm71panyc2okq716y',
@@ -48,23 +48,23 @@ const ENDPOINTS = {
   chatAttachment:    'https://hook.eu1.make.com/fxaqt9waonf63moiloj1bnm28w1kduj6',
   bedrijfContact:    'https://hook.eu1.make.com/459dayjdq34xgkt9bcbv8g1nxd9r9ubs',
   meetingAvailability:'https://hook.eu1.make.com/s4tuw763p9x4dc7o8n1h9sm48vhs77rb',
-  // v3 — AI Status Bot
+  // v3, AI Status Bot
   aiStatusBot:       'https://hook.eu1.make.com/3uor4cy6vmhe77sh2uvujg9iufoewj3u',
   pandadocPricelist: 'https://hook.eu1.make.com/uw2974b7b2yurygsgcn2i97x4lh9h86e',
   shootAvailability: 'https://hook.eu1.make.com/c1aekp5r567tqvgvp4e2a4juu3npanap',
-  // v3.1-6 — Huisstijl-bibliotheek (Google Drive)
+  // v3.1-6, Huisstijl-bibliotheek (Google Drive)
   huisstijlList:     'https://hook.eu1.make.com/v3z3t67otw7d96s37qciedt3uykimiru',
   huisstijlUpload:   'https://hook.eu1.make.com/3eqyxbkejfhyz8w2kl62lp1lsxwfr2d0',
   huisstijlDelete:   'https://hook.eu1.make.com/irpo6iemme6qpfe75rr83brkj7ybftsd',
   driveEnsure:       'https://hook.eu1.make.com/cy5n1y0377ovy2yso5f4dev1n792u71k',
-  // v3.1-7 — Facturatie
+  // v3.1-7, Facturatie
   facturatieSave:        'https://hook.eu1.make.com/41635fjyidjts4hlixkgxcsmo6apoe02',
   projectFacturatieSave: 'https://hook.eu1.make.com/cmqf97ej6aewxokt9g23tbff6gxg7frm',
-  // v3 — Performance Dashboard (mode=list | mode=data&task_id=…)
+  // v3, Performance Dashboard (mode=list | mode=data&task_id=…)
   performance:       'https://hook.eu1.make.com/chmsfitxr12m8cpjp4x3fb8ru1nqr7gg',
-  // v3 — Bedrijf-beheer (get_team | update_bedrijf | save_contact | update_contact)
+  // v3, Bedrijf-beheer (get_team | update_bedrijf | save_contact | update_contact)
   bedrijfBeheer:     'https://hook.eu1.make.com/bf5xp3rkbh7dik9rp6jvue4w9p2moctn',
-  // Agenda (beschikbaarheid + inplannen) — scope-guard server-side actief
+  // Agenda (beschikbaarheid + inplannen), scope-guard server-side actief
   beschikbaarheid:   'https://hook.eu1.make.com/jn1ael12s6b4xp6fsdqd49x9p27v8cht',
   inplannen:         'https://hook.eu1.make.com/4r3y6ba68spfgcgng7v0lvso11il6p6u'
 };
@@ -92,7 +92,7 @@ const AUTH_JS_URL = (function(){
 })();
 
 /* =============================================================================
-   api() / apiV2() — elke call gaat in live via de gateway (bedrijf_id server-side)
+   api() / apiV2(), elke call gaat in live via de gateway (bedrijf_id server-side)
    ============================================================================= */
 async function api(url, payload){
   if (AUTH_V2) return apiV2(url, payload);
@@ -212,13 +212,13 @@ async function switchCompany(id){
 }
 
 /* =============================================================================
-   Sessie verlopen (401) — UI-ontkoppeld via hook
+   Sessie verlopen (401), UI-ontkoppeld via hook
    ============================================================================= */
 function handleSessionExpired(message){
   if(state._sessionExpiredHandled) return;          // niet in een loop terechtkomen
   state._sessionExpiredHandled = true;
   try { localStorage.removeItem('s27_portal_session'); } catch(e){}
-  const msg = message || 'Je sessie is verlopen — log opnieuw in.';
+  const msg = message || 'Je sessie is verlopen, log opnieuw in.';
   if(typeof S27.onSessionExpired === 'function'){ S27.onSessionExpired(msg); return; }
   state.session = null; state.viewMode = 'login';
   if(typeof S27.reloadDashboard === 'function') S27.reloadDashboard();

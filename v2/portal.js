@@ -1,5 +1,5 @@
 /* =============================================================================
-   Studio 27 Klantenportaal v4 — app-logica (ECHTE wiring)
+   Studio 27 Klantenportaal v4, app-logica (ECHTE wiring)
    -----------------------------------------------------------------------------
    - Login: Firebase (Google + magic-link + TOTP-2FA) via window.S27Auth,
      gespiegeld op de werkende dashboard.js-flow. ?demo=1 = mock-preview.
@@ -9,13 +9,13 @@
 "use strict";
 
 let currentTab = 'start';
-const SECTION_LABEL = { start:'Start', berichten:'Berichten', projecten:'Projecten', socials:'Socials', advertenties:'Advertenties', performance:'Resultaten', diensten:'Onze diensten', meetings:'Meetings', nieuwproject:'Offerte aanvragen', offertes:'Offertes', huisstijl:'Huisstijl & bestanden', facturatie:'Facturatie', instellingen:'Instellingen' };
+const SECTION_LABEL = { start:'Start', berichten:'Berichten', projecten:'Actieve projecten', socials:'Socials', advertenties:'Advertenties', performance:'Resultaten', diensten:'Onze diensten', meetings:'Meetings', nieuwproject:'Offerte aanvragen', offertes:'Offertes', huisstijl:'Huisstijl & bestanden', facturatie:'Facturatie', instellingen:'Instellingen' };
 
 function qsp(){ return new URLSearchParams(location.search); }
 function $id(x){ return document.getElementById(x); }
 
 /* =============================================================================
-   DEEP-LINK ROUTER — bestemming uit de URL → na auth ernaartoe navigeren
+   DEEP-LINK ROUTER, bestemming uit de URL → na auth ernaartoe navigeren
    ============================================================================= */
 function parseRoute(){
   const q = qsp();
@@ -68,7 +68,7 @@ function init(){
 }
 
 /* =============================================================================
-   LOGIN — rendert in de v4 login-card per fase (Firebase) of demo/v1
+   LOGIN, rendert in de v4 login-card per fase (Firebase) of demo/v1
    ============================================================================= */
 let _wordmark = '';
 function captureWordmark(){
@@ -114,7 +114,7 @@ function renderLogin(mode){
   $id('lgGoogle').onclick = function(){ loginErr(''); if(window.S27Auth) window.S27Auth.google(); };
   $id('lgEmailBtn').onclick = function(){ const e=($id('lgEmail').value||'').trim(); if(!e){ loginErr('Vul je e-mailadres in.'); return; } loginErr(''); if(window.S27Auth) window.S27Auth.emailLink(e).catch(x=>loginErr(x.message)); };
 }
-function renderLoginEmailSent(){ loginCard('<div class="login-welkom" style="margin-top:8px">Check je mailbox 📬</div><p class="lead" style="text-align:center;color:var(--ink-3);font-size:14px;margin:10px 0 0">We stuurden je een inloglink. Klik erop om verder te gaan — je mag dit tabblad sluiten.</p>'); }
+function renderLoginEmailSent(){ loginCard('<div class="login-welkom" style="margin-top:8px">Check je mailbox 📬</div><p class="lead" style="text-align:center;color:var(--ink-3);font-size:14px;margin:10px 0 0">We stuurden je een inloglink. Klik erop om verder te gaan, je mag dit tabblad sluiten.</p>'); }
 function renderLoginMfa(){
   loginCard('<div class="llab" hidden></div><h1 style="font-size:22px;margin-top:6px">Verificatiecode</h1><p class="lead">Vul de 6-cijferige code uit je authenticator-app in.</p><div class="field"><label>Code</label><input id="lgMfa" inputmode="numeric" maxlength="6" placeholder="123456"></div><button class="btn btn-primary btn-block" style="min-height:48px;margin-top:6px" id="lgMfaBtn">Bevestig '+ARROW_SVG+'</button>');
   $id('lgMfaBtn').onclick = function(){ loginErr(''); if(window.S27Auth) window.S27Auth.mfaVerify(($id('lgMfa').value||'').trim()).catch(x=>loginErr(x.message)); };
@@ -158,7 +158,7 @@ async function doLoginCode(){
   if(res && res.ok && res.data && res.data.ok){
     state.session = { bedrijf_id:res.data.bedrijf_id, bedrijfsnaam:res.data.bedrijfsnaam, session_token:res.data.session_token };
     state.demoMode=false; await loadAndEnter();
-  } else { loginErr((res&&res.data&&res.data.message)||'Inloggen mislukt — controleer je gegevens.'); }
+  } else { loginErr((res&&res.data&&res.data.message)||'Inloggen mislukt, controleer je gegevens.'); }
 }
 
 function enterDemo(){
@@ -197,13 +197,13 @@ function onSessionExpired(msg){
   stopChatPoll();
   const b=document.createElement('div');
   b.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#fef2f2;color:#991b1b;border:1px solid #fecaca;padding:14px 22px;border-radius:12px;font:700 14px/1.4 var(--font-display);z-index:99999;box-shadow:var(--sh-md)';
-  b.textContent=msg||'Je sessie is verlopen — log opnieuw in.'; document.body.appendChild(b);
+  b.textContent=msg||'Je sessie is verlopen, log opnieuw in.'; document.body.appendChild(b);
   setTimeout(()=>{ try{b.remove();}catch(e){} state.session=null; state.viewMode='login'; showLogin(); if(AUTH_V2) initRealAuth(); }, 1700);
 }
 function logout(){ stopChatPoll(); try{ if(window.S27Auth) window.S27Auth.logout(); }catch(e){} state.session=null; state.data={dashboard:null,details:{},chats:{},meetings:null,bedrijf:null,team:null,huisstijl:null}; showLogin(); if(AUTH_V2 && !state.demoMode) initRealAuth(); else renderLogin(state.demoMode?'demo':'v1'); }
 
 /* =============================================================================
-   ROUTING — lazy-load per tab, dan renderen
+   ROUTING, lazy-load per tab, dan renderen
    ============================================================================= */
 async function ensureTabData(name){
   if(state.demoMode) return;
@@ -212,7 +212,7 @@ async function ensureTabData(name){
   if(name==='huisstijl' && !state.data.huisstijl) await S27DATA.loadHuisstijl();
   if(name==='facturatie'||name==='instellingen'){ if(!state.data.bedrijf) await S27DATA.loadBedrijf(); if(!state.data.team) await S27DATA.loadTeam(); }
   if(name==='performance'){ try{ state.perfUrl=(await S27DATA.performanceUrl())||null; }catch(e){ state.perfUrl=null; } }
-  if(name==='offertes' && !state.data.offertes){ try{ await S27DATA.loadOffertes(); }catch(e){} }
+  if(name==='offertes'){ var _t=[]; if(!state.data.offertes) _t.push(S27DATA.loadOffertes()); if(!state.data.bedrijf) _t.push(S27DATA.loadBedrijf()); if(_t.length){ try{ await Promise.all(_t); }catch(e){} } }
   if(name==='socials' && !state.data.metricool){ try{ await S27DATA.loadMetricool(); }catch(e){} }
   if(name==='advertenties' && !state.data.ads){ try{ await S27DATA.loadAds(); }catch(e){} }
 }
@@ -260,17 +260,18 @@ function needsLoad(name){
   if(name==='meetings' && state.data.meetings) return false;
   if(name==='huisstijl' && state.data.huisstijl) return false;
   if((name==='facturatie'||name==='instellingen') && state.data.bedrijf && state.data.team) return false;
-  if(name==='offertes' && state.data.offertes) return false;
+  if(name==='offertes' && state.data.offertes && state.data.bedrijf) return false;
   if(['nieuwproject','performance'].indexOf(name)>=0) return false;
   return true;
 }
 function setActiveNav(name){
   document.querySelectorAll('.sb-item').forEach(t=>t.classList.remove('active'));
   const item=document.querySelector('.sb-item[data-tab="'+name+'"]'); if(item) item.classList.add('active');
-  const tt=$id('topbarTitle'); if(tt) tt.textContent=SECTION_LABEL[name]||name;
+  // Op de homepage tonen we geen titel in de topbar (geen "Start"-tekst die meespringt bij navigatie).
+  const tt=$id('topbarTitle'); if(tt) tt.textContent=(name==='start')?'':(SECTION_LABEL[name]||name);
   document.querySelectorAll('.topbar [data-topnav]').forEach(t=>t.classList.toggle('topnav-on',t.dataset.topnav===name));
 }
-// lege takken (geen projecten) verbergen in de zijbalk — data-gedreven
+// lege takken (geen projecten) verbergen in de zijbalk, data-gedreven
 function applyTakVisibility(){
   if(state.demoMode || !state.data.dashboard) return;
   // socials + advertenties blijven altijd zichtbaar (Metricool-/ads-koppeling kan los van projecten staan; de panels tonen zelf een "nog niet gekoppeld"-staat)
@@ -284,7 +285,7 @@ function applyTakVisibility(){
 }
 
 /* =============================================================================
-   PROJECTDETAIL — lazy detail + chat, dan buildModal
+   PROJECTDETAIL, lazy detail + chat, dan buildModal
    ============================================================================= */
 async function openProject(id, from){
   const f=(from==='berichten')?'berichten':'projecten';
@@ -357,7 +358,7 @@ function rerenderActiveChat(stickBottom){
 }
 
 /* =============================================================================
-   CHAT AUTO-REFRESH — poll de open chat (~9s) en herrender enkel bij nieuwe comments.
+   CHAT AUTO-REFRESH, poll de open chat (~9s) en herrender enkel bij nieuwe comments.
    Stopt bij tab-wissel, chat-wissel, modal-sluiten en logout.
    ============================================================================= */
 const CHAT_POLL_MS = 9000;
@@ -413,7 +414,7 @@ async function openBerichtChat(id, el){
 async function chatUpload(input, taskId){
   const f=input.files&&input.files[0]; if(!f) return; input.value='';
   const tid=taskId||state.activeProject; const list=$id('chatList'); let bubble=null;
-  if(list){ bubble=document.createElement('div'); bubble.className='msg me'; bubble.innerHTML='<div class="bubble"><div class="who">Jij</div><div class="tx">'+ic('doc',14)+' '+escapeHtml(f.name)+' <span style="opacity:.6">— uploaden…</span></div><div class="tm">nu</div></div>'; list.appendChild(bubble); list.scrollTop=list.scrollHeight; }
+  if(list){ bubble=document.createElement('div'); bubble.className='msg me'; bubble.innerHTML='<div class="bubble"><div class="who">Jij</div><div class="tx">'+ic('doc',14)+' '+escapeHtml(f.name)+' <span style="opacity:.6">- uploaden…</span></div><div class="tm">nu</div></div>'; list.appendChild(bubble); list.scrollTop=list.scrollHeight; }
   const done=(txt)=>{ if(bubble){ var t=bubble.querySelector('.tx'); if(t)t.innerHTML=ic('doc',14)+' '+escapeHtml(f.name)+txt; } };
   if(state.demoMode){ done(' ✓'); return; }
   const rd=new FileReader();
@@ -421,17 +422,17 @@ async function chatUpload(input, taskId){
     try{ await api(ENDPOINTS.chatAttachment, { task_id:tid, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), filename:f.name, file_data:b64 }); done(' ✓');
       await refreshChatCache(tid);   // echte attachment-comment uit ClickUp in de cache (geen duplicaat met de optimistische bubble)
     }
-    catch(e){ done(' <span style="color:var(--s27-orange-ink)">— mislukt</span>'); }
+    catch(e){ done(' <span style="color:var(--s27-orange-ink)">- mislukt</span>'); }
   };
   rd.readAsDataURL(f);
 }
 function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-/* ---- Dringende vraag aan Ilke (accountmanagement) — werkt ook als de projectchat gesloten is ---- */
+/* ---- Dringende vraag aan Ilke (accountmanagement), werkt ook als de projectchat gesloten is ---- */
 function _projNaam(id){ var p=(window.S27DATA&&(S27DATA.projects()||[]).find(function(x){return x.id===id;}))||null; return p?p.name:'dit project'; }
 function dringendeVraag(id){
   const host=document.getElementById('dcBody'); if(!host) return;
   const naam=_projNaam(id);
-  host.innerHTML='<div style="padding:16px"><b style="font-family:var(--font-display);font-size:15px">Dringende vraag aan Ilke</b><p class="fs" style="color:var(--ink-3);margin:6px 0 12px">Over <b>'+escapeHtml(naam)+'</b> — Ilke pikt dit persoonlijk op (accountmanagement).</p><textarea id="dvTx" rows="4" style="width:100%;box-sizing:border-box;font-family:var(--font-body);font-size:13.5px;padding:10px;border:1px solid var(--line);border-radius:8px;outline:none;resize:vertical" placeholder="Wat is er aan de hand?"></textarea><div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-primary btn-sm" onclick="sendDringend(this,\''+escapeHtml(id)+'\')">Versturen '+ic('send',15)+'</button><button class="btn btn-ghost btn-sm" onclick="openProject(\''+escapeHtml(id)+'\')">Annuleer</button></div></div>';
+  host.innerHTML='<div style="padding:16px"><b style="font-family:var(--font-display);font-size:15px">Dringende vraag aan Ilke</b><p class="fs" style="color:var(--ink-3);margin:6px 0 12px">Over <b>'+escapeHtml(naam)+'</b>, Ilke pikt dit persoonlijk op (accountmanagement).</p><textarea id="dvTx" rows="4" style="width:100%;box-sizing:border-box;font-family:var(--font-body);font-size:13.5px;padding:10px;border:1px solid var(--line);border-radius:8px;outline:none;resize:vertical" placeholder="Wat is er aan de hand?"></textarea><div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-primary btn-sm" onclick="sendDringend(this,\''+escapeHtml(id)+'\')">Versturen '+ic('send',15)+'</button><button class="btn btn-ghost btn-sm" onclick="openProject(\''+escapeHtml(id)+'\')">Annuleer</button></div></div>';
   var t=$id('dvTx'); if(t)t.focus();
 }
 async function sendDringend(btn, id){
@@ -439,7 +440,7 @@ async function sendDringend(btn, id){
   const naam=_projNaam(id); const host=document.getElementById('dcBody');
   if(host) host.innerHTML='<div class="empty" style="padding:26px 16px;text-align:center"><div class="em-ic">'+ic('st_approved',44)+'</div><b style="font-family:var(--font-display);font-size:15px;color:var(--ink-2)">Verzonden naar Ilke ✓</b><p style="margin:6px 0 0;font-size:13px;color:var(--ink-3)">Ze neemt zo snel mogelijk contact met je op.</p></div>';
   if(state.demoMode) return;
-  try{ await api(ENDPOINTS.directMessage, { bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), onderwerp:'Dringende vraag — '+naam, bericht:'[DRINGEND · via projectpagina] '+tx, project:naam }); }catch(e){}
+  try{ await api(ENDPOINTS.directMessage, { bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), onderwerp:'Dringende vraag, '+naam, bericht:'[DRINGEND · via projectpagina] '+tx, project:naam }); }catch(e){}
 }
 
 /* ---- Bericht aan een Studio 27-contact (Ilke/Arne/Vincent) -> komt in ClickUp terecht ---- */
@@ -452,23 +453,23 @@ function s27Message(naam, btn){
 async function sendS27Message(btn, naam){
   const tx=(($id('s27MsgTx')||{}).value||'').trim(); if(!tx){ var e=$id('s27MsgTx'); if(e){ e.style.borderColor='var(--s27-orange)'; e.focus(); } return; }
   if(btn){ btn.disabled=true; btn.textContent='Versturen…'; }
-  const done=function(){ const h=$id('s27MsgHost'); if(h)h.innerHTML='<div class="fs" style="color:var(--s27-green-ink,#2e7d32);padding:10px 2px">'+ic('st_approved',16)+' Je bericht is bezorgd bij '+escapeHtml(naam)+' — je hoort snel iets terug.</div>'; };
+  const done=function(){ const h=$id('s27MsgHost'); if(h)h.innerHTML='<div class="fs" style="color:var(--s27-green-ink,#2e7d32);padding:10px 2px">'+ic('st_approved',16)+' Je bericht is bezorgd bij '+escapeHtml(naam)+', je hoort snel iets terug.</div>'; };
   if(state.demoMode){ done(); return; }
   try{ await api(ENDPOINTS.directMessage, { bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), onderwerp:'Bericht voor '+naam+' (via portaal)', bericht:'[Voor '+naam+'] '+tx, project:'' }); done(); }
   catch(e){ if(btn){ btn.disabled=false; btn.textContent='Opnieuw proberen'; } }
 }
 
-const BOT_ANSWERS={'Wanneer is mijn volgende meeting?':'Je vindt al je geplande meetings onder <b>Meetings</b> in de zijbalk. Wil je er een verzetten? Laat het hier weten.','Status van mijn website?':'Open je webdesign-project onder <b>Projecten</b> — daar zie je live de status en de laatste deliverables.','Hoe geef ik feedback?':'Open een project en ga naar het tabblad <b>Bestanden</b>. Per bestand kan je apart goedkeuren of feedback geven (met de weg waarlangs je het doorgaf) — alles passen we gratis aan!'};
+const BOT_ANSWERS={'Wanneer is mijn volgende meeting?':'Je vindt al je geplande meetings onder <b>Meetings</b> in de zijbalk. Wil je er een verzetten? Laat het hier weten.','Status van mijn website?':'Open je webdesign-project onder <b>Projecten</b>, daar zie je live de status en de laatste deliverables.','Hoe geef ik feedback?':'Open een project en ga naar het tabblad <b>Bestanden</b>. Per bestand kan je apart goedkeuren of feedback geven (met de weg waarlangs je het doorgaf), alles passen we gratis aan!'};
 function botAsk(btn){ pushBot(btn.textContent,'user'); const q=btn.textContent; const c=$id('botChips'); if(c)c.style.display='none'; botReply(q); }
 function botSend(){ const inp=$id('botInput'); const tx=(inp.value||'').trim(); if(!tx) return; pushBot(tx,'user'); inp.value=''; botReply(tx); }
 function pushBot(text,who){ const m=$id('botMsgs'); const d=document.createElement('div'); d.className='bmsg '+who; d.innerHTML = who==='user'?escapeHtml(text):text; m.appendChild(d); m.scrollTop=m.scrollHeight; }
 async function botReply(q){
   const m=$id('botMsgs'); const t=document.createElement('div'); t.className='typing'; t.innerHTML='<i></i><i></i><i></i>'; m.appendChild(t); m.scrollTop=m.scrollHeight;
-  if(state.demoMode){ setTimeout(()=>{ t.remove(); pushBot(BOT_ANSWERS[q]||'Goeie vraag! Ik verbind je even door met <b>Ilke</b>, je vaste contact — zij antwoordt je zo.','bot'); },1100); return; }
+  if(state.demoMode){ setTimeout(()=>{ t.remove(); pushBot(BOT_ANSWERS[q]||'Goeie vraag! Ik verbind je even door met <b>Ilke</b>, je vaste contact, zij antwoordt je zo.','bot'); },1100); return; }
   try {
     const res = await api(ENDPOINTS.aiStatusBot, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), vraag:q, projecten_context:botContext() });
-    t.remove(); pushBot((res&&res.data&&res.data.answer)?res.data.answer.replace(/^ESCALATE:[^\n]*\n?/,''):'Ik verbind je even door met je vaste contact — die antwoordt je zo.','bot');
-  } catch(e){ t.remove(); pushBot('Ik verbind je even door met je vaste contact — die antwoordt je zo.','bot'); }
+    t.remove(); pushBot((res&&res.data&&res.data.answer)?res.data.answer.replace(/^ESCALATE:[^\n]*\n?/,''):'Ik verbind je even door met je vaste contact, die antwoordt je zo.','bot');
+  } catch(e){ t.remove(); pushBot('Ik verbind je even door met je vaste contact, die antwoordt je zo.','bot'); }
 }
 function botContext(){ const ps=S27DATA.projects()||[]; return ps.map(p=>'- '+p.name+' ('+p.disc+', '+p.status+')').join('\n')||'(geen projecten)'; }
 
@@ -494,7 +495,7 @@ function toggleSwitch(e){ e.stopPropagation(); const m=$id('switchMenu'); const 
 function toggleNotif(e){ e.stopPropagation(); const np=$id('notifPanel'); if(!np)return; if(!np.classList.contains('show'))renderNotifs(); np.classList.toggle('show'); }
 
 /* =============================================================================
-   MELDINGEN-SEEN-STATE — persistent (localStorage), per bedrijf gescoped.
+   MELDINGEN-SEEN-STATE, persistent (localStorage), per bedrijf gescoped.
    - bel-badge = aantal ONGEZIENE acties (zie updateNavBadges)
    - klik op een melding markeert díe als gezien; klik "Alles gezien" markeert alles
    - stabiele key per actie (taak-id uit action + categorie) zodat 'gezien' gezien blijft
@@ -523,7 +524,7 @@ function pruneSeen(ids){
 }
 function isSeen(a){ return !!_readSeen()[notifId(a)]; }
 function markSeen(a){ var s=_readSeen(); s[notifId(a)]=Date.now(); _writeSeen(s); }
-// aantal ongeziene acties (voor de bel-badge) — met opruiming van verdwenen acties
+// aantal ongeziene acties (voor de bel-badge), met opruiming van verdwenen acties
 function unseenCount(){
   if(state.demoMode) return 0;
   var cock=(window.S27DATA&&S27DATA.cockpit())||[];
@@ -531,13 +532,13 @@ function unseenCount(){
   return cock.filter(function(a){ return !seen[notifId(a)]; }).length;
 }
 
-// echte meldingen uit de cockpit (Voor jou te doen) — klikbaar -> juiste bestemming
+// echte meldingen uit de cockpit (Voor jou te doen), klikbaar -> juiste bestemming
 function renderNotifs(){
   if(state.demoMode) return;
   const list=document.querySelector('#notifPanel .notif-list'); if(!list) return;
   const cock=(window.S27DATA&&S27DATA.cockpit())||[];
   pruneSeen(cock.map(notifId));
-  if(!cock.length){ list.innerHTML='<div class="empty" style="padding:30px 16px;text-align:center"><div class="em-ic">'+ic('st_approved',40)+'</div><b style="font-family:var(--font-display);font-size:14px;color:var(--ink-2)">Alles is bij!</b><p style="margin:6px 0 0;font-size:13px;color:var(--ink-3)">Geen openstaande acties — wij werken ondertussen verder.</p></div>'; return; }
+  if(!cock.length){ list.innerHTML='<div class="empty" style="padding:30px 16px;text-align:center"><div class="em-ic">'+ic('st_approved',40)+'</div><b style="font-family:var(--font-display);font-size:14px;color:var(--ink-2)">Alles is bij!</b><p style="margin:6px 0 0;font-size:13px;color:var(--ink-3)">Geen openstaande acties, wij werken ondertussen verder.</p></div>'; return; }
   // ongeziene bovenaan, geziene (gedimd) onderaan
   const sorted=cock.slice().sort(function(a,b){ return (isSeen(a)?1:0)-(isSeen(b)?1:0); });
   list.innerHTML=sorted.map(function(a){
@@ -560,8 +561,10 @@ function markAllSeen(){
 }
 document.addEventListener('click',e=>{ if(!e.target.closest('.client-switch-wrap')){ const m=$id('switchMenu'); if(m)m.style.display='none'; const sw=$id('clientSwitch'); if(sw)sw.classList.remove('open'); } if(!e.target.closest('#notifPanel')&&!e.target.closest('#bellBtn')){ const np=$id('notifPanel'); if(np)np.classList.remove('show'); } });
 function filterProjects(status,btn){ document.querySelectorAll('#filterbar .fpill').forEach(p=>p.classList.remove('active')); if(btn)btn.classList.add('active'); document.querySelectorAll('#projList .proj-row').forEach(r=>{ r.style.display=(status==='all'||r.dataset.status===status)?'flex':'none'; }); }
-function filterDienst(disc,btn){ document.querySelectorAll('.proj-filter .fchip').forEach(c=>c.classList.remove('active')); if(btn)btn.classList.add('active'); const body=$id('projViewBody'); if(!body)return; body.querySelectorAll('.dienst-group').forEach(g=>{ g.style.display=(disc==='all'||g.dataset.disc===disc)?'':'none'; }); }
+function filterDienst(disc,btn){ document.querySelectorAll('.proj-filter .fchip').forEach(c=>c.classList.remove('active')); if(btn)btn.classList.add('active'); const body=$id('projViewBody'); if(!body)return; body.querySelectorAll('.dienst-col,.dienst-group').forEach(g=>{ g.style.display=(disc==='all'||g.dataset.disc===disc)?'':'none'; }); }
 function goDienst(disc){ goTab('projecten'); setTimeout(()=>{ const sel=document.querySelector('.proj-filter select'); if(sel){ sel.value=disc; filterDienst(disc); } },60); }
+// Kennismaking / koffiegesprek -> meetingpagina, automatisch bij Arne (kies een vrij moment in zijn agenda)
+function koffieMetArne(){ goTab('meetings'); setTimeout(()=>{ const btns=document.querySelectorAll('.meet-side .mtype'); if(btns&&btns[0]) pickMtype(btns[0],'Arne','orange','Kennismaking / koffiegesprek'); const ag=$id('meetAgenda'); if(ag&&ag.scrollIntoView) ag.scrollIntoView({behavior:'smooth',block:'nearest'}); },120); }
 function setProjView(v,btn){ document.querySelectorAll('#projView .seg-btn').forEach(b=>b.classList.remove('active')); if(btn)btn.classList.add('active'); const b=$id('projViewBody'); if(b) b.innerHTML=(v==='kanban')?projKanban():projDienst(); }
 function switchModalTab(name){
   state._mtab=name;
@@ -617,7 +620,7 @@ async function submitFileReview(btn,choice){
   if(state.demoMode || !state.activeProject) return;
   try { await api(ENDPOINTS.feedbackV2, { task_id:state.activeProject, bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[{label:label,choice:choice,opmerking:tx,kanaal:kanaal,kanaal_label:chanLabel}], algemene_opmerking:'' }); } catch(e){}
 }
-function approveAll(btn){ const banner=document.querySelector('.fb-banner'); if(banner){ banner.style.animation='none'; banner.innerHTML='<div class="fb-ic" style="background:var(--s27-green)">'+ic('check',20)+'</div><div class="fb-tx"><b>Bedankt — goedgekeurd!</b><p>We zetten meteen de volgende stap.</p></div>'; banner.style.background='var(--s27-green-soft)'; } submitFeedbackReal('goedgekeurd'); }
+function approveAll(btn){ const banner=document.querySelector('.fb-banner'); if(banner){ banner.style.animation='none'; banner.innerHTML='<div class="fb-ic" style="background:var(--s27-green)">'+ic('check',20)+'</div><div class="fb-tx"><b>Bedankt, goedgekeurd!</b><p>We zetten meteen de volgende stap.</p></div>'; banner.style.background='var(--s27-green-soft)'; } submitFeedbackReal('goedgekeurd'); }
 async function submitFeedbackReal(choice){
   if(state.demoMode || !state.activeProject) return;
   try { await api(ENDPOINTS.feedbackV2, { task_id:state.activeProject, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[{label:'Project',choice:choice,kanaal:'portaal'}], algemene_opmerking:'' }); } catch(e){}
@@ -632,7 +635,7 @@ async function submitGeneralFeedback(btn){
   if(state.demoMode || !state.activeProject) return;
   try { await api(ENDPOINTS.feedbackV2, { task_id:state.activeProject, bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[], algemene_opmerking:msg, kanaal:kanaal, kanaal_label:chan }); } catch(e){}
 }
-// facturatiegegevens opslaan — ALLE velden via facturatieSave (schrijft naar exact de
+// facturatiegegevens opslaan, ALLE velden via facturatieSave (schrijft naar exact de
 // ClickUp-velden die content-get terugleest → volledige round-trip-sync, geen lege overschrijf)
 async function saveBedrijfGegevens(btn){
   if(state.demoMode){ if(btn) btn.innerHTML='Opgeslagen ✓'; return; }
@@ -662,7 +665,7 @@ async function saveNotifPref(sel){
   try { await api(ENDPOINTS.bedrijfBeheer, { action:'update_contact', contact_id:c.id||'', bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, voornaam:c.voornaam||'', achternaam:c.achternaam||'', email:c.email||'', gsm:c.gsm||'', rol:c.rol||'', voorkeur:sel.value }); } catch(e){}
 }
 // Eigen profiel + notificatievoorkeur realtime opslaan -> update_contact -> ClickUp-contactfiche.
-// Schrijft UITSLUITEND naar de eigen (ingelogde) contactfiche — npProfileId is per definitie
+// Schrijft UITSLUITEND naar de eigen (ingelogde) contactfiche, npProfileId is per definitie
 // de "me"-contactpersoon (zie panelInstellingen). De e-mail van het eigen account sturen we
 // hier mee als contact-email; dit raakt nooit een ander contact (dat loopt via saveContact).
 async function saveProfile(){
@@ -723,7 +726,7 @@ function offerteVraag(id, btn){
 async function sendOfferteVraag(btn, id){
   const q=btn&&btn.closest('.off-q'); if(!q)return; const tx=((q.querySelector('.off-qtx')||{}).value||'').trim();
   if(!tx){ var e=q.querySelector('textarea'); if(e){ e.style.borderColor='var(--s27-orange)'; e.focus(); } return; }
-  q.innerHTML='<div class="fs" style="color:var(--s27-green-ink,#147A50);padding:4px 0">✓ Je vraag is verstuurd naar je Studio 27-contact — je hoort snel iets.</div>';
+  q.innerHTML='<div class="fs" style="color:var(--s27-green-ink,#147A50);padding:4px 0">✓ Je vraag is verstuurd naar je Studio 27-contact, je hoort snel iets.</div>';
   if(state.demoMode) return;
   try{ await api(ENDPOINTS.chatPost, { task_id:id, bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), comment_text:'[VRAAG OVER OFFERTE · via portaal] '+tx }); }catch(e){}
 }
@@ -780,7 +783,7 @@ function weekStrip(ctx, dayPickFn){
   return '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><button class="icon-btn" style="width:34px;height:34px;font-size:22px;font-weight:700;line-height:1" '+(canPrev?'':'disabled')+' onclick="'+ctx.navFn+'(-1)">‹</button><b style="font-family:var(--font-display);font-size:13.5px">'+lab+'</b><button class="icon-btn" style="width:34px;height:34px;font-size:22px;font-weight:700;line-height:1" '+(canNext?'':'disabled')+' onclick="'+ctx.navFn+'(1)">›</button></div><div class="calstrip">'+strip+'</div>';
 }
 function renderMeetPicker(slots){
-  if(!slots.length) return '<p class="fs" style="color:var(--ink-3);padding:6px 0">Geen vrije momenten in de komende maand — stuur ons gerust een berichtje, dan zoeken we samen iets.</p>';
+  if(!slots.length) return '<p class="fs" style="color:var(--ink-3);padding:6px 0">Geen vrije momenten in de komende maand, stuur ons gerust een berichtje, dan zoeken we samen iets.</p>';
   const byDay={}; slots.forEach(st=>{ (byDay[_dayKey(st)]=byDay[_dayKey(st)]||[]).push(st); });
   state.meetCtx.byDay=byDay; state.meetCtx.slots=slots; state.meetCtx.weekStart=_monday(slots[0]); state.meetCtx.selDay=null; state.meetCtx.navFn='meetWeekNav';
   return '<p class="fs" style="margin:0 0 10px;color:var(--ink-3)">Live uit de agenda van <b>'+escapeHtml(state.meetCtx.who)+'</b> · ± 30 min. Blader per week tot een maand vooruit:</p>'
@@ -789,7 +792,7 @@ function renderMeetPicker(slots){
 }
 function meetWeekHTML(){
   const c=state.meetCtx;
-  return weekStrip(c,'meetDayPick')+'<label class="ms-label">Tijdslot <span style="font-weight:600;color:var(--ink-4)">(9–17u)</span></label><div class="slotgrid" id="meetSlotGrid">'+(c.selDay?meetSlotButtons(c.byDay[c.selDay]):'<span class="fs" style="color:var(--ink-4)">Geen vrije momenten deze week — blader verder ›</span>')+'</div>';
+  return weekStrip(c,'meetDayPick')+'<label class="ms-label">Tijdslot <span style="font-weight:600;color:var(--ink-4)">(9–17u)</span></label><div class="slotgrid" id="meetSlotGrid">'+(c.selDay?meetSlotButtons(c.byDay[c.selDay]):'<span class="fs" style="color:var(--ink-4)">Geen vrije momenten deze week, blader verder ›</span>')+'</div>';
 }
 function meetWeekNav(dir){ const c=state.meetCtx; if(!c)return; c.weekStart+=dir*7*864e5; c.selDay=null; c.sel=null; const box=$id('meetWeek'); if(box)box.innerHTML=meetWeekHTML(); const cf=$id('meetConfirm'); if(cf)cf.disabled=true; }
 function meetDayPick(el){ const c=state.meetCtx, k=el.dataset.k; c.selDay=k; el.parentElement.querySelectorAll('.calday').forEach(d=>d.classList.remove('sel')); el.classList.add('sel'); const g=$id('meetSlotGrid'); if(g)g.innerHTML=meetSlotButtons(c.byDay[k]); c.sel=null; const cf=$id('meetConfirm'); if(cf)cf.disabled=true; }
@@ -801,8 +804,8 @@ async function confirmMeeting(btn){
   const dt=new Date(ctx.sel); const wanneer=dt.toLocaleString('nl-BE',{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'});
   if(state.demoMode){ if(btn) btn.innerHTML='Aanvraag verstuurd ✓'; return; }
   if(btn){ btn.disabled=true; btn.textContent='Versturen…'; }
-  try { await api(ENDPOINTS.directMessage, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), onderwerp:(ctx.type||'Meeting')+'-aanvraag via portaal', bericht:'Graag een '+(ctx.type||'meeting')+' met '+who+' op '+wanneer+' — gekozen uit de live beschikbaarheid in het portaal.' });
-    if(btn){ btn.disabled=false; btn.innerHTML='Aanvraag verstuurd ✓ — we bevestigen snel'; }
+  try { await api(ENDPOINTS.directMessage, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), onderwerp:(ctx.type||'Meeting')+'-aanvraag via portaal', bericht:'Graag een '+(ctx.type||'meeting')+' met '+who+' op '+wanneer+', gekozen uit de live beschikbaarheid in het portaal.' });
+    if(btn){ btn.disabled=false; btn.innerHTML='Aanvraag verstuurd ✓, we bevestigen snel'; }
   } catch(e){ if(btn){ btn.disabled=false; btn.textContent='Opnieuw proberen'; } }
 }
 async function submitNieuwProject(btn){
@@ -810,7 +813,7 @@ async function submitNieuwProject(btn){
   if(!dienst) return;
   if(state.demoMode){ if(btn) btn.innerHTML='Aanvraag verstuurd ✓'; return; }
   if(btn){ btn.disabled=true; btn.textContent='Versturen…'; }
-  try { await api(ENDPOINTS.newProjectIntake, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), project_type:dienst+(typeTxt?(' — '+typeTxt):''), gewenste_opleverdatum:when, omschrijving:'Aanvraag via portaal: '+dienst+(typeTxt?(' / '+typeTxt):'')+' / start: '+when, intentie:'offerte_meeting' });
+  try { await api(ENDPOINTS.newProjectIntake, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), project_type:dienst+(typeTxt?(', '+typeTxt):''), gewenste_opleverdatum:when, omschrijving:'Aanvraag via portaal: '+dienst+(typeTxt?(' / '+typeTxt):'')+' / start: '+when, intentie:'offerte_meeting' });
     if(btn){ btn.disabled=false; btn.innerHTML='Aanvraag verstuurd ✓'; }
   } catch(e){ if(btn){ btn.disabled=false; btn.textContent='Opnieuw proberen'; } }
 }
@@ -823,7 +826,7 @@ async function uploadHuisstijl(input){
   };
   rd.readAsDataURL(f);
 }
-/* ===== Agenda-slotpicker — echte beschikbaarheid + inplannen (scope-guarded) ===== */
+/* ===== Agenda-slotpicker, echte beschikbaarheid + inplannen (scope-guarded) ===== */
 const PLAN_DUR_MS=90*60000, PLAN_DUR_MAX=6*3600000;
 function planDurMs(e){ e=Number(e)||0; return (e>0&&e<=PLAN_DUR_MAX)?e:PLAN_DUR_MS; }
 function fmtDur(ms){ const m=Math.round((Number(ms)||0)/60000),h=Math.floor(m/60),r=m%60; return h?(h+'u'+(r?String(r).padStart(2,'0'):'')):(r+'min'); }
@@ -863,7 +866,7 @@ function renderPlanPicker(taskId,slots){
     '<div id="planWeekBox">'+planWeekHTML()+'</div>'+
     '<button class="btn btn-branch br-blue btn-block" id="plan-book" onclick="bookPlanSlot(\''+escapeHtml(taskId)+'\')" disabled style="margin-top:12px">Bevestig afspraak</button>';
 }
-function planWeekHTML(){ const c=(state.planCtx||{})[state.planActive]; if(!c)return ''; return weekStrip(c,'planDayPick')+'<label class="ms-label">Tijdslot</label><div class="slotgrid" id="planSlotGrid">'+(c.selDay?planSlotButtons(c.byDay[c.selDay]):'<span class="fs" style="color:var(--ink-4)">Geen vrije momenten deze week — blader verder ›</span>')+'</div>'; }
+function planWeekHTML(){ const c=(state.planCtx||{})[state.planActive]; if(!c)return ''; return weekStrip(c,'planDayPick')+'<label class="ms-label">Tijdslot</label><div class="slotgrid" id="planSlotGrid">'+(c.selDay?planSlotButtons(c.byDay[c.selDay]):'<span class="fs" style="color:var(--ink-4)">Geen vrije momenten deze week, blader verder ›</span>')+'</div>'; }
 function planSlotButtons(arr){ return (arr||[]).map(ms=>{ const t=new Date(ms).toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'}); return '<button class="slot" data-plan-slot="'+ms+'" onclick="pickPlanSlot(this)">'+t+'</button>'; }).join(''); }
 function planWeekNav(dir){ const c=(state.planCtx||{})[state.planActive]; if(!c)return; c.weekStart+=dir*7*864e5; c.selDay=null; c.sel=null; const box=$id('planWeekBox'); if(box)box.innerHTML=planWeekHTML(); const b=$id('plan-book'); if(b)b.disabled=true; }
 function planDayPick(el){ const c=(state.planCtx||{})[state.planActive]; const k=el.dataset.k; c.selDay=k; el.parentElement.querySelectorAll('.calday').forEach(d=>d.classList.remove('sel')); el.classList.add('sel'); const g=$id('planSlotGrid'); if(g)g.innerHTML=planSlotButtons(c.byDay[k]); c.sel=null; const b=$id('plan-book'); if(b)b.disabled=true; }
@@ -881,7 +884,7 @@ async function bookPlanSlot(taskId){
   const box=$id('s27-plan-'+taskId);
   const done=()=>{ if(box)box.innerHTML='<div class="empty" style="padding:24px"><div class="em-ic">'+ic('st_approved',56)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Afspraak ingepland!</b><p style="margin:6px 0 0">'+escapeHtml(new Date(start).toLocaleString('nl-BE',{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'}))+' met '+escapeHtml(ctx.assignee||'Studio 27')+'.</p><p class="fs" style="color:var(--ink-4)">Je krijgt zo een agenda-uitnodiging'+(ctx.online?' met een Google Meet-link':' (fysiek bij Studio 27)')+'.</p></div>'; };
   if(state.demoMode){ done(); return; }
-  try { await api(ENDPOINTS.inplannen,{task_id:taskId,list_id:ctx.list_id,start:iso(start),eind:iso(eind),start_ms:String(start),online:!!ctx.online,titel:'Afspraak — '+(p.name||'Studio 27'),beschrijving:'Ingepland via je Studio 27-portaal met '+(ctx.assignee||'het team')+'.',locatie:ctx.online?'':'Studio 27, Sint-Lenaartsesteenweg, Rijkevorsel',attendees:attendees,assignee_naam:ctx.assignee,client_email:cc.email||'',client_naam:clientNaam,bedrijf_id:state.session.bedrijf_id,session_token:state.session.session_token}); done(); }
+  try { await api(ENDPOINTS.inplannen,{task_id:taskId,list_id:ctx.list_id,start:iso(start),eind:iso(eind),start_ms:String(start),online:!!ctx.online,titel:'Afspraak, '+(p.name||'Studio 27'),beschrijving:'Ingepland via je Studio 27-portaal met '+(ctx.assignee||'het team')+'.',locatie:ctx.online?'':'Studio 27, Sint-Lenaartsesteenweg, Rijkevorsel',attendees:attendees,assignee_naam:ctx.assignee,client_email:cc.email||'',client_naam:clientNaam,bedrijf_id:state.session.bedrijf_id,session_token:state.session.session_token}); done(); }
   catch(e){ ctx._booking=false; if(btn){btn.disabled=false;btn.textContent='Bevestig afspraak';} }
 }
 function toggleBot(){ const p=$id('botPanel'),f=$id('botFab'); const open=p.classList.toggle('show'); f.style.display=open?'none':'flex'; if(open){ const g=$id('botGreet'); if(g){ var nm=(typeof _greetNaam==='function'?_greetNaam():'')||''; g.innerHTML='Hallo '+escapeHtml(nm||'daar')+'! Ik help je graag op weg. Waarmee kan ik je verder helpen?'; } const inp=p.querySelector('.bot-input input'); if(inp)setTimeout(()=>inp.focus(),50); } }
@@ -889,10 +892,10 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($id('tourScrim
 
 /* ---------- Onboarding tour (1x + opt-out) ---------- */
 const TOUR=[
-  {t:'Jouw startscherm',b:'Hier vind je altijd wat er voor jóu klaarstaat — reviews, feedback en meetings. Begin hier elke dag.',target:'.sb-item[data-tab="start"]'},
+  {t:'Jouw startscherm',b:'Hier vind je altijd wat er voor jóu klaarstaat, reviews, feedback en meetings. Begin hier elke dag.',target:'.sb-item[data-tab="start"]'},
   {t:'Al je werk, gebundeld',b:'In de zijbalk staat alles altijd zichtbaar: je projecten, socials, advertenties, resultaten én onze diensten.',target:'.sb-item[data-tab="projecten"]'},
   {t:'Altijd in contact',b:'Vragen? Onze slimme assistent helpt je meteen op weg en schakelt zo nodig door naar een echt mens.',target:'#botFab'},
-  {t:'Plan vlot een moment',b:'Een meeting nodig? Prik zelf een vrij tijdslot. Wij staan klaar — vrijblijvend.',target:'.sb-item[data-tab="meetings"]'},
+  {t:'Plan vlot een moment',b:'Een meeting nodig? Prik zelf een vrij tijdslot. Wij staan klaar, vrijblijvend.',target:'.sb-item[data-tab="meetings"]'},
 ];
 let tourIdx=0;
 function openTour(){ tourIdx=0; goTab('start'); $id('tourScrim').classList.add('show'); $id('spotlight').classList.add('show'); $id('tourDialog').classList.add('show'); renderTour(); }

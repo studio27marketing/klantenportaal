@@ -1,5 +1,5 @@
 /* ============================================================
-   Studio 27 Klantenportaal — Tweaks
+   Studio 27 Klantenportaal, Tweaks
    Vanilla host-protocol panel. Three expressive controls that
    reshape the whole feel (not pixel-pushing).
    ============================================================ */

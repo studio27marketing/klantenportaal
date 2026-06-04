@@ -1,5 +1,5 @@
 /* ============================================================
-   Studio 27 Klantenportaal — SOFT GLASS theme layer
+   Studio 27 Klantenportaal, SOFT GLASS theme layer
    Loaded AFTER styles.css. Frosted surfaces over a soft
    gradient canvas. Translucent fills (cheap) on the many
    cards; real backdrop-blur only on the few big chrome panels.
@@ -159,7 +159,7 @@ body{background:var(--glass-grad);background-attachment:fixed;}
 .pf-select .pf-chev{position:absolute;right:13px;color:var(--ink-4);pointer-events:none;}
 
 /* ============================================================
-   VINCENT FEEDBACK — liquid glass accents, status icons,
+   VINCENT FEEDBACK, liquid glass accents, status icons,
    standalone detail pages, refined loader/login/settings
    ============================================================ */
 
@@ -260,7 +260,7 @@ body{background:var(--glass-grad);background-attachment:fixed;}
 @media(prefers-reduced-motion:reduce){.login-card{animation:none;}}
 
 /* ============================================================
-   ROUND 2 — bot orb, brand stamps, kanban, subtasks,
+   ROUND 2, bot orb, brand stamps, kanban, subtasks,
    centered login, lighter sidebar, mobile polish
    ============================================================ */
 
