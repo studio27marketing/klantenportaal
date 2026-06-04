@@ -156,12 +156,16 @@ async function apiV2(url, payload){
    = CORS-"simple" (geen preflight) ÉN Make parset de velden correct.
    ============================================================================= */
 function zipCompanies(combined){
-  return String(combined || '').split('|').filter(Boolean).map(function(row){
+  // ontdubbel op id: een bedrijf kan zowel via f0de5c6c-toegang als via een contactpersoon binnenkomen
+  var seen={}, out=[];
+  String(combined || '').split('|').filter(Boolean).forEach(function(row){
     const idx = row.indexOf('::');
-    const id = idx >= 0 ? row.slice(0, idx) : row;
-    const naam = idx >= 0 ? row.slice(idx + 2) : 'Bedrijf';
-    return { id: id.trim(), naam: (naam || 'Bedrijf').trim() };
+    const id = (idx >= 0 ? row.slice(0, idx) : row).trim();
+    const naam = ((idx >= 0 ? row.slice(idx + 2) : 'Bedrijf').trim()) || 'Bedrijf';
+    if(!id || seen[id]) return;
+    seen[id] = 1; out.push({ id: id, naam: naam });
   });
+  return out;
 }
 async function provisionFetch(token, selectedBid){
   try {
