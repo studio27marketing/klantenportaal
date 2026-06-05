@@ -623,17 +623,32 @@ export async function provisionLookup(env, email, selectedBid) {
   const rows = []; const seen = {};
   const add = (id, naam) => { id = str(id); if (!id || seen[id]) return; seen[id] = 1; rows.push(`${id}::${cleanCompanyName(naam)}`); };
 
-  // Lookup B: contactpersonen met email == X -> relatie 'Bedrijf'.
+  // Lookup B: contactpersonen met email == X -> hun task-IDs + contact-ZIJDE relatie 'Bedrijf'.
+  const contactIds = [];
   for (let page = 0; page < 25; page++) {
     const q = `/list/${LIST.contactpersonen}/task?include_closed=true&page=${page}&custom_fields=` +
       encodeURIComponent(`[{"field_id":"${FIELD.email}","operator":"=","value":"${email}"}]`);
     let r; try { r = await cu.get(env, q); } catch (e) { break; }
     const tasks = (r && r.data && r.data.tasks) || [];
     for (const t of tasks) {
+      if (t && t.id) contactIds.push(str(t.id));
       const rel = getCF(t, FIELD.bedrijf);
       if (Array.isArray(rel)) for (const b of rel) { if (b && b.id && str(b.name).trim()) add(b.id, b.name); }
     }
     if (tasks.length < 100 || (r && r.data && r.data.last_page)) break;
+  }
+  // Lookup C: Bedrijven waarvan het contact-veld een van die contact-IDs bevat (bedrijf-ZIJDE).
+  // Cruciaal: de twee relatievelden in ClickUp spiegelen NIET, dus een koppeling aan de bedrijf-kant
+  // staat niet automatisch op de contactfiche. Zonder deze stap miste de oude flow die bedrijven.
+  if (contactIds.length) {
+    for (let page = 0; page < 25; page++) {
+      const q = `/list/${LIST.bedrijven}/task?include_closed=true&page=${page}&custom_fields=` +
+        encodeURIComponent(`[{"field_id":"${FIELD.contact}","operator":"ANY","value":${JSON.stringify(contactIds)}}]`);
+      let r; try { r = await cu.get(env, q); } catch (e) { break; }
+      const tasks = (r && r.data && r.data.tasks) || [];
+      for (const t of tasks) { if (t && t.id && str(t.name).trim()) add(t.id, t.name); }
+      if (tasks.length < 100 || (r && r.data && r.data.last_page)) break;
+    }
   }
   // Lookup A: Bedrijven met portaalToegang-CSV die het e-mailadres EXACT als token bevat.
   for (let page = 0; page < 25; page++) {
