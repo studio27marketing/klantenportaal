@@ -155,9 +155,6 @@
 .fbc-fb textarea:focus{border-color:var(--s27-yellow,#F2C14E);}
 .fbc-fbact{display:flex;gap:8px;flex-wrap:wrap;}
 
-/* Instellingen: gelijke spacing tussen het profiel/notificaties-blok en de uitlogknop-kaart */
-.set-cols{margin-bottom:18px;}
-
 /* MEETINGS, plan-vakje in ons blauw zodat tekst goed afsteekt */
 .meet-side.meet-side-accent{background:linear-gradient(165deg,rgba(48,131,220,.96),rgba(31,95,168,.96));border:1px solid rgba(255,255,255,.35);color:#fff;-webkit-backdrop-filter:saturate(150%) blur(18px);backdrop-filter:saturate(150%) blur(18px);box-shadow:0 22px 50px rgba(31,95,168,.32),inset 0 1px 0 rgba(255,255,255,.25);}
 .meet-side-accent .ms-title,.meet-side-accent .ms-label{color:#fff;}
@@ -184,7 +181,7 @@
 .koffie-card .koffie-ic{width:46px;height:46px;border-radius:13px;background:var(--s27-orange-soft,rgba(246,97,49,.12));color:var(--s27-orange-ink,#C44514);display:flex;align-items:center;justify-content:center;flex:none;}
 
 /* INSTELLINGEN, compacte 2-koloms voorkeuren */
-.set-cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;}
+.set-cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;margin-bottom:18px;}
 .set-cols .setsec{margin-bottom:0;}
 .set-cols .set-grid-1{grid-template-columns:1fr;max-width:none;}
 .contact-list-sm{max-width:none;}

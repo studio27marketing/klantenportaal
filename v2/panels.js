@@ -1168,7 +1168,7 @@ function feedbackCard(s){
   var embed=(s.links||[]).map(function(l){ return l.type==='video'?vimeoEmbed(l.url):''; }).filter(Boolean)[0]||'';
   var views=(s.links||[]).map(function(l){
     var typ = l.type==='video'?'Bekijk op Vimeo' : l.type==='img'?"Bekijk de foto's" : l.type==='folder'?'Open de projectmap' : 'Bekijk de oplevering';
-    return '<a class="fbc-view" href="'+esc(l.url)+'" target="_blank" rel="noopener">'+ic(l.type==='video'?'play':l.type==='img'?'img':'doc',15)+'<span>'+esc(typ+' — '+s.naam)+'</span>'+ic('arrow',13)+'</a>';
+    return '<a class="fbc-view" href="'+esc(l.url)+'" target="_blank" rel="noopener">'+ic(l.type==='video'?'play':l.type==='img'?'img':'doc',15)+'<span>'+esc(typ+' · '+s.naam)+'</span>'+ic('arrow',13)+'</a>';
   }).join('');
   if(!views) views='<div class="fbc-nm">'+esc(s.naam)+'</div>';
   var tid=esc(s.task_id);
@@ -1176,12 +1176,12 @@ function feedbackCard(s){
     +(embed?'<div class="fbc-embed">'+embed+'</div>':'')
     +'<div class="fbc-views">'+views+'</div>'
     +'<div class="fbc-act" id="fbcact-'+tid+'">'
-      +'<button class="btn btn-branch br-green btn-sm" onclick="procesApprove(\''+tid+'\',this)">'+ic('check',15)+' Goedkeuren</button>'
+      +'<button class="btn btn-branch br-green btn-sm" onclick="procesApprove(\''+tid+'\')">'+ic('check',15)+' Goedkeuren</button>'
       +'<button class="btn btn-outline btn-sm" onclick="procesFeedbackToggle(\''+tid+'\')">'+ic('msg',15)+' Feedback geven</button>'
     +'</div>'
     +'<div class="fbc-fb" id="fbcfb-'+tid+'" style="display:none">'
       +'<textarea id="fbctx-'+tid+'" rows="3" placeholder="Wat mag er anders? Opmerkingen passen we volledig gratis aan."></textarea>'
-      +'<div class="fbc-fbact"><button class="btn btn-primary btn-sm" onclick="procesFeedback(\''+tid+'\',this)">'+ic('send',14)+' Versturen</button><button class="btn btn-ghost btn-sm" onclick="procesFeedbackToggle(\''+tid+'\')">Annuleer</button></div>'
+      +'<div class="fbc-fbact"><button class="btn btn-primary btn-sm" onclick="procesFeedback(\''+tid+'\')">'+ic('send',14)+' Versturen</button><button class="btn btn-ghost btn-sm" onclick="procesFeedbackToggle(\''+tid+'\')">Annuleer</button></div>'
     +'</div>'
   +'</div>';
 }
