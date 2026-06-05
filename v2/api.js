@@ -204,10 +204,9 @@ async function _provisionTry(url, token, selectedBid){
   } catch(e){ return { _neterr:true }; }
 }
 async function provisionFetch(token, selectedBid){
+  // 100% off-Make: provisioning loopt nu volledig via de worker (volledige Firebase-tokenvalidatie
+  // + exacte ClickUp-lookup over beide relatie-kanten). Geen Make-fallback meer.
   var d = await _provisionTry(GATEWAY_BASE + '/provision', token, selectedBid);
-  // Overgangsfase: val terug op Make bij ELK niet-succes van de worker (technische fout OF ok:false),
-  // zodat de login een vangnet houdt tot we de worker-flow bevestigd hebben. Daarna weghalen.
-  if(!d || d._neterr || !d.ok){ var _m = await _provisionTry(PROVISION_URL, token, selectedBid); if(_m && !_m._neterr) d = _m; }
   d = d || {};
   if(d && d.ok){
     state.portalCompanies = zipCompanies(d.companies);
