@@ -77,8 +77,10 @@ const ENDPOINTS = {
   // Metricool (geplande social posts) via de gateway i.p.v. de directe Make-hook.
   // BE-contract: { ok, linked, posts:[{id,datum,tekst,media,netwerken:[{netwerk,status}]}] }.
   metricool:         GATEWAY_BASE + '/metricool',
-  // Metricool post goedkeuren vanuit het portaal: { post_id } -> { ok, message }.
-  metricoolApprove:  GATEWAY_BASE + '/metricoolApprove'
+  // Metricool post goedkeuren vanuit het portaal: { post_id } -> { ok, approved }.
+  metricoolApprove:  GATEWAY_BASE + '/metricoolApprove',
+  // Klant geeft feedback/aanpassing op een geplande post: { post_id, feedback } -> { ok }.
+  metricoolFeedback: GATEWAY_BASE + '/metricoolFeedback'
 };
 
 /* AUTH v2 (Firebase + Cloudflare-gateway) is de DEFAULT. ?auth=v1 = legacy-vangnet. */

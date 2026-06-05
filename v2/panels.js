@@ -319,15 +319,12 @@ function mcOverall(p){ var ss=(p.netwerken||[]).map(function(n){return n.status|
   if(ss.some(function(s){return /PEND|SCHEDUL/i.test(s);})) return mcStatus('PENDING');
   if(ss.some(function(s){return /PUBLISH/i.test(s);})) return mcStatus('PUBLISHED');
   return mcStatus(ss[0]||''); }
-function mcStyleOnce(){ return $id('mcStyle')?'':('<style id="mcStyle">.mc-post{cursor:pointer;transition:box-shadow .15s}.mc-post .mc-body{display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--paper-3)}.mc-post.open .mc-body{display:block}.mc-post.open{box-shadow:0 8px 26px rgba(0,0,0,.08)}.mc-txt{white-space:pre-wrap;font-size:13.5px;line-height:1.55;color:var(--ink-2)}.mc-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}.mc-cal .cd{min-height:58px;border-radius:10px;background:var(--paper-2);border:1px solid var(--paper-3);padding:5px 6px;font-size:11px}.mc-cal .cd.muted{opacity:.35}.mc-dot{display:inline-block;width:7px;height:7px;border-radius:99px;margin:1px 1px 0 0}'
-  +'.mc-actions{margin-top:14px;padding-top:12px;border-top:1px dashed var(--paper-3)}'
-  +'.mc-actrow{display:flex;gap:8px;flex-wrap:wrap}'
-  +'.mc-fb{margin-top:10px}'
-  +'.mc-fb textarea{width:100%;box-sizing:border-box;font-family:var(--font-body);font-size:13.5px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;outline:none;resize:vertical}'
-  +'.mc-fb textarea:focus{border-color:var(--s27-yellow,#F2C14E)}'
-  +'.mc-fbact{display:flex;gap:8px;margin-top:8px}'
-  +'.mc-approved{margin-top:14px;padding:11px 13px;border-top:1px dashed var(--paper-3);display:flex;align-items:center;gap:9px;font-family:var(--font-display);font-weight:700;font-size:13.5px;color:#15803d}'
-  +'.mc-approved svg{flex:0 0 auto}'
+function mcStyleOnce(){ return $id('mcStyle')?'':('<style id="mcStyle">'
+  +'.soc-matrix{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:4px 0 16px}.soc-mcard{position:relative;text-align:left;background:var(--paper,#fff);border:1px solid var(--line);border-radius:16px;padding:16px 16px 14px 20px;cursor:pointer;overflow:hidden;transition:box-shadow .15s,transform .15s}.soc-mcard:hover{box-shadow:0 8px 22px rgba(60,40,80,.09);transform:translateY(-2px)}.soc-mcard.active{border-color:var(--c)}.soc-mbar{position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--c)}.soc-mnum{font-family:var(--font-display);font-weight:900;font-size:30px;line-height:1;color:var(--ink)}.soc-mlab{font-family:var(--font-body);font-weight:700;font-size:13px;color:var(--ink-3);margin-top:5px}@media(max-width:680px){.soc-matrix{grid-template-columns:1fr}}'
+  +'.soc-fbar{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}.soc-fchip{font-family:var(--font-display);font-weight:700;font-size:12.5px;color:var(--ink-3);background:var(--paper-2,#FAF7F2);border:1px solid var(--line);padding:7px 13px;border-radius:999px;cursor:pointer;transition:all .15s}.soc-fchip:hover{border-color:var(--s27-yellow,#F2C14E)}.soc-fchip.active{background:var(--ink,#230F23);border-color:var(--ink);color:#fff}'
+  +'.soc-nav{display:flex;gap:6px}.soc-nav button{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:var(--paper,#fff);color:var(--ink-3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}.soc-nav button:first-child svg{transform:rotate(180deg)}.soc-nav button:hover{border-color:var(--s27-yellow,#F2C14E);color:var(--ink)}'
+  +'.soc-cal{background:var(--paper,#fff);border:1px solid var(--line);border-radius:18px;padding:12px}.soc-dow{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}.soc-dow span{font-family:var(--font-display);font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-4);text-align:center;padding:4px 0}.soc-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}.soc-cell{min-height:92px;background:var(--paper-2,#FAF7F2);border:1px solid var(--paper-3,#F1EBE2);border-radius:11px;padding:6px;display:flex;flex-direction:column;gap:4px}.soc-cell.soc-empty{background:transparent;border:none}.soc-cell.soc-today{border-color:var(--s27-yellow,#F2C14E);box-shadow:inset 0 0 0 1px var(--s27-yellow,#F2C14E)}.soc-daynum{font-family:var(--font-display);font-weight:800;font-size:12px;color:var(--ink-4)}.soc-chip{display:flex;align-items:center;gap:5px;width:100%;text-align:left;font-family:var(--font-body);font-weight:700;font-size:11px;color:var(--ink-2);background:#fff;border:1px solid var(--line);border-left:3px solid var(--cc,#667684);border-radius:7px;padding:3px 6px;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;transition:box-shadow .12s}.soc-chip:hover{box-shadow:0 3px 9px rgba(60,40,80,.12)}.soc-cdot{width:7px;height:7px;border-radius:99px;flex:none}@media(max-width:680px){.soc-cell{min-height:64px}.soc-chip{font-size:10px}}'
+  +'.soc-detail{max-width:760px}.soc-back{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-display);font-weight:700;font-size:13.5px;color:var(--ink-3);background:none;border:none;cursor:pointer;padding:6px 0;margin-bottom:8px}.soc-back svg{transform:rotate(180deg)}.soc-back:hover{color:var(--ink)}.soc-dcard{background:var(--paper,#fff);border:1px solid var(--line);border-radius:18px;overflow:hidden}.soc-dimg{width:100%;max-height:420px;object-fit:cover;display:block;background:var(--paper-3)}.soc-dbody{padding:20px 22px 22px}.soc-dmeta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}.soc-dtxt{white-space:pre-wrap;font-family:var(--font-body);font-size:15px;line-height:1.6;color:var(--ink-2)}.soc-badge{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-display);font-weight:700;font-size:12.5px;border-radius:999px;padding:4px 12px}.soc-net{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;border-radius:999px;padding:3px 10px}.soc-dact{margin-top:20px;padding-top:18px;border-top:1px dashed var(--paper-3,#F1EBE2)}.soc-fbok{display:flex;align-items:center;gap:8px;font-family:var(--font-display);font-weight:700;font-size:14px;color:var(--s27-green-ink,#147A50);background:var(--s27-green-soft,rgba(18,172,78,.10));border-radius:12px;padding:13px 15px}.soc-fbta{width:100%;box-sizing:border-box;font-family:var(--font-body);font-size:14px;padding:11px 13px;border:1px solid var(--line);border-radius:11px;outline:none;resize:vertical;margin-top:6px}.soc-fbta:focus{border-color:var(--s27-yellow,#F2C14E)}'
   +'</style>'); }
 function socialNetChips(p){ return (p.netwerken||[]).map(function(nw){ var n=mcNet(nw.netwerk),st=mcStatus(nw.status); return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:'+n[1]+';background:'+n[1]+'14;border-radius:999px;padding:2px 9px">'+esc(n[0])+'<span style="width:6px;height:6px;border-radius:99px;background:'+st[1]+'"></span></span>'; }).join(' '); }
 // een post is "goed te keuren" zolang die nog niet gepubliceerd/mislukt is (concept of gepland)
@@ -376,50 +373,110 @@ function socialPostRow(p){
 }
 function toggleSocialPost(id){ var el=$id('mcp-'+id); if(el) el.classList.toggle('open'); }
 function toggleSocialFeedback(id){ var b=$id('mcfb-'+id); if(b){ var open=b.style.display!=='none'; b.style.display=open?'none':'block'; if(!open){ var t=$id('mcfbtx-'+id); if(t&&t.focus) t.focus(); } } }
+/* ---- Social-status voor de klant: gepubliceerd / goedgekeurd / wacht op je feedback ---- */
+function socialStatus(p){
+  var ss=(p.netwerken||[]).map(function(n){return String(n.status||'').toUpperCase();});
+  if(ss.length && ss.some(function(s){return s.indexOf('PUBLISH')>=0;})) return 'gepubliceerd';
+  if(p.approved || (state._mcApproved && state._mcApproved[p.id])) return 'goedgekeurd';
+  return 'feedback';
+}
+var SOC_STATUS={feedback:['Wacht op je feedback','#C44514','rgba(246,97,49,.13)','orange'],goedgekeurd:['Goedgekeurd','#147A50','rgba(18,172,78,.13)','green'],gepubliceerd:['Gepubliceerd','#1F5FA8','rgba(48,131,220,.13)','blue']};
+function socialStatusMeta(st){ return SOC_STATUS[st]||SOC_STATUS.feedback; }
+function socialPostsAll(){ if(state.demoMode) return socialDemoPosts(); var mc=(window.S27DATA&&S27DATA.metricool())||null; return (mc&&mc.posts)||[]; }
+function socialMonth(){ if(!state._socialMonth){ var n=new Date(); state._socialMonth={y:n.getFullYear(),m:n.getMonth()}; } return state._socialMonth; }
+function socialFilter(){ return state._socialFilter||'alles'; }
+function socialMonthNav(d){ var mo=socialMonth(); var dt=new Date(mo.y,mo.m+d,1); state._socialMonth={y:dt.getFullYear(),m:dt.getMonth()}; renderPanel('socials'); }
+function socialSetFilter(f){ state._socialFilter=f; renderPanel('socials'); }
+function socialOpenDetail(id){ state._socialDetail=String(id); renderPanel('socials'); if(window.scrollTo)window.scrollTo({top:0,behavior:'smooth'}); }
+function socialCloseDetail(){ state._socialDetail=null; renderPanel('socials'); }
+function socialMatrixbar(posts){
+  var c={feedback:0,goedgekeurd:0,gepubliceerd:0}; posts.forEach(function(p){ c[socialStatus(p)]++; });
+  var cards=[['feedback','Wacht op je feedback',c.feedback,'orange'],['goedgekeurd','Goedgekeurd',c.goedgekeurd,'green'],['gepubliceerd','Gepubliceerd',c.gepubliceerd,'blue']];
+  return '<div class="soc-matrix">'+cards.map(function(k){ var active=socialFilter()===k[0];
+    return '<button class="soc-mcard br-'+k[3]+(active?' active':'')+'" onclick="socialSetFilter(\''+(active?'alles':k[0])+'\')"><div class="soc-mbar"></div><div class="soc-mnum">'+k[2]+'</div><div class="soc-mlab">'+esc(k[1])+'</div></button>';
+  }).join('')+'</div>';
+}
+function socialFilters(){
+  var fs=[['alles','Alle'],['feedback','Wacht op je feedback'],['goedgekeurd','Goedgekeurd'],['gepubliceerd','Gepubliceerd']];
+  return '<div class="soc-fbar">'+fs.map(function(f){ return '<button class="soc-fchip'+(socialFilter()===f[0]?' active':'')+'" onclick="socialSetFilter(\''+f[0]+'\')">'+esc(f[1])+'</button>'; }).join('')+'</div>';
+}
+function socialCalendar(posts){
+  var mo=socialMonth(); var first=new Date(mo.y,mo.m,1);
+  var startDow=(first.getDay()+6)%7; var dim=new Date(mo.y,mo.m+1,0).getDate();
+  var label=first.toLocaleDateString('nl-BE',{month:'long',year:'numeric'});
+  var now=new Date(); var isCur=(now.getFullYear()===mo.y&&now.getMonth()===mo.m);
+  var byDay={}; posts.forEach(function(p){ if(p.dt&&p.dt.getFullYear()===mo.y&&p.dt.getMonth()===mo.m){ var d=p.dt.getDate(); (byDay[d]=byDay[d]||[]).push(p); } });
+  var dow=['ma','di','wo','do','vr','za','zo']; var cells='';
+  for(var i=0;i<startDow;i++) cells+='<div class="soc-cell soc-empty"></div>';
+  for(var day=1;day<=dim;day++){
+    var dps=(byDay[day]||[]).sort(function(a,b){return a.dt-b.dt;});
+    var today=isCur&&now.getDate()===day;
+    cells+='<div class="soc-cell'+(today?' soc-today':'')+'"><div class="soc-daynum">'+day+'</div>'+dps.map(function(p){
+      var m=socialStatusMeta(socialStatus(p)); var nc=mcNet(((p.netwerken||[])[0]||{}).netwerk);
+      var tm=p.dt.toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'});
+      return '<button class="soc-chip" style="--cc:'+nc[1]+'" onclick="socialOpenDetail(\''+esc(p.id)+'\')" title="'+esc((p.tekst||'').replace(/\s+/g,' ').slice(0,90))+'"><span class="soc-cdot" style="background:'+m[1]+'"></span>'+tm+'</button>';
+    }).join('')+'</div>';
+  }
+  var legend='<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--ink-4)">'+['feedback','goedgekeurd','gepubliceerd'].map(function(s){var m=socialStatusMeta(s);return '<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:99px;background:'+m[1]+'"></span>'+esc(m[0])+'</span>';}).join('')+'</div>';
+  return '<div class="section-head" style="margin-top:6px"><h2 style="text-transform:capitalize">'+esc(label)+'</h2><div class="soc-nav"><button aria-label="Vorige maand" onclick="socialMonthNav(-1)">'+ic('arrow',16)+'</button><button aria-label="Volgende maand" onclick="socialMonthNav(1)">'+ic('arrow',16)+'</button></div></div>'
+    +'<div class="soc-cal"><div class="soc-dow">'+dow.map(function(d){return '<span>'+d+'</span>';}).join('')+'</div><div class="soc-grid">'+cells+'</div></div>'+legend;
+}
+function socialDetailPage(id){
+  var p=socialPostsAll().filter(function(x){return String(x.id)===String(id);})[0];
+  if(!p){ socialCloseDetail(); return ''; }
+  var st=socialStatus(p), m=socialStatusMeta(st);
+  var dd=p.dt?p.dt.toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'long',year:'numeric'}):'';
+  var tt=p.dt?p.dt.toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'}):'';
+  var nets=(p.netwerken||[]).map(function(nw){ var n=mcNet(nw.netwerk); return '<span class="soc-net" style="color:'+n[1]+';background:'+n[1]+'15">'+esc(n[0])+'</span>'; }).join('');
+  var approved=(p.approved||(state._mcApproved&&state._mcApproved[p.id]));
+  var actions;
+  if(st==='gepubliceerd'){
+    actions='<div class="fs" style="color:var(--ink-3);line-height:1.55">Deze post is gepubliceerd. Bekijk ’m op je kanalen, of laat ons iets weten via de projectchat.</div>';
+  } else if(approved){
+    actions='<div class="soc-fbok">'+ic('check',16)+' Goedgekeurd, bedankt! We plannen deze post zo verder in.</div>';
+  } else {
+    actions='<div style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:16px"><button class="btn btn-branch br-green" onclick="socialApprove(\''+esc(p.id)+'\',this)">'+ic('check',16)+' Post goedkeuren</button></div>'
+      +'<div id="socFbWrap"><label class="fs" style="font-weight:700;color:var(--ink-3)">Liever iets aanpassen? Beschrijf de gewenste wijziging (tekst of visual), wij passen het voor je aan.</label>'
+      +'<textarea id="socFbTx" class="soc-fbta" rows="3" placeholder="bv. Kan de eerste zin pakkender? Of: vervang de foto door een teamfoto."></textarea>'
+      +'<div style="margin-top:9px"><button class="btn btn-primary" onclick="socialFeedback(\''+esc(p.id)+'\',this)">'+ic('send',15)+' Aanpassing doorgeven</button></div></div>';
+  }
+  return '<div class="soc-detail"><button class="soc-back" onclick="socialCloseDetail()">'+ic('arrow',15)+' Terug naar de kalender</button>'
+    +'<div class="soc-dcard">'
+    +(p.media?'<img class="soc-dimg" src="'+esc(p.media)+'" alt="" loading="lazy">':'')
+    +'<div class="soc-dbody">'
+    +'<div class="soc-dmeta"><span class="soc-badge" style="color:'+m[1]+';background:'+m[2]+'">'+esc(m[0])+'</span>'+nets+'</div>'
+    +(dd?'<div class="fs" style="color:var(--ink-4);margin-bottom:14px;display:flex;align-items:center;gap:6px">'+ic('cal',14)+' '+esc(dd)+(tt?' · '+tt:'')+'</div>':'')
+    +'<div class="soc-dtxt">'+esc(p.tekst||'(geen tekst)')+'</div>'
+    +'<div class="soc-dact">'+actions+'</div>'
+    +'</div></div></div>';
+}
 function panelSocials(){
   const head = hero('yellow','Mijn werk · Socials',
     `Jouw <span class="accent">socials${squig()}</span>, strak gepland`,
-    'Je geplande content over alle kanalen, rechtstreeks uit Metricool.',
+    'Je goedgekeurde en geplande content over alle kanalen, in één kalender.',
     scribble('stralen-geel.png','top:-12px;right:8px;width:124px;transform:rotate(6deg)'));
-  if(state.demoMode){
-    const posts=[['ig','Instagram','yellow','Reel · "Achter de schermen"','Gepland · 14 mei 10:00','sent'],
-      ['fb','Facebook','blue','Carrousel · Nieuwe collectie','Gepland · 16 mei 09:00','prog'],
-      ['li','LinkedIn','blue','Vacature · "Kom bij ons team"','Gepubliceerd · 8 mei','done'],
-      ['tt','TikTok','purple','Trend-video · lentepromo','Concept klaar','wait']];
-    return head+`<div class="mini-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:8px">
-      ${[['Volgers','8.940','up','+4,2%'],['Bereik deze maand','62.300','up','+11%'],['Engagement','5,8%','up','+0,9pt'],['Posts gepland','12','flat','=']].map(k=>`
-        <div class="kpi br-yellow"><div class="kbar"></div><div class="klab">${k[0]}</div><div class="knum">${k[1]}</div><span class="chip chip-${k[2]==='up'?'up':k[2]==='down'?'down':'flat'}">${ic(k[2],12)} ${k[3]}</span></div>`).join('')}
-    </div>
-    <div class="section-head"><h2>Contentkalender · mei</h2><span class="count">4 van 12 getoond</span></div>
-    <div class="proj-list">
-      ${posts.map(p=>`
-        <div class="proj-row br-${p[2]}" style="cursor:default">
-          <span class="pr-main"><span class="pr-disc">${p[1]}</span><span class="pr-name" style="font-size:15px">${p[3]}</span><span style="font-size:12.5px;color:var(--ink-4)">${p[4]}</span></span>
-          ${spill(p[5])}
-          ${p[5]==='wait'||p[5]==='sent'?'<button class="btn btn-branch btn-sm br-green">Goedkeuren</button><button class="btn btn-outline btn-sm">Feedback</button>':''}
-        </div>`).join('')}
-    </div>`;
-  }
-  var mc = (window.S27DATA&&S27DATA.metricool())||null;
-  if(!mc || !mc.linked)
-    return head+'<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen Metricool-koppeling</div><div style="color:var(--ink-3);max-width:460px;margin:0 auto;line-height:1.55">Zodra je social-kanalen aan je portaal gekoppeld zijn, zie je hier je volledige contentkalender met geplande posts en hun status. Vraag gerust je contactpersoon bij Studio&nbsp;27.</div></div>';
-  var posts = mc.posts||[];
-  if(!posts.length)
-    return head+'<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen geplande posts</div><div style="color:var(--ink-3)">Er staan momenteel geen posts ingepland voor de komende periode. Zodra Studio&nbsp;27 content inplant, verschijnt die hier.</div></div>';
-  var view = state._socialView||'lijst';
-  var perNet={}; posts.forEach(function(p){ (p.netwerken||[]).forEach(function(nw){ var n=mcNet(nw.netwerk)[0]; perNet[n]=(perNet[n]||0)+1; }); });
-  var summary='<div class="mini-grid" style="grid-template-columns:repeat(auto-fit,minmax(118px,1fr));margin-bottom:10px"><div class="kpi br-yellow"><div class="kbar"></div><div class="klab">Posts gepland</div><div class="knum">'+posts.length+'</div></div>'
-    +Object.keys(perNet).slice(0,4).map(function(n){ return '<div class="kpi br-yellow"><div class="kbar"></div><div class="klab">'+esc(n)+'</div><div class="knum">'+perNet[n]+'</div></div>'; }).join('')+'</div>';
-  var toggle='<div class="section-head"><h2>Contentkalender</h2><span class="count">'+posts.length+' posts</span></div>';
-  var body;
-  {
-    var byMonth={}; posts.forEach(function(p){ var k=p.dt?(p.dt.getFullYear()+'-'+('0'+(p.dt.getMonth()+1)).slice(-2)):'zonder'; (byMonth[k]=byMonth[k]||[]).push(p); });
-    body=Object.keys(byMonth).sort().map(function(k){
-      var lab=(k==='zonder')?'Zonder datum':(byMonth[k][0].dt.toLocaleDateString('nl-BE',{month:'long',year:'numeric'}));
-      return '<div style="margin:16px 0 8px;font-weight:800;font-family:var(--font-display);text-transform:capitalize;color:var(--ink-3)">'+esc(lab)+'</div>'+byMonth[k].map(socialPostRow).join('');
-    }).join('');
-  }
-  return mcStyleOnce()+head+summary+toggle+body;
+  var mc = state.demoMode ? {linked:true,posts:socialDemoPosts()} : ((window.S27DATA&&S27DATA.metricool())||null);
+  if(!mc) return head+'<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je contentkalender wordt geladen…</p></div>';
+  if(!mc.linked) return head+'<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen Metricool-koppeling</div><div style="color:var(--ink-3);max-width:460px;margin:0 auto;line-height:1.55">Zodra je social-kanalen gekoppeld zijn, zie je hier je volledige contentkalender met geplande en gepubliceerde posts. Vraag gerust je contactpersoon bij Studio&nbsp;27.</div></div>';
+  if(state._socialDetail) return mcStyleOnce()+head+socialDetailPage(state._socialDetail);
+  var posts=mc.posts||[];
+  if(!posts.length) return head+'<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen posts</div><div style="color:var(--ink-3)">Zodra Studio&nbsp;27 content voor je inplant, verschijnt die hier in de kalender.</div></div>';
+  var f=socialFilter(); var shown=f==='alles'?posts:posts.filter(function(p){return socialStatus(p)===f;});
+  return mcStyleOnce()+head+socialMatrixbar(posts)+socialFilters()+socialCalendar(shown);
+}
+// Voorbeeldposts (alleen demo): in de huidige maand verspreid, met verschillende statussen.
+function socialDemoPosts(){
+  var n=new Date(), y=n.getFullYear(), mo=n.getMonth();
+  function mk(id,day,h,mi,net,tekst,status,approved){ return {id:'d'+id,dt:new Date(y,mo,day,h,mi),datum:'',tekst:tekst,media:'',approved:!!approved,netwerken:[{netwerk:net,status:status||'PENDING'}]}; }
+  return [
+    mk(3,9,30,'instagram','Reel: achter de schermen bij onze nieuwste shoot.\n\nBenieuwd hoe we jouw merk in beeld brengen? Hou deze pagina in de gaten!','PENDING',false),
+    mk(8,10,0,'facebook','Carrousel: 5 tips voor meer zichtbaarheid online. Swipe mee en ontdek wat voor jou werkt.','PENDING',true),
+    mk(12,8,15,'linkedin','We verwelkomen een nieuw gezicht in de studio. Maak kennis met ons uitgebreide team!','PUBLISHED',false),
+    mk(16,17,0,'instagram','Klant in de kijker: zo hielpen we hen online groeien op een half jaar tijd.','PENDING',false),
+    mk(19,11,30,'tiktok','Trend-video lentepromo. Doe je mee met de actie van deze maand?','PENDING',false),
+    mk(24,9,0,'facebook','Maandelijkse update: dit hebben we de afgelopen weken voor je klaargezet.','PUBLISHED',false),
+    mk(27,14,0,'linkedin','Praktijkcase: van idee tot resultaat. Lees hoe we deze samenwerking aanpakten.','PENDING',false)
+  ];
 }
 
 /* ---- Advertenties (echte Meta/Google-data) ---- */

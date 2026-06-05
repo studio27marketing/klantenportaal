@@ -888,6 +888,22 @@ async function metricoolFeedback(id, btn){
     await api(ENDPOINTS.directMessage, { bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), onderwerp:'Feedback social post (via portaal)', bericht:'Feedback op geplande post '+id+': '+tx });
   }catch(e){}
 }
+/* ---- Social-kalender: goedkeuren + aanpassing doorgeven (nieuwe detail-UI) ---- */
+async function socialApprove(id, btn){
+  if(btn){ btn.disabled=true; btn.textContent='Bezig…'; }
+  state._mcApproved=state._mcApproved||{}; state._mcApproved[id]=true;
+  if(window.S27DATA&&S27DATA.markMetricoolApproved) S27DATA.markMetricoolApproved(id);
+  if(!state.demoMode){ try{ await api(ENDPOINTS.metricoolApprove, { post_id:id }); }catch(e){} }
+  if(typeof renderPanel==='function') renderPanel('socials');
+}
+async function socialFeedback(id, btn){
+  const t=$id('socFbTx'); const tx=((t&&t.value)||'').trim();
+  if(!tx){ if(t){ t.style.borderColor='var(--s27-orange)'; t.focus(); } return; }
+  if(btn){ btn.disabled=true; btn.textContent='Versturen…'; }
+  if(!state.demoMode){ try{ await api(ENDPOINTS.metricoolFeedback, { post_id:id, feedback:tx }); }catch(e){} }
+  const box=$id('socFbWrap');
+  if(box) box.innerHTML='<div class="soc-fbok">'+ic('check',16)+' Je opmerking is doorgestuurd naar je Studio 27-contact. We passen het aan en je ziet de update hier verschijnen.</div>';
+}
 async function uploadHuisstijl(input){
   const f=input.files&&input.files[0]; if(!f) return;
   if(state.demoMode){ return; }
