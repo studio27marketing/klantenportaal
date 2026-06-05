@@ -453,7 +453,7 @@ function botAsk(btn){ pushBot(btn.textContent,'user'); const q=btn.textContent; 
 function botSend(){ const inp=$id('botInput'); const tx=(inp.value||'').trim(); if(!tx) return; pushBot(tx,'user'); inp.value=''; botReply(tx); }
 function pushBot(text,who){ const m=$id('botMsgs'); const d=document.createElement('div'); d.className='bmsg '+who; d.innerHTML = who==='user'?escapeHtml(text):text; m.appendChild(d); m.scrollTop=m.scrollHeight; }
 async function botReply(q){
-  const m=$id('botMsgs'); const t=document.createElement('div'); t.className='typing'; t.innerHTML='<i></i><i></i><i></i>'; m.appendChild(t); m.scrollTop=m.scrollHeight;
+  const m=$id('botMsgs'); const t=document.createElement('div'); t.className='typing'; t.innerHTML='<i></i><i></i><i></i><span class="typing-tx">Onze assistent denkt na…</span>'; m.appendChild(t); m.scrollTop=m.scrollHeight;
   if(state.demoMode){ setTimeout(()=>{ t.remove(); pushBot(BOT_ANSWERS[q]||'Goeie vraag! Ik verbind je even door met <b>Ilke</b>, je vaste contact, zij antwoordt je zo.','bot'); },1100); return; }
   try {
     const res = await api(ENDPOINTS.aiStatusBot, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), vraag:q, projecten_context:botContext() });

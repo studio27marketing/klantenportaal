@@ -172,6 +172,9 @@
 .soc-saveok{display:flex;align-items:center;gap:8px;font-family:var(--font-display);font-weight:700;font-size:13.5px;color:var(--s27-green-ink,#147A50);background:var(--s27-green-soft,rgba(18,172,78,.10));border-radius:10px;padding:10px 13px;}
 .soc-saveerr{display:flex;align-items:center;gap:8px;font-family:var(--font-display);font-weight:700;font-size:13.5px;color:var(--s27-orange-ink,#C44514);background:var(--s27-orange-soft,rgba(246,97,49,.10));border-radius:10px;padding:10px 13px;}
 
+/* Chatbot 'denkt na'-indicator: tekst naast de bouncende bolletjes, zodat de klant weet dat er een antwoord aankomt */
+.typing .typing-tx{align-self:center;margin-left:7px;font-family:var(--font-body);font-size:13px;font-weight:600;color:var(--ink-3);}
+
 /* MEETINGS, plan-vakje in ons blauw zodat tekst goed afsteekt */
 .meet-side.meet-side-accent{background:linear-gradient(165deg,rgba(48,131,220,.96),rgba(31,95,168,.96));border:1px solid rgba(255,255,255,.35);color:#fff;-webkit-backdrop-filter:saturate(150%) blur(18px);backdrop-filter:saturate(150%) blur(18px);box-shadow:0 22px 50px rgba(31,95,168,.32),inset 0 1px 0 rgba(255,255,255,.25);}
 .meet-side-accent .ms-title,.meet-side-accent .ms-label{color:#fff;}
