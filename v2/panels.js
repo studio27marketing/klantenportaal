@@ -631,10 +631,8 @@ function offerteRequestForm(){
     <div class="np-actions np-hidden" id="npActions"><button class="btn btn-primary" onclick="submitNieuwProject(this)">Vraag offerte aan ${ic('arrow',16)}</button><button class="btn btn-outline" onclick="goTab('meetings')">Plan eerst een koffietje</button></div>
   </div>`;
 }
-function panelNieuwProject(){
-  return hero('blue','Plannen · Offerte aanvragen',
-    `Zin in iets <span class="accent">nieuws${squig()}</span>?`) + offerteRequestForm();
-}
+// De losse 'Nieuw project'-aanvraagmodule is verwijderd en vervangen door de volledige
+// Offertes-pagina (panelOffertes). Zijbalk en topbar wijzen nu naar 'offertes'.
 
 function panelHuisstijl(){
   const sw=[['Blauw','#3083DC'],['Roze','#F697CE'],['Paars','#9441DB'],['Groen','#12AC4E'],['Oranje','#F66131']];
@@ -740,7 +738,10 @@ function offEur(n){ return '€ '+(Number(n)||0).toLocaleString('nl-BE',{minimum
 function offCart(){ if(!state._offerteCart) state._offerteCart={}; return state._offerteCart; }
 function offBySku(sku){ var c=offCatalog(); for(var i=0;i<c.length;i++){ if(String(c[i].sku)===String(sku)) return c[i]; } return null; }
 // vaste tabvolgorde (meest gevraagde groepen vooraan); alleen groepen die echt bestaan worden getoond
-const OFF_GROUP_ORDER=['Content & video','Webdesign','Social media','Branding & grafisch','Fotografie','Audio','Adverteren','Strategie','Opleidingen','Overig'];
+const OFF_GROUP_ORDER=['Content & video','Social media','Fotografie','Branding & grafisch','Webdesign','Adverteren','Audio','Strategie','Opleidingen','Overig'];
+// Studio 27-branding per offerte-tak: kleur (br-*) + icoon, zodat de klant de takken meteen herkent.
+const OFF_GROUP_BRAND={'Content & video':{br:'purple',icon:'video'},'Social media':{br:'yellow',icon:'social'},'Fotografie':{br:'purple',icon:'video'},'Branding & grafisch':{br:'pink',icon:'branding'},'Webdesign':{br:'green',icon:'website'},'Adverteren':{br:'orange',icon:'ads'},'Audio':{br:'indigo',icon:'spark'},'Strategie':{br:'blue',icon:'strategie'},'Opleidingen':{br:'indigo',icon:'opleiding'},'Overig':{br:'indigo',icon:'doc'}};
+function offGroupBrand(g){ return OFF_GROUP_BRAND[g]||{br:'purple',icon:'doc'}; }
 function offGroups(){
   var seen={}, cat=offCatalog(); cat.forEach(function(p){ seen[p.group]=1; });
   var ordered=OFF_GROUP_ORDER.filter(function(g){ return seen[g]; });
@@ -798,12 +799,12 @@ function offBuilderInner(){
   state._offerteGroup=active;
   var q=String(state._offerteSearch||'').trim().toLowerCase();
   var cat=offCatalog();
-  var popular=cat.filter(function(p){return p.popular;});
-  // populair-strip (alleen tonen als er niet gezocht wordt)
-  var popHTML = (!q && popular.length) ? ('<div class="off-popular"><div class="off-poplab">'+ic('spark',15)+' Meest gevraagd</div><div class="off-poprow">'+popular.map(function(p){ return offProductRow(p,true); }).join('')+'</div></div>') : '';
+  // 'Meest gevraagd'-strip verwijderd (op vraag); de klant kiest direct via de gebrande tak-tabs.
+  var popHTML = '';
   var tabs='<div class="off-tabs" id="offTabs" role="tablist">'+groups.map(function(g){
     var n=cat.filter(function(p){return p.group===g;}).length;
-    return '<button class="off-tab'+(g===active?' active':'')+'" role="tab" onclick="offSetGroup(\''+esc(g)+'\')">'+esc(g)+'<span class="off-tabn">'+n+'</span></button>';
+    var b=offGroupBrand(g);
+    return '<button class="off-tab br-'+b.br+(g===active?' active':'')+'" role="tab" onclick="offSetGroup(\''+esc(g)+'\')"><span class="off-tabic">'+ic(b.icon,15)+'</span>'+esc(g)+'<span class="off-tabn">'+n+'</span></button>';
   }).join('')+'</div>';
   var search='<div class="off-search"><span class="off-searchic">'+ic('search',16)+'</span><input id="offSearch" type="search" placeholder="Zoek een product of dienst…" value="'+esc(state._offerteSearch||'')+'" oninput="offSearch(this.value)"></div>';
   // productlijst: bij zoeken over de hele catalogus, anders enkel de actieve groep
@@ -837,11 +838,13 @@ function offBuilderStyleOnce(){ return $id('offStyle')?'':('<style id="offStyle"
   +'.off-poplab{display:flex;align-items:center;gap:6px;font-family:var(--font-display);font-weight:800;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--s27-purple-ink);margin-bottom:8px}'
   +'.off-poprow{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px}'
   +'.off-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}'
-  +'.off-tab{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-display);font-weight:700;font-size:13px;color:var(--ink-3);background:var(--paper-2,#FAF7F2);border:1px solid var(--line);padding:8px 14px;border-radius:999px;cursor:pointer;transition:background .18s,color .18s,border-color .18s}'
-  +'.off-tab:hover{border-color:var(--s27-purple)}'
-  +'.off-tab.active{background:var(--s27-purple);border-color:var(--s27-purple);color:#fff}'
+  +'.off-tab{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-display);font-weight:700;font-size:13px;color:var(--ink-3);background:var(--paper-2,#FAF7F2);border:1px solid var(--line);padding:8px 13px;border-radius:999px;cursor:pointer;transition:background .18s,color .18s,border-color .18s}'
+  +'.off-tabic{display:inline-flex;align-items:center;color:var(--c,var(--s27-purple))}'
+  +'.off-tab:hover{border-color:var(--c,var(--s27-purple))}'
+  +'.off-tab.active{background:var(--c-soft,rgba(148,65,219,.12));border-color:var(--c,var(--s27-purple));color:var(--c-ink,var(--s27-purple-ink))}'
+  +'.off-tab.active .off-tabic{color:var(--c-ink,var(--s27-purple-ink))}'
   +'.off-tabn{font-size:11px;font-weight:800;background:rgba(0,0,0,.08);border-radius:999px;padding:0 7px;min-width:18px;text-align:center}'
-  +'.off-tab.active .off-tabn{background:rgba(255,255,255,.28)}'
+  +'.off-tab.active .off-tabn{background:color-mix(in oklab,var(--c) 22%,transparent);color:var(--c-ink)}'
   +'.off-subhead{font-family:var(--font-display);font-weight:800;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-4);margin:14px 0 7px}'
   +'.off-list{display:flex;flex-direction:column;gap:8px}'
   +'.off-prow{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px;transition:border-color .15s,box-shadow .15s}'
@@ -1255,7 +1258,7 @@ function buildOverlays(){
 const PANELS={
   start:panelStart, berichten:panelBerichten, projecten:panelProjecten, diensten:panelDiensten,
   socials:panelSocials, advertenties:panelAdvertenties, performance:panelPerformance,
-  meetings:panelMeetings, nieuwproject:panelNieuwProject, offertes:panelOffertes,
+  meetings:panelMeetings, nieuwproject:panelOffertes, offertes:panelOffertes,
   huisstijl:panelHuisstijl, facturatie:panelFacturatie, instellingen:panelInstellingen,
 };
 const TAB_BRANCH={start:'blue',berichten:'blue',projecten:'blue',diensten:'blue',socials:'yellow',advertenties:'orange',performance:'purple',meetings:'blue',nieuwproject:'blue',offertes:'purple',huisstijl:'pink',facturatie:'green',instellingen:'indigo'};

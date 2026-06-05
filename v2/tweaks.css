@@ -65,6 +65,13 @@
 .dc-head .dc-who .dc-av{width:24px;height:24px;border-radius:50%;background:var(--s27-blue,#3083DC);color:#fff;font-family:var(--font-display);font-weight:800;font-size:10px;display:flex;align-items:center;justify-content:center;flex:none;}
 .dc-head .dc-who .dc-sub{margin-left:0;}
 
+/* PROJECTCHAT, ruimer venster (was te klein): de aside vult de hoogte, berichten scrollen, invoer plakt onderaan */
+.detail-chat{min-height:560px;}
+.detail-chat .dc-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
+.detail-chat .dc-body .chat-list{flex:1 1 auto;min-height:180px;overflow-y:auto;margin-bottom:12px;padding-right:2px;}
+.detail-chat .dc-body .chat-input{flex:none;}
+@media(max-width:980px){.detail-chat{min-height:0;}.detail-chat .dc-body{height:auto;overflow:visible;}.detail-chat .dc-body .chat-list{min-height:52vh;}}
+
 /* ACTIEVE PROJECTEN, kolommen per tak */
 .dienst-cols{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px;align-items:start;}
 .dienst-col{background:var(--glass-fill,rgba(255,255,255,.6));border:1px solid var(--glass-border,rgba(255,255,255,.85));border-top:4px solid var(--c,var(--s27-blue));border-radius:18px;padding:14px 14px 16px;box-shadow:0 6px 22px rgba(60,40,80,.07);}

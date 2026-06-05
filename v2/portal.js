@@ -925,7 +925,7 @@ async function loadPlanSlots(taskId){
   const durMs=planDurMs(data.taak_est); const slots=computeFreeSlots(data.blokken,durMs);
   const aEmails=String(data.assignee_emails||data.assignee_email||'').split(',').map(s=>s.trim()).filter(Boolean);
   state.planCtx=state.planCtx||{};
-  state.planCtx[taskId]={assignee:data.assignee_naam||'je Studio 27-contact',assignee_emails:aEmails,list_id:data.list_id||'',online:true,sel:null,dur:durMs,pool:!!data.pool,vrijCount:Number(data.vrij_count)||0};
+  state.planCtx[taskId]={assignee:data.assignee_naam||'je Studio 27-contact',assignee_emails:aEmails,list_id:data.list_id||'',online:false,sel:null,dur:durMs,pool:!!data.pool,vrijCount:Number(data.vrij_count)||0};
   box.innerHTML=renderPlanPicker(taskId,slots);
 }
 function renderPlanPicker(taskId,slots){
@@ -936,7 +936,7 @@ function renderPlanPicker(taskId,slots){
   // pool-shoot: toon subtiel hoeveel content creators beschikbaar zijn (>=1 = boekbaar; wij wijzen er één toe).
   const poolBadge=(ctx.pool&&ctx.vrijCount>0)?' <span class="fs" style="color:var(--ink-4)">· '+ctx.vrijCount+' content creator'+(ctx.vrijCount===1?'':'s')+' beschikbaar</span>':'';
   return '<p class="fs" style="margin:0 0 12px;color:var(--ink-3)">Met <b>'+escapeHtml(ctx.assignee||'')+'</b> · duur ± '+escapeHtml(fmtDur(ctx.dur||PLAN_DUR_MS))+poolBadge+'. Blader per week tot een maand vooruit:</p>'+
-    '<div style="display:flex;gap:16px;margin-bottom:12px"><label class="remember"><input type="radio" name="pm" value="online" checked onchange="planMode(\''+escapeHtml(taskId)+'\',true)"> Online (Google Meet)</label><label class="remember"><input type="radio" name="pm" value="fysiek" onchange="planMode(\''+escapeHtml(taskId)+'\',false)"> Fysiek bij Studio 27</label></div>'+
+    '<div style="display:flex;gap:16px;margin-bottom:12px"><label class="remember"><input type="radio" name="pm" value="fysiek" checked onchange="planMode(\''+escapeHtml(taskId)+'\',false)"> Fysiek bij Studio 27</label><label class="remember"><input type="radio" name="pm" value="online" onchange="planMode(\''+escapeHtml(taskId)+'\',true)"> Online (Google Meet)</label></div>'+
     '<div id="planWeekBox">'+planWeekHTML()+'</div>'+
     '<button class="btn btn-branch br-blue btn-block" id="plan-book" onclick="bookPlanSlot(\''+escapeHtml(taskId)+'\')" disabled style="margin-top:12px">Bevestig afspraak</button>';
 }
