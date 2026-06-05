@@ -53,22 +53,9 @@ const scribble = ()=>'';
 const STATUS_ICON = {todo:'st_plan',prog:'st_progress',wait:'st_feedback',sent:'st_feedback',done:'st_approved'};
 
 const hero = (br,eyebrow,h1html,noCrumb)=>{
-  // Op de homepage geen broodkruimel (geen "Portaal"-knop die meespringt bij navigatie).
-  if(noCrumb){
-    return `<div class="hero br-${br}">
-      <h1 class="hero-h1">${h1html}</h1>
-    </div>`;
-  }
-  let path=String(eyebrow).replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim();
-  if(!/^portaal/i.test(path)) path='Portaal · '+path;
-  const parts=path.split('·').map(s=>s.trim()).filter(Boolean);
-  const CT={'Portaal':'start','Mijn werk':'projecten','Plannen':'meetings','Mijn bedrijf':'huisstijl','Onze diensten':'diensten'};
-  const crumb=parts.map((p,i)=>{
-    if(i===parts.length-1)return `<span class="hc-cur">${p}</span>`;
-    return CT[p]?`<button class="hc hc-link" onclick="goTab('${CT[p]}')">${p}</button>`:`<span class="hc">${p}</span>`;
-  }).join('<span class="hc-sep">›</span>');
+  // Breadcrumbs verwijderd (op vraag): ze gaven geen meerwaarde en maakten de look-and-feel
+  // complexer. De header toont enkel nog de titel. eyebrow/noCrumb blijven voor compat.
   return `<div class="hero br-${br}">
-    <nav class="hero-crumb">${crumb}</nav>
     <h1 class="hero-h1">${h1html}</h1>
   </div>`;
 };
@@ -1089,9 +1076,26 @@ function chatHTML(taskId, readOnly){
 /* =========================================================
    PROJECT DETAIL MODAL
    ========================================================= */
-function scheduleBlock(p){
-  if(!p || p.status!=='todo') return '';
-  return `<div class="setsec" style="margin-top:18px"><h3 style="display:flex;align-items:center;gap:8px">${ic('st_plan',18)} Plan je moment</h3><p class="sdesc">Kies een tijdslot dat past in de agenda van je Studio 27-contact, wij sturen meteen een agenda-uitnodiging met Meet-link of locatie.</p><div id="s27-plan-${esc(p.id)}"><button class="btn btn-branch br-${p.br} btn-sm" onclick="loadPlanSlots('${esc(p.id)}')">Toon beschikbare momenten →</button></div></div>`;
+// Plan-module: verschijnt ENKEL in twee scenario's (bepaald door de worker: det.plan):
+//  - 'meeting' : het woord 'meeting' staat in de (sub)taak -> gewone plan-moment-widget.
+//  - 'shoot'   : er is een nog-te-plannen shoot -> shootkalender-widget (altijd op locatie).
+// In alle andere gevallen (mode 'none' of geen plan-data) verdwijnt de module volledig.
+function scheduleBlock(det, p){
+  const br = (p&&p.br)||'blue';
+  let mode, tid;
+  if(!det){
+    // demo/geen detail geladen: oude regel (plan-moment bij een to-do-project) zodat de showcase niet leeg oogt.
+    if(!p || p.status!=='todo') return '';
+    mode='meeting'; tid=p.id;
+  } else {
+    const plan = det.plan;
+    if(!plan || plan.mode==='none' || !plan.task_id) return '';
+    mode=plan.mode; tid=plan.task_id;
+  }
+  if(mode==='shoot'){
+    return `<div class="setsec" style="margin-top:18px"><h3 style="display:flex;align-items:center;gap:8px">${ic('st_plan',18)} Plan je shoot</h3><p class="sdesc">Kies een dag uit onze shootkalender. Een shoot vindt altijd plaats op locatie of bij Studio 27, samen met je cameraploeg.</p><div id="s27-plan-${esc(tid)}"><button class="btn btn-branch br-${br} btn-sm" onclick="loadPlanSlots('${esc(tid)}',true)">Toon beschikbare shootdagen →</button></div></div>`;
+  }
+  return `<div class="setsec" style="margin-top:18px"><h3 style="display:flex;align-items:center;gap:8px">${ic('st_plan',18)} Plan je moment</h3><p class="sdesc">Kies een tijdslot dat past in de agenda van je Studio 27-contact, wij sturen meteen een agenda-uitnodiging met Meet-link of locatie.</p><div id="s27-plan-${esc(tid)}"><button class="btn btn-branch br-${br} btn-sm" onclick="loadPlanSlots('${esc(tid)}')">Toon beschikbare momenten →</button></div></div>`;
 }
 const REVIEW_CHANNEL_OPTS = [['portaal','via het portaal'],['whatsapp','via WhatsApp'],['email','via e-mail'],['telefoon','telefonisch'],['meeting','in een meeting']].map(function(c){return '<option value="'+c[0]+'">'+c[1]+'</option>';}).join('');
 // label naar de juiste actie-knop voor een deliverable-link (Vimeo/Webflow/Drive)
@@ -1246,7 +1250,7 @@ function buildModal(id, from){
   const hasProces = !!(det && det.proces && det.proces.aantal_stappen);
   const overview=`<div class="mpane active" data-mpane="overzicht">
     ${procesBlock(det,p)}
-    ${scheduleBlock(p)}
+    ${scheduleBlock(det,p)}
     ${showDeliv?`<h4 style="font-family:var(--font-display);font-size:15px;margin:0 0 4px">${(delivList&&delivList.length>1)||(delivList===null)?'Jouw deliverables':'Jouw deliverable'}</h4>
     <p class="sdesc" style="margin:0 0 10px">Bekijk wat we voor je klaarzetten en laat meteen weten of je akkoord gaat of feedback hebt. Opmerkingen passen we volledig gratis aan.</p>
     ${delivBlock}`:''}
@@ -1292,7 +1296,6 @@ function buildModal(id, from){
   const d=DISC[p.disc]||{icon:'doc'};
   const fromCap=backLabel.charAt(0).toUpperCase()+backLabel.slice(1);
   return `<div class="detail br-${p.br}">
-    <nav class="hero-crumb"><button class="hc hc-link" onclick="goTab('start')">Portaal</button><span class="hc-sep">›</span><button class="hc hc-link" onclick="goTab('${backTo}')">${fromCap}</button><span class="hc-sep">›</span><span class="hc-cur">${p.name}</span></nav>
     <button class="detail-back" onclick="goTab('${backTo}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg> Terug naar ${backLabel}</button>
     <div class="detail-head">
       <span class="detail-ic">${discMark(p.disc,'detail-stamp')}</span>

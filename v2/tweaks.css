@@ -133,6 +133,9 @@
 .proces-loopt{display:flex;align-items:center;gap:8px;font-family:var(--font-body);font-size:13px;color:var(--ink-3);margin-top:12px;}
 .proces-loopt svg{color:var(--ink-4);flex:none;}
 .proces-loopt b{color:var(--ink-2);}
+/* shoot-modus van de plan-picker: vaste locatie i.p.v. fysiek/online-keuze */
+.plan-locnote{display:flex;align-items:center;gap:7px;font-family:var(--font-display);font-weight:700;font-size:13px;color:var(--ink-3);background:var(--paper-2,#FAF7F2);border:1px solid var(--line,#E7DFD3);border-radius:10px;padding:9px 12px;margin-bottom:12px;}
+.plan-locnote svg{color:var(--ink-4);flex:none;}
 
 /* MEETINGS, plan-vakje in ons blauw zodat tekst goed afsteekt */
 .meet-side.meet-side-accent{background:linear-gradient(165deg,rgba(48,131,220,.96),rgba(31,95,168,.96));border:1px solid rgba(255,255,255,.35);color:#fff;-webkit-backdrop-filter:saturate(150%) blur(18px);backdrop-filter:saturate(150%) blur(18px);box-shadow:0 22px 50px rgba(31,95,168,.32),inset 0 1px 0 rgba(255,255,255,.25);}

@@ -911,6 +911,32 @@ export function buildProces(rootTask, descendants) {
   };
 }
 
+// Bepaalt of er bij een project een moment in te plannen valt, en welk type. Enkel twee
+// scenario's tonen de plan-module; in alle andere gevallen verdwijnt ze.
+//  - 'shoot'   : er is een nog-te-plannen shoot (TYPE JOB = Shoot/6) -> shootkalender-widget.
+//  - 'meeting' : het woord 'meeting' staat letterlijk in de naam/beschrijving van de (sub)taak.
+//  - 'none'    : niets te plannen.
+// Enkel OPEN taken (status.type 'open' = te doen) tellen; al afgehandelde shoots/meetings
+// hoeven niet meer ingepland te worden. Shoot heeft voorrang (concrete kalenderboeking).
+function isPlannableTask(t) {
+  return String(t && t.status && t.status.type || '').toLowerCase() === 'open';
+}
+export function buildPlan(rootTask, descendants) {
+  const pool = [rootTask].concat(descendants || []);
+  let shoot = null, meeting = null;
+  for (const t of pool) {
+    if (!isPlannableTask(t)) continue;
+    if (!shoot && Number(getCF(t, FIELD.typeJob)) === 6) shoot = t;                 // TYPE JOB = Shoot
+    if (!meeting) {
+      const hay = (String(t.name || '') + ' ' + String(t.description || t.text_content || '')).toLowerCase();
+      if (hay.indexOf('meeting') >= 0) meeting = t;
+    }
+  }
+  if (shoot)   return { mode: 'shoot',   task_id: str(shoot.id),   label: str(shoot.name) };
+  if (meeting) return { mode: 'meeting', task_id: str(meeting.id), label: str(meeting.name) };
+  return { mode: 'none', task_id: '', label: '' };
+}
+
 // status-mapper (substring + status.type) -> genormaliseerd + label + pct.
 export function statusMapper(statusObj) {
   const label = String((statusObj && statusObj.status) || '').toLowerCase();
@@ -1208,10 +1234,13 @@ export async function projectDetailV2(bedrijfId, body, env) {
   // zitten dieper. Kinderloze taak -> het overzicht toont de taak zelf. Additief: faalt het,
   // dan blijft de detail gewoon werken.
   let proces = { aantal_stappen: 0, opgeleverd: [], wacht_feedback: [], in_productie: [], te_doen: [], loopt: { aantal: 0, disciplines: [] }, links: [], meeting: { gepland: false, naam: '', task_id: '' }, acties: [] };
+  let plan = { mode: 'none', task_id: '', label: '' };
   try {
     const tree = await fetchBedrijfTree(env, bedrijfId);
-    proces = buildProces(task, descendantsOf(taskId, tree.childrenByParent));
-  } catch (e) { /* proces-overzicht is additief; nooit de detail breken */ }
+    const desc = descendantsOf(taskId, tree.childrenByParent);
+    proces = buildProces(task, desc);
+    plan = buildPlan(task, desc);
+  } catch (e) { /* proces-overzicht + plan zijn additief; nooit de detail breken */ }
   const out = {
     ok: true,
     task_id: str(task.id || taskId),
@@ -1236,6 +1265,7 @@ export async function projectDetailV2(bedrijfId, body, env) {
     sae: buildSae(task),                                      // assignees [{naam, initialen}]
     taken,
     proces,                                                   // proces-overzicht: opgeleverd/feedback/meeting/acties
+    plan,                                                     // {mode:'shoot'|'meeting'|'none', task_id, label}
     comments: [],
   };
   return { status: 200, body: out };
@@ -1248,6 +1278,7 @@ function detailSkeleton(taskId, err) {
     content_creators: '', type_job: '', shootlink: '', has_contact: 'no', has_bedrijf: 'no',
     sae: [], taken: [],
     proces: { aantal_stappen: 0, opgeleverd: [], wacht_feedback: [], in_productie: [], te_doen: [], loopt: { aantal: 0, disciplines: [] }, links: [], meeting: { gepland: false, naam: '', task_id: '' }, acties: [] },
+    plan: { mode: 'none', task_id: '', label: '' },
     comments: [], __ERROR__: err,
   };
 }

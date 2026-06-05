@@ -262,7 +262,7 @@
       labels:(p.labels&&p.labels.length)?p.labels:mapLabels(p._raw||{discipline:p.discId}),
       status:p.status||DATA.status(d.status||d.project_status).key,
       beschrijving:d.beschrijving||'', subtasks:subs, deliverables:delivs, sae:mapSae(d.sae||p.sae),
-      proces:d.proces||null,
+      proces:d.proces||null, plan:d.plan||null,
       feedbackStatus:d.feedback_status||'', hasContact:d.has_contact==='yes', hasBedrijf:d.has_bedrijf==='yes',
       timeEstimate:d.time_estimate||'', typeJob:d.type_job||'', _raw:d
     };
