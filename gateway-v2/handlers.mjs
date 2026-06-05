@@ -2902,9 +2902,8 @@ export const READ_HANDLERS = {
   driveEnsure,
   // Metricool (directe v2-API, geen Make). Leest blogId uit veld 40f6ccd2 op de bedrijf-taak.
   metricool,
-  // AI-assistent (chatbot) rechtstreeks via Cloudflare; prompt+model uit een ClickUp-config-taak.
-  // Onder de bestaande frontend-key 'aiStatusBot' geregistreerd, zo blijft de FE-aanroep werken.
-  aiStatusBot: aiChat,
+  // NB: de AI-chatbot loopt (op vraag) weer via Make, niet via de worker. De aiChat-handler
+  // hierboven blijft dormant (ongebruikt) staan, klaar mocht de keuze ooit omdraaien.
 };
 export const WRITE_HANDLERS = {
   bedrijfVoorkeuren,
