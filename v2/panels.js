@@ -179,7 +179,7 @@ function _cockpitCard(a){
     <div class="ac-foot"><button class="btn btn-branch btn-sm br-${a.br}" onclick="${a.action}">${esc(a.cta)}</button></div>
   </div>`;
 }
-function _runRow(r){ const sae=saeNames(r.sae); return `<button class="run-row br-${r.br}" onclick="${r.id?`openProject('${esc(r.id)}','projecten')`:`goTab('projecten')`}"><div class="run-top"><span class="run-dot"></span><span class="run-disc">${esc(r.disc)}</span><span class="pill pill-${r.status}">${ic(STATUS_ICON[r.status]||'st_progress',12)}<span>${esc(r.label)}</span></span></div><b class="run-name">${esc(r.name)}</b>${sae?`<span class="sae-line">${sae}</span>`:''}<div class="run-prog"><div class="rp-bar"><i style="width:${r.pct||0}%"></i></div><span class="rp-pct">${r.pct||0}%</span></div></button>`; }
+function _runRow(r){ const sae=saeNames(r.sae); const discBit=(r.labels&&r.labels.length)?discChips(r.labels):`<span class="run-disc">${esc(r.disc)}</span>`; return `<button class="run-row br-${r.br}" onclick="${r.id?`openProject('${esc(r.id)}','projecten')`:`goTab('projecten')`}"><div class="run-top">${discBit}<span class="pill pill-${r.status}">${ic(STATUS_ICON[r.status]||'st_progress',12)}<span>${esc(r.label)}</span></span></div><b class="run-name">${esc(r.name)}</b>${sae?`<span class="sae-line">${sae}</span>`:''}<div class="run-prog"><div class="rp-bar"><i style="width:${r.pct||0}%"></i></div><span class="rp-pct">${r.pct||0}%</span></div></button>`; }
 function _doneRow(d){
   const meta=[esc(d.disc), (d.when&&typeof d.when==='string')?esc(d.when):''].filter(Boolean).join(' · ');
   const sae=saeNames(d.sae);

@@ -216,7 +216,7 @@
     var raw = projList(); if(!raw) return null;
     return raw.filter(function(p){ return !isAfgerond(p.status); }).map(function(p){
       var br=DATA.disc(p.discipline), st=DATA.status(p.status);
-      return { br:br.br, disc:br.label, name:p.naam, status:st.key, label:st.label, pct:Number(p.voortgang_pct)||0, id:p.task_id, sae:mapSae(p.sae) };
+      return { br:br.br, disc:br.label, labels:mapLabels(p), name:p.naam, status:st.key, label:st.label, pct:Number(p.voortgang_pct)||0, id:p.task_id, sae:mapSae(p.sae) };
     });
   };
   // Recent afgerond, uitsluitend dashboard.afgerond_60d (laatste 60 dagen, juiste statussen).
