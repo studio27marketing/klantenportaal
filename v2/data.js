@@ -373,7 +373,9 @@
       if(!j.linked){ state.data.metricool={linked:false,posts:[]}; return true; }
       var posts=(j.posts||[]).filter(function(p){return p&&p.id;}).map(function(p){
         var tk=''; try{ tk=decodeURIComponent(p.tekst||''); }catch(e){ tk=p.tekst||''; }
-        return { id:p.id, datum:p.datum||'', dt:_parseDatum(p.datum), tekst:tk, media:p.media||'',
+        return { id:p.id, uuid:p.uuid||'', datum:p.datum||'', dt:_parseDatum(p.datum), tekst:tk,
+          media:p.media||'', media_all:(p.media_all||(p.media?[p.media]:[])),
+          providers:(p.providers||[]), hashtags:(p.hashtags||[]),
           draft:(p.draft===true||String(p.draft).toLowerCase()==='true'),
           approved:(p.approved===true||String(p.approved).toLowerCase()==='true'),
           netwerken: _mcNetwerken(p) };

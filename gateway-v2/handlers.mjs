@@ -2610,14 +2610,20 @@ function mcMapPost(p) {
   // publieke URL/detail (eerste provider die er een heeft).
   let url = '';
   for (const x of providers) { if (x && x.publicUrl) { url = str(x.publicUrl); break; } }
-  const media = Array.isArray(p && p.media) ? str(p.media[0]) : str(p && p.media);
+  const mediaArr = Array.isArray(p && p.media) ? p.media.map((m) => str(m)).filter(Boolean) : (p && p.media ? [str(p.media)] : []);
+  const text = str(p && p.text);
   const datum = (p && p.publicationDate && str(p.publicationDate.dateTime)) || '';
+  const hashtags = (text.match(/#[A-Za-z0-9_]+/g) || []);
   return {
     id: str(p && p.id),
+    uuid: str(p && p.uuid),                  // nodig voor bewerken (round-trip naar Metricool)
     datum,                                   // "YYYY-MM-DDTHH:mm:ss" (FE _parseDatum verwerkt dit)
-    tekst: encodeURIComponent(str(p && p.text)),  // FE doet decodeURIComponent
-    media,
+    tekst: encodeURIComponent(text),         // FE doet decodeURIComponent
+    media: mediaArr[0] || '',
+    media_all: mediaArr,                     // volledige media-array (carrousel)
     netwerken,                               // CSV "facebook,instagram"
+    providers: providers.map((x) => ({ network: str(x && x.network).toLowerCase(), status: str(x && x.status) })),
+    hashtags,                                // ["#tag",...] (uit de tekst)
     status,                                  // FE .toUpperCase()
     draft: !!(p && p.draft),
     detail: '',
@@ -2639,8 +2645,8 @@ export async function metricool(bedrijfId, body, env) {
 
   // (2) userId (optioneel) + venster -31d .. +90d.
   const userId = await metricoolUserId(env, blogId).catch(() => '');
-  const start = mcStamp(Date.now() - 31 * 86400000);
-  const end = mcStamp(Date.now() + 90 * 86400000);
+  const start = mcStamp(Date.now() - 122 * 86400000);   // ~4 maanden terug
+  const end = mcStamp(Date.now() + 122 * 86400000);     // ~4 maanden vooruit
   const qs = new URLSearchParams({ blogId: String(blogId), start, end, timezone: METRICOOL_TZ });
   if (userId) qs.set('userId', String(userId));
 
@@ -2657,8 +2663,8 @@ export async function metricool(bedrijfId, body, env) {
   const data = await r.json().catch(() => null);
   const arr = data && Array.isArray(data.data) ? data.data
     : (Array.isArray(data) ? data : (data && Array.isArray(data.posts) ? data.posts : []));
-  let posts = (arr || []).filter((p) => p && p.id != null).map(mcMapPost)
-    .filter((p) => !p.draft);   // concepten/drafts blijven uit de klant-weergave (op vraag)
+  // Alle statussen centraliseren (incl. concepten/drafts), op vraag. De FE labelt per status.
+  let posts = (arr || []).filter((p) => p && p.id != null).map(mcMapPost);
   // Klant-goedkeuringen uit KV mergen (portaal-eigen, los van Metricool's interne reviewer-flow).
   if (env.KV && posts.length) {
     try {

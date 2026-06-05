@@ -372,15 +372,20 @@ function socialStatus(p){
   var ss=(p.netwerken||[]).map(function(n){return String(n.status||'').toUpperCase();});
   if(ss.length && ss.some(function(s){return s.indexOf('PUBLISH')>=0;})) return 'gepubliceerd';
   if(p.approved || (state._mcApproved && state._mcApproved[p.id])) return 'goedgekeurd';
+  if(p.draft) return 'concept';
   return 'feedback';
 }
-var SOC_STATUS={feedback:['Wacht op je feedback','#C44514','rgba(246,97,49,.13)','orange'],goedgekeurd:['Goedgekeurd','#147A50','rgba(18,172,78,.13)','green'],gepubliceerd:['Gepubliceerd','#1F5FA8','rgba(48,131,220,.13)','blue']};
+var SOC_STATUS={concept:['Concept','#6B4FB8','rgba(122,90,248,.13)','indigo'],feedback:['Wacht op je feedback','#C44514','rgba(246,97,49,.13)','orange'],goedgekeurd:['Goedgekeurd','#147A50','rgba(18,172,78,.13)','green'],gepubliceerd:['Gepubliceerd','#1F5FA8','rgba(48,131,220,.13)','blue']};
 function socialStatusMeta(st){ return SOC_STATUS[st]||SOC_STATUS.feedback; }
 function socialPostsAll(){ if(state.demoMode) return socialDemoPosts(); var mc=(window.S27DATA&&S27DATA.metricool())||null; return (mc&&mc.posts)||[]; }
 function socialMonth(){ if(!state._socialMonth){ var n=new Date(); state._socialMonth={y:n.getFullYear(),m:n.getMonth()}; } return state._socialMonth; }
 function socialFilter(){ return state._socialFilter||'alles'; }
-function socialMonthNav(d){ var mo=socialMonth(); var dt=new Date(mo.y,mo.m+d,1); state._socialMonth={y:dt.getFullYear(),m:dt.getMonth()}; renderPanel('socials'); }
-function socialSetFilter(f){ state._socialFilter=f; renderPanel('socials'); }
+// Maand-/filter-navigatie verspringt NIET meer: enkel de deelcontainer wordt ververst (geen
+// full-panel renderPanel + scroll-to-top). Maand-nav raakt enkel de grid, filter de hele body.
+function socialShownPosts(){ var posts=socialPostsAll(); var f=socialFilter(); return f==='alles'?posts:posts.filter(function(p){return socialStatus(p)===f;}); }
+function socialBodyHTML(){ var posts=socialPostsAll(); return socialMatrixbar(posts)+socialFilters()+'<div id="socialCalContainer">'+socialCalendar(socialShownPosts())+'</div>'; }
+function socialMonthNav(d){ var mo=socialMonth(); var dt=new Date(mo.y,mo.m+d,1); state._socialMonth={y:dt.getFullYear(),m:dt.getMonth()}; var box=document.getElementById('socialCalContainer'); if(box){ box.innerHTML=socialCalendar(socialShownPosts()); } else { renderPanel('socials'); } }
+function socialSetFilter(f){ state._socialFilter=f; var box=document.getElementById('socialBody'); if(box){ box.innerHTML=socialBodyHTML(); } else { renderPanel('socials'); } }
 function socialOpenDetail(id){ state._socialDetail=String(id); renderPanel('socials'); if(window.scrollTo)window.scrollTo({top:0,behavior:'smooth'}); }
 function socialCloseDetail(){ state._socialDetail=null; renderPanel('socials'); }
 function socialMatrixbar(posts){
@@ -391,7 +396,7 @@ function socialMatrixbar(posts){
   }).join('')+'</div>';
 }
 function socialFilters(){
-  var fs=[['alles','Alle'],['feedback','Wacht op je feedback'],['goedgekeurd','Goedgekeurd'],['gepubliceerd','Gepubliceerd']];
+  var fs=[['alles','Alle'],['concept','Concept'],['feedback','Wacht op je feedback'],['goedgekeurd','Goedgekeurd'],['gepubliceerd','Gepubliceerd']];
   return '<div class="soc-fbar">'+fs.map(function(f){ return '<button class="soc-fchip'+(socialFilter()===f[0]?' active':'')+'" onclick="socialSetFilter(\''+f[0]+'\')">'+esc(f[1])+'</button>'; }).join('')+'</div>';
 }
 function socialCalendar(posts){
@@ -455,8 +460,7 @@ function panelSocials(){
   if(state._socialDetail) return mcStyleOnce()+head+socialDetailPage(state._socialDetail);
   var posts=mc.posts||[];
   if(!posts.length) return head+'<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen posts</div><div style="color:var(--ink-3)">Zodra Studio&nbsp;27 content voor je inplant, verschijnt die hier in de kalender.</div></div>';
-  var f=socialFilter(); var shown=f==='alles'?posts:posts.filter(function(p){return socialStatus(p)===f;});
-  return mcStyleOnce()+head+socialMatrixbar(posts)+socialFilters()+socialCalendar(shown);
+  return mcStyleOnce()+head+'<div id="socialBody">'+socialBodyHTML()+'</div>';
 }
 // Voorbeeldposts (alleen demo): in de huidige maand verspreid, met verschillende statussen.
 function socialDemoPosts(){
