@@ -467,7 +467,7 @@ function panelSocials(){
 // Voorbeeldposts (alleen demo): in de huidige maand verspreid, met verschillende statussen.
 function socialDemoPosts(){
   var n=new Date(), y=n.getFullYear(), mo=n.getMonth();
-  function mk(id,day,h,mi,net,tekst,status,approved){ return {id:'d'+id,dt:new Date(y,mo,day,h,mi),datum:'',tekst:tekst,media:'',approved:!!approved,netwerken:[{netwerk:net,status:status||'PENDING'}]}; }
+  function mk(day,h,mi,net,tekst,status,approved){ return {id:'d'+day+'-'+net,dt:new Date(y,mo,day,h,mi),datum:'',tekst:tekst,media:'',approved:!!approved,netwerken:[{netwerk:net,status:status||'PENDING'}]}; }
   return [
     mk(3,9,30,'instagram','Reel: achter de schermen bij onze nieuwste shoot.\n\nBenieuwd hoe we jouw merk in beeld brengen? Hou deze pagina in de gaten!','PENDING',false),
     mk(8,10,0,'facebook','Carrousel: 5 tips voor meer zichtbaarheid online. Swipe mee en ontdek wat voor jou werkt.','PENDING',true),
