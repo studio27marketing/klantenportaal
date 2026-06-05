@@ -8,7 +8,7 @@ compatibility_date = "2024-11-01"
 [vars]
 PROJECT_ID = "studio27-cloud"
 # Productie-origins + test-origins (raw.githack / raw.githubusercontent voor v4-preview).
-ALLOWED_ORIGINS = "https://www.studio27.be,https://studio27.be,https://raw.githack.com,https://raw.githubusercontent.com"
+ALLOWED_ORIGINS = "https://www.studio27.be,https://studio27.be,https://portaal.studio27.be,https://s27-portal-gateway-v2.studio27marketing.workers.dev,https://raw.githack.com,https://raw.githubusercontent.com"
 
 # KV-namespace voor rate-limiting + read-cache (TTL 60s).
 # De namespace maak ik bij deploy aan met:
@@ -17,3 +17,11 @@ ALLOWED_ORIGINS = "https://www.studio27.be,https://studio27.be,https://raw.githa
 [[kv_namespaces]]
 binding = "KV"
 id = "dcbe89a0ed8a4256a6ab1db50ac47940"
+
+# Statische portaal-frontend (de v2-bestanden) rechtstreeks vanaf de worker serveren.
+# GET-bestandsverzoeken (/, /index.html, /api.js, ...) -> assets; al het andere (POST API) -> de worker.
+# Zo draait het portaal op je eigen, stabiele domein i.p.v. githack.
+[assets]
+directory = "../v2"
+binding = "ASSETS"
+not_found_handling = "none"

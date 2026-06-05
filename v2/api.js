@@ -27,7 +27,15 @@ var S27 = window.S27 = { onSessionExpired: null, reloadDashboard: null, onSwitch
 
 /* Cloudflare-gateway-basis (de v2-handlers achter Firebase-auth). Vooraan gedeclareerd
    zodat ENDPOINTS hieronder de gateway-gerouteerde endpoints kan opbouwen. */
-const GATEWAY_BASE = 'https://s27-portal-gateway-v2.studio27marketing.workers.dev';
+const GATEWAY_BASE = (function(){
+  try {
+    var h = location.hostname || '';
+    // Portaal geserveerd vanaf de worker zelf (workers.dev of portaal.studio27.be) -> zelfde origin, geen CORS.
+    if (/\.workers\.dev$/.test(h) || h === 'portaal.studio27.be') return location.origin;
+  } catch(e){}
+  // Overgangssituatie (githack) -> absolute worker-URL.
+  return 'https://s27-portal-gateway-v2.studio27marketing.workers.dev';
+})();
 
 /* ---- Endpoints (EXACT uit dashboard.js, backend ongewijzigd) ---- */
 const ENDPOINTS = {
