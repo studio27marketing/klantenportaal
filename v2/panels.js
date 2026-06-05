@@ -1060,20 +1060,21 @@ function panelInstellingen(){
 }
 
 /* ---- shared chat markup ---- */
-function chatHTML(taskId){
+function chatHTML(taskId, readOnly){
   const live = (taskId && window.S27DATA) ? S27DATA.chat(taskId) : null;
   const msgs = (live && live.length!==undefined) ? live.map(m=>[m.av,m.who,m.color||'blue',m.tx,m.tm,m.me]) : [
     ['IM','Ilke Meeusen','blue','Hey Sarah! De eerste montage van de bedrijfsfilm staat klaar. Benieuwd wat je ervan vindt.','09:12',false],
     ['','Jij','blue','Wauw, ziet er strak uit! Kan de intro net iets korter?','09:41',true],
     ['IM','Ilke Meeusen','blue','Zeker, dat passen we gratis aan. Tegen morgen heb je een nieuwe versie.','09:43',false],
   ];
-  return `<div class="chat-list" id="chatList">
+  const listHTML = `<div class="chat-list" id="chatList">
     ${msgs.length?msgs.map(m=>`<div class="msg ${m[5]?'me':''}">
       ${m[5]?'':`<span class="av" style="background:var(--s27-${m[2]})">${m[0]}</span>`}
       <div class="bubble"><div class="who">${m[1]}</div><div class="tx">${m[3]}</div><div class="tm">${m[4]}</div></div>
-    </div>`).join(''):'<div class="empty" style="padding:30px 10px"><p>Nog geen berichten, stuur ons gerust iets!</p></div>'}
-  </div>
-  <div class="chat-input"><button type="button" class="chat-attach" title="Bestand toevoegen" onclick="document.getElementById('chatFile').click()" style="border:none;background:none;cursor:pointer;color:var(--ink-4);padding:0 4px 0 8px;display:flex;align-items:center;flex:none">${ic('upload',18)}</button><input type="file" id="chatFile" style="display:none" onchange="chatUpload(this,'${taskId||''}')"><input placeholder="Schrijf een bericht…" onkeydown="if(event.key==='Enter')sendChat(this)"><button class="chat-send" onclick="sendChat(this.previousElementSibling)">${ic('send',18)}</button></div>`;
+    </div>`).join(''):`<div class="empty" style="padding:30px 10px"><p>${readOnly?'Geen chatgeschiedenis voor dit project.':'Nog geen berichten, stuur ons gerust iets!'}</p></div>`}
+  </div>`;
+  if(readOnly) return listHTML+`<div class="chat-readonly">${ic('check',14)} Dit project is afgerond. De chatgeschiedenis blijft hier zichtbaar.</div>`;
+  return listHTML+`<div class="chat-input"><button type="button" class="chat-attach" title="Bestand toevoegen" onclick="document.getElementById('chatFile').click()" style="border:none;background:none;cursor:pointer;color:var(--ink-4);padding:0 4px 0 8px;display:flex;align-items:center;flex:none">${ic('upload',18)}</button><input type="file" id="chatFile" style="display:none" onchange="chatUpload(this,'${taskId||''}')"><input placeholder="Schrijf een bericht…" onkeydown="if(event.key==='Enter')sendChat(this)"><button class="chat-send" onclick="sendChat(this.previousElementSibling)">${ic('send',18)}</button></div>`;
 }
 
 /* =========================================================
@@ -1244,14 +1245,14 @@ function buildModal(id, from){
           <button class="mtab active" onclick="switchModalTab('overzicht')">Overzicht</button>
           <button class="mtab" onclick="switchModalTab('deliverables')">Bestanden</button>
           <button class="mtab" onclick="switchModalTab('feedback')">Feedback</button>
-          ${chatClosed?'':`<button class="mtab mtab-chat" onclick="switchModalTab('chat')">Chat</button>`}
+          <button class="mtab mtab-chat" onclick="switchModalTab('chat')">Chat</button>
         </div>
         <div class="detail-body">${overview}${deliverables}${feedback}</div>
       </div>
       <aside class="detail-chat">
         <div class="dc-head">${ic('msg',16)} Projectchat ${saeChatWho(det?det.sae:p.sae, chatClosed)}</div>
-        <div class="dc-body" id="dcBody">${chatClosed?`<div class="empty" style="padding:22px 14px;text-align:center"><div class="em-ic">${ic('st_approved',40)}</div><b style="font-family:var(--font-display);font-size:14.5px;color:var(--ink-2)">Deze taak is doorgestuurd of afgerond</b><p style="margin:6px 0 0;font-size:13px;color:var(--ink-3)">Heb je nog een vraag? Stel ze gerust, we volgen het verder op.</p><button class="btn btn-branch br-blue btn-sm" style="margin-top:14px" onclick="dringendeVraag('${esc(p.id)}')">${ic('spark',15)} Stel je vraag</button></div>`:chatHTML(id)}</div>
-        ${chatClosed?'':`<div style="padding:2px 12px 12px"><button class="btn btn-ghost btn-sm" style="width:100%;color:var(--s27-orange-ink)" onclick="dringendeVraag('${esc(p.id)}')">${ic('spark',14)} Dringende vraag aan Ilke</button></div>`}
+        <div class="dc-body" id="dcBody">${chatClosed?chatHTML(id,true):chatHTML(id)}</div>
+        <div style="padding:2px 12px 12px"><button class="btn btn-ghost btn-sm" style="width:100%;color:var(--s27-orange-ink)" onclick="dringendeVraag('${esc(p.id)}')">${ic('spark',14)} ${chatClosed?'Nog een vraag over dit project?':'Dringende vraag aan Ilke'}</button></div>
       </aside>
     </div>
   </div>`;

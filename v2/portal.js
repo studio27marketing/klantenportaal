@@ -354,8 +354,7 @@ function rerenderActiveChat(stickBottom){
   } else if(dcBody){
     // projectdetail-chat: enkel de chat-body verversen (laat de tabs/overzicht ongemoeid)
     const closed=!!(window.S27DATA && S27DATA.isChatClosed && p && p._raw && S27DATA.isChatClosed(p._raw.status));
-    if(!closed) dcBody.innerHTML=chatHTML(id);
-    else return;
+    dcBody.innerHTML=chatHTML(id, closed);   // afgerond -> read-only historie (blijft zichtbaar + ververst mee)
   } else { return; }
   if(draft){ const newInp=document.querySelector('.chat-input input'); if(newInp) newInp.value=draft; }
   const newList=$id('chatList'); if(!newList) return;
