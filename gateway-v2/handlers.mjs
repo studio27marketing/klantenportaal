@@ -610,6 +610,51 @@ export function getRelationFirstId(task, fieldId) {
   return getRelationIds(task, fieldId)[0] || '';
 }
 
+// Naam-escaping voor het "id::Naam|id::Naam"-formaat dat de frontend (zipCompanies) parset.
+function cleanCompanyName(n) { n = str(n).replace(/\|/g, '/').replace(/::/g, ':').trim(); return n || 'Bedrijf'; }
+
+// PROVISIONING-lookup (vervangt het Make-scenario): bedrijven van een gebruiker op GEVERIFIEERD e-mailadres.
+// Lookup B (contactpersonen, exacte e-mailmatch -> relatie Bedrijf) EERST -> eigen bedrijf staat vooraan.
+// Lookup A (Bedrijven met portaalToegang-CSV, EXACTE token-match, geen substring). Beide gepagineerd.
+// Output: { companies:"id::Naam|id::Naam" (STRING), ids:[...], bid } met server-side scope-guard op bid.
+export async function provisionLookup(env, email, selectedBid) {
+  email = str(email).trim().toLowerCase();
+  if (!email) return { companies: '', ids: [], bid: '' };
+  const rows = []; const seen = {};
+  const add = (id, naam) => { id = str(id); if (!id || seen[id]) return; seen[id] = 1; rows.push(`${id}::${cleanCompanyName(naam)}`); };
+
+  // Lookup B: contactpersonen met email == X -> relatie 'Bedrijf'.
+  for (let page = 0; page < 25; page++) {
+    const q = `/list/${LIST.contactpersonen}/task?include_closed=true&page=${page}&custom_fields=` +
+      encodeURIComponent(`[{"field_id":"${FIELD.email}","operator":"=","value":"${email}"}]`);
+    let r; try { r = await cu.get(env, q); } catch (e) { break; }
+    const tasks = (r && r.data && r.data.tasks) || [];
+    for (const t of tasks) {
+      const rel = getCF(t, FIELD.bedrijf);
+      if (Array.isArray(rel)) for (const b of rel) { if (b && b.id && str(b.name).trim()) add(b.id, b.name); }
+    }
+    if (tasks.length < 100 || (r && r.data && r.data.last_page)) break;
+  }
+  // Lookup A: Bedrijven met portaalToegang-CSV die het e-mailadres EXACT als token bevat.
+  for (let page = 0; page < 25; page++) {
+    const q = `/list/${LIST.bedrijven}/task?include_closed=true&page=${page}&custom_fields=` +
+      encodeURIComponent(`[{"field_id":"${FIELD.portaalToegang}","operator":"IS NOT NULL"}]`);
+    let r; try { r = await cu.get(env, q); } catch (e) { break; }
+    const tasks = (r && r.data && r.data.tasks) || [];
+    for (const t of tasks) {
+      const toks = str(getCF(t, FIELD.portaalToegang)).toLowerCase().split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean);
+      if (toks.includes(email)) add(t.id, t.name);
+    }
+    if (tasks.length < 100 || (r && r.data && r.data.last_page)) break;
+  }
+
+  const companies = rows.join('|');
+  const ids = rows.map((x) => x.split('::')[0]);
+  let bid = '';
+  if (ids.length) bid = (selectedBid && ids.includes(str(selectedBid))) ? str(selectedBid) : ids[0];
+  return { companies, ids, bid };
+}
+
 // scope-guard op veld 'Bedrijf' 4b1fb333. failClosed => count==0 levert ok:false.
 export function scopeCheckTask(task, bedrijfId, failClosed = false) {
   const ids = getRelationIds(task, FIELD.bedrijf);

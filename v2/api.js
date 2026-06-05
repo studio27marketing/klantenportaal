@@ -188,21 +188,33 @@ function zipCompanies(combined){
   });
   return out;
 }
-async function provisionFetch(token, selectedBid){
+// Provisioning: probeer EERST de worker (off-Make, met volledige Firebase-tokenvalidatie + exacte
+// ClickUp-lookup). Val enkel bij een technische fout terug op de oude Make-hook, zodat de login
+// nooit kan breken tijdens de overgang. Na bevestiging halen we de Make-fallback weg.
+async function _provisionTry(url, token, selectedBid){
   try {
-    const r = await fetch(PROVISION_URL, {
+    const r = await fetch(url, {
       method:'POST',
       headers:{ 'Content-Type':'application/x-www-form-urlencoded' },
       body: 'idToken=' + encodeURIComponent(token) + '&selected_bedrijf_id=' + encodeURIComponent(selectedBid || '')
     });
-    const d = await r.json().catch(function(){ return {}; });
-    if(d && d.ok){
-      state.portalCompanies = zipCompanies(d.companies);
-      state.activeBedrijf = d.bedrijf_id || '';
-      try { if(d.bedrijf_id) localStorage.setItem('s27_active_bedrijf', d.bedrijf_id); } catch(e){}
-    }
-    return d || {};
-  } catch(e){ return {}; }
+    if(r.status >= 500) return { _neterr:true };
+    const d = await r.json().catch(function(){ return null; });
+    return (d && typeof d.ok !== 'undefined') ? d : { _neterr:true };
+  } catch(e){ return { _neterr:true }; }
+}
+async function provisionFetch(token, selectedBid){
+  var d = await _provisionTry(GATEWAY_BASE + '/provision', token, selectedBid);
+  // Overgangsfase: val terug op Make bij ELK niet-succes van de worker (technische fout OF ok:false),
+  // zodat de login een vangnet houdt tot we de worker-flow bevestigd hebben. Daarna weghalen.
+  if(!d || d._neterr || !d.ok){ var _m = await _provisionTry(PROVISION_URL, token, selectedBid); if(_m && !_m._neterr) d = _m; }
+  d = d || {};
+  if(d && d.ok){
+    state.portalCompanies = zipCompanies(d.companies);
+    state.activeBedrijf = d.bedrijf_id || '';
+    try { if(d.bedrijf_id) localStorage.setItem('s27_active_bedrijf', d.bedrijf_id); } catch(e){}
+  }
+  return d;
 }
 function lastSelectedBedrijf(){ try { return localStorage.getItem('s27_active_bedrijf') || ''; } catch(e){ return ''; } }
 async function tryProvision(token){

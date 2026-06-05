@@ -32,6 +32,7 @@ import {
   bedrijfBeheerContacts,
   withCache,
   bustCache,
+  provisionLookup,
 } from './handlers.mjs';
 
 // Pad → Make-webhook. Deze URLs zijn niet geheim (staan al in dashboard.js).
@@ -250,6 +251,50 @@ async function handleAdminLink(request, env, cors) {
   return json({ ok: true, uid: user.localId, email: email, bedrijf_id: bedrijfId }, 200, cors);
 }
 
+// Zet de Firebase custom claim bedrijf_id voor een (reeds bestaand) e-mailadres. Herbruikt door provision.
+async function setBedrijfClaim(env, email, bedrijfId) {
+  const accessToken = await getGoogleAccessToken(env);
+  const lk = await fetch('https://identitytoolkit.googleapis.com/v1/projects/' + env.PROJECT_ID + '/accounts:lookup', {
+    method: 'POST', headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: [String(email)] }),
+  });
+  if (!lk.ok) throw new Error('lookup_failed');
+  const data = await lk.json();
+  const user = data && data.users && data.users[0];
+  if (!user) throw new Error('user_not_found');
+  const up = await fetch('https://identitytoolkit.googleapis.com/v1/projects/' + env.PROJECT_ID + '/accounts:update', {
+    method: 'POST', headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ localId: user.localId, customAttributes: JSON.stringify({ bedrijf_id: String(bedrijfId) }) }),
+  });
+  if (!up.ok) throw new Error('update_failed');
+  return user.localId;
+}
+
+// PROVISIONING (off-Make): verifieert het Firebase-token (volledige RS256), zoekt de bedrijven uit ClickUp
+// (provisionLookup) en zet de claim inline. Antwoord-shape 1:1 met de oude Make-flow (companies = STRING).
+async function handleProvision(request, env, cors) {
+  const ct = request.headers.get('Content-Type') || '';
+  let idToken = '', selectedBid = '';
+  try {
+    if (ct.includes('application/json')) { const b = await request.json(); idToken = b.idToken || ''; selectedBid = b.selected_bedrijf_id || ''; }
+    else { const f = new URLSearchParams(await request.text()); idToken = f.get('idToken') || ''; selectedBid = f.get('selected_bedrijf_id') || ''; }
+  } catch (e) {}
+  const fail = (extra) => json(Object.assign({ ok: false, bedrijf_id: '', email: '', companies: '' }, extra || {}), 200, cors);
+  if (!idToken) return fail();
+  if (!env.PROJECT_ID || !env.CLICKUP_TOKEN) return fail({ error: 'gateway_misconfigured' });
+  let claims;
+  try { claims = await verifyFirebaseToken(idToken, env.PROJECT_ID); }
+  catch (e) { return fail({ error: 'invalid_token' }); }
+  const email = String(claims.email || '').trim().toLowerCase();
+  if (!email) return fail({ error: 'no_email' });
+  let res;
+  try { res = await provisionLookup(env, email, selectedBid); }
+  catch (e) { return fail({ email, error: 'lookup_failed' }); }
+  // claim zetten mag de bedrijvenlijst niet breken (best-effort).
+  if (res.bid) { try { await setBedrijfClaim(env, email, res.bid); } catch (e) {} }
+  return json({ ok: !!res.bid, bedrijf_id: res.bid, email, companies: res.companies }, 200, cors);
+}
+
 /* ---- PERFORMANCE-RAPPORT: gescopet ophalen uit de ads-cache (key = bedrijf_id) ---- */
 const ADS_SERVE_URL = 'https://hook.eu1.make.com/n4gmm74o1r7icidm4ra1q5pt861e2k46';
 async function handlePerfReport(request, env) {
@@ -337,6 +382,7 @@ export default {
 
     const path = new URL(request.url).pathname.replace(/^\/+|\/+$/g, '');
     if (path === 'admin/link') return handleAdminLink(request, env, ch);
+    if (path === 'provision') return handleProvision(request, env, ch);
 
     const isPorted = !!(READ_HANDLERS[path] || WRITE_HANDLERS[path] || path === 'bedrijfBeheer');
     const target = MAKE_ENDPOINTS[path];
