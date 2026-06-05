@@ -1966,7 +1966,23 @@ export const PANDADOC_ROLE_PM = 'Projectmanager';
 export const PANDADOC_ROLE_KLANT = 'Klant';
 // Quote-sectie-naam in de template (pricing.quotes[0].sections[0].name). pricing_tables[].name
 // moet matchen met de pricing-table/quote-naam in de template; de enige sectie heet 'Adverteren'.
-export const PANDADOC_PRICING_TABLE_NAME = 'Adverteren';
+export const PANDADOC_PRICING_TABLE_NAME = 'Adverteren'; // (legacy, niet meer gebruikt)
+// Portaal-offerte -> sectie-tabel: elke productgroep (catalog.group) mapt op een prijstabel in
+// de PandaDoc-template. We vullen de tabellen rechtstreeks (standaardvelden name/price/qty),
+// dus de data_merge-toggle in de template is niet relevant. Onbekende groep -> 'Strategie'.
+export const OFFERTE_TABLE_MAP = {
+  'Content & video': 'Video en fotografie',
+  'Fotografie': 'Video en fotografie',
+  'Audio': 'Video en fotografie',
+  'Social media': 'Social media',
+  'Branding & grafisch': 'Branding',
+  'Webdesign': 'Webdesign',
+  'Adverteren': 'Adverteren',
+  'Strategie': 'Strategie',
+  'Opleidingen': 'Opleidingen',
+};
+export const OFFERTE_TABLE_ORDER = ['Strategie', 'Branding', 'Video en fotografie', 'Webdesign', 'Social media', 'Adverteren', 'Opleidingen'];
+function offerteTableFor(groep) { return OFFERTE_TABLE_MAP[str(groep).trim()] || 'Strategie'; }
 // Vaste Projectmanager-recipient/token-bron (Studio 27). Eén bron zodat de rol altijd
 // preassigned is; tokens vullen het PM-blok in de offerte.
 export const PANDADOC_PM = {
@@ -1991,7 +2007,7 @@ function normalizeOfferteItems(raw) {
     const aantal = Math.max(0, Math.round(num(it.aantal)) || 0);
     if (!naam && !sku) continue;
     if (aantal <= 0) continue;
-    items.push({ sku, naam: naam || sku, prijs: round2(prijs), aantal, regel_totaal: round2(prijs * aantal) });
+    items.push({ sku, naam: naam || sku, groep: str(it.groep).trim(), prijs: round2(prijs), aantal, regel_totaal: round2(prijs * aantal) });
   }
   if (items.length === 0) return null;
   const budget = round2(items.reduce((s, i) => s + i.regel_totaal, 0));
@@ -2019,15 +2035,19 @@ function deriveKlantFromTasks(bedrijfTask, contactTask) {
 // door fetch() én teruggegeven voor inspectie. Documenten worden ALTIJD als concept
 // aangemaakt (geen 'send' in de body; verzenden is een aparte POST /documents/{id}/send).
 export function buildPandadocCreate(env, { docName, items, klant, pm }) {
-  const rows = items.map((it) => ({
-    options: { qty_editable: false, optional: false, optional_selected: true },
-    data: {
-      Name: it.naam,
-      Description: '',
-      Price: it.prijs,
-      QTY: it.aantal,            // data_merge-kolom 'Quantity' heet in de API-merge 'QTY'
-      SKU: it.sku,
-    },
+  // Groepeer de items per sectie-tabel (productgroep -> template-prijstabel). We vullen de
+  // tabellen rechtstreeks (standaardvelden name/price/qty), dus geen data_merge nodig.
+  const byTable = {};
+  for (const it of items) {
+    const tbl = offerteTableFor(it.groep);
+    (byTable[tbl] = byTable[tbl] || []).push({
+      options: { qty_editable: false, optional: false, optional_selected: true },
+      data: { name: it.naam, description: '', price: it.prijs, qty: it.aantal, sku: it.sku },
+    });
+  }
+  const pricing_tables = OFFERTE_TABLE_ORDER.filter((t) => byTable[t]).map((t) => ({
+    name: t,
+    sections: [{ title: t, default: true, rows: byTable[t] }],
   }));
   const body = {
     name: docName,
@@ -2049,15 +2069,7 @@ export function buildPandadocCreate(env, { docName, items, klant, pm }) {
       { name: 'Projectmanager.Email', value: pm.email || '' },
       { name: 'Projectmanager.Phone', value: pm.phone || '' },
     ],
-    pricing_tables: [
-      {
-        name: PANDADOC_PRICING_TABLE_NAME,
-        data_merge: true,
-        sections: [
-          { title: PANDADOC_PRICING_TABLE_NAME, default: true, rows },
-        ],
-      },
-    ],
+    pricing_tables,
   };
   return {
     url: `${PANDADOC_BASE}/documents`,
@@ -2292,7 +2304,16 @@ export async function metricool(bedrijfId, body, env) {
   const data = await r.json().catch(() => null);
   const arr = data && Array.isArray(data.data) ? data.data
     : (Array.isArray(data) ? data : (data && Array.isArray(data.posts) ? data.posts : []));
-  const posts = (arr || []).filter((p) => p && p.id != null).map(mcMapPost);
+  let posts = (arr || []).filter((p) => p && p.id != null).map(mcMapPost)
+    .filter((p) => !p.draft);   // concepten/drafts blijven uit de klant-weergave (op vraag)
+  // Klant-goedkeuringen uit KV mergen (portaal-eigen, los van Metricool's interne reviewer-flow).
+  if (env.KV && posts.length) {
+    try {
+      const lst = await env.KV.list({ prefix: `mcappr:${bedrijfId}:` });
+      const approved = new Set((lst.keys || []).map((k) => str(k.name).split(':').pop()));
+      if (approved.size) posts.forEach((p) => { if (approved.has(String(p.id))) p.approved = true; });
+    } catch (e) {}
+  }
   return { status: 200, body: { ok: true, linked: true, brandId: blogId, posts } };
 }
 
@@ -2305,33 +2326,50 @@ export async function metricoolApprove(bedrijfId, body, env) {
   if (!postId) {
     return { status: 400, body: { ok: false, error: 'missing_post_id' } };
   }
-  // scope-guard: de bedrijf-taak moet een Metricool-koppeling hebben (anders geen recht te muteren).
+  // scope-guard: de bedrijf-taak moet een Metricool-koppeling hebben (anders geen recht).
   const br = await cu.get(env, `/task/${bedrijfId}`);
   const blogId = br.ok && br.data ? str(getCF(br.data, FIELD.metricoolId)).trim() : '';
   if (!blogId) {
     return { status: 403, body: { ok: false, error: 'not_linked', message: 'Geen Metricool-koppeling voor dit bedrijf.' } };
   }
-  if (!str(env && env.METRICOOL_API_KEY)) {
-    return { status: 200, body: { ok: false, error: 'approval_unsupported' } };
+  // De klant is geen Metricool-reviewer: we bewaren de goedkeuring portaal-eigen in KV
+  // (zodat de social-kalender 'goedgekeurd' toont) en melden het team via de ClickUp-inbox.
+  if (env.KV) {
+    try { await env.KV.put(`mcappr:${bedrijfId}:${postId}`, JSON.stringify({ at: Date.now() })); } catch (e) {}
+    try { await env.KV.delete(cacheKey('metricool', bedrijfId)); } catch (e) {}
   }
-  const userId = await metricoolUserId(env, blogId).catch(() => '');
-  const qs = new URLSearchParams({ blogId: String(blogId) });
-  if (userId) qs.set('userId', String(userId));
-  let r;
+  const naam = str(br.data && br.data.name) || 'Klant';
   try {
-    r = await fetch(`${METRICOOL_BASE}/scheduler/posts/${encodeURIComponent(postId)}/approval?${qs.toString()}`, {
-      method: 'PUT',
-      headers: { ...mcHeaders(env), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'approved' }),
-    });
+    await directMessage(bedrijfId, {
+      klant_naam: naam,
+      onderwerp: 'Social post goedgekeurd via portaal',
+      bericht: `De klant keurde de geplande social post (${postId}) goed via het portaal. Je kan ze verder inplannen.`,
+    }, env);
+  } catch (e) {}
+  return { status: 200, body: { ok: true, id: postId, approved: true } };
+}
+
+/* ---- metricoolFeedback (WRITE) - klant geeft feedback/aanpassing op een post --- */
+// Geen directe Metricool-mutatie: de feedback (incl. een gewenste tekstaanpassing) gaat
+// als opdracht naar de ClickUp-inbox, zodat Studio 27 ze veilig verwerkt.
+export async function metricoolFeedback(bedrijfId, body, env) {
+  const postId = str(body && (body.id || body.post_id)).trim();
+  const feedback = str(body && (body.feedback || body.bericht)).trim();
+  if (!postId || !feedback) {
+    return { status: 400, body: { ok: false, error: 'missing_fields' } };
+  }
+  const br = await cu.get(env, `/task/${bedrijfId}`);
+  const naam = str(br.ok && br.data && br.data.name) || 'Klant';
+  try {
+    await directMessage(bedrijfId, {
+      klant_naam: naam,
+      onderwerp: 'Feedback op social post (via portaal)',
+      bericht: `Feedback/aanpassing op de geplande social post (${postId}):\n\n${feedback}`,
+    }, env);
   } catch (e) {
-    return { status: 200, body: { ok: false, error: 'approval_unsupported' } };
+    return { status: 200, body: { ok: false, error: 'send_failed' } };
   }
-  if (!r.ok) {
-    // endpoint onbevestigd of niet toegestaan -> defensief, niet falen.
-    return { status: 200, body: { ok: false, error: 'approval_unsupported' } };
-  }
-  return { status: 200, body: { ok: true, id: postId, status: 'approved' } };
+  return { status: 200, body: { ok: true, id: postId } };
 }
 
 /* =============================================================================
@@ -2364,8 +2402,9 @@ export const WRITE_HANDLERS = {
   inplannen,
   // Offerte genereren (ClickUp-offertetaak + PandaDoc CONCEPT-document, geen Make).
   offerteGenereren,
-  // Metricool concept-post goedkeuren (defensief; onbevestigd endpoint -> approval_unsupported).
+  // Metricool: klant keurt een geplande post goed (KV + ClickUp-melding) of geeft feedback.
   metricoolApprove,
+  metricoolFeedback,
   // Google Drive writes (directe API v3, geen Make).
   huisstijlUpload,
   huisstijlDelete,

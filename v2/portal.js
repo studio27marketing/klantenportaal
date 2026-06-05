@@ -461,7 +461,7 @@ async function botReply(q){
     t.remove(); pushBot((res&&res.data&&res.data.answer)?res.data.answer.replace(/^ESCALATE:[^\n]*\n?/,''):'Ik verbind je even door met je vaste contact, die antwoordt je zo.','bot');
   } catch(e){ t.remove(); pushBot('Ik verbind je even door met je vaste contact, die antwoordt je zo.','bot'); }
 }
-function botContext(){ const ps=S27DATA.projects()||[]; return ps.map(p=>'- '+p.name+' ('+p.disc+', '+p.status+')').join('\n')||'(geen projecten)'; }
+function botContext(){ const ps=S27DATA.projects()||[]; return ps.map(p=>'- '+p.name+' ('+p.disc+', '+p.status+(p.pct?(', '+p.pct+'% klaar'):'')+')').join('\n')||'(geen projecten)'; }
 
 /* ---- bedrijf-switcher in de topbar (>1 bedrijf) ---- */
 function renderCompanySwitcher(){
@@ -824,7 +824,7 @@ async function offerteSubmit(btn){
   const skus=Object.keys(cart).filter(s=>cart[s]>0);
   if(!skus.length){ showOfferteResult('Je winkelmand is nog leeg. Voeg eerst een product toe.', true); return; }
   // items in het FE->BE-contract: [{sku, naam, prijs, aantal}]
-  const items=skus.map(function(sku){ const p=offBySku(sku)||{}; return { sku:sku, naam:p.name||'', prijs:Number(p.price)||0, aantal:cart[sku] }; });
+  const items=skus.map(function(sku){ const p=offBySku(sku)||{}; return { sku:sku, naam:p.name||'', groep:p.group||'', prijs:Number(p.price)||0, aantal:cart[sku] }; });
   const opm=(($id('offOpm')||{}).value||'').trim();
   state._offerteOpm=opm;   // bewaren zodat een rerender de tekst behoudt
   if(state.demoMode){
