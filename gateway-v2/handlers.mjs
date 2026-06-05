@@ -2663,8 +2663,9 @@ export async function metricool(bedrijfId, body, env) {
   const data = await r.json().catch(() => null);
   const arr = data && Array.isArray(data.data) ? data.data
     : (Array.isArray(data) ? data : (data && Array.isArray(data.posts) ? data.posts : []));
-  // Alle statussen centraliseren (incl. concepten/drafts), op vraag. De FE labelt per status.
-  let posts = (arr || []).filter((p) => p && p.id != null).map(mcMapPost);
+  // Het volledige venster ophalen (4 mnd terug + vooruit), maar concepten/drafts blijven UIT de
+  // klant-weergave (op vraag). De editor werkt dus enkel op niet-draft posts.
+  let posts = (arr || []).filter((p) => p && p.id != null).map(mcMapPost).filter((p) => !p.draft);
   // Klant-goedkeuringen uit KV mergen (portaal-eigen, los van Metricool's interne reviewer-flow).
   if (env.KV && posts.length) {
     try {
@@ -2731,6 +2732,89 @@ export async function metricoolFeedback(bedrijfId, body, env) {
   return { status: 200, body: { ok: true, id: postId } };
 }
 
+/* ---- metricoolUpdate (WRITE) - klant past een post DIRECT aan in Metricool ----
+   Kanalen (providers), caption+hashtags (text) en visual (media via publieke URL). De klant
+   stuurt enkel de wijzigingen; de worker haalt de volledige post op, schoont 'info' op
+   (providers enkel {network}, geen read-only statusvelden) en PUT terug. LET OP: Metricool
+   VERNUMMERT het id bij een update -> we geven het nieuwe id terug zodat de FE kan herladen. */
+function mcCleanInfo(p) {
+  const mediaArr = Array.isArray(p.media) ? p.media.map((m) => str(m)).filter(Boolean) : [];
+  const origAlt = Array.isArray(p.mediaAltText) ? p.mediaAltText : [];
+  const info = {
+    text: str(p.text),
+    media: mediaArr,
+    mediaAltText: mediaArr.map((_, i) => (origAlt[i] != null ? origAlt[i] : null)),  // ALT-array moet even lang zijn als media
+    providers: (Array.isArray(p.providers) ? p.providers : []).map((x) => ({ network: str(x && x.network).toLowerCase() })).filter((x) => x.network),
+    publicationDate: { dateTime: str(p.publicationDate && p.publicationDate.dateTime), timezone: str((p.publicationDate && p.publicationDate.timezone) || METRICOOL_TZ) },
+    draft: !!p.draft,
+    autoPublish: p.autoPublish !== false,
+    shortener: !!p.shortener,
+    firstCommentText: str(p.firstCommentText != null ? p.firstCommentText : ''),
+  };
+  if (p.uuid != null) info.uuid = p.uuid;
+  for (const k of Object.keys(p)) { if (/Data$/.test(k) && p[k] && typeof p[k] === 'object') info[k] = p[k]; }  // *Data-blokken 1-op-1
+  return info;
+}
+export async function metricoolUpdate(bedrijfId, body, env) {
+  const postId = str(body && (body.id || body.post_id)).trim();
+  if (!postId) return { status: 400, body: { ok: false, error: 'missing_post_id' } };
+  const br = await cu.get(env, `/task/${bedrijfId}`);
+  const blogId = br.ok && br.data ? str(getCF(br.data, FIELD.metricoolId)).trim() : '';
+  if (!blogId) return { status: 403, body: { ok: false, error: 'not_linked' } };
+  if (!str(env && env.METRICOOL_API_KEY)) return { status: 200, body: { ok: false, error: 'no_key' } };
+
+  const userId = await metricoolUserId(env, blogId).catch(() => '');
+  // 1) volledige post ophalen (binnen het 8-maanden-venster).
+  const start = mcStamp(Date.now() - 122 * 86400000);
+  const end = mcStamp(Date.now() + 122 * 86400000);
+  const gq = new URLSearchParams({ blogId: String(blogId), start, end, timezone: METRICOOL_TZ });
+  if (userId) gq.set('userId', String(userId));
+  let raw = null;
+  try {
+    const gr = await fetch(`${METRICOOL_BASE}/scheduler/posts?${gq.toString()}`, { headers: mcHeaders(env) });
+    const gd = await gr.json().catch(() => null);
+    const garr = gd && Array.isArray(gd.data) ? gd.data : (Array.isArray(gd) ? gd : []);
+    raw = (garr || []).find((p) => String(p && p.id) === postId) || null;
+  } catch (e) {}
+  if (!raw) return { status: 200, body: { ok: false, error: 'post_not_found' } };
+  if (raw.draft) return { status: 200, body: { ok: false, error: 'draft_not_editable' } };
+
+  // 2) opgeschoonde info + wijzigingen toepassen.
+  const info = mcCleanInfo(raw);
+  if (typeof body.text === 'string') info.text = body.text;
+  if (Array.isArray(body.providers)) {
+    info.providers = body.providers.map((n) => ({ network: str(typeof n === 'string' ? n : (n && n.network)).toLowerCase() })).filter((x) => x.network);
+    for (const pr of info.providers) { const k = pr.network + 'Data'; if (!info[k]) info[k] = {}; }
+  }
+  if (Array.isArray(body.media)) { info.media = body.media.map((m) => str(m)).filter(Boolean); info.mediaAltText = info.media.map(() => null); }
+  if (!info.providers.length) return { status: 200, body: { ok: false, error: 'no_providers', message: 'Kies minstens één kanaal.' } };
+
+  // 3) PUT terug (Metricool geeft een NIEUW id terug).
+  let res, out;
+  try {
+    const pq = new URLSearchParams({ blogId: String(blogId), timezone: METRICOOL_TZ });
+    if (userId) pq.set('userId', String(userId));
+    res = await fetch(`${METRICOOL_BASE}/scheduler/posts/${postId}?${pq.toString()}`, {
+      method: 'PUT', headers: { ...mcHeaders(env), 'Content-Type': 'application/json' }, body: JSON.stringify(info),
+    });
+    out = await res.json().catch(() => null);
+  } catch (e) { return { status: 200, body: { ok: false, error: 'upstream' } }; }
+  if (!res.ok) return { status: 200, body: { ok: false, error: 'metricool_error', detail: str((out && (out.detail || out.title)) || res.status) } };
+  const newId = out && out.data && out.data.id != null ? str(out.data.id) : postId;
+
+  // 4) cache bustten + team melden (klant paste direct aan).
+  if (env.KV) { try { await env.KV.delete(cacheKey('metricool', bedrijfId)); } catch (e) {} }
+  const naam = str(br.data && br.data.name) || 'Klant';
+  try {
+    await directMessage(bedrijfId, {
+      klant_naam: naam,
+      onderwerp: 'Social post aangepast via portaal',
+      bericht: `De klant paste een geplande social post zelf aan via het portaal (oud id ${postId} -> nieuw id ${newId}). Kanalen: ${info.providers.map((x) => x.network).join(', ')}.`,
+    }, env);
+  } catch (e) {}
+  return { status: 200, body: { ok: true, id: newId, providers: info.providers.map((x) => x.network) } };
+}
+
 /* =============================================================================
    Handler-registry voor de router-shim + node-harness.
    READ_HANDLERS: testbaar zonder Firebase met (bedrijfId, body, env).
@@ -2764,6 +2848,7 @@ export const WRITE_HANDLERS = {
   // Metricool: klant keurt een geplande post goed (KV + ClickUp-melding) of geeft feedback.
   metricoolApprove,
   metricoolFeedback,
+  metricoolUpdate,
   // Google Drive writes (directe API v3, geen Make).
   huisstijlUpload,
   huisstijlDelete,

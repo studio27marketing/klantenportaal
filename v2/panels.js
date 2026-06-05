@@ -372,10 +372,9 @@ function socialStatus(p){
   var ss=(p.netwerken||[]).map(function(n){return String(n.status||'').toUpperCase();});
   if(ss.length && ss.some(function(s){return s.indexOf('PUBLISH')>=0;})) return 'gepubliceerd';
   if(p.approved || (state._mcApproved && state._mcApproved[p.id])) return 'goedgekeurd';
-  if(p.draft) return 'concept';
   return 'feedback';
 }
-var SOC_STATUS={concept:['Concept','#6B4FB8','rgba(122,90,248,.13)','indigo'],feedback:['Wacht op je feedback','#C44514','rgba(246,97,49,.13)','orange'],goedgekeurd:['Goedgekeurd','#147A50','rgba(18,172,78,.13)','green'],gepubliceerd:['Gepubliceerd','#1F5FA8','rgba(48,131,220,.13)','blue']};
+var SOC_STATUS={feedback:['Wacht op je feedback','#C44514','rgba(246,97,49,.13)','orange'],goedgekeurd:['Goedgekeurd','#147A50','rgba(18,172,78,.13)','green'],gepubliceerd:['Gepubliceerd','#1F5FA8','rgba(48,131,220,.13)','blue']};
 function socialStatusMeta(st){ return SOC_STATUS[st]||SOC_STATUS.feedback; }
 function socialPostsAll(){ if(state.demoMode) return socialDemoPosts(); var mc=(window.S27DATA&&S27DATA.metricool())||null; return (mc&&mc.posts)||[]; }
 function socialMonth(){ if(!state._socialMonth){ var n=new Date(); state._socialMonth={y:n.getFullYear(),m:n.getMonth()}; } return state._socialMonth; }
@@ -396,7 +395,7 @@ function socialMatrixbar(posts){
   }).join('')+'</div>';
 }
 function socialFilters(){
-  var fs=[['alles','Alle'],['concept','Concept'],['feedback','Wacht op je feedback'],['goedgekeurd','Goedgekeurd'],['gepubliceerd','Gepubliceerd']];
+  var fs=[['alles','Alle'],['feedback','Wacht op je feedback'],['goedgekeurd','Goedgekeurd'],['gepubliceerd','Gepubliceerd']];
   return '<div class="soc-fbar">'+fs.map(function(f){ return '<button class="soc-fchip'+(socialFilter()===f[0]?' active':'')+'" onclick="socialSetFilter(\''+f[0]+'\')">'+esc(f[1])+'</button>'; }).join('')+'</div>';
 }
 function socialCalendar(posts){
@@ -426,27 +425,42 @@ function socialDetailPage(id){
   var st=socialStatus(p), m=socialStatusMeta(st);
   var dd=p.dt?p.dt.toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'long',year:'numeric'}):'';
   var tt=p.dt?p.dt.toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'}):'';
-  var nets=(p.netwerken||[]).map(function(nw){ var n=mcNet(nw.netwerk); return '<span class="soc-net" style="color:'+n[1]+';background:'+n[1]+'15">'+esc(n[0])+'</span>'; }).join('');
-  var approved=(p.approved||(state._mcApproved&&state._mcApproved[p.id]));
-  var actions;
-  if(st==='gepubliceerd'){
-    actions='<div class="fs" style="color:var(--ink-3);line-height:1.55">Deze post is gepubliceerd. Bekijk ’m op je kanalen, of laat ons iets weten via de projectchat.</div>';
-  } else if(approved){
-    actions='<div class="soc-fbok">'+ic('check',16)+' Goedgekeurd, bedankt! We plannen deze post zo verder in.</div>';
-  } else {
-    actions='<div style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:16px"><button class="btn btn-branch br-green" onclick="socialApprove(\''+esc(p.id)+'\',this)">'+ic('check',16)+' Post goedkeuren</button></div>'
-      +'<div id="socFbWrap"><label class="fs" style="font-weight:700;color:var(--ink-3)">Liever iets aanpassen? Beschrijf de gewenste wijziging (tekst of visual), wij passen het voor je aan.</label>'
-      +'<textarea id="socFbTx" class="soc-fbta" rows="3" placeholder="bv. Kan de eerste zin pakkender? Of: vervang de foto door een teamfoto."></textarea>'
-      +'<div style="margin-top:9px"><button class="btn btn-primary" onclick="socialFeedback(\''+esc(p.id)+'\',this)">'+ic('send',15)+' Aanpassing doorgeven</button></div></div>';
+  var published=(st==='gepubliceerd');
+  var media=p.media||'';
+  var isVid=/\.(mp4|mov|webm|m4v)(\?|$)/i.test(media);
+  var mediaHtml = media ? (isVid
+    ? '<video class="soc-dimg" src="'+esc(media)+'" controls preload="metadata"></video>'
+    : '<img class="soc-dimg" src="'+esc(media)+'" alt="" loading="lazy">') : '';
+  var back='<button class="soc-back" onclick="socialCloseDetail()">'+ic('arrow',15)+' Terug naar de kalender</button>';
+  if(published){
+    var nets=(p.netwerken||[]).map(function(nw){ var n=mcNet(nw.netwerk); return '<span class="soc-net" style="color:'+n[1]+';background:'+n[1]+'15">'+esc(n[0])+'</span>'; }).join('');
+    return '<div class="soc-detail">'+back+'<div class="soc-dcard">'+mediaHtml+'<div class="soc-dbody">'
+      +'<div class="soc-dmeta"><span class="soc-badge" style="color:'+m[1]+';background:'+m[2]+'">'+esc(m[0])+'</span>'+nets+'</div>'
+      +(dd?'<div class="fs" style="color:var(--ink-4);margin-bottom:14px;display:flex;align-items:center;gap:6px">'+ic('cal',14)+' '+esc(dd)+(tt?' · '+tt:'')+'</div>':'')
+      +'<div class="soc-dtxt">'+esc(p.tekst||'(geen tekst)')+'</div>'
+      +'<div class="soc-dact"><div class="fs" style="color:var(--ink-3);line-height:1.55">Deze post is gepubliceerd, dus niet meer aanpasbaar. Een vraag erover? Laat het ons weten via de projectchat.</div></div>'
+      +'</div></div></div>';
   }
-  return '<div class="soc-detail"><button class="soc-back" onclick="socialCloseDetail()">'+ic('arrow',15)+' Terug naar de kalender</button>'
-    +'<div class="soc-dcard">'
-    +(p.media?'<img class="soc-dimg" src="'+esc(p.media)+'" alt="" loading="lazy">':'')
-    +'<div class="soc-dbody">'
-    +'<div class="soc-dmeta"><span class="soc-badge" style="color:'+m[1]+';background:'+m[2]+'">'+esc(m[0])+'</span>'+nets+'</div>'
-    +(dd?'<div class="fs" style="color:var(--ink-4);margin-bottom:14px;display:flex;align-items:center;gap:6px">'+ic('cal',14)+' '+esc(dd)+(tt?' · '+tt:'')+'</div>':'')
-    +'<div class="soc-dtxt">'+esc(p.tekst||'(geen tekst)')+'</div>'
-    +'<div class="soc-dact">'+actions+'</div>'
+  // EDITOR (geplande post): kanalen aan/uit, caption+hashtags, visual wijzigen. Wijziging gaat direct door.
+  var CHAN=['facebook','instagram','linkedin','tiktok','youtube','gbp'];
+  var on={}; (p.providers||[]).forEach(function(pr){ on[String(pr.network||'').toLowerCase()]=true; });
+  (p.netwerken||[]).forEach(function(nw){ on[String(nw.netwerk||'').toLowerCase()]=true; });
+  var chans=CHAN.map(function(net){ var n=mcNet(net);
+    return '<button type="button" class="soc-chan'+(on[net]?' on':'')+'" data-net="'+net+'" onclick="socialToggleChan(this)" style="--cn:'+n[1]+'"><span class="soc-chan-dot"></span>'+esc(n[0])+'</button>';
+  }).join('');
+  var approved=(p.approved||(state._mcApproved&&state._mcApproved[p.id]));
+  return '<div class="soc-detail">'+back+'<div class="soc-dcard">'+mediaHtml+'<div class="soc-dbody">'
+    +'<div class="soc-dmeta"><span class="soc-badge" style="color:'+m[1]+';background:'+m[2]+'">'+esc(m[0])+'</span>'+(dd?'<span class="fs" style="color:var(--ink-4);display:inline-flex;align-items:center;gap:5px">'+ic('cal',13)+' '+esc(dd)+(tt?' · '+tt:'')+'</span>':'')+'</div>'
+    +'<p class="fs" style="color:var(--ink-3);margin:2px 0 14px">Pas je post zelf aan: kies de kanalen, herschrijf de tekst, voeg hashtags toe of wissel de visual. Je wijziging gaat meteen door.</p>'
+    +'<label class="soc-elab">Kanalen</label><div class="soc-chans">'+chans+'</div>'
+    +'<label class="soc-elab">Tekst &amp; hashtags</label><textarea id="socCap" class="soc-cap" rows="7">'+esc(p.tekst||'')+'</textarea>'
+    +'<div class="soc-hashrow"><input id="socHash" class="soc-hashin" placeholder="#hashtag" onkeydown="if(event.key===\'Enter\'){event.preventDefault();socialAddHash();}"><button type="button" class="btn btn-outline btn-sm" onclick="socialAddHash()">'+ic('plus',14)+' Hashtag</button></div>'
+    +'<label class="soc-elab">Visual wijzigen</label>'
+    +'<input id="socMedia" class="soc-hashin" style="width:100%;box-sizing:border-box" placeholder="Plak een nieuwe afbeeldings- of video-URL (of een Google Drive-link)">'
+    +'<p class="fs" style="color:var(--ink-4);margin:6px 0 0">Laat leeg om de huidige visual te behouden.</p>'
+    +'<div class="soc-eact"><button class="btn btn-primary" onclick="socialSavePost(\''+esc(p.id)+'\',this)">'+ic('check',16)+' Wijzigingen opslaan</button>'
+    +(approved?'<span class="soc-fbok" style="margin:0">'+ic('check',15)+' Goedgekeurd</span>':'<button class="btn btn-branch br-green" onclick="socialApprove(\''+esc(p.id)+'\',this)">'+ic('check',16)+' Goedkeuren</button>')
+    +'</div><div id="socSaveMsg" style="margin-top:10px"></div>'
     +'</div></div></div>';
 }
 function panelSocials(){

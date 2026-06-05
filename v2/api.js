@@ -88,7 +88,9 @@ const ENDPOINTS = {
   // Metricool post goedkeuren vanuit het portaal: { post_id } -> { ok, approved }.
   metricoolApprove:  GATEWAY_BASE + '/metricoolApprove',
   // Klant geeft feedback/aanpassing op een geplande post: { post_id, feedback } -> { ok }.
-  metricoolFeedback: GATEWAY_BASE + '/metricoolFeedback'
+  metricoolFeedback: GATEWAY_BASE + '/metricoolFeedback',
+  // Klant past een post DIRECT aan in Metricool: { post_id, text, providers:[net], media:[url] } -> { ok, id }.
+  metricoolUpdate:   GATEWAY_BASE + '/metricoolUpdate'
 };
 
 /* AUTH v2 (Firebase + Cloudflare-gateway) is de DEFAULT. ?auth=v1 = legacy-vangnet. */

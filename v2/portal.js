@@ -927,6 +927,36 @@ async function socialFeedback(id, btn){
   const box=$id('socFbWrap');
   if(box) box.innerHTML='<div class="soc-fbok">'+ic('check',16)+' Je opmerking is doorgestuurd naar je Studio 27-contact. We passen het aan en je ziet de update hier verschijnen.</div>';
 }
+/* --- In-portal post-editor: kanalen toggelen, hashtag toevoegen, en DIRECT opslaan in Metricool --- */
+function socialToggleChan(btn){ if(btn) btn.classList.toggle('on'); }
+function socialAddHash(){
+  var inp=$id('socHash'), cap=$id('socCap'); if(!inp||!cap) return;
+  var h=String(inp.value||'').trim().replace(/^#+/,''); if(!h) return;
+  cap.value=(String(cap.value||'').replace(/\s+$/,'')+' #'+h).replace(/^\s+/,'')+' '; inp.value=''; cap.focus();
+}
+async function socialSavePost(id, btn){
+  var cap=$id('socCap'), media=$id('socMedia'), msg=$id('socSaveMsg');
+  var chans=[].slice.call(document.querySelectorAll('.soc-chan.on')).map(function(b){return b.getAttribute('data-net');});
+  if(!chans.length){ if(msg) msg.innerHTML='<div class="soc-saveerr">Kies minstens één kanaal.</div>'; return; }
+  if(btn){ btn.disabled=true; btn.dataset.orig=btn.innerHTML; btn.textContent='Opslaan…'; }
+  var payload={ post_id:id, text:(cap?cap.value:''), providers:chans };
+  var mv=media?String(media.value||'').trim():''; if(mv) payload.media=[mv];
+  var resetBtn=function(){ if(btn){ btn.disabled=false; btn.innerHTML=btn.dataset.orig||(ic('check',16)+' Wijzigingen opslaan'); } };
+  if(state.demoMode || !state.session){ if(msg) msg.innerHTML='<div class="soc-saveok">'+ic('check',15)+' Opgeslagen (demo).</div>'; resetBtn(); return; }
+  try{
+    var r=await api(ENDPOINTS.metricoolUpdate, payload);
+    var d=(r&&r.ok&&r.data)?r.data:(r&&r.ok!==undefined?r:null);
+    if(d&&d.ok){
+      if(msg) msg.innerHTML='<div class="soc-saveok">'+ic('check',15)+' Je wijziging staat in Metricool. We verwerken ze verder.</div>';
+      try{ state.data.metricool=null; await S27DATA.loadMetricool(); }catch(e){}
+      state._socialDetail=null; setTimeout(function(){ renderPanel('socials'); }, 700);
+    } else {
+      var det=(d&&d.detail)?(': '+escapeHtml(String(d.detail))):'';
+      if(msg) msg.innerHTML='<div class="soc-saveerr">Opslaan lukte niet'+det+'. Probeer opnieuw of laat het ons weten via de chat.</div>';
+      resetBtn();
+    }
+  }catch(e){ if(msg) msg.innerHTML='<div class="soc-saveerr">Opslaan lukte niet. Probeer het later opnieuw.</div>'; resetBtn(); }
+}
 async function uploadHuisstijl(input){
   const f=input.files&&input.files[0]; if(!f) return;
   if(state.demoMode){ return; }
