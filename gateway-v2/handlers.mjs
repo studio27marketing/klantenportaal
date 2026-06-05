@@ -699,6 +699,23 @@ export function disciplineMapper(typeJobValue) {
   if (!Number.isFinite(n)) return '';
   return DISCIPLINE_MAP[n] || '';
 }
+// Fallback: als TYPE JOB niet (correct) is ingevuld, leid de discipline af uit de LIJSTNAAM.
+// Projecten zijn in ClickUp georganiseerd in disciplineе-lijsten (Webdesign, Branding, Video-en
+// fotografie, ...), dus de lijst is een betrouwbare bron. Zo verschijnen altijd ALLE projecten.
+export function disciplineFromList(listName) {
+  const n = String(listName || '').toLowerCase();
+  if (!n) return '';
+  if (n.includes('webdesign') || n.includes('website')) return 'webdesign';
+  if (n.includes('video') || n.includes('fotograf') || n.includes('content')) return 'video_fotografie';
+  if (n.includes('brand') || n.includes('grafis')) return 'branding';
+  if (n.includes('seo') || n.includes('geo')) return 'seo';
+  if (n.includes('social')) return 'social';
+  if (n.includes('adverteren') || n.includes('advertentie') || n.includes(' ads')) return 'ads';
+  if (n.includes('strategie')) return 'strategie';
+  if (n.includes('opleiding')) return 'opleiding';
+  if (n.includes('automation') || n.includes('automatisat')) return 'automation';
+  return '';
+}
 
 // status-mapper (substring + status.type) -> genormaliseerd + label + pct.
 export function statusMapper(statusObj) {
@@ -1186,7 +1203,8 @@ export async function dashboard(bedrijfId, body, env) {
     // her-check scope per taak (bedrijf_match), 1:1 met Make filter 12
     const rel = getRelationIds(t, FIELD.bedrijf);
     if (!rel.includes(String(bedrijfId))) continue;
-    const discipline = disciplineMapper(getCF(t, FIELD.typeJob));
+    let discipline = disciplineMapper(getCF(t, FIELD.typeJob));
+    if (!discipline) discipline = disciplineFromList(t.list && t.list.name);
 
     // (A) afgerond_60d: status in {done, goedgekeurd, klaar voor facturatie, gefactureerd}
     //     EN afgerond/opgeleverd (date_done>date_closed>due_date) in de laatste 60 dagen.
