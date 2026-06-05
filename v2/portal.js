@@ -457,8 +457,20 @@ async function botReply(q){
   if(state.demoMode){ setTimeout(()=>{ t.remove(); pushBot(BOT_ANSWERS[q]||'Goeie vraag! Ik verbind je even door met <b>Ilke</b>, je vaste contact, zij antwoordt je zo.','bot'); },1100); return; }
   try {
     const res = await api(ENDPOINTS.aiStatusBot, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), vraag:q, projecten_context:botContext() });
-    t.remove(); pushBot((res&&res.data&&res.data.answer)?res.data.answer.replace(/^ESCALATE:[^\n]*\n?/,''):'Ik verbind je even door met je vaste contact, die antwoordt je zo.','bot');
+    t.remove(); pushBot(botFormatAnswer(res&&res.data&&res.data.answer),'bot');
   } catch(e){ t.remove(); pushBot('Ik verbind je even door met je vaste contact, die antwoordt je zo.','bot'); }
+}
+// AI-antwoord opmaken: eerst letterlijke \n -> echte regeleindes (de AI levert soms een
+// letterlijke \n), DAN de interne ESCALATE-stuurregel weghalen (alles vóór de eerste regel-
+// einde), en veilig als HTML tonen. Leeg of enkel-escalate -> nette doorverwijzing i.p.v. niets.
+function botFormatAnswer(raw){
+  var s=String(raw==null?'':raw).replace(/\\r/g,'').replace(/\\n/g,'\n');
+  if(!s.trim()) return 'Ik verbind je even door met je vaste contact, die antwoordt je zo.';
+  if(/^\s*ESCALATE\s*:/i.test(s)){
+    var nl=s.indexOf('\n');
+    s=(nl>=0?s.slice(nl+1):'').trim() || 'Ik laat je vaste contactpersoon dit persoonlijk opvolgen, je hoort snel van hen.';
+  }
+  return escapeHtml(s).replace(/\n/g,'<br>');
 }
 function botContext(){ const ps=S27DATA.projects()||[]; return ps.map(p=>'- '+p.name+' ('+p.disc+', '+p.status+(p.pct?(', '+p.pct+'% klaar'):'')+')').join('\n')||'(geen projecten)'; }
 
