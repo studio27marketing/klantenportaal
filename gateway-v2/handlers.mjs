@@ -2816,6 +2816,76 @@ export async function metricoolUpdate(bedrijfId, body, env) {
 }
 
 /* =============================================================================
+   AI-assistent (portaal-chatbot) - rechtstreeks via Cloudflare, GEEN Make.
+   Prompt + model komen uit een ClickUp-config-taak (door Studio 27 zelf bewerkbaar in
+   ClickUp): eerste regel "MODEL: <naam>", dan "---", dan de system-prompt. Modelnaam met
+   'gpt'/'o' -> OpenAI, anders -> Anthropic. Sleutels: env.ANTHROPIC_API_KEY / env.OPENAI_API_KEY.
+   ============================================================================= */
+export const AI_CONFIG_TASK = '86ca5511h';
+const AI_DEFAULT_MODEL = 'claude-3-5-sonnet-latest';
+const AI_DEFAULT_PROMPT = 'Je bent de vriendelijke digitale assistent van Studio 27. Antwoord kort, warm en in het Nederlands (je-vorm). Gebruik de meegegeven projectcontext en verzin niets. Weet je iets niet, verwijs dan door naar de vaste contactpersoon via de projectchat.';
+let _aiCfgCache = { val: null, exp: 0 };
+async function aiConfig(env) {
+  const now = Date.now();
+  if (_aiCfgCache.val && now < _aiCfgCache.exp) return _aiCfgCache.val;
+  let model = AI_DEFAULT_MODEL, prompt = AI_DEFAULT_PROMPT;
+  try {
+    const r = await cu.get(env, `/task/${AI_CONFIG_TASK}?include_markdown_description=true`);
+    const desc = r.ok && r.data ? str(r.data.text_content || r.data.description) : '';
+    if (desc.trim()) {
+      const mMatch = desc.match(/MODEL:\s*([^\n\r]+)/i);
+      if (mMatch) model = mMatch[1].trim();
+      const sep = desc.indexOf('---');
+      const body = (sep >= 0 ? desc.slice(sep + 3) : desc.replace(/MODEL:[^\n\r]*/i, '')).trim();
+      if (body) prompt = body;
+    }
+  } catch (e) {}
+  const val = { model, systemPrompt: prompt };
+  _aiCfgCache = { val, exp: now + 60 * 1000 };   // 60s cache, zodat een prompt-wijziging snel doorwerkt
+  return val;
+}
+async function aiComplete(env, model, system, user) {
+  model = str(model) || AI_DEFAULT_MODEL;
+  try {
+    if (/^(gpt|o\d)/i.test(model)) {
+      const key = str(env && env.OPENAI_API_KEY); if (!key) return { err: 'no_openai_key' };
+      const r = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, max_tokens: 700, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] }),
+      });
+      const d = await r.json().catch(() => null);
+      if (!r.ok) return { err: str((d && d.error && d.error.message) || r.status) };
+      const txt = d && d.choices && d.choices[0] && d.choices[0].message ? str(d.choices[0].message.content) : '';
+      return txt ? { text: txt } : { err: 'empty' };
+    }
+    const key = str(env && env.ANTHROPIC_API_KEY); if (!key) return { err: 'no_anthropic_key' };
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, max_tokens: 700, system, messages: [{ role: 'user', content: user }] }),
+    });
+    const d = await r.json().catch(() => null);
+    if (!r.ok) return { err: str((d && d.error && d.error.message) || r.status) };
+    const txt = d && Array.isArray(d.content) && d.content[0] ? str(d.content[0].text) : '';
+    return txt ? { text: txt } : { err: 'empty' };
+  } catch (e) { return { err: 'network' }; }
+}
+export async function aiChat(bedrijfId, body, env) {
+  const vraag = str(body && (body.vraag || body.question)).trim();
+  if (!vraag) return { status: 400, body: { ok: false, error: 'no_question', answer: '' } };
+  const br = await cu.get(env, `/task/${bedrijfId}`);            // scope: geldig bedrijf
+  const klantNaam = str(body && body.klant_naam) || str(br.ok && br.data && br.data.name) || 'de klant';
+  const cfg = await aiConfig(env);
+  const context = str(body && body.projecten_context);
+  const user = `Vraag van ${klantNaam}:\n${vraag}\n\nLopende projecten van deze klant (context, niets verzinnen):\n${context || '(geen projectdata beschikbaar)'}`;
+  const res = await aiComplete(env, cfg.model, cfg.systemPrompt, user);
+  if (!res || res.err || !res.text) {
+    // graceful: de FE toont dan haar doorverwijs-zin. error-veld helpt bij debuggen (logs).
+    return { status: 200, body: { ok: false, error: (res && res.err) || 'ai_unavailable', answer: '' } };
+  }
+  return { status: 200, body: { ok: true, answer: res.text, model: cfg.model } };
+}
+
+/* =============================================================================
    Handler-registry voor de router-shim + node-harness.
    READ_HANDLERS: testbaar zonder Firebase met (bedrijfId, body, env).
    ============================================================================= */
@@ -2832,6 +2902,9 @@ export const READ_HANDLERS = {
   driveEnsure,
   // Metricool (directe v2-API, geen Make). Leest blogId uit veld 40f6ccd2 op de bedrijf-taak.
   metricool,
+  // AI-assistent (chatbot) rechtstreeks via Cloudflare; prompt+model uit een ClickUp-config-taak.
+  // Onder de bestaande frontend-key 'aiStatusBot' geregistreerd, zo blijft de FE-aanroep werken.
+  aiStatusBot: aiChat,
 };
 export const WRITE_HANDLERS = {
   bedrijfVoorkeuren,
