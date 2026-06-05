@@ -137,6 +137,27 @@
 .plan-locnote{display:flex;align-items:center;gap:7px;font-family:var(--font-display);font-weight:700;font-size:13px;color:var(--ink-3);background:var(--paper-2,#FAF7F2);border:1px solid var(--line,#E7DFD3);border-radius:10px;padding:9px 12px;margin-bottom:12px;}
 .plan-locnote svg{color:var(--ink-4);flex:none;}
 
+/* 'Nieuwe taak klaar'-melding bovenaan het proces-overzicht */
+.proces-newtask{display:flex;align-items:center;gap:9px;font-family:var(--font-display);font-weight:700;font-size:13.5px;color:var(--s27-blue-ink,#1F5FA8);background:var(--s27-blue-soft,rgba(48,131,220,.10));border:1px solid color-mix(in srgb,var(--s27-blue,#3083DC) 28%,transparent);border-radius:12px;padding:11px 13px;margin-bottom:14px;}
+.proces-newtask svg{flex:none;}
+
+/* In-portal feedback-kaart (bekijk oplevering + direct goedkeuren/feedback) */
+.fbc{background:var(--paper,#fff);border:1px solid var(--line,#E7DFD3);border-radius:14px;padding:13px;margin-bottom:10px;display:flex;flex-direction:column;gap:10px;}
+.fbc-embed iframe{width:100%;}
+.fbc-nm{font-family:var(--font-display);font-weight:800;font-size:14px;color:var(--ink);}
+.fbc-views{display:flex;flex-direction:column;gap:7px;}
+.fbc-view{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-display);font-weight:700;font-size:13.5px;color:var(--s27-blue-ink,#1F5FA8);background:var(--s27-blue-soft,rgba(48,131,220,.10));border:1px solid color-mix(in srgb,var(--s27-blue,#3083DC) 22%,transparent);border-radius:10px;padding:9px 12px;text-decoration:none;}
+.fbc-view:hover{background:color-mix(in srgb,var(--s27-blue,#3083DC) 16%,transparent);}
+.fbc-view span{flex:1;min-width:0;}
+.fbc-act{display:flex;gap:8px;flex-wrap:wrap;}
+.fbc-fb{display:flex;flex-direction:column;gap:9px;}
+.fbc-fb textarea{font-family:var(--font-body);font-size:13.5px;padding:10px;border:1px solid var(--line);border-radius:10px;resize:vertical;outline:none;width:100%;box-sizing:border-box;}
+.fbc-fb textarea:focus{border-color:var(--s27-yellow,#F2C14E);}
+.fbc-fbact{display:flex;gap:8px;flex-wrap:wrap;}
+
+/* Instellingen: gelijke spacing tussen het profiel/notificaties-blok en de uitlogknop-kaart */
+.set-cols{margin-bottom:18px;}
+
 /* MEETINGS, plan-vakje in ons blauw zodat tekst goed afsteekt */
 .meet-side.meet-side-accent{background:linear-gradient(165deg,rgba(48,131,220,.96),rgba(31,95,168,.96));border:1px solid rgba(255,255,255,.35);color:#fff;-webkit-backdrop-filter:saturate(150%) blur(18px);backdrop-filter:saturate(150%) blur(18px);box-shadow:0 22px 50px rgba(31,95,168,.32),inset 0 1px 0 rgba(255,255,255,.25);}
 .meet-side-accent .ms-title,.meet-side-accent .ms-label{color:#fff;}

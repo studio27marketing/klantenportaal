@@ -207,18 +207,16 @@ function panelStart(){
   </div>`;
 }
 
-// svc-kaart-key -> de bijhorende npDienst-optie (zodat het offerteformulier de dienst voorselecteert).
-// Branding/SEO/Opleiding hebben (nog) geen prijsopties in NP_OPTIONS -> dan enkel naar Offertes navigeren.
-const SVC_TO_NPDIENST = { strategie:'Strategie', video:'Video- en fotografie', website:'Website & SEO', seo:'Website & SEO', ads:'Online adverteren', social:'Social media' };
+// svc-kaart-key -> de offerte-samensteller-GROEP die we openen bij 'Vraag offerte aan'.
+// Strategie én Ads gaan bewust naar 'Adverteren' (daar bemachtigen we de aanvraag).
+const SVC_TO_OFFGROUP = { strategie:'Adverteren', ads:'Adverteren', video:'Content & video', website:'Webdesign', seo:'Webdesign', branding:'Branding & grafisch', social:'Social media', opleiding:'Opleidingen' };
 function goDienstOfferte(key){
   goTab('offertes');
-  const dienst=SVC_TO_NPDIENST[key]; if(!dienst) return;
+  const groep=SVC_TO_OFFGROUP[key];
   setTimeout(function(){
-    const sel=document.getElementById('npDienst'); if(!sel) return;
-    for(var i=0;i<sel.options.length;i++){ if(sel.options[i].value===dienst || sel.options[i].text===dienst){ sel.selectedIndex=i; break; } }
-    if(typeof npDienst==='function') npDienst();
-    const card=document.querySelector('.npform'); if(card&&card.scrollIntoView) card.scrollIntoView({behavior:'smooth',block:'center'});
-  },80);
+    if(groep && typeof offSetGroup==='function'){ try{ offSetGroup(groep); }catch(e){} }
+    const card=document.getElementById('offBuilder'); if(card&&card.scrollIntoView) card.scrollIntoView({behavior:'smooth',block:'start'});
+  },90);
 }
 function panelDiensten(){
   const act=SERVICES.filter(svcActive), inact=SERVICES.filter(s=>!svcActive(s));
@@ -719,18 +717,13 @@ function panelHuisstijl(){
 }
 
 function panelFacturatie(){
-  // Facturen zijn (nog) niet zichtbaar: geen boekhoudkoppeling. De facturatiegegevens
-  // (ondernemingsnummer, facturatie-email, opmerkingen) staan voortaan bij Offertes.
+  // Facturatiegegevens (ondernemingsnummer, facturatie-email, opmerkingen) staan terug op DEZE tab.
   return hero('green','Mijn bedrijf · Facturatie',
     `Jouw <span class="accent">facturatie${squig()}</span>, helder geregeld`,
     'Transparant en zonder kleine lettertjes.',
     scribble('krabbel-groen.png','top:-4px;right:8px;width:120px;transform:rotate(-5deg)'))
+  + facturatieBlock()
   +`<div class="setsec">
-    <h3>Facturatiegegevens staan bij je offertes</h3>
-    <p class="sdesc">Je ondernemingsnummer, facturatie-e-mail en eventuele opmerkingen geef je voortaan door bij je offertes, zo verwerken Ilke en Arne alles meteen correct bij oplevering.</p>
-    <button class="btn btn-branch br-green btn-sm" onclick="goTab('offertes')">${ic('arrow',15)} Naar je offertes en facturatiegegevens</button>
-  </div>
-  <div class="setsec">
     <h3>Facturen</h3>
     <div class="empty" style="padding:34px 20px"><div class="em-ic">${ic('doc',52)}</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Binnenkort hier</b><p style="margin:6px 0 0">Zodra je facturen automatisch gekoppeld zijn, vind je ze hier overzichtelijk terug. Een factuur nodig? Je Studio 27-contact bezorgt ze je vlot.</p></div>
   </div>`;
@@ -976,12 +969,10 @@ function panelOffertes(){
   var head = hero('purple','Plannen · Offertes', 'Jouw <span class="accent">offertes'+squig()+'</span> in één overzicht');
   if(raw===null||raw===undefined) return head+'<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je offertes worden geladen…</p></div>';
   var offs = live ? raw.filter(function(o){return offerteVisible(o.status);}) : raw;  // verberg concept/draft
-  // Kennismaking / koffiegesprek -> automatisch bij Arne (link naar de meetingpagina, vooraf op "Nieuw project" met Arne)
-  var koffieCard = '<div class="card koffie-card br-orange" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:14px"><span class="koffie-ic">'+ic('msg',22)+'</span><div style="flex:1;min-width:200px"><b style="font-family:var(--font-display);font-size:15.5px;display:block">Liever eerst even kennismaken?</b><span class="fs" style="color:var(--ink-3)">Plan een vrijblijvend koffiegesprek met Arne, dan bekijken we samen wat je nodig hebt.</span></div><button class="btn btn-branch br-orange btn-sm" onclick="koffieMetArne()">'+ic('cal',15)+' Koffiegesprek met Arne</button></div>';
-  // Nieuwe offerte aanvragen: (1) zelf samenstellen uit de catalogus, (2) snel een richtprijs via het
-  // 3-staps-formuliertje, (3) liever eerst kennismaken. Facturatiegegevens onderaan.
-  var quickForm = '<div class="section-head" style="margin-top:40px"><h2>Of vraag snel een richtprijs</h2></div><p class="sdesc" style="margin:-4px 0 14px;max-width:60ch">Weet je nog niet precies wat je nodig hebt? Vertel ons kort je richting, dan denken wij met je mee.</p>'+koffieCard+offerteRequestForm();
-  var formSection = offerteSamensteller()+quickForm+facturatieBlock();
+  // Nieuwe offerte aanvragen = de offerte-samensteller (catalogus). De sectie 'Of vraag snel een
+  // richtprijs' (+ koffiegesprek-kaart) is verwijderd; facturatiegegevens staan nu op de
+  // facturatie-tab, niet meer hier.
+  var formSection = offerteSamensteller();
   if(!offs.length) return head+'<div class="empty" style="padding:40px 20px"><div class="em-ic">'+ic('doc',52)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog geen offertes</b><p style="margin:6px 0 0">Hier verschijnen je verzonden offertes zodra we er één klaarzetten, of vraag er hieronder meteen één aan.</p></div>'+formSection;
   var lopend=offs.filter(function(o){return !offerteAfgerond(o.status);}), afge=offs.filter(function(o){return offerteAfgerond(o.status);});
   return head
@@ -1080,22 +1071,26 @@ function chatHTML(taskId, readOnly){
 //  - 'meeting' : het woord 'meeting' staat in de (sub)taak -> gewone plan-moment-widget.
 //  - 'shoot'   : er is een nog-te-plannen shoot -> shootkalender-widget (altijd op locatie).
 // In alle andere gevallen (mode 'none' of geen plan-data) verdwijnt de module volledig.
+// Plan-module: één kaart per plannbaar item (det.plan.items, bepaald door de worker via
+// 'Kan beginnen' + due_date). Meerdere shoots/meetings tegelijk mogelijk. Geen items -> niets.
 function scheduleBlock(det, p){
   const br = (p&&p.br)||'blue';
-  let mode, tid;
   if(!det){
-    // demo/geen detail geladen: oude regel (plan-moment bij een to-do-project) zodat de showcase niet leeg oogt.
+    // demo/geen detail geladen: oude regel (1 plan-moment bij een to-do-project) voor de showcase.
     if(!p || p.status!=='todo') return '';
-    mode='meeting'; tid=p.id;
-  } else {
-    const plan = det.plan;
-    if(!plan || plan.mode==='none' || !plan.task_id) return '';
-    mode=plan.mode; tid=plan.task_id;
+    return planCardHTML('meeting', p.id, '', br);
   }
-  if(mode==='shoot'){
-    return `<div class="setsec" style="margin-top:18px"><h3 style="display:flex;align-items:center;gap:8px">${ic('st_plan',18)} Plan je shoot</h3><p class="sdesc">Kies een dag uit onze shootkalender. Een shoot vindt altijd plaats op locatie of bij Studio 27, samen met je cameraploeg.</p><div id="s27-plan-${esc(tid)}"><button class="btn btn-branch br-${br} btn-sm" onclick="loadPlanSlots('${esc(tid)}',true)">Toon beschikbare shootdagen →</button></div></div>`;
+  const items = (det.plan && det.plan.items) || [];
+  if(!items.length) return '';
+  return items.map(function(it){ return planCardHTML(it.type, it.task_id, it.label||'', br); }).join('');
+}
+function planCardHTML(type, tid, label, br){
+  br = br||'blue';
+  const sub = label ? `<p class="sdesc" style="margin:-2px 0 10px;font-weight:700;color:var(--ink-2)">${esc(label)}</p>` : '';
+  if(type==='shoot'){
+    return `<div class="setsec" style="margin-top:18px"><h3 style="display:flex;align-items:center;gap:8px">${ic('st_plan',18)} Plan je shoot</h3>${sub}<p class="sdesc">Kies een dag uit onze shootkalender. Een shoot vindt altijd plaats op locatie of bij Studio 27, samen met je cameraploeg.</p><div id="s27-plan-${esc(tid)}"><button class="btn btn-branch br-${br} btn-sm" onclick="loadPlanSlots('${esc(tid)}',true)">Toon beschikbare shootdagen →</button></div></div>`;
   }
-  return `<div class="setsec" style="margin-top:18px"><h3 style="display:flex;align-items:center;gap:8px">${ic('st_plan',18)} Plan je moment</h3><p class="sdesc">Kies een tijdslot dat past in de agenda van je Studio 27-contact, wij sturen meteen een agenda-uitnodiging met Meet-link of locatie.</p><div id="s27-plan-${esc(tid)}"><button class="btn btn-branch br-${br} btn-sm" onclick="loadPlanSlots('${esc(tid)}')">Toon beschikbare momenten →</button></div></div>`;
+  return `<div class="setsec" style="margin-top:18px"><h3 style="display:flex;align-items:center;gap:8px">${ic('st_plan',18)} Plan je moment</h3>${sub}<p class="sdesc">Kies een tijdslot dat past in de agenda van je Studio 27-contact, wij sturen meteen een agenda-uitnodiging met Meet-link of locatie.</p><div id="s27-plan-${esc(tid)}"><button class="btn btn-branch br-${br} btn-sm" onclick="loadPlanSlots('${esc(tid)}')">Toon beschikbare momenten →</button></div></div>`;
 }
 const REVIEW_CHANNEL_OPTS = [['portaal','via het portaal'],['whatsapp','via WhatsApp'],['email','via e-mail'],['telefoon','telefonisch'],['meeting','in een meeting']].map(function(c){return '<option value="'+c[0]+'">'+c[1]+'</option>';}).join('');
 // label naar de juiste actie-knop voor een deliverable-link (Vimeo/Webflow/Drive)
@@ -1160,21 +1155,52 @@ function procesLinkLabel(l){
 // Proces-overzicht bovenaan de detail: direct zichtbaar wat opgeleverd is (+linkjes), of je
 // feedback moet geven, of er een meeting moet komen en welke acties er zijn. Bron = det.proces
 // (worker, diepe subtaak-boom). Bij demo/lege proces -> '' (de oude blokken nemen het over).
+// Vimeo-embed (player) uit een vimeo-URL; ondersteunt unlisted (hash). '' als geen vimeo-link.
+function vimeoEmbed(url){
+  var m=String(url||'').match(/vimeo\.com\/(?:video\/)?(\d+)(?:\/([0-9a-z]+))?/i);
+  if(!m) return '';
+  var src='https://player.vimeo.com/video/'+m[1]+(m[2]?('?h='+m[2]):'');
+  return '<iframe src="'+src+'" loading="lazy" frameborder="0" allow="autoplay;fullscreen;picture-in-picture" allowfullscreen style="width:100%;aspect-ratio:16/9;border:0;border-radius:12px;display:block"></iframe>';
+}
+// In-portal feedback-kaart voor één wacht-op-feedback-stap: bekijk de oplevering (link met
+// projectnaam, evt. Vimeo-speler in het portaal) + direct goedkeuren of feedback geven (feedbackV2).
+function feedbackCard(s){
+  var embed=(s.links||[]).map(function(l){ return l.type==='video'?vimeoEmbed(l.url):''; }).filter(Boolean)[0]||'';
+  var views=(s.links||[]).map(function(l){
+    var typ = l.type==='video'?'Bekijk op Vimeo' : l.type==='img'?"Bekijk de foto's" : l.type==='folder'?'Open de projectmap' : 'Bekijk de oplevering';
+    return '<a class="fbc-view" href="'+esc(l.url)+'" target="_blank" rel="noopener">'+ic(l.type==='video'?'play':l.type==='img'?'img':'doc',15)+'<span>'+esc(typ+' — '+s.naam)+'</span>'+ic('arrow',13)+'</a>';
+  }).join('');
+  if(!views) views='<div class="fbc-nm">'+esc(s.naam)+'</div>';
+  var tid=esc(s.task_id);
+  return '<div class="fbc">'
+    +(embed?'<div class="fbc-embed">'+embed+'</div>':'')
+    +'<div class="fbc-views">'+views+'</div>'
+    +'<div class="fbc-act" id="fbcact-'+tid+'">'
+      +'<button class="btn btn-branch br-green btn-sm" onclick="procesApprove(\''+tid+'\',this)">'+ic('check',15)+' Goedkeuren</button>'
+      +'<button class="btn btn-outline btn-sm" onclick="procesFeedbackToggle(\''+tid+'\')">'+ic('msg',15)+' Feedback geven</button>'
+    +'</div>'
+    +'<div class="fbc-fb" id="fbcfb-'+tid+'" style="display:none">'
+      +'<textarea id="fbctx-'+tid+'" rows="3" placeholder="Wat mag er anders? Opmerkingen passen we volledig gratis aan."></textarea>'
+      +'<div class="fbc-fbact"><button class="btn btn-primary btn-sm" onclick="procesFeedback(\''+tid+'\',this)">'+ic('send',14)+' Versturen</button><button class="btn btn-ghost btn-sm" onclick="procesFeedbackToggle(\''+tid+'\')">Annuleer</button></div>'
+    +'</div>'
+  +'</div>';
+}
 function procesBlock(det,p){
   const pr = det && det.proces;
   if(!pr || !pr.aantal_stappen) return '';
+  const plan = (det && det.plan && det.plan.items) || [];
+  const fb = pr.wacht_feedback || [];
   let h='<div class="proces-panel">';
-  // 1) Voor jou te doen (afgeleide acties)
-  if(pr.acties && pr.acties.length){
-    h+='<div class="proces-acties"><div class="proces-h proces-h-do">'+ic('spark',15)+'<span>Voor jou</span></div>';
-    h+=pr.acties.map(function(a){
-      if(a.type==='feedback' && a.url) return '<a class="proces-actie act-fb" href="'+esc(a.url)+'" target="_blank" rel="noopener"><span class="pa-ic">'+ic('st_feedback',16)+'</span><span class="pa-tx">'+esc(a.tekst)+'</span>'+ic('arrow',15)+'</a>';
-      if(a.type==='meeting') return '<button class="proces-actie act-meet" onclick="goTab(\'meetings\')"><span class="pa-ic">'+ic('cal',16)+'</span><span class="pa-tx">'+esc(a.tekst)+'</span>'+ic('arrow',15)+'</button>';
-      return '<div class="proces-actie act-info"><span class="pa-ic">'+ic('info',16)+'</span><span class="pa-tx">'+esc(a.tekst)+'</span></div>';
-    }).join('');
-    h+='</div>';
-  } else {
-    h+='<div class="proces-allgood">'+ic('st_approved',16)+'<span>Alles loopt op schema. Je hoeft nu even niets te doen.</span></div>';
+  // 0) 'Nieuwe taak klaar'-melding (de plan-kaarten staan er net onder via scheduleBlock)
+  if(plan.length){
+    var hasShoot=plan.some(function(x){return x.type==='shoot';}), hasMeet=plan.some(function(x){return x.type!=='shoot';});
+    var wat = (hasShoot&&hasMeet)?'je shoots of meetings' : hasShoot?(plan.length>1?'je shoots':'je shoot') : (plan.length>1?'je meetings':'een meeting');
+    h+='<div class="proces-newtask">'+ic('st_plan',16)+'<span>Er staat een nieuwe taak voor je klaar. Je kunt nu '+wat+' inplannen, hieronder.</span></div>';
+  }
+  // 1) Klaar voor jouw feedback (IN-PORTAL: bekijken + direct goedkeuren of feedback geven)
+  if(fb.length){
+    h+='<div class="proces-h proces-h-do">'+ic('st_feedback',15)+'<span>Klaar voor jouw feedback</span></div>';
+    h+=fb.map(feedbackCard).join('');
   }
   // 2) Wat is opgeleverd (+ linkjes)
   if(pr.opgeleverd && pr.opgeleverd.length){
@@ -1190,7 +1216,11 @@ function procesBlock(det,p){
     var dn=(pr.loopt.disciplines||[]).map(function(k){ return (window.S27DATA?S27DATA.disc(k).label:k); }).join(', ');
     h+='<div class="proces-loopt">'+ic('st_progress',14)+'<span>Nog <b>'+pr.loopt.aantal+'</b> stap'+(pr.loopt.aantal===1?'':'pen')+' in productie'+(dn?' · '+esc(dn):'')+'</span></div>';
   }
-  // 4) Meeting al gepland?
+  // 4) Niets te doen -> geruststelling
+  if(!plan.length && !fb.length && !(pr.opgeleverd&&pr.opgeleverd.length)){
+    h+='<div class="proces-allgood">'+ic('st_approved',16)+'<span>Alles loopt op schema. Je hoeft nu even niets te doen.</span></div>';
+  }
+  // 5) Meeting al gepland?
   if(pr.meeting && pr.meeting.gepland){
     h+='<div class="proces-loopt">'+ic('cal',14)+'<span>Er staat al een meeting gepland voor dit project.</span></div>';
   }
@@ -1286,13 +1316,8 @@ function buildModal(id, from){
       </div>`).join('')}
   </div>`;
 
-  const feedback=`<div class="mpane" data-mpane="feedback">
-    <p style="color:var(--ink-3);font-size:14px;margin-top:0">Een algemene opmerking over dit project? Laat het hier weten. Opmerkingen passen we volledig gratis aan. Wil je per bestand reageren? Dat kan onder <b>Bestanden</b>.</p>
-    <div class="field"><label>Jouw feedback</label><textarea id="genFbTx" rows="4" style="font-family:var(--font-body);font-size:14px;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r-sm);resize:vertical;outline:none" placeholder="bv. de intro mag iets korter…"></textarea></div>
-    <div class="field" style="margin-top:12px"><label>Via welke weg geef je dit door?</label><select id="genFbChan" style="font-family:var(--font-body);font-size:14px;padding:11px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:#fff;outline:none">${REVIEW_CHANNEL_OPTS}</select></div>
-    <div style="display:flex;gap:10px;margin-top:16px"><button class="btn btn-branch br-green" onclick="approveAll(this)">${ic('check',16)} Project goedkeuren</button><button class="btn btn-primary" onclick="submitGeneralFeedback(this)">Feedback versturen ${ic('arrow',16)}</button></div>
-  </div>`;
-
+  // De algemene 'Feedback'-tab is verwijderd: feedback gebeurt per subtaak (in-portal in het
+  // overzicht), nooit op projectniveau/de PM-taak.
   const d=DISC[p.disc]||{icon:'doc'};
   const fromCap=backLabel.charAt(0).toUpperCase()+backLabel.slice(1);
   return `<div class="detail br-${p.br}">
@@ -1307,10 +1332,9 @@ function buildModal(id, from){
         <div class="modal-tabs detail-tabs">
           <button class="mtab active" onclick="switchModalTab('overzicht')">Overzicht</button>
           <button class="mtab" onclick="switchModalTab('deliverables')">Bestanden</button>
-          <button class="mtab" onclick="switchModalTab('feedback')">Feedback</button>
           <button class="mtab mtab-chat" onclick="switchModalTab('chat')">Chat</button>
         </div>
-        <div class="detail-body">${overview}${deliverables}${feedback}</div>
+        <div class="detail-body">${overview}${deliverables}</div>
       </div>
       <aside class="detail-chat">
         <div class="dc-head">${ic('msg',16)} Projectchat ${saeChatWho(det?det.sae:p.sae, chatClosed)}</div>

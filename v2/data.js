@@ -200,14 +200,18 @@
     var raw = projList(); if(!raw) return null;
     var out=[];
     raw.forEach(function(p){
-      var st = norm(p.status); var br = DATA.disc(p.discipline);
-      if(st==='doorgestuurd' || p.feedback_link){
+      var br = DATA.disc(p.discipline);
+      if(norm(p.status)==='doorgestuurd' || p.feedback_link){
         out.push({ br:br.br, cat:br.label, title:'Review nodig', ctx:'Er staat iets klaar voor jou bij <b>'+esc(p.naam)+'</b>. Geef je akkoord of je feedback.',
           cta:'Bekijk', action:"openProject('"+esc(p.task_id)+"','projecten')", urgent:true, icon:'st_feedback' });
-      } else if(st==='to_do' && !p.opleverdatum){
-        out.push({ br:br.br, cat:br.label, title:'Moment inplannen', ctx:'<b>'+esc(p.naam)+'</b> wacht om ingepland te worden. Prik een moment dat jou past.',
-          cta:'Plan in', action:"openProject('"+esc(p.task_id)+"','projecten')", urgent:false, icon:'st_plan' });
       }
+      // Plannbare taken (wij hebben 'Kan beginnen' aangevinkt, nog geen due date) -> 'nieuwe taak klaar'-melding.
+      (p.plan_items||[]).forEach(function(it){
+        var isShoot=it.type==='shoot';
+        out.push({ br:br.br, cat:br.label, title:'Klaar om in te plannen',
+          ctx:'Er staat een nieuwe taak voor je klaar bij <b>'+esc(p.naam)+'</b>'+(it.label?' ('+esc(it.label)+')':'')+'. Je kunt nu '+(isShoot?'je shoot':'een meeting')+' inplannen.',
+          cta:(isShoot?'Plan shoot':'Plan moment'), action:"openProject('"+esc(p.task_id)+"','projecten')", urgent:true, icon:'st_plan' });
+      });
     });
     return out;
   };
@@ -238,7 +242,10 @@
   // Diensten-hub: actief als de tak projecten heeft (project-based disciplineState)
   DATA.discActive = function(discId){
     var raw = projList(); if(!raw) return false;
-    return raw.some(function(p){ return p.discipline===discId; });
+    // check op ALLE labels (niet enkel de primaire discipline), zodat een tak die enkel als
+    // secundair label voorkomt (bv. webdesign naast branding) ook als actief telt. Anders
+    // toont een lopend webdesign-project foutief 'niet actief / vraag offerte aan'.
+    return raw.some(function(p){ var L=(p.labels&&p.labels.length)?p.labels:[p.discipline]; return L.indexOf(discId)>=0; });
   };
 
   // per-taak bestanden normaliseren: expliciet veld of geparset uit een ruwe URL-tekst

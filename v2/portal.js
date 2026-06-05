@@ -631,6 +631,30 @@ async function submitGeneralFeedback(btn){
   if(state.demoMode || !state.activeProject) return;
   try { await api(ENDPOINTS.feedbackV2, { task_id:state.activeProject, bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[], algemene_opmerking:msg, kanaal:kanaal, kanaal_label:chan }); } catch(e){}
 }
+/* --- In-portal feedback per SUBTAAK (vanuit het proces-overzicht), via feedbackV2 ---
+   task_id = de subtaak zelf (niet de hoofdtaak), zodat goedkeuren/feedback op de juiste
+   oplevering landt. Optimistische UI: knoppen -> bevestiging, daarna best-effort POST. */
+function procesFeedbackToggle(taskId){
+  var b=document.getElementById('fbcfb-'+taskId); if(!b) return;
+  var open=b.style.display==='none'; b.style.display=open?'':'none';
+  if(open){ var t=document.getElementById('fbctx-'+taskId); if(t) t.focus(); }
+}
+async function procesApprove(taskId){
+  var act=document.getElementById('fbcact-'+taskId), fb=document.getElementById('fbcfb-'+taskId);
+  if(fb) fb.style.display='none';
+  if(act) act.innerHTML='<span class="pill pill-done"><span class="pdot"></span>Goedgekeurd, bedankt!</span>';
+  if(state.demoMode || !state.session) return;
+  try { await api(ENDPOINTS.feedbackV2, { task_id:taskId, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[{label:'Oplevering',choice:'goedgekeurd',kanaal:'portaal',kanaal_label:'via het portaal'}], algemene_opmerking:'' }); } catch(e){}
+}
+async function procesFeedback(taskId){
+  var t=document.getElementById('fbctx-'+taskId); var msg=t?String(t.value||'').trim():'';
+  if(!msg){ if(t){ t.style.borderColor='var(--s27-orange)'; t.focus(); } return; }
+  var act=document.getElementById('fbcact-'+taskId), fb=document.getElementById('fbcfb-'+taskId);
+  if(fb) fb.style.display='none';
+  if(act) act.innerHTML='<span class="pill pill-wait"><span class="pdot"></span>Feedback verstuurd, bedankt!</span>';
+  if(state.demoMode || !state.session) return;
+  try { await api(ENDPOINTS.feedbackV2, { task_id:taskId, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[{label:'Oplevering',choice:'feedback',opmerking:msg,kanaal:'portaal',kanaal_label:'via het portaal'}], algemene_opmerking:'' }); } catch(e){}
+}
 // facturatiegegevens opslaan, ALLE velden via facturatieSave (schrijft naar exact de
 // ClickUp-velden die content-get terugleest → volledige round-trip-sync, geen lege overschrijf)
 async function saveBedrijfGegevens(btn){

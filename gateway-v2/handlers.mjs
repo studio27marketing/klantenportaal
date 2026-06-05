@@ -54,6 +54,7 @@ export const FIELD = {
   offertes:       'eb145449-a8bd-4865-a931-23eed06a9df4', // relatie 'Offertes' op bedrijf-taak
   modules:        'b8effbfe-c4d6-42fb-b8ac-bc7d48a71734', // labels 'Actieve portaal-modules'
   typeJob:        '3e76c134-a270-483c-a82a-d9a6817f375d', // dropdown TYPE JOB
+  kanBeginnen:    'e99f30c7-7b5f-4ab4-ad48-9881dec38d91', // dropdown 'Kan beginnen?' (enkel optie JA, orderindex 0). GEZET = value-key aanwezig.
   // contact-velden
   voornaam:       '626a0441-8824-4381-a89a-4639ac547e23',
   achternaam:     '79cbda71-626b-424c-8f78-d0785c52126a',
@@ -889,13 +890,12 @@ export function buildProces(rootTask, descendants) {
   const mRel = getRelationIds(rootTask, FIELD.meeting);
   if (mRel.length) meeting = { gepland: true, naam: '', task_id: str(mRel[0]) };
 
-  // afgeleide acties (volgorde = prioriteit): feedback geven > meeting plannen
+  // afgeleide acties: enkel nog feedback-acties (inplannen loopt nu via plan-items/Kan beginnen,
+  // niet meer als generieke 'plan een afspraak'-knop). De frontend rendert de feedback bovendien
+  // IN-PORTAL (geen externe link meer).
   const acties = [];
   for (const w of wacht_feedback) {
     acties.push({ type: 'feedback', tekst: `Geef je feedback op: ${w.naam}`, url: w.feedback_link, task_id: w.task_id });
-  }
-  if (!meeting.gepland) {
-    acties.push({ type: 'meeting', tekst: 'Plan een afspraak met je projectteam', url: '', task_id: str(rootTask.id) });
   }
 
   return {
@@ -918,23 +918,47 @@ export function buildProces(rootTask, descendants) {
 //  - 'none'    : niets te plannen.
 // Enkel OPEN taken (status.type 'open' = te doen) tellen; al afgehandelde shoots/meetings
 // hoeven niet meer ingepland te worden. Shoot heeft voorrang (concrete kalenderboeking).
-function isPlannableTask(t) {
-  return String(t && t.status && t.status.type || '').toLowerCase() === 'open';
+// Een (sub)taak is door de KLANT in te plannen wanneer:
+//  - wij 'Kan beginnen' hebben aangevinkt (veld gezet -> value-key aanwezig), EN
+//  - er nog GEEN due_date staat (gezette due_date = reeds ingepland -> melding weg), EN
+//  - de taak niet 'done'/afgerond is, EN
+//  - het een shoot (TYPE JOB = Shoot/6) of een meeting ('meeting' in naam/beschrijving) is.
+// Meerdere shoots/meetings tegelijk kan (bv. contentproject met meerdere shootdata).
+function kanBeginnenGezet(t) {
+  return getCF(t, FIELD.kanBeginnen) != null;       // enkel optie 'JA'; gezet = value-key aanwezig
+}
+function heeftDueDate(t) {
+  const d = Number(t && t.due_date);
+  return Number.isFinite(d) && d > 0;
+}
+function isDoneTask(t) {
+  const ty = String(t && t.status && t.status.type || '').toLowerCase();
+  return ty === 'done' || ty === 'closed' || isAfgerondStatus(t && t.status);
+}
+function planTypeOf(t) {
+  if (Number(getCF(t, FIELD.typeJob)) === 6) return 'shoot';                         // TYPE JOB = Shoot
+  const hay = (String(t.name || '') + ' ' + String(t.description || t.text_content || '')).toLowerCase();
+  if (hay.indexOf('meeting') >= 0) return 'meeting';
+  return '';
 }
 export function buildPlan(rootTask, descendants) {
   const pool = [rootTask].concat(descendants || []);
-  let shoot = null, meeting = null;
+  const items = [];
+  const seen = new Set();
   for (const t of pool) {
-    if (!isPlannableTask(t)) continue;
-    if (!shoot && Number(getCF(t, FIELD.typeJob)) === 6) shoot = t;                 // TYPE JOB = Shoot
-    if (!meeting) {
-      const hay = (String(t.name || '') + ' ' + String(t.description || t.text_content || '')).toLowerCase();
-      if (hay.indexOf('meeting') >= 0) meeting = t;
-    }
+    const id = str(t.id);
+    if (seen.has(id)) continue;
+    if (!kanBeginnenGezet(t)) continue;        // wij hebben 't nog niet vrijgegeven
+    if (heeftDueDate(t)) continue;             // reeds ingepland (due date) -> geen melding
+    if (isDoneTask(t)) continue;               // afgerond -> geen melding
+    const type = planTypeOf(t);
+    if (!type) continue;                       // enkel shoots/meetings zijn plannbaar
+    seen.add(id);
+    items.push({ type, task_id: id, label: str(t.name) });
   }
-  if (shoot)   return { mode: 'shoot',   task_id: str(shoot.id),   label: str(shoot.name) };
-  if (meeting) return { mode: 'meeting', task_id: str(meeting.id), label: str(meeting.name) };
-  return { mode: 'none', task_id: '', label: '' };
+  // shoots eerst (concrete kalenderboeking), dan meetings; binnen hetzelfde type op naam
+  items.sort((a, b) => (a.type === b.type ? String(a.label).localeCompare(String(b.label)) : (a.type === 'shoot' ? -1 : 1)));
+  return { items };
 }
 
 // status-mapper (substring + status.type) -> genormaliseerd + label + pct.
@@ -1234,7 +1258,7 @@ export async function projectDetailV2(bedrijfId, body, env) {
   // zitten dieper. Kinderloze taak -> het overzicht toont de taak zelf. Additief: faalt het,
   // dan blijft de detail gewoon werken.
   let proces = { aantal_stappen: 0, opgeleverd: [], wacht_feedback: [], in_productie: [], te_doen: [], loopt: { aantal: 0, disciplines: [] }, links: [], meeting: { gepland: false, naam: '', task_id: '' }, acties: [] };
-  let plan = { mode: 'none', task_id: '', label: '' };
+  let plan = { items: [] };
   try {
     const tree = await fetchBedrijfTree(env, bedrijfId);
     const desc = descendantsOf(taskId, tree.childrenByParent);
@@ -1490,6 +1514,7 @@ export async function dashboard(bedrijfId, body, env) {
       opleverdatum: fmtDateFromMs(t.due_date),
       laatst_geupdatet: fmtDateTimeFromMs(t.date_updated),
       feedback_link: st.key === 'doorgestuurd' ? `https://studio27.be/design-feedback?taskId=${t.id}` : '',
+      plan_items: buildPlan(t, descendantsOf(String(t.id), childrenByParent)).items, // plannbare shoots/meetings (Kan beginnen + geen due) -> Start-melding
       sae: buildSae(t),                                        // assignees [{naam, initialen}]
     });
   }
