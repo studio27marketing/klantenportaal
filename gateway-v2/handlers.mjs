@@ -68,8 +68,10 @@ export const FIELD = {
   aantalMedewerkers:'e72680d9-9706-40b8-9e67-564bc21855d7',
   portaalToegang: 'f0de5c6c-0eea-4809-8e40-145fc7359a3d', // tekst-CSV e-mails met portaaltoegang
   // projectDetail-velden
-  deliverablesRaw:'b071307b-84c4-4372-9d7e-783e999c618f',
-  feedbackLink:   'f2610454-1961-42cf-9ba3-c7371b81353d',
+  deliverablesRaw:'b071307b-84c4-4372-9d7e-783e999c618f', // tekst 'Bestanden' (oplever-links)
+  feedbackLink:   'f2610454-1961-42cf-9ba3-c7371b81353d', // url 'Feedback link' (klant-feedback-URL)
+  driveFolder:    'b3a288a1-4f14-4dcf-bcc9-7833371e4fa3', // url 'Drive-projectfolder'
+  meeting:        '5eab5514-5b17-4cfc-ae3b-912693d57b1f', // relatie 'Meeting'
   budget:         'c8d2dd2c-2428-4236-ba37-a3f3cd90c9ec',
   contentCreators:'dbe74db2-1083-4f2a-886f-0425718ae136',
   shootlink:      'c6a7da95-80b4-45c7-8004-227e01c421d4',
@@ -686,12 +688,20 @@ export function isCompanyTask(task) {
   return !!(task && task.list && String(task.list.id) === LIST.bedrijven);
 }
 
-// discipline uit TYPE JOB-orderindex (int). 1:1 uit blueprint.
+// discipline uit TYPE JOB-orderindex (int). Volledige tabel (live geverifieerd):
+// 0 Projectmanagement (communicatie/hoofdtaak-label, GEEN discipline -> ''),
+// 1 Strategie, 2 Branding, 3 FB-Branding, 4 Preproductie, 5 FB-preproductie,
+// 6 Shoot, 7 Edit, 8 FB-Edit, 9 Webdesign, 10 FB-Webdesign, 11 Copywriting,
+// 12 SEO, 13 Social media, 14 Adverteren, 15 Automation, 16 Opleiding,
+// 17 hosting, 18 bestelling. FB-* = feedbackronde van dezelfde discipline; de
+// granulaire video-jobs (preproductie/shoot/edit) rollen naar 'video_fotografie'.
 const DISCIPLINE_MAP = {
-  1: 'strategie', 2: 'branding',
-  4: 'video_fotografie', 6: 'video_fotografie', 7: 'video_fotografie',
-  9: 'webdesign', 11: 'webdesign',
+  1: 'strategie',
+  2: 'branding', 3: 'branding',
+  4: 'video_fotografie', 5: 'video_fotografie', 6: 'video_fotografie', 7: 'video_fotografie', 8: 'video_fotografie',
+  9: 'webdesign', 10: 'webdesign', 11: 'webdesign', 17: 'webdesign',
   12: 'seo', 13: 'social', 14: 'ads', 15: 'automation', 16: 'opleiding',
+  // 0 (projectmanagement) en 18 (bestelling) bewust ongemapt -> '' (val terug op lijst/naam)
 };
 export function disciplineMapper(typeJobValue) {
   if (typeJobValue == null || typeJobValue === '') return '';
@@ -715,6 +725,190 @@ export function disciplineFromList(listName) {
   if (n.includes('opleiding')) return 'opleiding';
   if (n.includes('automation') || n.includes('automatisat')) return 'automation';
   return '';
+}
+
+// Laatste vangnet: leid discipline af uit de TAAKNAAM. Subtaken dragen niet altijd
+// een correcte TYPE JOB (bv. de subtaak 'Webdesign - X' staat op typeJob=0/PM), maar
+// de naam is dan wél sprekend. Enkel als typeJob én lijst niets opleveren.
+export function disciplineFromName(name) {
+  const n = String(name || '').toLowerCase();
+  if (!n) return '';
+  if (n.includes('webdesign') || n.includes('website') || n.includes('webdev') || n.includes('figma') || n.includes('livegang') || n.includes('hosting')) return 'webdesign';
+  if (n.includes('video') || n.includes('fotograf') || n.includes(' foto') || n.includes('montage') || n.includes('cameraman') || n.includes('shoot') || n.includes('nabewerking') || n.includes('headervideo')) return 'video_fotografie';
+  if (n.includes('branding') || n.includes('logo') || n.includes('huisstijl') || n.includes('stylesheet') || n.includes('rebranding')) return 'branding';
+  if (n.includes('seo') || n.includes('zoekmachine')) return 'seo';
+  if (n.includes('social')) return 'social';
+  if (n.includes('advertentie') || n.includes('adverteren') || n.includes('campagne')) return 'ads';
+  if (n.includes('strategie')) return 'strategie';
+  if (n.includes('opleiding')) return 'opleiding';
+  if (n.includes('automation') || n.includes('automatisat')) return 'automation';
+  return '';
+}
+
+// disciplineOf: de beste discipline-gok voor één (sub)taak. Volgorde: TYPE JOB ->
+// lijstnaam -> taaknaam. Kan '' teruggeven (bv. een pure PM-/herinneringstaak).
+export function disciplineOf(task) {
+  let d = disciplineMapper(getCF(task, FIELD.typeJob));
+  if (!d) d = disciplineFromList(task && task.list && task.list.name);
+  if (!d) d = disciplineFromName(task && task.name);
+  return d;
+}
+
+// Haalt de VOLLEDIGE taakboom (parents + alle subtaken, diep) voor één bedrijf op via
+// de team-task-filter met subtasks=true. LET OP: subtasks=true is GEEN superset van
+// subtasks=false in ClickUp (sommige losse top-level taken vallen weg), dus dit dient
+// ENKEL als subtaak-/discipline-bron, NOOIT als bron voor de projectlijst zelf.
+export async function fetchBedrijfTree(env, bedrijfId) {
+  const cf = `[{"field_id":"${FIELD.bedrijf}","operator":"ANY","value":["${bedrijfId}"]}]`;
+  const enc = encodeURIComponent(cf);
+  const all = await pageAll(env, (page) =>
+    `/team/${TEAM_ID}/task?subtasks=true&include_closed=true&page=${page}&custom_fields=${enc}`);
+  // index op directe parent-id
+  const childrenByParent = new Map();
+  for (const t of all) {
+    const p = t.parent ? String(t.parent) : '';
+    if (!p) continue;
+    if (!childrenByParent.has(p)) childrenByParent.set(p, []);
+    childrenByParent.get(p).push(t);
+  }
+  return { all, childrenByParent };
+}
+
+// Alle AFSTAMMELINGEN (diep) van een taak-id, via de childrenByParent-index. Cyclus-veilig.
+export function descendantsOf(rootId, childrenByParent) {
+  const out = [];
+  const seen = new Set();
+  const stack = [...(childrenByParent.get(String(rootId)) || [])];
+  while (stack.length) {
+    const t = stack.pop();
+    const id = String(t.id);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(t);
+    const kids = childrenByParent.get(id);
+    if (kids) for (const k of kids) stack.push(k);
+  }
+  return out;
+}
+
+// labels[] voor een hoofdtaak: de disciplines van haar DIRECTE kinderen (de 'types jobs'
+// zoals branding/webdesign/video), gededupliceerd. Plus de eigen niet-PM TYPE JOB. Valt
+// terug op lijst/naam als er niets is (kinderloze losse taak). Volgorde = vaste discipline-
+// volgorde voor een rustige weergave.
+const DISCIPLINE_ORDER = ['strategie', 'branding', 'video_fotografie', 'webdesign', 'copywriting', 'seo', 'social', 'ads', 'automation', 'opleiding'];
+export function labelsForProject(topTask, directChildren) {
+  const set = new Set();
+  for (const c of (directChildren || [])) {
+    const d = disciplineOf(c);
+    if (d) set.add(d);
+  }
+  const ownTj = disciplineMapper(getCF(topTask, FIELD.typeJob)); // eigen niet-PM discipline
+  if (ownTj) set.add(ownTj);
+  if (set.size === 0) {
+    const f = disciplineFromList(topTask && topTask.list && topTask.list.name) || disciplineFromName(topTask && topTask.name);
+    if (f) set.add(f);
+  }
+  const arr = [...set];
+  arr.sort((a, b) => {
+    const ia = DISCIPLINE_ORDER.indexOf(a), ib = DISCIPLINE_ORDER.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  return arr;
+}
+
+// Herkent pure PM-/herinnering-/voorbereidings-/fase-koptaken die geen opleverstap zijn.
+function isProcesNoise(name) {
+  const n = String(name || '').toLowerCase().trim();
+  if (!n) return true;
+  if (/^\[?\s*(herinnering|reminder)\b/.test(n)) return true;     // [Herinnering PM: ...]
+  if (/\bpm\b.*doorsturen|vragen voor livegang/.test(n)) return true;
+  if (/^voorbereiding\b/.test(n)) return true;
+  if (/^fase\s*\d/.test(n)) return true;                          // 'Fase 1 - ...' koptaken
+  if (/^\[aan te vullen\]/.test(n)) return true;                  // placeholder-taken
+  if (/^checklist\b/.test(n)) return true;                        // interne checklist
+  if (/^feedbackmeeting\b/.test(n)) return true;                  // interne meeting-prep
+  return false;
+}
+
+// Bouwt het proces-overzicht van één project uit zijn afstammelingen (of de taak zelf als
+// die kinderloos is): opgeleverd (+linkjes), wacht-op-feedback (+feedbackknop), in productie,
+// een meeting-blok en afgeleide acties. Truthful: enkel uit echte ClickUp-velden.
+export function buildProces(rootTask, descendants) {
+  const pool = (descendants && descendants.length) ? descendants : [rootTask];
+  const steps = [];
+  for (const s of pool) {
+    // ruis eruit (maar root altijd houden): PM-/herinnering-/fase-koptaken én de interne
+    // FB-feedbackrondes (TYPE JOB 3/5/8/10) zijn geen klant-opleverstappen.
+    const tjNum = Number(getCF(s, FIELD.typeJob));
+    const isInterneFeedback = tjNum === 3 || tjNum === 5 || tjNum === 8 || tjNum === 10;
+    if (s !== rootTask && (isProcesNoise(s.name) || isInterneFeedback)) continue;
+    const st = statusMapper(s.status);
+    const deliv = parseDeliverables(getCF(s, FIELD.deliverablesRaw));
+    const drive = str(getCF(s, FIELD.driveFolder));
+    const fb = str(getCF(s, FIELD.feedbackLink));
+    const links = deliv.slice();
+    if (drive && /^https?:\/\//i.test(drive)) links.push({ label: 'Projectmap', url: drive, type: 'folder' });
+    let staat;
+    if (st.key === 'done') staat = 'opgeleverd';
+    else if (st.key === 'doorgestuurd') staat = 'wacht_feedback';
+    else if (st.key === 'to_do') staat = 'te_doen';
+    else staat = 'bezig';
+    steps.push({
+      task_id: str(s.id),
+      naam: str(s.name),
+      discipline: disciplineOf(s),
+      staat,
+      status_label: st.label,
+      pct: st.pct,
+      links,
+      feedback_link: (staat === 'wacht_feedback' && fb && /^https?:\/\//i.test(fb)) ? fb : '',
+      datum: fmtDateFromMs(s.due_date),
+    });
+  }
+  const opgeleverd = steps.filter((s) => s.staat === 'opgeleverd');
+  const wacht_feedback = steps.filter((s) => s.staat === 'wacht_feedback');
+  const in_productie = steps.filter((s) => s.staat === 'bezig');
+  const te_doen = steps.filter((s) => s.staat === 'te_doen');
+
+  // geaggregeerde linkjes (alle opleveringen, inclusief die op de hoofdtaak zelf), gededupliceerd.
+  const links = [];
+  const linkSeen = new Set();
+  const addLinks = (arr) => { for (const l of (arr || [])) { if (l && l.url && !linkSeen.has(l.url)) { linkSeen.add(l.url); links.push(l); } } };
+  for (const s of steps) addLinks(s.links);
+  addLinks(parseDeliverables(getCF(rootTask, FIELD.deliverablesRaw)));
+
+  // compacte 'loopt nu'-samenvatting (zodat de klant niet 15 interne stappen ziet).
+  const lopend = in_productie.concat(te_doen);
+  const loopt = {
+    aantal: lopend.length,
+    disciplines: [...new Set(lopend.map((s) => s.discipline).filter(Boolean))],
+  };
+
+  // meeting-blok uit de Meeting-relatie op de root (of een afstammeling die er één draagt)
+  let meeting = { gepland: false, naam: '', task_id: '' };
+  const mRel = getRelationIds(rootTask, FIELD.meeting);
+  if (mRel.length) meeting = { gepland: true, naam: '', task_id: str(mRel[0]) };
+
+  // afgeleide acties (volgorde = prioriteit): feedback geven > meeting plannen
+  const acties = [];
+  for (const w of wacht_feedback) {
+    acties.push({ type: 'feedback', tekst: `Geef je feedback op: ${w.naam}`, url: w.feedback_link, task_id: w.task_id });
+  }
+  if (!meeting.gepland) {
+    acties.push({ type: 'meeting', tekst: 'Plan een afspraak met je projectteam', url: '', task_id: str(rootTask.id) });
+  }
+
+  return {
+    aantal_stappen: steps.length,
+    opgeleverd,
+    wacht_feedback,
+    in_productie,
+    te_doen,
+    loopt,
+    links,
+    meeting,
+    acties,
+  };
 }
 
 // status-mapper (substring + status.type) -> genormaliseerd + label + pct.
@@ -1009,6 +1203,15 @@ export async function projectDetailV2(bedrijfId, body, env) {
       bestanden: subDeliv,                                    // [{label, url, type}]
     };
   });
+  // proces-overzicht: DIEPE afstammelingen via de bedrijf-boom. De directe .subtasks bevatten
+  // bij meerlaagse projecten (Totaalproject > Webdesign > Fase > job) geen opleveringen; die
+  // zitten dieper. Kinderloze taak -> het overzicht toont de taak zelf. Additief: faalt het,
+  // dan blijft de detail gewoon werken.
+  let proces = { aantal_stappen: 0, opgeleverd: [], wacht_feedback: [], in_productie: [], te_doen: [], loopt: { aantal: 0, disciplines: [] }, links: [], meeting: { gepland: false, naam: '', task_id: '' }, acties: [] };
+  try {
+    const tree = await fetchBedrijfTree(env, bedrijfId);
+    proces = buildProces(task, descendantsOf(taskId, tree.childrenByParent));
+  } catch (e) { /* proces-overzicht is additief; nooit de detail breken */ }
   const out = {
     ok: true,
     task_id: str(task.id || taskId),
@@ -1032,6 +1235,7 @@ export async function projectDetailV2(bedrijfId, body, env) {
     has_bedrijf: getRelationIds(task, FIELD.bedrijf).length > 0 ? 'yes' : 'no',
     sae: buildSae(task),                                      // assignees [{naam, initialen}]
     taken,
+    proces,                                                   // proces-overzicht: opgeleverd/feedback/meeting/acties
     comments: [],
   };
   return { status: 200, body: out };
@@ -1042,7 +1246,9 @@ function detailSkeleton(taskId, err) {
     beschrijving: '', due_date: '', start_date: '', date_created: '', url: '',
     deliverables_raw: '', deliverables: [], feedback_link: '', budget: '', time_estimate: '',
     content_creators: '', type_job: '', shootlink: '', has_contact: 'no', has_bedrijf: 'no',
-    sae: [], taken: [], comments: [], __ERROR__: err,
+    sae: [], taken: [],
+    proces: { aantal_stappen: 0, opgeleverd: [], wacht_feedback: [], in_productie: [], te_doen: [], loopt: { aantal: 0, disciplines: [] }, links: [], meeting: { gepland: false, naam: '', task_id: '' }, acties: [] },
+    comments: [], __ERROR__: err,
   };
 }
 
@@ -1185,11 +1391,18 @@ export async function getOffertes(bedrijfId, body, env) {
 
 /* ---- dashboard ----------------------------------------------------------- */
 export async function dashboard(bedrijfId, body, env) {
-  // 1) team-task-filter op 4b1fb333 (ANY), volledig gepagineerd
+  // 1) team-task-filter op 4b1fb333 (ANY), volledig gepagineerd. De projectlijst komt UIT
+  //    subtasks=false (de bewezen, volledige top-level set). De subtaak-boom (voor de
+  //    discipline-labels per hoofdtaak) komt APART uit fetchBedrijfTree (subtasks=true),
+  //    want subtasks=true is geen superset en mist soms losse top-level taken.
   const cf = `[{"field_id":"${FIELD.bedrijf}","operator":"ANY","value":["${bedrijfId}"]}]`;
   const enc = encodeURIComponent(cf);
-  const tasks = await pageAll(env, (page) =>
-    `/team/${TEAM_ID}/task?subtasks=false&include_closed=true&page=${page}&custom_fields=${enc}`);
+  const [tasks, tree] = await Promise.all([
+    pageAll(env, (page) =>
+      `/team/${TEAM_ID}/task?subtasks=false&include_closed=true&page=${page}&custom_fields=${enc}`),
+    fetchBedrijfTree(env, bedrijfId),
+  ]);
+  const childrenByParent = tree.childrenByParent;
 
   // 2) module-labels op de bedrijf-taak zelf
   const cr = await cu.get(env, `/task/${bedrijfId}`);
@@ -1203,8 +1416,12 @@ export async function dashboard(bedrijfId, body, env) {
     // her-check scope per taak (bedrijf_match), 1:1 met Make filter 12
     const rel = getRelationIds(t, FIELD.bedrijf);
     if (!rel.includes(String(bedrijfId))) continue;
-    let discipline = disciplineMapper(getCF(t, FIELD.typeJob));
-    if (!discipline) discipline = disciplineFromList(t.list && t.list.name);
+    // discipline-labels van de hoofdtaak = disciplines van haar DIRECTE subtaken (branding,
+    // webdesign, video, ...). Meerdere labels mogelijk (bv. branding + webdesign). De primaire
+    // discipline (voor de afgerond-/zichtbaarheidsfilters) = het eerste label.
+    const directChildren = childrenByParent.get(String(t.id)) || [];
+    const labels = labelsForProject(t, directChildren);
+    let discipline = labels[0] || '';
 
     // (A) afgerond_60d: status in {done, goedgekeurd, klaar voor facturatie, gefactureerd}
     //     EN afgerond/opgeleverd (date_done>date_closed>due_date) in de laatste 60 dagen.
@@ -1218,6 +1435,7 @@ export async function dashboard(bedrijfId, body, env) {
           task_id: str(t.id),
           naam: str(t.name),
           discipline,
+          labels,                                               // [discipline,...] -> chips ook bij afgeronde
           opleverdatum: opMs,                                   // epoch-ms (contract)
           heeft_bestanden: parseDeliverables(getCF(t, FIELD.deliverablesRaw)).length > 0,
         });
@@ -1225,14 +1443,15 @@ export async function dashboard(bedrijfId, body, env) {
     }
 
     // (B) actieve_projecten: enkel OPEN/lopende projecten (goedgekeurde/afgeronde apart in (A)).
-    if (discipline === '') continue;                          // disc != ''
-    if (!showVisible(discipline, t.due_date, now)) continue;  // show == yes
+    if (!labels.length) continue;                             // geen enkele discipline -> geen project
+    if (!labels.some((d) => showVisible(d, t.due_date, now))) continue; // ≥1 label zichtbaar deze maand
     if (isAfgerondStatus(t.status)) continue;                 // done/goedgekeurd/facturatie → afgerond_60d, niet actief
     const st = statusMapper(t.status);
     actieve.push({
       task_id: str(t.id),
       naam: str(t.name),
       discipline,
+      labels,                                                 // [discipline,...] -> meerdere chips naast de hoofdtaak
       status: st.key,
       status_label: st.label,
       voortgang_pct: st.pct,

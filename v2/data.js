@@ -175,13 +175,23 @@
      ========================================================================= */
   function projList(){ var d=state.data.dashboard; return (d && d.actieve_projecten) ? d.actieve_projecten : null; }
 
+  // labels[] van een hoofdtaak (worker geeft discipline-keys) -> [{discId,br,label,stamp}],
+  // gededupliceerd. Valt terug op de primaire discipline als labels ontbreekt (oude payload).
+  function mapLabels(p){
+    var keys = (p && p.labels && p.labels.length) ? p.labels : [p && p.discipline];
+    var seen={}, out=[];
+    keys.forEach(function(k){ if(!k||seen[k]) return; seen[k]=1; var b=DATA.disc(k); out.push({ discId:k, br:b.br, label:b.label, stamp:b.stamp }); });
+    return out;
+  }
+  DATA.mapLabels = mapLabels;
+
   DATA.projects = function(){
     var raw = projList(); if(!raw) return null;
     return raw.map(function(p){
       var br = DATA.disc(p.discipline);
       var st = DATA.status(p.status);
       var deliv = st.key==='wait' || !!p.feedback_link;
-      return { id:p.task_id, name:p.naam, br:br.br, disc:br.label, discId:p.discipline, status:st.key, deliv:deliv, sae:mapSae(p.sae), _raw:p };
+      return { id:p.task_id, name:p.naam, br:br.br, disc:br.label, discId:p.discipline, labels:mapLabels(p), status:st.key, deliv:deliv, sae:mapSae(p.sae), _raw:p };
     });
   };
 
@@ -221,7 +231,7 @@
     var raw = d.afgerond_60d; if(!raw) return null;
     return raw.map(function(p){
       var br=DATA.disc(p.discipline);
-      return { id:p.task_id, br:br.br, name:p.naam, disc:br.label, when:_whenLabel(p.opleverdatum), heeftBestanden:(p.heeft_bestanden===true||p.heeft_bestanden==='true') };
+      return { id:p.task_id, br:br.br, name:p.naam, disc:br.label, labels:mapLabels(p), when:_whenLabel(p.opleverdatum), heeftBestanden:(p.heeft_bestanden===true||p.heeft_bestanden==='true') };
     });
   };
 
@@ -249,8 +259,10 @@
     var delivs = (d.deliverables && d.deliverables.length) ? d.deliverables.map(function(f){ return { label:f.label||urlLabel(f.url||''), url:f.url||'', type:f.type||urlType(f.url||'') }; }) : parseDeliverablesRaw(d.deliverables_raw);
     return {
       id:taskId, name:d.naam||p.name||'Project', br:p.br||'blue', disc:p.disc||'',
+      labels:(p.labels&&p.labels.length)?p.labels:mapLabels(p._raw||{discipline:p.discId}),
       status:p.status||DATA.status(d.status||d.project_status).key,
       beschrijving:d.beschrijving||'', subtasks:subs, deliverables:delivs, sae:mapSae(d.sae||p.sae),
+      proces:d.proces||null,
       feedbackStatus:d.feedback_status||'', hasContact:d.has_contact==='yes', hasBedrijf:d.has_bedrijf==='yes',
       timeEstimate:d.time_estimate||'', typeJob:d.type_job||'', _raw:d
     };

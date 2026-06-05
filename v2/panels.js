@@ -265,31 +265,40 @@ function panelBerichten(){
   </div>`;
 }
 
-function projDienst(){
-  // ENKEL open projecten (goedgekeurde/afgeronde niet), kolommen per tak, projectdetails eronder
-  const projs=_projects().filter(p=>p.status!=='done'); const groups={};
-  projs.forEach(p=>{ (groups[p.disc]=groups[p.disc]||[]).push(p); });
-  const keys=Object.keys(groups).sort((a,b)=>{ const ia=DISC_ORDER.indexOf(a),ib=DISC_ORDER.indexOf(b); return (ia<0?99:ia)-(ib<0?99:ib); });
-  const html=keys.map(disc=>{
-    const items=groups[disc]; const d=DISC[disc]||{br:items[0].br||'blue'};
-    return `<div class="dienst-col br-${d.br||items[0].br||'blue'}" data-disc="${esc(disc)}">
-      <div class="dienst-head"><span class="dienst-ic">${discMark(disc)}</span><h3>${esc(disc)}</h3><span class="dienst-n">${items.length}</span></div>
-      <div class="proj-list">${items.map(projCardCol).join('')}</div>
-    </div>`;
-  }).join('');
-  return html ? `<div class="dienst-cols">${html}</div>` : `<div class="empty"><div class="em-ic">${ic('st_approved',64)}</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Geen actieve projecten</b><p style="margin:6px 0 0">Zodra we samen aan iets nieuws starten, verschijnt het hier.</p></div>`;
+// Discipline-chips: kleine label(s) die aangeven waar een hoofdtaak over gaat. Eén hoofdtaak
+// kan meerdere disciplines bevatten (bv. branding + webdesign) -> meerdere chips naast elkaar.
+function discChips(labels){
+  if(!labels||!labels.length) return '';
+  return `<span class="disc-chips">`+labels.map(function(l){
+    return `<span class="disc-chip br-${l.br||'blue'}">${discMark(l.label,'disc-chip-ic')}<span>${esc(l.label)}</span></span>`;
+  }).join('')+`</span>`;
 }
-// projectkaart binnen een tak-kolom: naam, status, deliverable-badge, SA&E-namen (geen foto-iconen)
-function projCardCol(p){
+function projDienst(){
+  // ENKEL de hoofdtaken (open projecten) in één platte lopende-projectlijst. Elke hoofdtaak
+  // verschijnt ÉÉN keer met haar discipline-label(s) ernaast (geen kolommen per tak meer,
+  // want een project kan meerdere disciplines hebben).
+  const projs=_projects().filter(p=>p.status!=='done');
+  if(!projs.length) return `<div class="empty"><div class="em-ic">${ic('st_approved',64)}</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Geen actieve projecten</b><p style="margin:6px 0 0">Zodra we samen aan iets nieuws starten, verschijnt het hier.</p></div>`;
+  projs.sort((a,b)=>{ const ia=DISC_ORDER.indexOf(a.disc),ib=DISC_ORDER.indexOf(b.disc); return ((ia<0?99:ia)-(ib<0?99:ib))||String(a.name).localeCompare(String(b.name)); });
+  return `<div class="projflat-list">${projs.map(projCardFlat).join('')}</div>`;
+}
+// platte hoofdtaak-kaart: naam + discipline-chip(s), status, deliverable-badge, SA&E-namen.
+function projCardFlat(p){
   const sae=saeNames(p.sae);
-  return `<button class="projcol-card br-${p.br}" data-status="${p.status}" onclick="openProject('${esc(p.id)}','projecten')">
-    <span class="pc-name">${esc(p.name)}</span>
-    ${sae?`<span class="sae-line">${sae}</span>`:''}
-    <span class="pc-foot">${spill(p.status)}${p.deliv?`<span class="pc-deliv">${ic('download',13)} klaar</span>`:''}</span>
+  const discs=(p.labels&&p.labels.length)?p.labels:[{discId:p.discId,br:p.br,label:p.disc}];
+  const dataDiscs=discs.map(function(l){return l.label;}).join('|');
+  return `<button class="projflat-card br-${p.br}" data-discs="${esc(dataDiscs)}" data-status="${p.status}" onclick="openProject('${esc(p.id)}','projecten')">
+    <span class="pf-main">
+      <span class="pf-name">${esc(p.name)}</span>
+      ${discChips(discs)}
+    </span>
+    <span class="pf-foot">${spill(p.status)}${sae?`<span class="sae-line">${sae}</span>`:''}${p.deliv?`<span class="pc-deliv">${ic('download',13)} klaar</span>`:''}</span>
   </button>`;
 }
 function panelProjecten(){
-  const order=[]; _projects().filter(p=>p.status!=='done').forEach(p=>{ if(order.indexOf(p.disc)<0) order.push(p.disc); });
+  // filter-opties = ALLE disciplines die ergens als label voorkomen (ook secundaire), zodat
+  // je ook op 'Webdesign' kan filteren als dat enkel een tweede label van een hoofdtaak is.
+  const order=[]; _projects().filter(p=>p.status!=='done').forEach(p=>{ ((p.labels&&p.labels.length)?p.labels:[{label:p.disc}]).forEach(l=>{ if(l.label && order.indexOf(l.label)<0) order.push(l.label); }); });
   order.sort((a,b)=>{ const ia=DISC_ORDER.indexOf(a),ib=DISC_ORDER.indexOf(b); return (ia<0?99:ia)-(ib<0?99:ib); });
   return hero('blue','Mijn werk · Actieve projecten',
     `Jouw <span class="accent">actieve${squig()}</span> projecten`)
@@ -1135,6 +1144,55 @@ function timelineSteps(p){
     return [lab, state];
   });
 }
+// vriendelijk label voor een opgeleverd-linkje (picflow-slugs e.d. worden 'Bekijk oplevering')
+function procesLinkLabel(l){
+  if(!l) return 'Bekijk';
+  if(l.type==='video') return 'Bekijk video';
+  if(l.type==='img') return "Bekijk foto's";
+  if(l.type==='folder') return 'Projectmap';
+  if(l.label && /\s/.test(l.label) && l.label.length<=28) return l.label;
+  return 'Bekijk oplevering';
+}
+// Proces-overzicht bovenaan de detail: direct zichtbaar wat opgeleverd is (+linkjes), of je
+// feedback moet geven, of er een meeting moet komen en welke acties er zijn. Bron = det.proces
+// (worker, diepe subtaak-boom). Bij demo/lege proces -> '' (de oude blokken nemen het over).
+function procesBlock(det,p){
+  const pr = det && det.proces;
+  if(!pr || !pr.aantal_stappen) return '';
+  let h='<div class="proces-panel">';
+  // 1) Voor jou te doen (afgeleide acties)
+  if(pr.acties && pr.acties.length){
+    h+='<div class="proces-acties"><div class="proces-h proces-h-do">'+ic('spark',15)+'<span>Voor jou</span></div>';
+    h+=pr.acties.map(function(a){
+      if(a.type==='feedback' && a.url) return '<a class="proces-actie act-fb" href="'+esc(a.url)+'" target="_blank" rel="noopener"><span class="pa-ic">'+ic('st_feedback',16)+'</span><span class="pa-tx">'+esc(a.tekst)+'</span>'+ic('arrow',15)+'</a>';
+      if(a.type==='meeting') return '<button class="proces-actie act-meet" onclick="goTab(\'meetings\')"><span class="pa-ic">'+ic('cal',16)+'</span><span class="pa-tx">'+esc(a.tekst)+'</span>'+ic('arrow',15)+'</button>';
+      return '<div class="proces-actie act-info"><span class="pa-ic">'+ic('info',16)+'</span><span class="pa-tx">'+esc(a.tekst)+'</span></div>';
+    }).join('');
+    h+='</div>';
+  } else {
+    h+='<div class="proces-allgood">'+ic('st_approved',16)+'<span>Alles loopt op schema. Je hoeft nu even niets te doen.</span></div>';
+  }
+  // 2) Wat is opgeleverd (+ linkjes)
+  if(pr.opgeleverd && pr.opgeleverd.length){
+    h+='<div class="proces-h">'+ic('st_approved',15)+'<span>Wat is opgeleverd</span></div><div class="proces-list">';
+    h+=pr.opgeleverd.map(function(s){
+      var links=(s.links||[]).map(function(l){ return '<a class="proces-link" href="'+esc(l.url)+'" target="_blank" rel="noopener">'+ic('download',13)+'<span>'+esc(procesLinkLabel(l))+'</span></a>'; }).join('');
+      return '<div class="proces-step"><span class="proces-dot done">'+ic('check',11)+'</span><span class="proces-step-nm">'+esc(s.naam)+'</span>'+(links?'<span class="proces-links">'+links+'</span>':'')+'</div>';
+    }).join('');
+    h+='</div>';
+  }
+  // 3) Nog in productie (compacte samenvatting i.p.v. tientallen interne stappen)
+  if(pr.loopt && pr.loopt.aantal){
+    var dn=(pr.loopt.disciplines||[]).map(function(k){ return (window.S27DATA?S27DATA.disc(k).label:k); }).join(', ');
+    h+='<div class="proces-loopt">'+ic('st_progress',14)+'<span>Nog <b>'+pr.loopt.aantal+'</b> stap'+(pr.loopt.aantal===1?'':'pen')+' in productie'+(dn?' · '+esc(dn):'')+'</span></div>';
+  }
+  // 4) Meeting al gepland?
+  if(pr.meeting && pr.meeting.gepland){
+    h+='<div class="proces-loopt">'+ic('cal',14)+'<span>Er staat al een meeting gepland voor dit project.</span></div>';
+  }
+  h+='</div>';
+  return h;
+}
 function buildModal(id, from){
   const p=_projects().find(x=>x.id===id)||{id:id,name:'Project',disc:'',status:'prog',br:'blue'};
   const sl=STATUS_LABEL[p.status]||STATUS_LABEL.prog; const lab=sl[0], cls=sl[1];
@@ -1185,7 +1243,9 @@ function buildModal(id, from){
   }
   const showDeliv = needsFeedback || (delivList && delivList.length) || (delivList===null);
 
+  const hasProces = !!(det && det.proces && det.proces.aantal_stappen);
   const overview=`<div class="mpane active" data-mpane="overzicht">
+    ${procesBlock(det,p)}
     ${scheduleBlock(p)}
     ${showDeliv?`<h4 style="font-family:var(--font-display);font-size:15px;margin:0 0 4px">${(delivList&&delivList.length>1)||(delivList===null)?'Jouw deliverables':'Jouw deliverable'}</h4>
     <p class="sdesc" style="margin:0 0 10px">Bekijk wat we voor je klaarzetten en laat meteen weten of je akkoord gaat of feedback hebt. Opmerkingen passen we volledig gratis aan.</p>
@@ -1195,11 +1255,11 @@ function buildModal(id, from){
       ${timelineSteps(p).map((t,i,a)=>`
         <div class="tl-step"><span class="tl-dot ${t[1]}">${t[1]==='done'?ic('check',10):''}</span><span class="tl-lab ${t[1]==='todo'?'muted':''}">${t[0]}</span>${i<a.length-1?'<span class="tl-line"></span>':''}</div>`).join('')}
     </div>
-    <h4 style="font-family:var(--font-display);font-size:15px;margin:22px 0 10px">Goedgekeurde taken</h4>
+    ${hasProces?'':`<h4 style="font-family:var(--font-display);font-size:15px;margin:22px 0 10px">Goedgekeurde taken</h4>
     <div class="approved-list">
       ${approvedTasks ? (approvedTasks.length?approvedTasks.map(approvedTaskRow).join(''):'<div class="fs" style="color:var(--ink-4)">Nog niets goedgekeurd.</div>')
         : approved.map(t=>`<div class="approved-row"><span class="check-circ">${ic('check',13)}</span><span>${t}</span></div>`).join('')}
-    </div>
+    </div>`}
   </div>`;
 
   const deliverables=`<div class="mpane" data-mpane="deliverables">
