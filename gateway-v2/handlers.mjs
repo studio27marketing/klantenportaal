@@ -2885,6 +2885,40 @@ export async function aiChat(bedrijfId, body, env) {
   return { status: 200, body: { ok: true, answer: res.text, model: cfg.model } };
 }
 
+/* Rijke AI-context: ALLE taken (hoofdtaken + subtaken) gekoppeld aan dit bedrijf, met status,
+   tak, deadline, opleveringen EN inhoud (beschrijving). Wordt door de worker net vóór de Make-
+   forward in body.projecten_context gezet, zodat de chatbot de volledige bedrijfscontext meekrijgt.
+   Merge van subtasks=false (volledige top-level set) + subtasks=true (subtaken), gededupliceerd. */
+export async function buildAiContext(env, bedrijfId) {
+  const cf = `[{"field_id":"${FIELD.bedrijf}","operator":"ANY","value":["${bedrijfId}"]}]`;
+  const enc = encodeURIComponent(cf);
+  let flat = [], tree = [];
+  try {
+    [flat, tree] = await Promise.all([
+      pageAll(env, (p) => `/team/${TEAM_ID}/task?subtasks=false&include_closed=true&page=${p}&custom_fields=${enc}`),
+      pageAll(env, (p) => `/team/${TEAM_ID}/task?subtasks=true&include_closed=true&page=${p}&custom_fields=${enc}`),
+    ]);
+  } catch (e) { /* fail-soft: lege context i.p.v. de chatbot breken */ }
+  const seen = new Set(); const lines = [];
+  for (const t of (flat || []).concat(tree || [])) {
+    const id = str(t && t.id); if (!id || seen.has(id)) continue; seen.add(id);
+    if (!getRelationIds(t, FIELD.bedrijf).includes(String(bedrijfId))) continue;   // her-check scope
+    if (lines.length >= 120) break;                                                // ruime maar begrensde context
+    const naam = str(t.name).replace(/\s+/g, ' ').trim();
+    const st = str(t.status && t.status.status) || 'onbekend';
+    const disc = disciplineOf(t);
+    const due = t.due_date ? fmtDateFromMs(t.due_date) : '';
+    const sub = t.parent ? ' [subtaak]' : '';
+    const deliv = parseDeliverables(getCF(t, FIELD.deliverablesRaw)).map((d) => d.url);
+    const desc = str(t.text_content || t.description).replace(/\s+/g, ' ').trim().slice(0, 500);
+    let line = `- ${naam}${sub} | status: ${st}` + (disc ? ` | tak: ${disc}` : '') + (due ? ` | deadline: ${due}` : '');
+    if (deliv.length) line += ` | opgeleverd: ${deliv.slice(0, 4).join(' ')}`;
+    if (desc) line += `\n  inhoud: ${desc}`;
+    lines.push(line);
+  }
+  return lines.length ? lines.join('\n') : '(geen taken gekoppeld aan dit bedrijf)';
+}
+
 /* =============================================================================
    Handler-registry voor de router-shim + node-harness.
    READ_HANDLERS: testbaar zonder Firebase met (bedrijfId, body, env).

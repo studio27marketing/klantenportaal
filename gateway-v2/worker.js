@@ -33,6 +33,7 @@ import {
   withCache,
   bustCache,
   provisionLookup,
+  buildAiContext,
 } from './handlers.mjs';
 
 // Pad → Make-webhook. Deze URLs zijn niet geheim (staan al in dashboard.js).
@@ -451,6 +452,12 @@ export default {
       body.uid = claims.sub;
       body.email = claims.email || '';
       body.session_token = 'gw-verified-' + claims.sub;
+    }
+
+    // Chatbot: server-side de VOLLEDIGE bedrijfscontext (alle taken + inhoud) injecteren, zodat
+    // de AI niet afhangt van de dunne frontend-context. Overschrijft wat de client meestuurde.
+    if (path === 'aiStatusBot') {
+      try { body.projecten_context = await buildAiContext(env, bedrijfId); } catch (e) { /* fail-soft */ }
     }
 
     let makeRes;
