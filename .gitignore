@@ -10,3 +10,4 @@ v4/_htest.cjs
 .dev.vars
 **/.dev.vars
 gateway-v2/.dev.vars
+.wrangler/

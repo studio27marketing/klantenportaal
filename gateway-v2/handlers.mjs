@@ -74,8 +74,10 @@ export const FIELD = {
   driveFolder:    'b3a288a1-4f14-4dcf-bcc9-7833371e4fa3', // url 'Drive-projectfolder'
   meeting:        '5eab5514-5b17-4cfc-ae3b-912693d57b1f', // relatie 'Meeting'
   budget:         'c8d2dd2c-2428-4236-ba37-a3f3cd90c9ec',
-  contentCreators:'dbe74db2-1083-4f2a-886f-0425718ae136',
+  contentCreators:'dbe74db2-1083-4f2a-886f-0425718ae136', // dropdown 'Aantal Content creators' (orderindex 0=1..3=4)
   shootlink:      'c6a7da95-80b4-45c7-8004-227e01c421d4',
+  startdatum:     '7086dc88-f247-430a-bed6-839fee4eea77', // date 'Startdatum' (shoot-aanvang, wegschrijven bij booking)
+  locatie:        'fcbb46ff-66d5-432c-8edb-80de053197f3', // location 'Locatie' (shoot start-locatie, lat/lng + adres)
   // offerte-velden
   offerteLink:    '36264fc2-f348-4e14-b81c-063045ce1264',
   offerteBudget:  'c8d2dd2c-2428-4236-ba37-a3f3cd90c9ec',
@@ -2677,6 +2679,89 @@ export async function metricool(bedrijfId, body, env) {
   return { status: 200, body: { ok: true, linked: true, brandId: blogId, posts } };
 }
 
+/* ---- metricoolStats (READ) - KPI-dashboard + trend (fase 1) ----------------
+ * Per gekoppeld netwerk een tijdreeks via GET /api/v2/analytics/timelines
+ * (params: from,to,timezone,blogId,userId,network,metric,subject). Aggregeert tot
+ * KPI's (volgers, groei, bereik, engagement) + een trend. Fail-soft: netwerken/metrics
+ * die falen worden overgeslagen, nooit 5xx (consistent met de andere Metricool-reads).
+ */
+const MC_NET_KEYS = { instagramData: 'instagram', facebookData: 'facebook', linkedinData: 'linkedin', tiktokData: 'tiktok', youtubeData: 'youtube' };
+const MC_NET_LABEL = { instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn', tiktok: 'TikTok', youtube: 'YouTube' };
+// per netwerk: [metricNaam, subject] voor followers / reach / interactions (live geverifieerde metric-namen).
+const MC_STAT_METRICS = {
+  instagram: { followers: ['Followers', 'account'], reach: ['reach', 'account'], inter: ['postsInteractions', 'account'] },
+  facebook:  { followers: ['pageFollows', 'account'], reach: ['pageImpressions', 'account'], inter: ['postsInteractions', 'account'] },
+  tiktok:    { followers: ['followers_count', 'account'], reach: ['video_views', 'account'], inter: ['likes', 'account'] },
+  youtube:   { followers: ['totalSubscribers', 'account'], reach: ['views', 'account'], inter: null },
+  linkedin:  { followers: ['followers', 'account'], reach: ['impressions', 'account'], inter: ['interactions', 'account'] }, // best-effort
+};
+async function mcTimeline(env, blogId, userId, network, metric, subject, from, to) {
+  const qs = new URLSearchParams({ from, to, timezone: METRICOOL_TZ, blogId: String(blogId), network, metric, subject });
+  if (userId) qs.set('userId', String(userId));
+  let r;
+  try { r = await fetch(`${METRICOOL_BASE}/analytics/timelines?${qs.toString()}`, { headers: mcHeaders(env) }); }
+  catch (e) { return []; }
+  if (!r.ok) return [];
+  const d = await r.json().catch(() => null);
+  const vals = (d && d.data && d.data[0] && Array.isArray(d.data[0].values)) ? d.data[0].values : [];
+  return vals.map((x) => ({ t: Date.parse(x.dateTime) || 0, v: Number(x.value) || 0 })).filter((x) => x.t).sort((a, b) => a.t - b.t);
+}
+const mcSum = (s) => (s || []).reduce((a, x) => a + (Number(x.v) || 0), 0);
+const mcLast = (s) => (s && s.length ? Number(s[s.length - 1].v) || 0 : 0);
+const mcFirst = (s) => (s && s.length ? Number(s[0].v) || 0 : 0);
+
+export async function metricoolStats(bedrijfId, body, env) {
+  const br = await cu.get(env, `/task/${bedrijfId}`);
+  const blogId = br.ok && br.data ? str(getCF(br.data, FIELD.metricoolId)).trim() : '';
+  if (!blogId) return { status: 200, body: { ok: true, linked: false } };
+  if (!str(env && env.METRICOOL_API_KEY)) return { status: 200, body: { ok: true, linked: false } };
+  // brand-info (userId + gekoppelde netwerken) uit simpleProfiles.
+  let userId = ''; let networks = [];
+  try {
+    const r = await fetch(`${METRICOOL_ADMIN}/admin/simpleProfiles`, { headers: mcHeaders(env) });
+    const list = r.ok ? await r.json().catch(() => []) : [];
+    const brand = (Array.isArray(list) ? list : []).find((b) => String(b && b.id) === String(blogId));
+    if (brand) {
+      userId = str(brand.userId || brand.ownerUserId || '');
+      const nd = brand.networksData || {};
+      networks = Object.keys(MC_NET_KEYS).filter((k) => nd[k]).map((k) => MC_NET_KEYS[k]);
+    }
+  } catch (e) { /* fail-soft */ }
+  if (!userId) userId = str(env && env.METRICOOL_USER_ID).trim();
+  if (!networks.length) networks = ['instagram', 'facebook'];
+  const days = Math.min(180, Math.max(7, Number(body && body.days) || 90));
+  const from = mcStamp(Date.now() - days * 86400000);
+  const to = mcStamp(Date.now());
+
+  const perNet = await Promise.all(networks.map(async (net) => {
+    const m = MC_STAT_METRICS[net]; if (!m) return null;
+    const [fSer, rSer, iSer] = await Promise.all([
+      m.followers ? mcTimeline(env, blogId, userId, net, m.followers[0], m.followers[1], from, to) : Promise.resolve([]),
+      m.reach ? mcTimeline(env, blogId, userId, net, m.reach[0], m.reach[1], from, to) : Promise.resolve([]),
+      m.inter ? mcTimeline(env, blogId, userId, net, m.inter[0], m.inter[1], from, to) : Promise.resolve([]),
+    ]);
+    const followers = mcLast(fSer);
+    const growth = fSer.length ? (mcLast(fSer) - mcFirst(fSer)) : 0;
+    const reach = mcSum(rSer);
+    const interactions = mcSum(iSer);
+    if (!followers && !reach && !interactions) return null;
+    return { network: net, label: MC_NET_LABEL[net] || net, followers, growth, reach, interactions, trend: fSer };
+  }));
+  const nets = perNet.filter(Boolean);
+  const totals = nets.reduce((a, n) => ({
+    followers: a.followers + (n.followers || 0),
+    growth: a.growth + (n.growth || 0),
+    reach: a.reach + (n.reach || 0),
+    interactions: a.interactions + (n.interactions || 0),
+  }), { followers: 0, growth: 0, reach: 0, interactions: 0 });
+  totals.engagementRate = totals.reach > 0 ? Math.round((totals.interactions / totals.reach) * 1000) / 10 : 0; // %
+  // trend = followers per dag van het netwerk met de langste reeks.
+  const primary = nets.slice().sort((a, b) => (b.trend.length - a.trend.length))[0];
+  const trend = (primary && primary.trend) ? primary.trend.map((x) => ({ date: msToBrusselsYmd(x.t), value: x.v })) : [];
+  const networksOut = nets.map((n) => ({ network: n.network, label: n.label, followers: n.followers, growth: n.growth, reach: n.reach, interactions: n.interactions }));
+  return { status: 200, body: { ok: true, linked: true, brandId: blogId, period: { from, to, days }, totals, networks: networksOut, trend, trendLabel: primary ? primary.label : '' } };
+}
+
 /* ---- metricoolApprove (WRITE) - keur een geplande concept-post goed -------- */
 // PUT /api/v2/scheduler/posts/{id}/approval { status:"approved" } (per onderzoeksrapport).
 // Defensief: bij elk niet-2xx / onbevestigd endpoint -> { ok:false, error:'approval_unsupported' }
@@ -2920,6 +3005,254 @@ export async function buildAiContext(env, bedrijfId) {
 }
 
 /* =============================================================================
+   SHOOT-INPLANNEN (port van studio27.be/shoot-inplannen, VOLLEDIG zonder Make)
+   -----------------------------------------------------------------------------
+   1:1 met de Make-scenario's [CONT] Booking widget: availability (5662991) +
+   submit (5663001). De klant kiest in het portaal een shootdag + startuur uit de
+   shootkalender en vult locatie/contact in. shootContext levert validatie +
+   beschikbaarheid; shootSubmit schrijft de booking weg op de shoot-taak:
+   start_date/due_date (+ -_time), assignee (random vrij poollid), de custom fields
+   Startdatum (date) + Locatie (location, lat/lng + adres), de VOLLEDIGE booking in
+   de task-description, plus een interne ClickUp-comment voor het content-team.
+   ============================================================================= */
+// Hosts = content-creators-pool (ClickUp user-ids), 1:1 met de externe widget/VIDEO_POOL.
+const SHOOT_HOSTS = [
+  { id: 36583476, name: 'Bjorn' },
+  { id: 36583478, name: 'Guus' },
+  { id: 82624365, name: 'Viktor' },
+  { id: 54339680, name: 'Ines' },
+];
+// Planning-lijsten die de beschikbaarheid voeden (1:1 met availability-scenario 5662991).
+const SHOOT_AVAIL_LISTS = {
+  shoots:     '901520180316', // Video-en fotografie
+  shoots_27m: '901522906153', // 27M video-planning
+  vakantie:   '901520180360', // Payroll/afwezigheid (= PAYROLL_LIST)
+};
+// TYPE JOB dropdown-optie 'Shoot' (UUID) - filter op de twee shoot-lijsten.
+const SHOOT_TYPE_OPTION = 'ceaa5d14-b8c6-42ca-8509-3050eba99f9e';
+
+// Europe/Brussels-helpers (DST-correct via Intl, geen tz-library nodig).
+function brusselsOffsetMin(ms) {
+  const dtf = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Brussels', hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const p = {}; dtf.formatToParts(new Date(ms)).forEach((x) => { p[x.type] = x.value; });
+  const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+  return Math.round((asUTC - ms) / 60000);
+}
+// Wandklok-tijd (Brussels) -> epoch-ms. Offset op de gok-instant volstaat (shoots starten >=08:00, ver van de DST-omschakeling om 02:00-03:00).
+function brusselsWallToMs(ymd, hhmm) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(str(ymd));
+  if (!m) return 0;
+  const t = /^(\d{1,2}):(\d{2})$/.exec(str(hhmm) || '00:00');
+  const guess = Date.UTC(+m[1], +m[2] - 1, +m[3], t ? +t[1] : 0, t ? +t[2] : 0, 0, 0);
+  return guess - brusselsOffsetMin(guess) * 60000;
+}
+function msToBrusselsYmd(ms) {
+  const n = Number(ms); if (!n) return null;
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Brussels', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(n)); // 'YYYY-MM-DD'
+}
+function msToBrusselsHm(ms) {
+  const n = Number(ms); if (!n) return null;
+  return new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Brussels', hour12: false, hour: '2-digit', minute: '2-digit' }).format(new Date(n)); // 'HH:mm'
+}
+
+// Eén shoot/vakantie-taak -> {dateStart, dateEnd (YYYY-MM-DD, Brussels), assignees:[ids]}.
+function shootAvailNorm(t) {
+  const startYmd = msToBrusselsYmd(t.start_date) || msToBrusselsYmd(t.due_date);
+  const endYmd = msToBrusselsYmd(t.due_date) || startYmd;
+  const assignees = (Array.isArray(t.assignees) ? t.assignees : [])
+    .map((a) => (a && typeof a === 'object') ? a.id : a).filter((x) => x != null);
+  return { dateStart: startYmd, dateEnd: endYmd, assignees };
+}
+
+// Beschikbaarheid: 3 planning-lijsten over [now-1d, now+365d]. Venster dekt exact het
+// klikbare bereik van de frontend-kalender (SHOOT_WINDOW_DAYS=365), zodat dagen 361-365 niet
+// vals als 'vrij' tonen door ontbrekende data. Fail-open (lege lijsten bij fout).
+async function shootAvailability(env) {
+  const van = Date.now() - 1 * 86400000;
+  const tot = Date.now() + 365 * 86400000;
+  const filter = encodeURIComponent(JSON.stringify([{ field_id: FIELD.typeJob, operator: '=', value: SHOOT_TYPE_OPTION }]));
+  const build = (id, withFilter) => (page) =>
+    `/list/${id}/task?subtasks=true&include_closed=true&due_date_gt=${van}&due_date_lt=${tot}&page=${page}` + (withFilter ? `&custom_fields=${filter}` : '');
+  const [shoots, shoots27m, vakantie] = await Promise.all([
+    pageAll(env, build(SHOOT_AVAIL_LISTS.shoots, true)),
+    pageAll(env, build(SHOOT_AVAIL_LISTS.shoots_27m, true)),
+    pageAll(env, build(SHOOT_AVAIL_LISTS.vakantie, false)),
+  ]);
+  return {
+    shoots: shoots.map(shootAvailNorm),
+    shoots_27m: shoots27m.map(shootAvailNorm),
+    vakantie: vakantie.map(shootAvailNorm),
+    hosts: SHOOT_HOSTS,
+  };
+}
+
+// Server-side: vrije host-ids op een YYYY-MM-DD (Brussels). Zelfde regel als de widget:
+// shoot -> bezet op dateStart; vakantie -> bezet als datum in [dateStart,dateEnd].
+function freeHostIdsOnDate(avail, dateStr) {
+  const busy = new Set();
+  (avail.shoots || []).forEach((s) => { if (s.dateStart === dateStr) (s.assignees || []).forEach((a) => busy.add(Number(a))); });
+  (avail.shoots_27m || []).forEach((s) => { if (s.dateStart === dateStr) (s.assignees || []).forEach((a) => busy.add(Number(a))); });
+  (avail.vakantie || []).forEach((v) => { if (v.dateStart && dateStr >= v.dateStart && dateStr <= (v.dateEnd || v.dateStart)) (v.assignees || []).forEach((a) => busy.add(Number(a))); });
+  return SHOOT_HOSTS.map((h) => h.id).filter((id) => !busy.has(Number(id)));
+}
+
+/* ---- shootContext (READ) - validatie + beschikbaarheid in één call ----------
+ * Body: { task_id }. Scope-guard fail-CLOSED (opstap naar een write).
+ * Status: 'ok' | 'not_found' | 'wrong_type' | 'incomplete_metadata' | 'already_scheduled' | 'forbidden'.
+ */
+export async function shootContext(bedrijfId, body, env) {
+  const taskId = str(body && body.task_id);
+  if (!taskId) return { status: 200, body: { status: 'not_found' } };
+  const tr = await cu.get(env, `/task/${taskId}`);
+  if (!tr.ok || !tr.data || (!tr.data.id && !tr.data.name)) return { status: 200, body: { status: 'not_found' } };
+  const task = tr.data;
+  const sc = scopeCheckTask(task, bedrijfId, SCOPE_FAIL_CLOSED.write);
+  if (!sc.ok) return { status: 403, body: { status: 'forbidden', message: 'Geen toegang tot deze taak.' } };
+  // TYPE JOB = Shoot (single-task GET levert de orderindex 6).
+  if (Number(getCF(task, FIELD.typeJob)) !== 6) return { status: 200, body: { status: 'wrong_type' } };
+  // Reeds een due_date -> al ingepland: details tonen, niet opnieuw laten boeken.
+  if (heeftDueDate(task)) {
+    const locVal = getCF(task, FIELD.locatie);
+    const locatie = (locVal && (locVal.formatted_address || locVal.address)) || '';
+    const startMs = Number(task.start_date) || 0;
+    const dueMs = Number(task.due_date) || 0;
+    const st = startMs ? msToBrusselsHm(startMs) : null;
+    const et = dueMs ? msToBrusselsHm(dueMs) : null;
+    return { status: 200, body: { status: 'already_scheduled',
+      datum: msToBrusselsYmd(startMs || dueMs),
+      startTime: (st && st !== '00:00') ? st : null,
+      endTime: (et && et !== '00:00') ? et : null,
+      locatie } };
+  }
+  const timeHours = task.time_estimate ? Math.round(Number(task.time_estimate) / 3600000) : null;
+  const aRaw = getCF(task, FIELD.contentCreators);
+  const aantalCreators = (aRaw != null && aRaw !== '') ? (parseInt(aRaw, 10) + 1) : null;
+  if (!timeHours || !aantalCreators) return { status: 200, body: { status: 'incomplete_metadata' } };
+  let availability;
+  try { availability = await shootAvailability(env); }
+  catch (e) { availability = { shoots: [], shoots_27m: [], vakantie: [], hosts: SHOOT_HOSTS }; }
+  return { status: 200, body: { status: 'ok', task_name: str(task.name), timeHours, aantalCreators, availability } };
+}
+
+/* ---- shootSubmit (WRITE) - boeking wegschrijven (description + custom fields) -
+ * Body: { task_id, datum, datumLeesbaar, startuur, duur, timeHours, aantalPersonen,
+ *         klantVoornaam, klantEmail, locatie, locatieStraat, locatiePostcode,
+ *         locatieGemeente, contactNaam, contactGsm, extraInfo, lat?, lng? }.
+ * Scope-guard fail-CLOSED + dubbel-boek-guard (bestaande due_date).
+ */
+export async function shootSubmit(bedrijfId, body, env) {
+  const taskId = str(body && body.task_id);
+  if (!taskId) return { status: 400, body: { ok: false, error: 'no_task' } };
+  const tr = await cu.get(env, `/task/${taskId}`);
+  const task = (tr.ok && tr.data) ? tr.data : { custom_fields: [] };
+  const sc = scopeCheckTask(task, bedrijfId, SCOPE_FAIL_CLOSED.write);
+  if (!sc.ok) return { status: 403, body: { ok: false, error: 'scope_mismatch', message: 'Geen toegang tot deze taak.' } };
+  if (heeftDueDate(task)) return { status: 200, body: { ok: true, already_booked: true, message: 'Deze shoot is zonet al ingepland.' } };
+
+  const datum = str(body.datum);                       // YYYY-MM-DD
+  const startuur = str(body.startuur);                 // HH:mm
+  const datumLeesbaar = str(body.datumLeesbaar) || datum;
+  const timeHours = Number(body.timeHours) || 0;
+  const aantalPersonen = Number(body.aantalPersonen) || 1;
+  const duurLabel = str(body.duur);
+  const voornaam = str(body.klantVoornaam);
+  const email = str(body.klantEmail);
+  const straat = str(body.locatieStraat);
+  const postcode = str(body.locatiePostcode);
+  const gemeente = str(body.locatieGemeente);
+  const contactNaam = str(body.contactNaam);
+  const contactGsm = str(body.contactGsm);
+  const extraInfo = str(body.extraInfo);
+
+  const startMs = brusselsWallToMs(datum, startuur);
+  if (!startMs) return { status: 400, body: { ok: false, error: 'bad_date' } };
+  // Eind = effectieve duur op locatie (totaal / aantal creators, op halfuur naar boven), zelfde regel als de slotpicker.
+  const effHours = aantalPersonen > 0 ? Math.ceil((timeHours / aantalPersonen) * 2) / 2 : timeHours;
+  const endMs = startMs + Math.max(1, Math.round(effHours * 3600000));
+
+  // Host-keuze: verse server-side beschikbaarheid -> random vrij poollid op die dag.
+  let pickedHost = null;
+  try {
+    const avail = await shootAvailability(env);
+    const free = freeHostIdsOnDate(avail, datum);
+    if (free.length) {
+      const pid = free[Math.floor(Math.random() * free.length)];
+      pickedHost = SHOOT_HOSTS.find((h) => Number(h.id) === Number(pid)) || { id: pid, name: '' };
+    }
+  } catch (e) { /* fail-open: PM wijst handmatig toe */ }
+
+  // (1) native velden via PUT (persisteren WEL): start/eind + assignee.
+  const putBody = { start_date: startMs, start_date_time: true, due_date: endMs, due_date_time: true };
+  if (pickedHost) putBody.assignees = { add: [Number(pickedHost.id)], rem: [] };
+  await cu.put(env, `/task/${taskId}`, putBody);
+
+  // (2) Startdatum (date custom field) - via POST /field (custom_fields via PUT persisteren niet).
+  await cu.post(env, `/task/${taskId}/field/${FIELD.startdatum}`, { value: startMs, value_options: { time: true } });
+
+  // (3) Locatie (location custom field): client-coords (autocomplete) -> server-geocode -> anders overslaan.
+  let coords = null;
+  let formatted = str(body.locatie) || `${straat}, ${postcode} ${gemeente}, België`.replace(/\s+,/g, ',');
+  const clat = Number(body.lat), clng = Number(body.lng);
+  if (Number.isFinite(clat) && Number.isFinite(clng) && (clat || clng)) {
+    coords = { lat: clat, lng: clng };
+  } else if (env && env.GOOGLE_GEOCODE_KEY && (straat || postcode || gemeente)) {
+    try {
+      const gr = await fetch('https://maps.googleapis.com/maps/api/geocode/json?address=' +
+        encodeURIComponent(`${straat}, ${postcode} ${gemeente}, België`) + '&key=' + encodeURIComponent(env.GOOGLE_GEOCODE_KEY));
+      const gd = await gr.json().catch(() => ({}));
+      const r0 = gd && Array.isArray(gd.results) && gd.results[0];
+      if (r0 && r0.geometry && r0.geometry.location) {
+        coords = { lat: r0.geometry.location.lat, lng: r0.geometry.location.lng };
+        formatted = str(r0.formatted_address) || formatted;
+      }
+    } catch (e) { /* geocode-fout -> geen coords, adres staat in de description */ }
+  }
+  if (coords) {
+    await cu.field(env, taskId, FIELD.locatie, { location: { lat: coords.lat, lng: coords.lng }, formatted_address: formatted });
+  }
+
+  // (4) VOLLEDIGE booking in de task-description (Vincent: 'schrijf de data in de description').
+  const L = [];
+  L.push('SHOOT INGEPLAND VIA KLANTENPORTAAL');
+  L.push('');
+  L.push(`Klant: ${voornaam}${email ? ` (${email})` : ''}`);
+  L.push(`Datum: ${datumLeesbaar}`);
+  L.push(`Startuur: ${startuur} (aankomst op locatie)`);
+  if (duurLabel) L.push(`Duur: ${duurLabel}`);
+  L.push(`Aantal creators: ${aantalPersonen}`);
+  if (pickedHost && pickedHost.name) L.push(`Voorlopig toegewezen: ${pickedHost.name}`);
+  L.push('');
+  L.push('Startlocatie:');
+  if (straat) L.push(straat);
+  const pcg = `${postcode} ${gemeente}`.trim();
+  if (pcg) L.push(pcg);
+  if (contactNaam || contactGsm) { L.push(''); L.push(`Contactpersoon op locatie: ${[contactNaam, contactGsm].filter(Boolean).join(' · ')}`); }
+  if (extraInfo) { L.push(''); L.push('Extra info / briefing:'); L.push(extraInfo); }
+  const bookingBlock = L.join('\n');
+  const prev = str(task.description).trim();
+  const newDesc = prev ? (bookingBlock + '\n\n----------\n\n' + prev) : bookingBlock;
+  await cu.put(env, `/task/${taskId}`, { description: newDesc });
+
+  // (5) interne comment voor het content-team (notify_all -> toegewezen host krijgt melding).
+  const C = [];
+  C.push('🎬 Klant heeft een shoot ingepland via het klantenportaal.');
+  C.push('');
+  C.push(`Klant: ${voornaam}${email ? ` (${email})` : ''}`);
+  C.push(`Datum: ${datumLeesbaar} · ${startuur}${duurLabel ? ` · ${duurLabel}` : ''}`);
+  C.push(`Aantal personen: ${aantalPersonen}`);
+  if (pickedHost && pickedHost.name) C.push(`Voorlopig toegewezen: ${pickedHost.name}`);
+  if (pcg || straat) C.push(`Startlocatie: ${[straat, pcg].filter(Boolean).join(', ')}`);
+  if (contactNaam || contactGsm) C.push(`Contact op locatie: ${[contactNaam, contactGsm].filter(Boolean).join(' · ')}`);
+  if (extraInfo) C.push(`Extra info: ${extraInfo}`);
+  C.push('');
+  C.push('Controleer de toewijzing in ClickUp en bevestig de afspraak bij de klant.');
+  try { await cu.comment(env, taskId, C.join('\n'), true); } catch (e) { /* comment-fout mag de booking niet breken */ }
+
+  return { status: 200, body: { ok: true, taskId, assignedTo: pickedHost ? pickedHost.id : null, assignedName: pickedHost ? pickedHost.name : '' } };
+}
+
+/* =============================================================================
    Handler-registry voor de router-shim + node-harness.
    READ_HANDLERS: testbaar zonder Firebase met (bedrijfId, body, env).
    ============================================================================= */
@@ -2936,6 +3269,10 @@ export const READ_HANDLERS = {
   driveEnsure,
   // Metricool (directe v2-API, geen Make). Leest blogId uit veld 40f6ccd2 op de bedrijf-taak.
   metricool,
+  // Metricool analytics: KPI-dashboard + trend per netwerk (fase 1 metriek-look-and-feel).
+  metricoolStats,
+  // Shoot-inplannen: validatie + beschikbaarheid (port van de externe widget, geen Make).
+  shootContext,
   // NB: de AI-chatbot loopt (op vraag) weer via Make, niet via de worker. De aiChat-handler
   // hierboven blijft dormant (ongebruikt) staan, klaar mocht de keuze ooit omdraaien.
 };
@@ -2958,6 +3295,8 @@ export const WRITE_HANDLERS = {
   // Google Drive writes (directe API v3, geen Make).
   huisstijlUpload,
   huisstijlDelete,
+  // Shoot-inplannen: boeking wegschrijven (description + custom fields, geen Make).
+  shootSubmit,
 };
 // bedrijfBeheer sub-acties (read vs write split voor cache/rate-decisions in de shell)
 export const BEDRIJFBEHEER_READ_ACTIONS = { get_team: getTeam, get_offertes: getOffertes };

@@ -30,10 +30,11 @@ var S27 = window.S27 = { onSessionExpired: null, reloadDashboard: null, onSwitch
 const GATEWAY_BASE = (function(){
   try {
     var h = location.hostname || '';
-    // Portaal geserveerd vanaf de worker zelf (workers.dev of portaal.studio27.be) -> zelfde origin, geen CORS.
-    if (/\.workers\.dev$/.test(h) || h === 'portaal.studio27.be') return location.origin;
+    // Enkel wanneer de worker de frontend ZELF serveert (workers.dev) is het zelfde origin.
+    // Op Cloudflare Pages (portaal.studio27.be) draait de frontend los van de worker:
+    // dan praten we cross-origin met de worker-URL hieronder (CORS staat dat toe).
+    if (/\.workers\.dev$/.test(h)) return location.origin;
   } catch(e){}
-  // Overgangssituatie (githack) -> absolute worker-URL.
   return 'https://s27-portal-gateway-v2.studio27marketing.workers.dev';
 })();
 
@@ -90,7 +91,14 @@ const ENDPOINTS = {
   // Klant geeft feedback/aanpassing op een geplande post: { post_id, feedback } -> { ok }.
   metricoolFeedback: GATEWAY_BASE + '/metricoolFeedback',
   // Klant past een post DIRECT aan in Metricool: { post_id, text, providers:[net], media:[url] } -> { ok, id }.
-  metricoolUpdate:   GATEWAY_BASE + '/metricoolUpdate'
+  metricoolUpdate:   GATEWAY_BASE + '/metricoolUpdate',
+  // Metricool analytics (KPI-dashboard + trend): { days? } -> { ok, linked, totals, networks:[], trend:[] }.
+  metricoolStats:    GATEWAY_BASE + '/metricoolStats',
+  // Shoot-inplannen (port van studio27.be/shoot-inplannen, VOLLEDIG via de gateway, geen Make).
+  // shootContext: { task_id } -> { status:'ok'|'wrong_type'|'incomplete_metadata'|'already_scheduled'|'not_found'|'forbidden', timeHours, aantalCreators, availability:{shoots,shoots_27m,vakantie,hosts} }.
+  shootContext:      GATEWAY_BASE + '/shootContext',
+  // shootSubmit: { task_id, datum, startuur, timeHours, aantalPersonen, klant*, locatie*, contact*, extraInfo, lat?, lng? } -> { ok, taskId, assignedTo, assignedName }.
+  shootSubmit:       GATEWAY_BASE + '/shootSubmit'
 };
 
 /* AUTH v2 (Firebase + Cloudflare-gateway) is de DEFAULT. ?auth=v1 = legacy-vangnet. */

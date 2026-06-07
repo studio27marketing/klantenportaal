@@ -99,6 +99,7 @@ const SENSITIVE = new Set([
   'chatAttachment', 'chatPost', 'directMessage', 'feedbackV2', 'newProjectIntake',
   'facturatieSave', 'projectFacturatieSave', 'bedrijfVoorkeuren', 'bedrijfContact',
   'bedrijfBeheer', 'inplannen', 'offerteGenereren', 'metricoolApprove', 'metricoolUpdate',
+  'shootSubmit',
 ]);
 const LIMIT_SENSITIVE = 15; // per minuut, per gebruiker
 const LIMIT_DEFAULT   = 80;
@@ -320,7 +321,7 @@ async function handlePerfReport(request, env) {
 async function tryHandle(path, bedrijfId, body, claims, env, ctx, ch, noCache) {
   // READS (met KV-cache voor dashboard/bedrijfContent)
   if (READ_HANDLERS[path]) {
-    const cacheable = (path === 'dashboard' || path === 'bedrijfContent');
+    const cacheable = (path === 'dashboard' || path === 'bedrijfContent' || path === 'metricoolStats');
     const run = () => READ_HANDLERS[path](bedrijfId, body, env);
     const res = cacheable
       ? await withCache(env, ctx, path, bedrijfId, noCache, run)

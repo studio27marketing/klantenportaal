@@ -382,11 +382,62 @@ function socialFilter(){ return state._socialFilter||'alles'; }
 // Maand-/filter-navigatie verspringt NIET meer: enkel de deelcontainer wordt ververst (geen
 // full-panel renderPanel + scroll-to-top). Maand-nav raakt enkel de grid, filter de hele body.
 function socialShownPosts(){ var posts=socialPostsAll(); var f=socialFilter(); return f==='alles'?posts:posts.filter(function(p){return socialStatus(p)===f;}); }
-function socialBodyHTML(){ var posts=socialPostsAll(); return socialMatrixbar(posts)+socialFilters()+'<div id="socialCalContainer">'+socialCalendar(socialShownPosts())+'</div>'; }
+function socialBodyHTML(){ var posts=socialPostsAll(); return '<div id="socialStats">'+socialStatsHTML()+'</div>'+socialMatrixbar(posts)+socialFilters()+'<div id="socialCalContainer">'+socialCalendar(socialShownPosts())+'</div>'; }
 function socialMonthNav(d){ var mo=socialMonth(); var dt=new Date(mo.y,mo.m+d,1); state._socialMonth={y:dt.getFullYear(),m:dt.getMonth()}; var box=document.getElementById('socialCalContainer'); if(box){ box.innerHTML=socialCalendar(socialShownPosts()); } else { renderPanel('socials'); } }
 function socialSetFilter(f){ state._socialFilter=f; var box=document.getElementById('socialBody'); if(box){ box.innerHTML=socialBodyHTML(); } else { renderPanel('socials'); } }
 function socialOpenDetail(id){ state._socialDetail=String(id); renderPanel('socials'); if(window.scrollTo)window.scrollTo({top:0,behavior:'smooth'}); }
 function socialCloseDetail(){ state._socialDetail=null; renderPanel('socials'); }
+/* ---- KPI-dashboard + trend (fase 1 metriek-look-and-feel), data via metricoolStats ---- */
+function socialFmt(n){ return (Number(n)||0).toLocaleString('nl-BE'); }
+function socialStatsHTML(){
+  if(state.demoMode) return socialStatsBlock(socialStatsDemo());
+  var s=(window.S27DATA&&S27DATA.metricoolStats)?S27DATA.metricoolStats():null;
+  if(!s) return '<div class="soc-kpi-skel">Cijfers laden…</div>';
+  if(!s.linked) return '';                       // geen Metricool-koppeling -> sectie verbergen
+  return socialStatsBlock(s);
+}
+function socialStatsBlock(s){
+  var t=s.totals||{}; var dys=(s.period&&s.period.days)||90;
+  function grow(g){ g=Number(g)||0; var cls=g>0?'up':(g<0?'down':'flat'); return '<span class="soc-kpi-delta '+cls+'">'+(g>0?'+':'')+socialFmt(g)+'</span>'; }
+  var kpis=[
+    ['Volgers', socialFmt(t.followers), grow(t.growth)],
+    ['Bereik', socialFmt(t.reach), '<span class="soc-kpi-sub">laatste '+dys+' dagen</span>'],
+    ['Engagement', (Number(t.engagementRate)||0)+'%', '<span class="soc-kpi-sub">interacties / bereik</span>'],
+    ['Interacties', socialFmt(t.interactions), '<span class="soc-kpi-sub">laatste '+dys+' dagen</span>']
+  ];
+  var cards='<div class="soc-kpis">'+kpis.map(function(k){ return '<div class="soc-kpi"><div class="soc-kpi-lab">'+esc(k[0])+'</div><div class="soc-kpi-num">'+k[1]+'</div><div class="soc-kpi-foot">'+k[2]+'</div></div>'; }).join('')+'</div>';
+  var chart=socialTrendSVG(s.trend||[], s.trendLabel||'Trend');
+  var nets=(s.networks||[]).filter(function(n){ return n.followers||n.reach||n.interactions; });
+  var netRow=nets.length?('<div class="soc-knets">'+nets.map(function(n){ var col=((typeof mcNet==='function'&&mcNet(n.network))||[])[1]||'var(--s27-blue,#3083DC)';
+    return '<div class="soc-knet"><span class="soc-knet-dot" style="background:'+col+'"></span><b>'+esc(n.label||n.network)+'</b><span class="soc-knet-v">'+socialFmt(n.followers)+' volgers</span>'+(n.growth?('<span class="soc-knet-g '+(n.growth>0?'up':'down')+'">'+(n.growth>0?'+':'')+socialFmt(n.growth)+'</span>'):'')+'</div>';
+  }).join('')+'</div>'):'';
+  return '<div class="soc-stats">'+cards+chart+netRow+'</div>';
+}
+function socialTrendSVG(trend, label){
+  var pts=(trend||[]).map(function(p){ return Number(p.value)||0; });
+  if(pts.length<2) return '';
+  var W=600,H=120,pad=6,n=pts.length;
+  var min=Math.min.apply(null,pts),max=Math.max.apply(null,pts); if(max===min){ max=min+1; }
+  var X=function(i){ return pad+(i*(W-2*pad)/(n-1)); }, Y=function(v){ return H-pad-((v-min)*(H-2*pad)/(max-min)); };
+  var line='',area='M'+X(0).toFixed(1)+','+(H-pad);
+  pts.forEach(function(v,i){ var px=X(i).toFixed(1),py=Y(v).toFixed(1); line+=(i?'L':'M')+px+','+py+' '; area+='L'+px+','+py+' '; });
+  area+='L'+X(n-1).toFixed(1)+','+(H-pad)+'Z';
+  var up=pts[n-1]>=pts[0]; var col=up?'var(--s27-green,#12AC4E)':'var(--s27-orange-ink,#C44514)';
+  return '<div class="soc-trend"><div class="soc-trend-head"><span>'+esc(label)+'</span><span class="soc-trend-range">'+socialFmt(pts[0])+' → '+socialFmt(pts[n-1])+'</span></div>'
+    +'<svg class="soc-trend-svg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" aria-hidden="true">'
+    +'<defs><linearGradient id="soc-tg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="'+col+'" stop-opacity="0.18"/><stop offset="100%" stop-color="'+col+'" stop-opacity="0"/></linearGradient></defs>'
+    +'<path d="'+area+'" fill="url(#soc-tg)"/>'
+    +'<path d="'+line.trim()+'" fill="none" stroke="'+col+'" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>'
+    +'</svg></div>';
+}
+function socialStatsDemo(){
+  var tr=[],v=4970; for(var i=0;i<90;i++){ v+=((i*7)%5)-1; tr.push({date:'',value:v}); }
+  return { linked:true, period:{days:90}, trendLabel:'Instagram volgers', trend:tr,
+    totals:{followers:8940,growth:382,reach:62300,interactions:3620,engagementRate:5.8},
+    networks:[{network:'instagram',label:'Instagram',followers:5210,growth:240,reach:41200,interactions:2300},
+      {network:'facebook',label:'Facebook',followers:2730,growth:90,reach:21100,interactions:980},
+      {network:'linkedin',label:'LinkedIn',followers:1000,growth:52,reach:0,interactions:340}] };
+}
 function socialMatrixbar(posts){
   var c={feedback:0,goedgekeurd:0,gepubliceerd:0}; posts.forEach(function(p){ c[socialStatus(p)]++; });
   var cards=[['feedback','Wacht op je feedback',c.feedback,'orange'],['goedgekeurd','Goedgekeurd',c.goedgekeurd,'green'],['gepubliceerd','Gepubliceerd',c.gepubliceerd,'blue']];
@@ -1106,7 +1157,7 @@ function planCardHTML(type, tid, label, br){
   br = br||'blue';
   const sub = label ? `<p class="sdesc" style="margin:-2px 0 10px;font-weight:700;color:var(--ink-2)">${esc(label)}</p>` : '';
   if(type==='shoot'){
-    return `<div class="setsec" style="margin-top:18px"><h3 style="display:flex;align-items:center;gap:8px">${ic('st_plan',18)} Plan je shoot</h3>${sub}<p class="sdesc">Kies een dag uit onze shootkalender. Een shoot vindt altijd plaats op locatie of bij Studio 27, samen met je cameraploeg.</p><div id="s27-plan-${esc(tid)}"><button class="btn btn-branch br-${br} btn-sm" onclick="loadPlanSlots('${esc(tid)}',true)">Toon beschikbare shootdagen →</button></div></div>`;
+    return `<div class="setsec" style="margin-top:18px"><h3 style="display:flex;align-items:center;gap:8px">${ic('st_plan',18)} Plan je shoot</h3>${sub}<p class="sdesc">Kies een dag uit onze shootkalender en vul de locatie in. Een shoot vindt altijd plaats op locatie of bij Studio 27, samen met je cameraploeg.</p><div id="s27-plan-${esc(tid)}"><button class="btn btn-branch br-${br} btn-sm" onclick="openShootWizard('${esc(tid)}')">Toon beschikbare shootdagen →</button></div></div>`;
   }
   return `<div class="setsec" style="margin-top:18px"><h3 style="display:flex;align-items:center;gap:8px">${ic('st_plan',18)} Plan je moment</h3>${sub}<p class="sdesc">Kies een tijdslot dat past in de agenda van je Studio 27-contact, wij sturen meteen een agenda-uitnodiging met Meet-link of locatie.</p><div id="s27-plan-${esc(tid)}"><button class="btn btn-branch br-${br} btn-sm" onclick="loadPlanSlots('${esc(tid)}')">Toon beschikbare momenten →</button></div></div>`;
 }

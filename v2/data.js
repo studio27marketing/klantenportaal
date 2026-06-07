@@ -386,6 +386,22 @@
     }catch(e){ state.data.metricool={linked:false,posts:[]}; return false; }
   };
   DATA.metricool = function(){ return state.data.metricool; };
+  /* ---- Metricool analytics (KPI-dashboard + trend), gateway-endpoint metricoolStats ----
+     Contract: { ok, linked, totals:{followers,growth,reach,interactions,engagementRate},
+     networks:[{network,label,followers,growth,reach,interactions}], trend:[{date,value}], trendLabel, period }. */
+  DATA.loadMetricoolStats = async function(){
+    if(!live()){ state.data.metricoolStats={linked:false}; return false; }
+    var bid = state.activeBedrijf || '';
+    if(!bid){ state.data.metricoolStats={linked:false}; return false; }
+    try{
+      var res = await api(ENDPOINTS.metricoolStats, base({ bedrijf_id:bid }));
+      var j = (res && res.ok && res.data) ? res.data : null;
+      if(!j || !j.ok || !j.linked){ state.data.metricoolStats={linked:false}; return true; }
+      state.data.metricoolStats = j;
+      return true;
+    }catch(e){ state.data.metricoolStats={linked:false}; return false; }
+  };
+  DATA.metricoolStats = function(){ return state.data.metricoolStats; };
   // markeer een post lokaal als goedgekeurd (na een geslaagde metricoolApprove-call)
   DATA.markMetricoolApproved = function(postId){
     var mc = state.data.metricool; if(!mc || !mc.posts) return;
