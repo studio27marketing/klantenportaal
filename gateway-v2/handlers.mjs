@@ -101,10 +101,12 @@ const DM_ONTVANGERS = {
   _default:{ id: '48338421', naam: 'Ilke',    pron: 'haar' },
 };
 
-/* ---- Beslissings-flag: fail-open (reads) vs fail-closed (writes) ---------- */
-// 1:1 met Make = FAIL-OPEN (count==0 => toestaan). Voor writes zetten we fail-closed
-// (de VERPLICHTE BESLISSING). Eén plek zodat de gaps-keuze centraal staat.
-export const SCOPE_FAIL_CLOSED = { read: false, write: true };
+/* ---- Beslissings-flag: fail-CLOSED voor reads EN writes -------------------- */
+// SEC-2 (H1): vroeger waren reads fail-OPEN (count==0 => toestaan, 1:1 met de oude Make-logica).
+// Dat liet een klant taken ZONDER Bedrijf-koppeling van anderen uitlezen (cross-tenant leeslek
+// via projectDetailV2/chatList/beschikbaarheid). Nu fail-CLOSED voor beide: een lege of
+// niet-matchende Bedrijf-koppeling geeft NOOIT toegang.
+export const SCOPE_FAIL_CLOSED = { read: true, write: true };
 
 /* =============================================================================
    ClickUp-client (cu) - kale token, gestructureerde fouten i.p.v. throw
@@ -562,7 +564,7 @@ async function huisstijlUpload(bedrijfId, body, env) {
 // van de file ophalen en bevestigen dat de file IN de Huisstijl-folder van DIT bedrijf zit
 // vóór trashen - zo kan een klant geen vreemde Drive-file verwijderen via een gespoofte id.
 async function huisstijlDelete(bedrijfId, body, env) {
-  const fileId = str(body && (body.file_id || body.id));
+  const fileId = cleanId(body && (body.file_id || body.id));
   if (!fileId) return { status: 200, body: { ok: false, error: 'no_file_id' } };
   const companyFolderId = await driveCompanyFolderId(env, bedrijfId);
   const hsId = await driveHuisstijlFolderId(env, companyFolderId, { create: false });
@@ -676,13 +678,13 @@ export async function provisionLookup(env, email, selectedBid) {
 }
 
 // scope-guard op veld 'Bedrijf' 4b1fb333. failClosed => count==0 levert ok:false.
-export function scopeCheckTask(task, bedrijfId, failClosed = false) {
+export function scopeCheckTask(task, bedrijfId, failClosed = true) {
   const ids = getRelationIds(task, FIELD.bedrijf);
   const bedrCount = ids.length;
   const bedrId = ids[0] || '';
   let ok;
-  if (bedrCount === 0) ok = !failClosed;                 // fail-open default
-  else ok = String(bedrId) === String(bedrijfId);        // alleen eerste, 1:1 Make (first())
+  if (bedrCount === 0) ok = !failClosed;                 // SEC-2: nu fail-CLOSED (reads+writes)
+  else ok = ids.includes(String(bedrijfId));             // SEC-2: ELKE gekoppelde Bedrijf telt (niet enkel first())
   return { ok, bedrCount, bedrId };
 }
 
@@ -1105,6 +1107,11 @@ function fmtDateTimeFromMs(ms) {
 }
 
 const str = (v) => (v == null ? '' : String(v));
+// SEC-3: client-geleverde ids (ClickUp-task/-contact, Metricool-post, Drive-file) zijn altijd
+// alfanumeriek (+ _ -). Geef een leeg id terug bij elk ander teken, zodat path/param-injectie
+// in ClickUp/Metricool-URL's onmogelijk is (bv. '..', '/', '?', '#', spaties). De bestaande
+// lege-id-guards/scope-checks weigeren een leeg id daarna automatisch.
+const cleanId = (v) => { const s = (v == null ? '' : String(v)).trim(); return /^[A-Za-z0-9_-]{1,64}$/.test(s) ? s : ''; };
 
 /* =============================================================================
    Deliverables-parser + SAE (assignees) - gedeeld door dashboard + projectDetailV2.
@@ -1220,7 +1227,7 @@ export function bustCache(env, ctx, bedrijfId) {
 
 /* ---- projectDetailV2 ----------------------------------------------------- */
 export async function projectDetailV2(bedrijfId, body, env) {
-  const taskId = str(body && body.task_id);
+  const taskId = cleanId(body && body.task_id);
   if (!taskId) {
     // geen task_id -> skeleton (200, 1:1 Make Resume-stijl), nooit 5xx
     return { status: 200, body: detailSkeleton('', '__ERROR__') };
@@ -1311,7 +1318,7 @@ function detailSkeleton(taskId, err) {
 
 /* ---- chatList ------------------------------------------------------------ */
 export async function chatList(bedrijfId, body, env) {
-  const taskId = str(body && body.task_id);
+  const taskId = cleanId(body && body.task_id);
   if (!taskId) return { status: 200, body: { ok: true, comments: [] } };
   const tr = await cu.get(env, `/task/${taskId}`);
   const task = tr.ok && tr.data ? tr.data : { custom_fields: [] };
@@ -1592,7 +1599,7 @@ export async function meetingsList(bedrijfId, body, env) {
  *   blok 1 minuut verbergen en zo dubbele-boekingen of valse vrije slots geven.
  */
 export async function beschikbaarheid(bedrijfId, body, env) {
-  const taskId = str(body && body.task_id);
+  const taskId = cleanId(body && body.task_id);
   const van = str(body && body.van);   // epoch-ms, 1:1 doorgeven (geen conversie)
   const tot = str(body && body.tot);
 
@@ -1784,7 +1791,7 @@ export async function facturatieSave(bedrijfId, body, env) {
 
 /* ---- projectFacturatieSave (project-niveau, GET+2 best-effort) ----------- */
 export async function projectFacturatieSave(bedrijfId, body, env) {
-  const taskId = str(body && body.task_id);
+  const taskId = cleanId(body && body.task_id);
   const klant_naam = str((body && body.klant_naam) || 'Onbekend');
   const project_naam = str((body && body.project_naam) || '');
   const onr = str(body && body.ondernemingsnummer);
@@ -1834,7 +1841,7 @@ export async function bedrijfUpload(bedrijfId, body, env) {
 
 /* ---- chatPost (GET scope + POST comment; prefix kritisch) ---------------- */
 export async function chatPost(bedrijfId, body, env) {
-  const taskId = str(body && body.task_id);
+  const taskId = cleanId(body && body.task_id);
   const commentText = str(body && body.comment_text);
   const klantNaam = str((body && body.klant_naam) || 'Onbekend');
   const tr = await cu.get(env, `/task/${taskId}`);
@@ -1853,7 +1860,7 @@ export async function chatPost(bedrijfId, body, env) {
 
 /* ---- chatAttachment (GET scope + upload + comment) ----------------------- */
 export async function chatAttachment(bedrijfId, body, env) {
-  const taskId = str(body && body.task_id);
+  const taskId = cleanId(body && body.task_id);
   const filename = str(body && body.filename);
   const klantNaam = str((body && body.klant_naam) || 'Onbekend');
   const commentText = str(body && body.comment_text);
@@ -1937,7 +1944,7 @@ export async function directMessage(bedrijfId, body, env) {
 
 /* ---- feedbackV2 (GET scope + tot 3 voorwaardelijke best-effort writes) --- */
 export async function feedbackV2(bedrijfId, body, env) {
-  const taskId = str(body && body.task_id);
+  const taskId = cleanId(body && body.task_id);
   const klant_naam = str((body && body.klant_naam) || 'Onbekend');
   const deliverables = Array.isArray(body && body.deliverables) ? body.deliverables : [];
   const algemene_opmerking = str(body && body.algemene_opmerking);
@@ -2025,7 +2032,7 @@ export async function feedbackV2(bedrijfId, body, env) {
  * Output: { ok:true, event_id, meet_link, html_link, assigned_member? }.
  */
 export async function inplannen(bedrijfId, body, env) {
-  const taskId = str(body && body.task_id);
+  const taskId = cleanId(body && body.task_id);
 
   // (1) scope-guard fail-CLOSED. Geen task_id → behandelen als lege task = 403.
   let task = { custom_fields: [] };
@@ -2238,7 +2245,7 @@ async function assertContactInBedrijf(bedrijfId, contactId, env) {
 }
 
 async function updateContact(bedrijfId, body, env, contactEmail) {
-  const contactId = str(body && body.contact_id);
+  const contactId = cleanId(body && body.contact_id);
   if (!contactId) return { status: 200, body: { ok: true, updated: true, contact_id: '' } };
   const allowed = await assertContactInBedrijf(bedrijfId, contactId, env);
   if (!allowed) return { status: 403, body: { ok: false, error: 'scope_violation' } };
@@ -2273,7 +2280,7 @@ async function updateContact(bedrijfId, body, env, contactEmail) {
 }
 
 async function deleteContact(bedrijfId, body, env, contactEmail) {
-  const contactId = str(body && body.contact_id);
+  const contactId = cleanId(body && body.contact_id);
   if (!contactId) return { status: 200, body: { ok: true, deleted: true, contact_id: '' } };
   const allowed = await assertContactInBedrijf(bedrijfId, contactId, env);
   if (!allowed) return { status: 403, body: { ok: false, error: 'scope_violation' } };
@@ -2762,12 +2769,30 @@ export async function metricoolStats(bedrijfId, body, env) {
   return { status: 200, body: { ok: true, linked: true, brandId: blogId, period: { from, to, days }, totals, networks: networksOut, trend, trendLabel: primary ? primary.label : '' } };
 }
 
+// SEC-4: bevestig dat een post-id ECHT tot de blogId van DEZE klant hoort (anti-IDOR).
+// Zonder deze check kon klant A met het post-id van klant B een misleidende interne
+// goedkeuring/feedback-melding triggeren. Hergebruikt het blogId-gescopete scheduler-venster.
+async function mcPostBelongsToBlog(env, blogId, postId) {
+  if (!blogId || !postId || !str(env && env.METRICOOL_API_KEY)) return false;
+  const userId = await metricoolUserId(env, blogId).catch(() => '');
+  const start = mcStamp(Date.now() - 122 * 86400000);
+  const end = mcStamp(Date.now() + 122 * 86400000);
+  const q = new URLSearchParams({ blogId: String(blogId), start, end, timezone: METRICOOL_TZ });
+  if (userId) q.set('userId', String(userId));
+  try {
+    const r = await fetch(`${METRICOOL_BASE}/scheduler/posts?${q.toString()}`, { headers: mcHeaders(env) });
+    const d = await r.json().catch(() => null);
+    const arr = d && Array.isArray(d.data) ? d.data : (Array.isArray(d) ? d : []);
+    return (arr || []).some((p) => String(p && p.id) === String(postId));
+  } catch (e) { return false; }
+}
+
 /* ---- metricoolApprove (WRITE) - keur een geplande concept-post goed -------- */
 // PUT /api/v2/scheduler/posts/{id}/approval { status:"approved" } (per onderzoeksrapport).
 // Defensief: bij elk niet-2xx / onbevestigd endpoint -> { ok:false, error:'approval_unsupported' }
 // i.p.v. falen. We muteren NOOIT zonder een geldige scope (blogId van de bedrijf-taak).
 export async function metricoolApprove(bedrijfId, body, env) {
-  const postId = str(body && (body.id || body.post_id)).trim();
+  const postId = cleanId(body && (body.id || body.post_id));
   if (!postId) {
     return { status: 400, body: { ok: false, error: 'missing_post_id' } };
   }
@@ -2776,6 +2801,10 @@ export async function metricoolApprove(bedrijfId, body, env) {
   const blogId = br.ok && br.data ? str(getCF(br.data, FIELD.metricoolId)).trim() : '';
   if (!blogId) {
     return { status: 403, body: { ok: false, error: 'not_linked', message: 'Geen Metricool-koppeling voor dit bedrijf.' } };
+  }
+  // SEC-4: post moet tot DEZE klant z'n blogId horen (anti-IDOR).
+  if (!(await mcPostBelongsToBlog(env, blogId, postId))) {
+    return { status: 404, body: { ok: false, error: 'post_not_found' } };
   }
   // De klant is geen Metricool-reviewer: we bewaren de goedkeuring portaal-eigen in KV
   // (zodat de social-kalender 'goedgekeurd' toont) en melden het team via de ClickUp-inbox.
@@ -2798,12 +2827,17 @@ export async function metricoolApprove(bedrijfId, body, env) {
 // Geen directe Metricool-mutatie: de feedback (incl. een gewenste tekstaanpassing) gaat
 // als opdracht naar de ClickUp-inbox, zodat Studio 27 ze veilig verwerkt.
 export async function metricoolFeedback(bedrijfId, body, env) {
-  const postId = str(body && (body.id || body.post_id)).trim();
+  const postId = cleanId(body && (body.id || body.post_id));
   const feedback = str(body && (body.feedback || body.bericht)).trim();
   if (!postId || !feedback) {
     return { status: 400, body: { ok: false, error: 'missing_fields' } };
   }
   const br = await cu.get(env, `/task/${bedrijfId}`);
+  // SEC-4: post moet tot DEZE klant z'n blogId horen (anti-IDOR), anders geen melding.
+  const blogId = br.ok && br.data ? str(getCF(br.data, FIELD.metricoolId)).trim() : '';
+  if (!blogId || !(await mcPostBelongsToBlog(env, blogId, postId))) {
+    return { status: 404, body: { ok: false, error: 'post_not_found' } };
+  }
   const naam = str(br.ok && br.data && br.data.name) || 'Klant';
   try {
     await directMessage(bedrijfId, {
@@ -2841,7 +2875,7 @@ function mcCleanInfo(p) {
   return info;
 }
 export async function metricoolUpdate(bedrijfId, body, env) {
-  const postId = str(body && (body.id || body.post_id)).trim();
+  const postId = cleanId(body && (body.id || body.post_id));
   if (!postId) return { status: 400, body: { ok: false, error: 'missing_post_id' } };
   const br = await cu.get(env, `/task/${bedrijfId}`);
   const blogId = br.ok && br.data ? str(getCF(br.data, FIELD.metricoolId)).trim() : '';
@@ -3102,7 +3136,7 @@ function freeHostIdsOnDate(avail, dateStr) {
  * Status: 'ok' | 'not_found' | 'wrong_type' | 'incomplete_metadata' | 'already_scheduled' | 'forbidden'.
  */
 export async function shootContext(bedrijfId, body, env) {
-  const taskId = str(body && body.task_id);
+  const taskId = cleanId(body && body.task_id);
   if (!taskId) return { status: 200, body: { status: 'not_found' } };
   const tr = await cu.get(env, `/task/${taskId}`);
   if (!tr.ok || !tr.data || (!tr.data.id && !tr.data.name)) return { status: 200, body: { status: 'not_found' } };
@@ -3142,7 +3176,7 @@ export async function shootContext(bedrijfId, body, env) {
  * Scope-guard fail-CLOSED + dubbel-boek-guard (bestaande due_date).
  */
 export async function shootSubmit(bedrijfId, body, env) {
-  const taskId = str(body && body.task_id);
+  const taskId = cleanId(body && body.task_id);
   if (!taskId) return { status: 400, body: { ok: false, error: 'no_task' } };
   const tr = await cu.get(env, `/task/${taskId}`);
   const task = (tr.ok && tr.data) ? tr.data : { custom_fields: [] };

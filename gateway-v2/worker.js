@@ -160,6 +160,16 @@ async function verifyFirebaseToken(idToken, projectId) {
   if (typeof p.exp !== 'number' || p.exp < now) throw new Error('expired');
   if (typeof p.iat !== 'number' || p.iat > now + 300) throw new Error('bad_iat');
   if (p.auth_time && p.auth_time > now + 300) throw new Error('bad_auth_time');
+  // SEC-1a (K1): mailbox-eigendom AFDWINGEN. Provisioning matcht op e-mailstring, dus een
+  // niet-geverifieerd e-mailadres (bv. via een rechtstreekse e-mail/wachtwoord-signup buiten
+  // de portaal-UI) mag NOOIT toegang geven. Niet vertrouwen op Firebase-console-config.
+  if (p.email && p.email_verified !== true) throw new Error('email_not_verified');
+  // SEC-1b (K2): tweede factor (Google Authenticator/TOTP) SERVER-SIDE afdwingen. Firebase zet
+  // firebase.sign_in_second_factor enkel in tokens die NA een geslaagde MFA-challenge zijn
+  // uitgegeven. Zo is 2FA niet langer enkel een frontend-scherm dat omzeild kan worden door de
+  // worker rechtstreeks aan te roepen met een 1e-factor-token.
+  const _sf = p.firebase && p.firebase.sign_in_second_factor;
+  if (_sf !== 'totp' && _sf !== 'phone') throw new Error('mfa_required');
   return p; // bevat sub (uid), email en custom claim bedrijf_id
 }
 
@@ -176,6 +186,31 @@ function corsHeaders(origin, allowed) {
 }
 const json = (obj, status, headers) =>
   new Response(JSON.stringify(obj), { status, headers: { 'Content-Type': 'application/json', ...headers } });
+
+// SEC-5: constant-tijd vergelijking (geen timing-orakel bij het vergelijken van secrets).
+function timingSafeEqual(a, b) {
+  const enc = new TextEncoder();
+  const ab = enc.encode(String(a == null ? '' : a));
+  const bb = enc.encode(String(b == null ? '' : b));
+  if (ab.length !== bb.length) return false;
+  let r = 0;
+  for (let i = 0; i < ab.length; i++) r |= ab[i] ^ bb[i];
+  return r === 0;
+}
+// SEC-5: per-IP throttle voor de niet-ingelogde endpoints (/provision, /admin/link) die VÓÓR
+// de KV-rate-limit-sectie draaien. Fail-open op de teller (zoals de hoofd-limiet) zodat een
+// KV-storing de login niet breekt.
+async function ipThrottle(env, request, bucket, limit) {
+  if (!env || !env.KV) return true;
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const key = `rlip:${bucket}:${ip}:${Math.floor(Date.now() / 60000)}`;
+  try {
+    const cur = parseInt((await env.KV.get(key)) || '0', 10);
+    if (cur >= limit) return false;
+    await env.KV.put(key, String(cur + 1), { expirationTtl: 120 });
+  } catch (e) { /* fail-open op de teller */ }
+  return true;
+}
 
 /* ---- ADMIN: koppel een account aan een bedrijf (zet custom claim bedrijf_id) ----
    Vereist Worker-secrets ADMIN_SECRET, SA_CLIENT_EMAIL, SA_PRIVATE_KEY (Firebase
@@ -222,7 +257,10 @@ async function getGoogleAccessToken(env) {
 async function handleAdminLink(request, env, cors) {
   if (!env.ADMIN_SECRET || !env.SA_CLIENT_EMAIL || !env.SA_PRIVATE_KEY)
     return json({ ok: false, error: 'admin_not_configured', message: 'Service-account/ADMIN_SECRET nog niet ingesteld.' }, 501, cors);
-  if ((request.headers.get('X-Admin-Secret') || '') !== env.ADMIN_SECRET)
+  // SEC-5: per-IP throttle (brute-force op het secret afremmen) + constant-tijd vergelijking.
+  if (!(await ipThrottle(env, request, 'adminlink', 10)))
+    return json({ ok: false, error: 'rate_limited' }, 429, cors);
+  if (!timingSafeEqual(request.headers.get('X-Admin-Secret') || '', env.ADMIN_SECRET))
     return json({ ok: false, error: 'forbidden' }, 403, cors);
   let body = {};
   try { body = await request.json(); } catch (e) {}
@@ -275,6 +313,9 @@ async function setBedrijfClaim(env, email, bedrijfId) {
 // PROVISIONING (off-Make): verifieert het Firebase-token (volledige RS256), zoekt de bedrijven uit ClickUp
 // (provisionLookup) en zet de claim inline. Antwoord-shape 1:1 met de oude Make-flow (companies = STRING).
 async function handleProvision(request, env, cors) {
+  // SEC-5: per-IP throttle (provisioning doet zware ClickUp-paginering -> DoS/kosten-rem).
+  if (!(await ipThrottle(env, request, 'provision', 20)))
+    return json({ ok: false, error: 'rate_limited', bedrijf_id: '', email: '', companies: '' }, 429, cors);
   const ct = request.headers.get('Content-Type') || '';
   let idToken = '', selectedBid = '';
   try {

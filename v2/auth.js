@@ -164,7 +164,12 @@ const S27Auth = {
       const assertion = fb.TotpMultiFactorGenerator.assertionForEnrollment(pendingTotpSecret, code);
       await fb.multiFactor(auth.currentUser).enroll(assertion, 'Authenticator app');
       pendingTotpSecret = null;
-      emit('ready', { user: auth.currentUser }); // onAuthStateChanged vuurt hier niet opnieuw
+      // SEC-1b: het HUIDIGE token draagt nog GEEN 2e factor (de gebruiker logde met 1 factor in
+      // en schreef daarna pas in). De gateway vereist server-side firebase.sign_in_second_factor,
+      // dus forceren we een verse login: uitloggen + de gebruiker laat zich opnieuw aanmelden,
+      // waarna de MFA-challenge een 2FA-token oplevert dat de worker aanvaardt.
+      try { await fb.signOut(auth); } catch (_) {}
+      emit('signed_out', { error: '2FA is ingesteld. Log opnieuw in en bevestig met de 6-cijfercode uit je authenticator-app.' });
     } catch (e) { await reauthIfNeeded(e); throw new Error(friendly(e)); }
   },
 
