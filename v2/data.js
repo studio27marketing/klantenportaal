@@ -414,10 +414,9 @@
     var bid = state.activeBedrijf || '';
     if(!bid){ state.data.ads={linked:false,campaigns:[]}; return false; }
     try{
-      var r = await fetch(ADS_DIRECT, { method:'POST',
-        headers:{'Content-Type':'application/x-www-form-urlencoded'},   // CORS-safe
-        body:'bedrijf_id='+encodeURIComponent(bid) });
-      var t = await r.text(); var j=null; try{ j=JSON.parse(t); }catch(e){}
+      // SEC-6: via de gateway (token-geverifieerd, bedrijf_id server-side) i.p.v. de directe hook.
+      var res = await api(ENDPOINTS.ads, base({ bedrijf_id:bid }));
+      var j = (res && res.ok && res.data) ? res.data : null;
       if(!j || !j.ok){ state.data.ads={linked:false,campaigns:[]}; return false; }
       if(!j.linked){ state.data.ads={linked:false,campaigns:[]}; return true; }
       var camps=(j.campaigns||[]).filter(function(c){return c&&c.naam!=='';}).map(function(c){

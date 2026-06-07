@@ -78,6 +78,10 @@ const MAKE_ENDPOINTS = {
   projectFacturatieSave: 'https://hook.eu1.make.com/cmqf97ej6aewxokt9g23tbff6gxg7frm',
   performance:           'https://hook.eu1.make.com/chmsfitxr12m8cpjp4x3fb8ru1nqr7gg',
   bedrijfBeheer:         'https://hook.eu1.make.com/bf5xp3rkbh7dik9rp6jvue4w9p2moctn',
+  // SEC-6: ads-insights via de gateway i.p.v. de directe ADS_DIRECT-hook. De worker
+  // injecteert bedrijf_id uit het geverifieerde token (overschrijft client-waarde), zodat
+  // een klant niet langer de ads-cijfers van een ander bedrijf kan opvragen (read-IDOR).
+  ads:                   'https://hook.eu1.make.com/wvb3qfpqpm28kq6ksrduqywwrymokdjv',
   // beschikbaarheid: GEPORT naar de gateway (READ_HANDLERS.beschikbaarheid). Doorsnede
   // Google-Agenda ∩ ClickUp-planning. Trigger pool/specifiek = de ClickUp-assignee:
   // video-lijst 901520180316 ZONDER assignee → POOL (4 content creators, vrij_count);
