@@ -86,6 +86,12 @@ export const FIELD = {
   offerteBedrijfsnaam:'8da934b5-7747-4ad3-ac2f-cc53cf2985e8', // short_text 'Bedrijfsnaam' (offertes-lijst)
   // bedrijf-velden (extra) - Metricool blogId/brandId op de bedrijf-taak
   metricoolId:    '40f6ccd2-b25e-4385-bbca-3bfdf602e542', // short_text 'Metricool ID'
+  // ad-account-ids op de bedrijf-taak (Bedrijven-lijst) — direct-API ads-rapportage
+  metaAdsId:      '1658c472-496c-480d-81bf-0c19e82d84df', // short_text 'Meta Ads ID'
+  metaBusinessId: 'c352892a-7cd9-4f17-9e81-4d3decdb0fad', // short_text 'Meta Business ID'
+  googleAdsId:    'b1a52056-be3a-435a-95d6-1aa338bfc065', // short_text 'Google Ads ID'
+  tiktokAdsId:    '35baf0a8-ec33-4f97-863e-301eb1b2815e', // short_text 'TIkTok Ads ID'
+  snapchatAdsId:  '856172ba-7c88-40ce-8c01-f51f9bc885a4', // short_text 'Snapchat Ads ID'
   // project-facturatie
   factuurNote:    '42a0fd8e-5e24-4018-a698-5f76f87e6449',
 };
@@ -2769,6 +2775,110 @@ export async function metricoolStats(bedrijfId, body, env) {
   return { status: 200, body: { ok: true, linked: true, brandId: blogId, period: { from, to, days }, totals, networks: networksOut, trend, trendLabel: primary ? primary.label : '' } };
 }
 
+/* ---- metaAds (READ) — real-time Meta-insights RECHTSTREEKS via de Graph API ----
+ * Geen Make. Leest het Meta-ad-account uit de bedrijf-taak (FIELD.metaAdsId) — dus
+ * SERVER-SIDE en tenant-safe, NOOIT uit de body — en haalt live op: account-KPI's,
+ * actieve campagnes (+ per-campagne insights) en actieve advertenties met hun creative
+ * (foto/video/carrousel). SEC: account numeriek gevalideerd (geen path-injectie),
+ * date_preset uit een allowlist, token uitsluitend server-side (env.META_SYSTEM_TOKEN).
+ * Niet-gekoppeld of geen token => { ok:true, linked:false } (fail-soft, geen 5xx).
+ * Output: { ok, linked, account, currency, period, kpis, campaigns:[], ads:[], error? }.
+ */
+const META_GRAPH = 'https://graph.facebook.com/v21.0';
+const META_PRESETS = { today: 'today', yesterday: 'yesterday', last_7d: 'last_7d', last_14d: 'last_14d', last_30d: 'last_30d', this_month: 'this_month', last_month: 'last_month' };
+const META_RESULT_ACTIONS = ['offsite_conversion.fb_pixel_purchase', 'purchase', 'lead', 'onsite_conversion.lead_grouped', 'offsite_conversion.fb_pixel_lead'];
+async function metaGet(env, path, params) {
+  const qs = new URLSearchParams(Object.assign({ access_token: str(env && env.META_SYSTEM_TOKEN) }, params || {}));
+  let r;
+  try { r = await fetch(`${META_GRAPH}/${path}?${qs.toString()}`); }
+  catch (e) { return { ok: false, data: null, err: 'unreachable' }; }
+  const d = await r.json().catch(() => null);
+  if (!r.ok || !d || d.error) return { ok: false, data: d, err: (d && d.error && d.error.message) || ('http_' + r.status) };
+  return { ok: true, data: d };
+}
+function metaActionVal(actions, types) {
+  if (!Array.isArray(actions)) return 0;
+  let n = 0; for (const a of actions) { if (a && types.includes(a.action_type)) n += Number(a.value) || 0; }
+  return n;
+}
+function metaCreativeFormat(cr) {
+  if (!cr) return 'image';
+  if (cr.video_id) return 'video';
+  const oss = cr.object_story_spec || {};
+  if (oss.link_data && Array.isArray(oss.link_data.child_attachments) && oss.link_data.child_attachments.length > 1) return 'carousel';
+  if (cr.asset_feed_spec && Array.isArray(cr.asset_feed_spec.images) && cr.asset_feed_spec.images.length > 1) return 'carousel';
+  return 'image';
+}
+
+export async function metaAds(bedrijfId, body, env) {
+  const br = await cu.get(env, `/task/${bedrijfId}`);
+  const acct = br.ok && br.data ? str(getCF(br.data, FIELD.metaAdsId)).trim() : '';
+  // Account UITSLUITEND uit de eigen bedrijf-taak (tenant-safe); numeriek = geen path-injectie.
+  if (!/^\d{6,20}$/.test(acct)) return { status: 200, body: { ok: true, linked: false } };
+  if (!str(env && env.META_SYSTEM_TOKEN)) return { status: 200, body: { ok: true, linked: false, reason: 'no_token' } };
+
+  const preset = META_PRESETS[str(body && body.period).trim()] || 'last_7d';
+  const act = `act_${acct}`;
+
+  // valuta (best-effort)
+  const accInfo = await metaGet(env, act, { fields: 'currency,timezone_name,name' });
+  const currency = (accInfo.ok && accInfo.data && accInfo.data.currency) || 'EUR';
+
+  // account-KPI's
+  const kins = await metaGet(env, `${act}/insights`, {
+    level: 'account', date_preset: preset,
+    fields: 'spend,impressions,reach,clicks,inline_link_clicks,ctr,cpc,cpm,frequency,actions',
+  });
+  const k = (kins.ok && kins.data && Array.isArray(kins.data.data) && kins.data.data[0]) || {};
+  const kpis = {
+    spend: Number(k.spend) || 0, impressions: Number(k.impressions) || 0, reach: Number(k.reach) || 0,
+    clicks: Number(k.clicks) || 0, linkClicks: Number(k.inline_link_clicks) || 0,
+    ctr: Number(k.ctr) || 0, cpc: Number(k.cpc) || 0, cpm: Number(k.cpm) || 0,
+    frequency: Number(k.frequency) || 0, results: metaActionVal(k.actions, META_RESULT_ACTIONS),
+  };
+
+  // actieve campagnes + per-campagne insights
+  const campRes = await metaGet(env, `${act}/campaigns`, {
+    fields: 'name,objective,effective_status,daily_budget,lifetime_budget',
+    effective_status: '["ACTIVE"]', limit: '50',
+  });
+  const cins = await metaGet(env, `${act}/insights`, {
+    level: 'campaign', date_preset: preset, limit: '200',
+    fields: 'campaign_id,spend,impressions,clicks,ctr,cpc,actions',
+  });
+  const cmap = {};
+  if (cins.ok && Array.isArray(cins.data.data)) for (const row of cins.data.data) cmap[row.campaign_id] = row;
+  const campaigns = ((campRes.ok && Array.isArray(campRes.data.data)) ? campRes.data.data : []).map((c) => {
+    const m = cmap[c.id] || {};
+    return {
+      id: c.id, name: c.name || '', objective: c.objective || '', status: c.effective_status || '',
+      budget: Number(c.daily_budget || c.lifetime_budget || 0) / 100,
+      spend: Number(m.spend) || 0, impressions: Number(m.impressions) || 0, clicks: Number(m.clicks) || 0,
+      ctr: Number(m.ctr) || 0, cpc: Number(m.cpc) || 0, results: metaActionVal(m.actions, META_RESULT_ACTIONS),
+    };
+  });
+
+  // actieve advertenties + creatives (met mini-insights van dezelfde periode)
+  const adRes = await metaGet(env, `${act}/ads`, {
+    fields: 'name,effective_status,campaign_id,creative{thumbnail_url,image_url,object_type,video_id,object_story_spec,asset_feed_spec},insights.date_preset(' + preset + '){spend,impressions,clicks,ctr}',
+    effective_status: '["ACTIVE"]', limit: '50',
+  });
+  const ads = ((adRes.ok && Array.isArray(adRes.data.data)) ? adRes.data.data : []).map((a) => {
+    const cr = a.creative || {};
+    const ins = (a.insights && Array.isArray(a.insights.data) && a.insights.data[0]) || {};
+    return {
+      id: a.id, name: a.name || '', campaignId: a.campaign_id || '', format: metaCreativeFormat(cr),
+      thumb: cr.image_url || cr.thumbnail_url || '',
+      spend: Number(ins.spend) || 0, impressions: Number(ins.impressions) || 0,
+      clicks: Number(ins.clicks) || 0, ctr: Number(ins.ctr) || 0,
+    };
+  });
+
+  // Alleen een 'error' als ALLE primaire calls faalden (bv. token/permissie) → UI toont nette melding i.p.v. nullen.
+  const error = (!kins.ok && !campRes.ok && !adRes.ok) ? (kins.err || 'fetch_failed') : null;
+  return { status: 200, body: { ok: true, linked: true, account: acct, currency, period: preset, kpis, campaigns, ads, error } };
+}
+
 // SEC-4: bevestig dat een post-id ECHT tot de blogId van DEZE klant hoort (anti-IDOR).
 // Zonder deze check kon klant A met het post-id van klant B een misleidende interne
 // goedkeuring/feedback-melding triggeren. Hergebruikt het blogId-gescopete scheduler-venster.
@@ -3305,6 +3415,9 @@ export const READ_HANDLERS = {
   metricool,
   // Metricool analytics: KPI-dashboard + trend per netwerk (fase 1 metriek-look-and-feel).
   metricoolStats,
+  // Meta Ads (DIRECT via de Graph API, geen Make): real-time KPI's + actieve campagnes +
+  // advertenties met creatives. Account server-side uit FIELD.metaAdsId (tenant-safe).
+  metaAds,
   // Shoot-inplannen: validatie + beschikbaarheid (port van de externe widget, geen Make).
   shootContext,
   // NB: de AI-chatbot loopt (op vraag) weer via Make, niet via de worker. De aiChat-handler

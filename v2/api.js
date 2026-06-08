@@ -96,6 +96,9 @@ const ENDPOINTS = {
   metricoolStats:    GATEWAY_BASE + '/metricoolStats',
   // SEC-6: ads-insights via de gateway (bedrijf_id server-side uit het token), niet meer direct.
   ads:               GATEWAY_BASE + '/ads',
+  // Meta Ads real-time (direct via Graph API, geen Make): { period? } -> { ok, linked, account,
+  // currency, period, kpis, campaigns:[], ads:[] }. bedrijf_id + account server-side bepaald.
+  metaAds:           GATEWAY_BASE + '/metaAds',
   // Shoot-inplannen (port van studio27.be/shoot-inplannen, VOLLEDIG via de gateway, geen Make).
   // shootContext: { task_id } -> { status:'ok'|'wrong_type'|'incomplete_metadata'|'already_scheduled'|'not_found'|'forbidden', timeHours, aantalCreators, availability:{shoots,shoots_27m,vakantie,hosts} }.
   shootContext:      GATEWAY_BASE + '/shootContext',
