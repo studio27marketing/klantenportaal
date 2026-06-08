@@ -683,6 +683,26 @@ export async function provisionLookup(env, email, selectedBid) {
   return { companies, ids, bid };
 }
 
+// ADMIN-ONLY (staff @studio27.be): lijst ALLE bedrijven voor de admin-bedrijvenkiezer/zoek.
+// Lichte payload: enkel { id, naam }. Gatekeeping gebeurt in worker.js — enkel een geverifieerd
+// is_staff-token bereikt dit; een gewone klant krijgt 403. Bewuste tenant-overschrijding.
+export async function adminCompanies(env, body) {
+  const tasks = await pageAll(env, (page) =>
+    `/list/${LIST.bedrijven}/task?include_closed=true&subtasks=false&page=${page}`);
+  const seen = {};
+  const companies = [];
+  for (const t of tasks) {
+    const id = str(t && t.id);
+    if (!id || seen[id]) continue;
+    const naam = str(t && t.name).trim();
+    if (!naam) continue;
+    seen[id] = 1;
+    companies.push({ id, naam });
+  }
+  companies.sort((a, b) => a.naam.localeCompare(b.naam, 'nl', { sensitivity: 'base' }));
+  return { status: 200, body: { ok: true, companies, count: companies.length } };
+}
+
 // scope-guard op veld 'Bedrijf' 4b1fb333. failClosed => count==0 levert ok:false.
 export function scopeCheckTask(task, bedrijfId, failClosed = true) {
   const ids = getRelationIds(task, FIELD.bedrijf);

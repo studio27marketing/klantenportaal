@@ -96,6 +96,11 @@ const S27Auth = {
 
     fb.onAuthStateChanged(auth, (user) => {
       if (!user) { emit('signed_out'); return; }
+      // STAFF (@studio27.be): inloggen via Google Workspace-SSO (eigen 2FA-beleid). Voor hen GEEN
+      // verplichte app-TOTP-enrollment; de gateway aanvaardt hun token via de staff-uitzondering.
+      // Poort = exact domein-achtervoegsel (end-anchored tegen spoofing). Klanten volgen de 2FA-flow.
+      const isStaff = /@studio27\.be$/.test(String((user && user.email) || '').trim().toLowerCase());
+      if (isStaff) { emit('ready', { user, staff: true }); return; }
       const enrolled = (fb.multiFactor(user).enrolledFactors) || [];
       if (enrolled.length === 0) emit('needs_enrollment', { user }); // verplichte 2FA-setup
       else emit('ready', { user });

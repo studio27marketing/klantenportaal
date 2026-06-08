@@ -515,6 +515,17 @@
   };
   DATA.campaignAds = function(campaignId){ var m=state.data.metaCampaignAds||{}; return m[String(campaignId||'')]; };
 
+  // ADMIN (staff @studio27.be): alle bedrijven voor de bedrijvenkiezer/zoek. Geen bedrijf-scoping
+  // (admin-global); de worker gate't strikt op het geverifieerde domein. -> [{id, naam}].
+  DATA.loadAdminCompanies = async function(){
+    try{
+      var res = await api(ENDPOINTS.adminCompanies, {});
+      var j = (res && res.ok && res.data) ? res.data : null;
+      if(!j || !j.ok || !Array.isArray(j.companies)) return [];
+      return j.companies;
+    }catch(e){ return []; }
+  };
+
   DATA.huisstijl = function(){ return state.data.huisstijl; };
 
   /* ---- relatieve tijd ---- */

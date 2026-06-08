@@ -35,6 +35,7 @@ import {
   provisionLookup,
   buildAiContext,
   publicShootAvailability,
+  adminCompanies,
 } from './handlers.mjs';
 
 // Pad → Make-webhook. Deze URLs zijn niet geheim (staan al in dashboard.js).
@@ -173,9 +174,26 @@ async function verifyFirebaseToken(idToken, projectId) {
   // firebase.sign_in_second_factor enkel in tokens die NA een geslaagde MFA-challenge zijn
   // uitgegeven. Zo is 2FA niet langer enkel een frontend-scherm dat omzeild kan worden door de
   // worker rechtstreeks aan te roepen met een 1e-factor-token.
+  //
+  // STAFF-UITZONDERING (Vincent-akkoord, juni 2026): geverifieerde @studio27.be-medewerkers loggen
+  // in via Google Workspace-SSO, dat z'n EIGEN 2FA-beleid afdwingt. Voor hen is app-niveau-TOTP niet
+  // vereist. De poort is het GEVERIFIEERDE bedrijfsdomein: email_verified===true (al afgedwongen
+  // hierboven) + exact achtervoegsel @studio27.be (isStaffEmail, end-anchored tegen spoofing).
+  // Deze uitzondering geeft GEEN extra rechten in verifyFirebaseToken zelf; de admin-bevoegdheden
+  // (acting-as / adminCompanies) worden pas in de fetch-router op p.is_staff gegate.
+  const _staff = p.email_verified === true && isStaffEmail(p.email);
   const _sf = p.firebase && p.firebase.sign_in_second_factor;
-  if (_sf !== 'totp' && _sf !== 'phone') throw new Error('mfa_required');
-  return p; // bevat sub (uid), email en custom claim bedrijf_id
+  if (!_staff && _sf !== 'totp' && _sf !== 'phone') throw new Error('mfa_required');
+  p.is_staff = _staff;
+  return p; // bevat sub (uid), email, custom claim bedrijf_id en is_staff
+}
+
+// STAFF-POORT: exact e-maildomein @studio27.be. End-anchored ($) zodat spoof-adressen als
+// "x@studio27.be.evil.com" of "x@notstudio27.be" NIET matchen. Lowercase + trim. Het mailbox-
+// eigendom zelf is geborgd door email_verified===true (Google verifieert de @studio27.be-mailbox).
+function isStaffEmail(email) {
+  const e = String(email == null ? '' : email).trim().toLowerCase();
+  return /@studio27\.be$/.test(e);
 }
 
 /* ---- Helpers ------------------------------------------------------------- */
@@ -184,7 +202,7 @@ function corsHeaders(origin, allowed) {
   return {
     'Access-Control-Allow-Origin': ok ? origin : (allowed[0] || '*'),
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-No-Cache',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-No-Cache, X-Act-As-Bedrijf',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',
   };
@@ -486,14 +504,15 @@ export default {
     if (path === 'admin/link') return handleAdminLink(request, env, ch);
     if (path === 'provision') return handleProvision(request, env, ch);
 
+    const isAdminApi = (path === 'adminCompanies');   // admin-only ClickUp-read (enkel staff)
     const isPorted = !!(READ_HANDLERS[path] || WRITE_HANDLERS[path] || path === 'bedrijfBeheer');
     const target = MAKE_ENDPOINTS[path];
-    if (!isPorted && !target) return json({ ok: false, error: 'unknown_endpoint' }, 404, ch);
+    if (!isAdminApi && !isPorted && !target) return json({ ok: false, error: 'unknown_endpoint' }, 404, ch);
 
     if (!env.PROJECT_ID) return json({ ok: false, error: 'gateway_misconfigured' }, 500, ch);
-    // Geporte ClickUp-paden vereisen CLICKUP_TOKEN; Make-forward vereist GATEWAY_SECRET.
-    if (isPorted && !env.CLICKUP_TOKEN) return json({ ok: false, error: 'gateway_misconfigured' }, 500, ch);
-    if (!isPorted && !env.GATEWAY_SECRET) return json({ ok: false, error: 'gateway_misconfigured' }, 500, ch);
+    // Geporte ClickUp-paden (en admin-API) vereisen CLICKUP_TOKEN; Make-forward vereist GATEWAY_SECRET.
+    if ((isPorted || isAdminApi) && !env.CLICKUP_TOKEN) return json({ ok: false, error: 'gateway_misconfigured' }, 500, ch);
+    if (!isPorted && !isAdminApi && !env.GATEWAY_SECRET) return json({ ok: false, error: 'gateway_misconfigured' }, 500, ch);
 
     // 1. Firebase ID-token
     const authz = request.headers.get('Authorization') || '';
@@ -507,7 +526,43 @@ export default {
       return json({ ok: false, error: 'invalid_token', detail: e.message }, 401, ch);
     }
 
-    const bedrijfId = claims.bedrijf_id;
+    // ADMIN/STAFF (@studio27.be): mag als ELK bedrijf acteren via een expliciete, gevalideerde
+    // header X-Act-As-Bedrijf, en mag de admin-only endpoints zonder bedrijfskoppeling aanroepen.
+    // Dit doorbreekt BEWUST de tenant-isolatie (Vincent: "iedereen met @studio27.be moet kunnen").
+    // De gate is strikt p.is_staff (geverifieerd domein). Een gewone klant (is_staff=false) kan de
+    // header NIET gebruiken en bereikt adminCompanies niet — die houdt z'n eigen claim-scope.
+    const isStaff = claims.is_staff === true;
+    let bedrijfId = claims.bedrijf_id;
+    if (isStaff) {
+      const actAs = (request.headers.get('X-Act-As-Bedrijf') || '').trim();
+      if (actAs) {
+        if (!/^[A-Za-z0-9_-]{1,64}$/.test(actAs)) return json({ ok: false, error: 'bad_act_as' }, 400, ch);
+        bedrijfId = actAs;
+      }
+    }
+
+    // Admin-only: lijst ALLE bedrijven (bedrijvenkiezer/zoek). Vóór de bedrijfId-gate, want admins
+    // hebben zelf geen bedrijfskoppeling. Niet-staff → 403 (ook met geldige eigen claim).
+    if (isAdminApi) {
+      if (!isStaff) return json({ ok: false, error: 'forbidden' }, 403, ch);
+      if (env.KV) {
+        const rlKey = 'rl:' + claims.sub + ':' + Math.floor(Date.now() / 60000);
+        try {
+          const cur = parseInt((await env.KV.get(rlKey)) || '0', 10);
+          if (cur >= LIMIT_DEFAULT) return json({ ok: false, error: 'rate_limited' }, 429, ch);
+          ctx.waitUntil(env.KV.put(rlKey, String(cur + 1), { expirationTtl: 120 }));
+        } catch (e) { /* fail-open op de teller */ }
+      }
+      let abody = {};
+      try { abody = await request.json(); } catch (e) { abody = {}; }
+      try {
+        const r = await adminCompanies(env, abody || {});
+        return json(r.body, r.status, ch);
+      } catch (e) {
+        return json({ ok: false, error: 'handler_error' }, 502, ch);
+      }
+    }
+
     if (!bedrijfId)
       return json({ ok: false, error: 'no_company_link',
         message: 'Je account is nog niet aan een bedrijf gekoppeld. Mail ilke@studio27.be.' }, 403, ch);

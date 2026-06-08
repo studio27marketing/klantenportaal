@@ -156,9 +156,11 @@ async function initRealAuth(){
       if(!_enrollStarted){ _enrollStarted=true; try { const r=await window.S27Auth.enrollBegin(); renderLoginEnroll(r.secret, r.qrUrl); } catch(e){ _enrollStarted=false; loginErr(e.message); } }
     } else if(s.phase==='ready'){
       const u=s.user||{};
-      state.session = { bedrijf_id:'via-gateway', bedrijfsnaam:(u.email||'Klant'), session_token:'firebase', uid:u.uid, email:u.email, displayName:u.displayName||'' };
+      const staff = !!s.staff || /@studio27\.be$/.test(String(u.email||'').trim().toLowerCase());
+      state.session = { bedrijf_id:(staff?'admin':'via-gateway'), bedrijfsnaam:(u.email||'Klant'), session_token:'firebase', uid:u.uid, email:u.email, displayName:u.displayName||'' };
       state.demoMode = false; loginErr('');
-      await loadAndEnter();
+      if(staff){ state.adminMode = true; await enterAdminMode(); }
+      else { state.adminMode = false; await loadAndEnter(); }
     }
   });
   window.S27Auth.init({ gatewayBase: GATEWAY_BASE }).catch(e=>loginErr('Init faalde: '+e.message));
@@ -222,7 +224,92 @@ async function loadAndEnter(skipLink){
 function afterEnter(){
   applyTakVisibility();
   initSbGlass();
-  if(!localStorage.getItem('s27_tour_completed')){ setTimeout(openTour,500); }
+  // ADMIN: geen klant-onboardingtour; toon i.p.v. de naam-begroeting een "team"-context.
+  if(state.adminMode){ document.body.classList.add('admin-mode'); }
+  else if(!localStorage.getItem('s27_tour_completed')){ setTimeout(openTour,500); }
+}
+
+/* =============================================================================
+   ADMIN-MODUS (@studio27.be teamleden): bedrijvenkiezer met zoek over ÁLLE klanten.
+   Flow: login (Google SSO) -> enterAdminMode (laadt alle bedrijven) -> bedrijvenkiezer ->
+   keuze -> normaal portaal in adminMode, waarbij elke gateway-call X-Act-As-Bedrijf meestuurt
+   (server-side scoping naar het gekozen bedrijf). De mini-switcher wordt vervangen door deze
+   zoek-overlay (openAdminPicker) zodat een admin tussen ALLE klanten kan springen.
+   ============================================================================= */
+async function enterAdminMode(){
+  playLoader();
+  var list=[];
+  try { list = await S27DATA.loadAdminCompanies(); } catch(e){ list=[]; }
+  state.adminCompanies = Array.isArray(list)?list:[];
+  hideLoader();
+  if(!state.adminCompanies.length){
+    renderLogin('v2'); loginErr('Kon de bedrijvenlijst niet laden. Ververs de pagina of meld je opnieuw aan.');
+    return;
+  }
+  openAdminPicker();
+}
+function adminPickerEl(){
+  var el=$id('adminPicker');
+  if(!el){ el=document.createElement('div'); el.id='adminPicker'; el.className='admin-picker'; document.body.appendChild(el); }
+  return el;
+}
+function adminPickerHTML(){
+  var u=(state.session&&state.session.email)||'';
+  var naam=(state.session&&state.session.displayName)||'';
+  var voor = naam ? naam.split(' ')[0] : ((u.split('@')[0]||'collega'));
+  var last=''; try{ last=localStorage.getItem('s27_admin_bedrijf')||''; }catch(e){}
+  var lastC = last ? (state.adminCompanies||[]).find(function(c){return c.id===last;}) : null;
+  var rows=(state.adminCompanies||[]).map(function(c){
+    var ini=String(c.naam||'?').replace(/[^A-Za-z0-9]/g,'').slice(0,2).toUpperCase()||'?';
+    var key=String(c.naam||'').toLowerCase();
+    return '<button class="apick-row" data-s="'+esc(key)+'" onclick="adminEnterCompany(\''+esc(c.id)+'\')">'+
+           '<span class="apick-av">'+esc(ini)+'</span><span class="apick-nm">'+esc(c.naam)+'</span>'+
+           '<svg class="apick-chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>';
+  }).join('');
+  return ''+
+   '<div class="apick-box">'+
+     '<div class="apick-head"><div class="apick-brand"><span class="apick-dot"></span>STUDIO 27 · TEAM</div>'+
+       '<button class="apick-logout" onclick="logout()">Uitloggen</button></div>'+
+     '<h1 class="apick-title">Welkom, '+esc(voor)+'</h1>'+
+     '<p class="apick-sub">Kies het klantportaal waarin je wilt werken. Je krijgt de uitgebreide team-weergave van die klant.</p>'+
+     (lastC ? '<button class="apick-resume" onclick="adminEnterCompany(\''+esc(lastC.id)+'\')"><span>Verder met</span> <strong>'+esc(lastC.naam)+'</strong></button>' : '')+
+     '<div class="apick-searchwrap"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>'+
+       '<input id="apickSearch" type="text" autocomplete="off" spellcheck="false" placeholder="Zoek een klant ('+(state.adminCompanies||[]).length+')…" oninput="filterAdminPicker()"></div>'+
+     '<div class="apick-list" id="apickList">'+rows+'</div>'+
+     '<div class="apick-empty" id="apickEmpty" style="display:none">Geen klant gevonden.</div>'+
+   '</div>';
+}
+function openAdminPicker(){
+  if(!state.adminCompanies || !state.adminCompanies.length){ enterAdminMode(); return; }
+  var el=adminPickerEl();
+  el.innerHTML=adminPickerHTML();
+  el.classList.add('show');
+  document.body.classList.add('admin-picking');
+  setTimeout(function(){ var s=$id('apickSearch'); if(s) s.focus(); }, 60);
+}
+function hideAdminPicker(){
+  var el=$id('adminPicker'); if(el) el.classList.remove('show');
+  document.body.classList.remove('admin-picking');
+}
+function filterAdminPicker(){
+  var q=((($id('apickSearch')||{}).value)||'').trim().toLowerCase();
+  var rows=document.querySelectorAll('#apickList .apick-row'); var shown=0;
+  rows.forEach(function(r){ var hit=!q || (r.getAttribute('data-s')||'').indexOf(q)>=0; r.style.display=hit?'':'none'; if(hit) shown++; });
+  var em=$id('apickEmpty'); if(em) em.style.display=shown?'none':'block';
+}
+async function adminEnterCompany(id){
+  id=String(id||''); if(!id) return;
+  if(id===state.activeBedrijf){ hideAdminPicker(); return; }   // al actief bedrijf
+  if(state.activeBedrijf && typeof S27.stashData==='function'){ try{ S27.stashData(state.activeBedrijf); }catch(e){} }
+  if(typeof S27.stopChatPoll==='function') S27.stopChatPoll();
+  var c=(state.adminCompanies||[]).find(function(x){return x.id===id;});
+  state.activeBedrijf=id;
+  state._adminActiveName=(c&&c.naam)||'';
+  try{ localStorage.setItem('s27_admin_bedrijf', id); }catch(e){}
+  state._provisionTried=true;        // admin: nooit de klant-provisionflow proberen
+  state.portalCompanies=[];          // admin gebruikt de zoek-overlay i.p.v. de mini-switcher
+  hideAdminPicker();
+  await loadAndEnter(true);          // skipLink: geen provision; X-Act-As-Bedrijf doet de scoping
 }
 
 /* ---- app/login tonen + loader ---- */
@@ -238,7 +325,10 @@ function onSessionExpired(msg){
   b.textContent=msg||'Je sessie is verlopen, log opnieuw in.'; document.body.appendChild(b);
   setTimeout(()=>{ try{b.remove();}catch(e){} state.session=null; state.viewMode='login'; showLogin(); if(AUTH_V2) initRealAuth(); }, 1700);
 }
-function logout(){ stopChatPoll(); try{ if(window.S27Auth) window.S27Auth.logout(); }catch(e){} state.session=null; state.data={dashboard:null,details:{},chats:{},meetings:null,bedrijf:null,team:null,huisstijl:null}; showLogin(); if(AUTH_V2 && !state.demoMode) initRealAuth(); else renderLogin(state.demoMode?'demo':'v1'); }
+function logout(){ stopChatPoll(); try{ if(window.S27Auth) window.S27Auth.logout(); }catch(e){} state.session=null; state.data={dashboard:null,details:{},chats:{},meetings:null,bedrijf:null,team:null,huisstijl:null};
+  // ADMIN-staat volledig opruimen zodat een volgende (klant-)login niet in adminMode blijft hangen.
+  state.adminMode=false; state.activeBedrijf=''; state.adminCompanies=null; state._adminActiveName=''; hideAdminPicker(); document.body.classList.remove('admin-mode');
+  showLogin(); if(AUTH_V2 && !state.demoMode) initRealAuth(); else renderLogin(state.demoMode?'demo':'v1'); }
 
 /* =============================================================================
    ROUTING, lazy-load per tab, dan renderen
@@ -513,6 +603,14 @@ function botContext(){ const ps=S27DATA.projects()||[]; return ps.map(p=>'- '+p.
 /* ---- bedrijf-switcher in de topbar (>1 bedrijf) ---- */
 function renderCompanySwitcher(){
   const wrap=$id('switchMenu'); const nm=document.querySelector('.sb-client .nm');
+  // ADMIN: toon de gekozen klantnaam + maak de client-knop een poort naar de zoek-overlay (alle klanten).
+  if(state.adminMode){
+    if(nm) nm.textContent = state._adminActiveName || S27DATA.bedrijfsnaam() || 'Kies klant';
+    const sw=$id('clientSwitch');
+    if(sw){ sw.style.pointerEvents=''; sw.classList.add('has-switch'); sw.classList.add('admin-switch'); }
+    if(wrap) wrap.innerHTML='';   // geen mini-dropdown; toggleSwitch opent de admin-zoekoverlay
+    return;
+  }
   if(nm) nm.textContent = S27DATA.bedrijfsnaam();
   const comps = state.portalCompanies||[];
   const sw=$id('clientSwitch');
@@ -533,7 +631,7 @@ function renderCompanySwitcher(){
    ============================================================================= */
 function toggleSidebar(){ const sb=$id('sidebar'); const open=sb.classList.toggle('open'); $id('sbScrim').classList.toggle('show',open); }
 function closeSidebar(){ $id('sidebar').classList.remove('open'); $id('sbScrim').classList.remove('show'); }
-function toggleSwitch(e){ e.stopPropagation(); const m=$id('switchMenu'); const sw=$id('clientSwitch'); const open=m.style.display==='block'; m.style.display=open?'none':'block'; sw.classList.toggle('open',!open); }
+function toggleSwitch(e){ e.stopPropagation(); if(state.adminMode){ openAdminPicker(); return; } const m=$id('switchMenu'); const sw=$id('clientSwitch'); const open=m.style.display==='block'; m.style.display=open?'none':'block'; sw.classList.toggle('open',!open); }
 function closeSwitchMenu(){ const m=$id('switchMenu'); if(m)m.style.display='none'; const sw=$id('clientSwitch'); if(sw)sw.classList.remove('open'); }
 // nette melding wanneer een bedrijf-switch faalt (zelfde stijl als onSessionExpired, maar zonder uitloggen)
 function onSwitchFailed(msg){

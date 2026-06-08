@@ -104,6 +104,9 @@ const ENDPOINTS = {
   metaAds:           GATEWAY_BASE + '/metaAds',
   // Campagne-creatives (rijke media: video/foto/carrousel) ON-DEMAND: { campaign_id } -> { ok, ads:[] }.
   metaCampaignAds:   GATEWAY_BASE + '/metaCampaignAds',
+  // ADMIN-only (staff @studio27.be): lijst ALLE bedrijven voor de admin-bedrijvenkiezer/zoek.
+  // {} -> { ok, companies:[{id,naam}], count }. Worker gate't strikt op het geverifieerde domein.
+  adminCompanies:    GATEWAY_BASE + '/adminCompanies',
   // Shoot-inplannen (port van studio27.be/shoot-inplannen, VOLLEDIG via de gateway, geen Make).
   // shootContext: { task_id } -> { status:'ok'|'wrong_type'|'incomplete_metadata'|'already_scheduled'|'not_found'|'forbidden', timeHours, aantalCreators, availability:{shoots,shoots_27m,vakantie,hosts} }.
   shootContext:      GATEWAY_BASE + '/shootContext',
@@ -152,6 +155,18 @@ async function api(url, payload){
   } catch(e){ return { ok:false, status:0, error:e.message }; }
 }
 
+// Standaard v2-headers + (enkel voor staff/admin) de acting-as-header X-Act-As-Bedrijf.
+// De worker honoreert die header UITSLUITEND voor een geverifieerd @studio27.be-token; voor een
+// gewone klant wordt ze genegeerd. Zo scope't één en dezelfde frontend-call naar het door de
+// admin gekozen bedrijf, zonder dat de klant-flow ook maar iets verandert.
+function _v2Headers(token){
+  const h = { 'Content-Type':'application/json', 'Authorization':'Bearer ' + token };
+  if(typeof state!=='undefined' && state && state.adminMode && state.activeBedrijf){
+    h['X-Act-As-Bedrijf'] = String(state.activeBedrijf);
+  }
+  return h;
+}
+
 // AUTH v2: route elke call via de Cloudflare-gateway met het Firebase ID-token.
 // bedrijf_id wordt server-side door de gateway gezet; meegestuurde session_token wordt genegeerd.
 async function apiV2(url, payload){
@@ -162,7 +177,7 @@ async function apiV2(url, payload){
     if(!token){ if(state && state.session) handleSessionExpired('Niet ingelogd.'); return { ok:false, status:401 }; }
     const r = await fetch(GATEWAY_BASE + '/' + key, {
       method:'POST',
-      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + token },
+      headers: _v2Headers(token),
       body: JSON.stringify(payload || {})
     });
     const t = await r.text();
@@ -171,14 +186,15 @@ async function apiV2(url, payload){
     catch { parsed = { ok:r.ok, status:r.status, data:{ _raw:t } }; }
     // JIT-provisioning: ingelogd maar nog geen bedrijf-koppeling → koppel via Make,
     // vernieuw het token (nieuwe bedrijf_id-claim) en herprobeer exact één keer.
-    if(parsed.status === 403 && parsed.data && parsed.data.error === 'no_company_link' && !state._provisionTried){
+    // NIET voor admin/staff: die hebben bewust geen bedrijfskoppeling en scopen via X-Act-As-Bedrijf.
+    if(parsed.status === 403 && parsed.data && parsed.data.error === 'no_company_link' && !state._provisionTried && !(state && state.adminMode)){
       state._provisionTried = true;
       const linked = await tryProvision(token);
       if(linked){
         const fresh = (window.S27Auth ? await window.S27Auth.token(true) : token) || token;
         const r2 = await fetch(GATEWAY_BASE + '/' + key, {
           method:'POST',
-          headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + fresh },
+          headers: _v2Headers(fresh),
           body: JSON.stringify(payload || {})
         });
         const t2 = await r2.text();
