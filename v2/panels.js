@@ -2074,6 +2074,7 @@ function offerteSetTab(name){
   } else { renderPanel('offertes'); }
 }
 function goOfferteNieuw(){ state._offTab='nieuw'; if(typeof goTab==='function') goTab('offertes'); }
+function goOffertes(){ state._offTab='overzicht'; if(typeof goTab==='function') goTab('offertes'); }   // zijbalk: altijd met het overzicht openen
 function offerteOverzichtHTML(){
   var live=_live(); var raw = live ? S27DATA.offertes() : OFFERTE_MOCK;
   if(raw===null||raw===undefined) return '<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je offertes worden geladen…</p></div>';
