@@ -1021,6 +1021,11 @@ function adsReload(){
     S27DATA.loadMetaAdsRich({from:pp.from,to:pp.to,compare:pp.compare}).then(function(){ var b=document.getElementById('adsBody'); if(b){ b.innerHTML=adsRichTabBody(); adsRichMountTabCharts(); } }).catch(function(){ var b=document.getElementById('adsBody'); if(b) b.innerHTML=adsRichTabBody(); });
     return;
   }
+  if(adsActivePlatform()==='google'){
+    if(state.demoMode || !(window.S27DATA&&S27DATA.loadGoogleAds)){ var bg=document.getElementById('adsBody'); if(bg) bg.innerHTML=googleOverviewInner(); return; }
+    S27DATA.loadGoogleAds({from:pp.from,to:pp.to,compare:pp.compare}).then(function(){ var b=document.getElementById('adsBody'); if(b) b.innerHTML=googleOverviewInner(); }).catch(function(){ var b=document.getElementById('adsBody'); if(b) b.innerHTML=googleOverviewInner(); });
+    return;
+  }
   if(state.demoMode || !(window.S27DATA&&S27DATA.loadMetaAds)){ var b0=document.getElementById('adsBody'); if(b0) b0.innerHTML=adsOverviewInner(); return; }
   S27DATA.loadMetaAds({from:pp.from,to:pp.to,compare:pp.compare}).then(function(){ var b=document.getElementById('adsBody'); if(b) b.innerHTML=adsOverviewInner(); }).catch(function(){ var b=document.getElementById('adsBody'); if(b) b.innerHTML=adsOverviewInner(); });
 }
@@ -1070,14 +1075,17 @@ function adsTrendBlock(){
 }
 function metaAdsBody(){
   if(isRichView()) return metaAdsBodyRich();   // team-weergave: uitgebreide Meta-rapportage
-  var m=(window.S27DATA&&S27DATA.metaAds&&S27DATA.metaAds())||null;
-  if(m===null){ return '<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je advertenties worden real-time opgehaald…</p></div>'; }
-  if(!m.linked){ return '<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen Meta-advertentieaccount gekoppeld</div><div style="color:var(--ink-3);max-width:470px;margin:0 auto;line-height:1.55">Zodra je Meta-advertentieaccount aan je portaal gekoppeld is, zie je hier real-time je campagnes, cijfers en de gebruikte visuals. Vraag gerust je contactpersoon bij Studio&nbsp;27.</div></div>'; }
   metaEnsureStyles();
+  var head='<div class="section-head" style="margin-bottom:4px"><h2 style="display:flex;align-items:center;gap:9px"><span class="live-dot"></span>Live overzicht</h2></div>';
+  var sw=adsPlatformSwitch();
+  // Google-tak: eigen beknopte real-time weergave (zelfde periodebalk, geen creatives). Meta-flow blijft ongewijzigd.
+  if(adsActivePlatform()==='google'){ return head+sw+googleAdsBody(); }
+  var m=(window.S27DATA&&S27DATA.metaAds&&S27DATA.metaAds())||null;
+  if(m===null){ return head+sw+'<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je advertenties worden real-time opgehaald…</p></div>'; }
+  if(!m.linked){ return head+sw+'<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen Meta-advertentieaccount gekoppeld</div><div style="color:var(--ink-3);max-width:470px;margin:0 auto;line-height:1.55">Zodra je Meta-advertentieaccount aan je portaal gekoppeld is, zie je hier real-time je campagnes, cijfers en de gebruikte visuals. Vraag gerust je contactpersoon bij Studio&nbsp;27.</div></div>'; }
   var cur=m.currency||'EUR';
   if(state._metaCampaign){ return metaCampaignDetail(m,cur); }
-  var head='<div class="section-head" style="margin-bottom:4px"><h2 style="display:flex;align-items:center;gap:9px"><span class="live-dot"></span>Live overzicht</h2></div>';
-  return head+adsPeriodBar()+'<div id="adsBody">'+adsOverviewInner()+'</div>'+adsChatSection();
+  return head+sw+adsPeriodBar()+'<div id="adsBody">'+adsOverviewInner()+'</div>'+adsChatSection();
 }
 // Ads-chat: enkel zichtbaar als er een advertentietaak van de HUIDIGE MAAND bestaat (worker filtert
 // ad-taken al op due-date deze maand). Berichten/uploads gaan als comments naar die taak.
@@ -1516,6 +1524,63 @@ function adsOverviewInner(){
   var camps=(m.campaigns||[]).slice().sort(function(a,b){return (b.spend||0)-(a.spend||0);});
   var campSec='<div class="section-head" style="margin-top:18px"><h2>Actieve campagnes</h2><span class="count">'+camps.length+'</span></div>'+(camps.length?camps.map(function(c){return metaCampaignCard(c,cur);}).join(''):'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">Geen campagnes met besteding in deze periode.</div>');
   return resChip+strip+adsTrendBlock()+note+campSec;
+}
+
+/* =============================================================================
+   GOOGLE ADS — client-weergave (beknopt, real-time). Meta/Google-schakelaar op de
+   bestaande platform-scaffolding (setAdsPlatform / state._adsPlatform / ADS_PLAT).
+   Hergebruikt dezelfde periodebalk (adsPeriodBar/adsReload) + KPI-/trend-helpers als
+   Meta. Geen creatives (Google Ads kent geen vergelijkbaar visueel postmodel).
+   ============================================================================= */
+function adsActivePlatform(){ return state._adsPlatform==='google'?'google':'meta'; }
+function adsPlatStyles(){ if(document.getElementById('adsPlatStyles'))return; var s=document.createElement('style'); s.id='adsPlatStyles'; s.textContent='.ads-platsw{display:inline-flex;gap:4px;background:var(--wash,#F3EEE6);border:1px solid var(--line,#E7DFD3);border-radius:999px;padding:4px;margin:2px 0 14px}.ads-plat{display:inline-flex;align-items:center;gap:7px;border:0;background:transparent;font:inherit;font-weight:700;font-size:13px;color:var(--ink-3);padding:7px 15px;border-radius:999px;cursor:pointer;transition:all .15s}.ads-plat:hover{color:var(--ink)}.ads-plat.active{background:var(--paper,#fff);color:var(--ink);box-shadow:0 2px 7px rgba(35,15,35,.10)}.ads-platdot{width:8px;height:8px;border-radius:50%;flex:none}'; document.head.appendChild(s); }
+function adsPlatformSwitch(){
+  adsPlatStyles(); var p=adsActivePlatform();
+  function b(id,lab,col){ return '<button class="ads-plat'+(p===id?' active':'')+'" onclick="setAdsPlatform(\''+id+'\')"><span class="ads-platdot" style="background:'+col+'"></span>'+esc(lab)+'</button>'; }
+  return '<div class="ads-platsw">'+b('meta','Meta',ADS_PLAT.meta[1])+b('google','Google Ads',ADS_PLAT.google[1])+'</div>';
+}
+function googleAdsBody(){
+  var g=(window.S27DATA&&S27DATA.googleAds&&S27DATA.googleAds())||null;
+  if(g===null){
+    if(!state._gadsLoading && !state.demoMode && window.S27DATA && S27DATA.loadGoogleAds){
+      state._gadsLoading=true; var pp=adsPeriod();
+      S27DATA.loadGoogleAds({from:pp.from,to:pp.to,compare:pp.compare}).then(function(){ state._gadsLoading=false; if(adsActivePlatform()==='google' && document.querySelector('.panel[data-screen-label="advertenties"]')) renderPanel('advertenties'); }).catch(function(){ state._gadsLoading=false; });
+    }
+    return '<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je Google Ads-campagnes worden real-time opgehaald…</p></div>';
+  }
+  if(!g.linked){ return '<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen Google Ads-account gekoppeld</div><div style="color:var(--ink-3);max-width:470px;margin:0 auto;line-height:1.55">Zodra je Google Ads-account aan je portaal gekoppeld is, zie je hier real-time je campagnes en cijfers. Vraag gerust je contactpersoon bij Studio&nbsp;27.</div></div>'; }
+  return adsPeriodBar()+'<div id="adsBody">'+googleOverviewInner()+'</div>';
+}
+function googleOverviewInner(){
+  var g=(window.S27DATA&&S27DATA.googleAds&&S27DATA.googleAds())||{}; var cur=g.currency||'EUR';
+  if(g.error){ return '<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">De real-time Google Ads-data is even niet beschikbaar. Probeer straks opnieuw.</div>'; }
+  var k=g.kpis||{}, pv=g.prevKpis||null, clab=g.compareLabel||'';
+  var resd = pv?('<div class="ads-reschip-d">'+adsKpiDelta(k.results,pv.results)+'<span>vs '+esc(clab)+'</span></div>'):'';
+  var resChip='<div class="ads-reschip"><div class="ads-reschip-ic">'+ic('st_approved',20)+'</div><div class="ads-reschip-tx"><div class="ads-reschip-lab">Conversies in deze periode</div><div class="ads-reschip-num">'+adsNum(k.results)+'</div></div>'+resd+'</div>';
+  var strip='<div class="kpi-grid kpi-grid-5">'
+    +adsKpiCard('orange','Besteding',metaEur(k.spend,cur), pv?adsKpiDelta(k.spend,pv.spend):'')
+    +adsKpiCard('blue','Vertoningen',adsNum(k.impressions), pv?adsKpiDelta(k.impressions,pv.impressions):'')
+    +adsKpiCard('green','Klikken',adsNum(k.clicks), pv?adsKpiDelta(k.clicks,pv.clicks):'')
+    +adsKpiCard('indigo','CPC',metaEur(k.cpc,cur), pv?adsKpiDelta(k.cpc,pv.cpc):'')
+    +adsKpiCard('purple','CTR',(Number(k.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%', pv?adsKpiDelta(k.ctr,pv.ctr):'')
+    +'</div>';
+  var note='<p class="sdesc" style="margin:-2px 0 12px;max-width:64ch">Rechtstreeks en real-time uit je Google Ads-account.</p>';
+  var camps=(g.campaigns||[]).slice().sort(function(a,b){return (b.spend||0)-(a.spend||0);});
+  var campSec='<div class="section-head" style="margin-top:18px"><h2>Actieve campagnes</h2><span class="count">'+camps.length+'</span></div>'+(camps.length?camps.map(function(c){return googleCampaignCard(c,cur);}).join(''):'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">Geen campagnes met besteding in deze periode.</div>');
+  return resChip+strip+googleTrendBlock()+note+campSec;
+}
+function googleCampaignCard(c,cur){
+  var ms=[['Besteed',metaEur(c.spend,cur)],['Vertoningen',adsNum(c.impressions)],['Klikken',adsNum(c.clicks)],['CPC',metaEur(c.cpc,cur)],['CTR',(Number(c.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%'],['Conversies',adsNum(c.results)]];
+  var chan=c.objective?'<span class="fs" style="color:var(--ink-4)">'+esc(c.objective)+'</span>':'';
+  return '<div class="card" style="padding:14px 16px;margin-bottom:10px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:11px"><span class="pill pill-prog"><span class="pdot"></span>Live</span><b style="font-family:var(--font-display);font-size:15px;flex:1;min-width:130px">'+esc(c.name||'Campagne')+'</b>'+chan+'</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:10px">'+ms.map(function(m){return '<div><div style="color:var(--ink-4);font-size:11px;font-weight:600">'+m[0]+'</div><div style="font-family:var(--font-display);font-weight:800;font-size:16px;color:var(--ink)">'+m[1]+'</div></div>';}).join('')+'</div></div>';
+}
+function gadsTrendOn(){ if(!state._gadsTrendOn) state._gadsTrendOn={spend:true,clicks:true,impressions:false}; return state._gadsTrendOn; }
+function gadsToggleTrend(metric){ var on=gadsTrendOn(); on[metric]=!on[metric]; var box=document.getElementById('gadsTrendBox'); if(box) box.outerHTML=googleTrendBlock(); }
+function googleTrendBlock(){
+  var g=(window.S27DATA&&S27DATA.googleAds&&S27DATA.googleAds())||{}; var tr=g.trend||[]; var cur=g.currency||'EUR'; var on=gadsTrendOn();
+  var chips=['spend','clicks','impressions'].map(function(x){ var mm=ADS_TREND_META[x]; var tot=tr.reduce(function(a,d){return a+(Number(d[x])||0);},0); var tl=x==='spend'?metaEur(tot,cur):adsNum(tot); return '<button class="ads-tchip'+(on[x]?' on':'')+'" onclick="gadsToggleTrend(\''+x+'\')" style="--tc:'+mm[1]+'"><span class="ads-tdot"></span>'+esc(mm[0])+' <b>'+tl+'</b></button>'; }).join('');
+  var svg=(tr.length<2)?'<div class="ads-tempty">Nog te weinig data voor een trend in deze periode.</div>':adsTrendSVG(tr,on);
+  return '<div class="card ads-trend" id="gadsTrendBox" style="padding:15px 18px 12px;margin-bottom:14px"><div class="ads-thead"><h3>Evolutie per dag</h3><div class="ads-tchips">'+chips+'</div></div>'+svg+'</div>';
 }
 function openMetaCampaign(id){
   state._metaCampaign=String(id); renderPanel('advertenties'); if(window.scrollTo)window.scrollTo({top:0,behavior:'auto'});
