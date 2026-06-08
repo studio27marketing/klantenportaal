@@ -488,7 +488,7 @@ function socialInsightsData(){
    met dag-series + vergelijking + post-insights (top-posts, beste momenten, formats,
    hashtags). Hergebruikt de bestaande inzicht-renderers via socialInsightsData().
    ============================================================================= */
-function socialRichReport(){ return socialPeriodBar()+'<div id="socialStats">'+socialRichInner()+'</div>'; }
+function socialRichReport(){ return '<div class="ar-rephead"><h2 style="display:flex;align-items:center;gap:9px;margin:0"><span class="live-dot"></span>Uitgebreide rapportage</h2>'+_pdfBtn('exportSocialPdf')+'</div>'+socialPeriodBar()+'<div id="socialStats">'+socialRichInner()+'</div>'; }
 function socialRichInner(){
   var s=(window.S27DATA&&S27DATA.metricoolStatsRich)?S27DATA.metricoolStatsRich():null;
   if(s===undefined||s===null) return '<div class="soc-kpi-skel">De uitgebreide rapportage wordt opgehaald…</div>';
@@ -1086,8 +1086,104 @@ function renderAds(){ renderPanel('advertenties'); if(typeof adsChatMount==='fun
    ============================================================================= */
 function metaAdsBodyRich(){
   metaEnsureStyles();
-  var head='<div class="section-head" style="margin-bottom:4px"><h2 style="display:flex;align-items:center;gap:9px"><span class="live-dot"></span>Uitgebreide rapportage</h2></div>';
+  var head='<div class="ar-rephead"><h2 style="display:flex;align-items:center;gap:9px;margin:0"><span class="live-dot"></span>Uitgebreide rapportage</h2>'+_pdfBtn('exportAdsPdf')+'</div>';
   return head+adsPeriodBar()+'<div id="adsBody">'+adsRichInner()+'</div>'+adsChatSection();
+}
+
+/* =============================================================================
+   PDF-EXPORT (team-rapporten) — opent een gebrand, A4-geoptimaliseerd print-venster
+   in Studio 27-huisstijl met de reeds gerenderde Chart.js-grafieken als afbeeldingen.
+   window.print() → "Opslaan als PDF". Geen externe library. Enkel adminMode.
+   ============================================================================= */
+function _pdfBtn(fn){ return '<button class="ar-pdfbtn" onclick="'+fn+'()" title="Download dit rapport als PDF"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg><span>PDF-rapport</span></button>'; }
+function _pdfToday(){ try{ return new Date().toLocaleDateString('nl-BE',{day:'2-digit',month:'long',year:'numeric'}); }catch(e){ return ''; } }
+function _pdfPeriodFromUI(which){ try{ var pp=which==='ads'?adsPeriod():socialPeriod(); return _srDate(pp.from)+' – '+_srDate(pp.to); }catch(e){ return ''; } }
+function _pdfDelta(cur,prev,invert){ if(prev==null) return ''; cur=Number(cur)||0; prev=Number(prev)||0; if(!prev) return cur>0?'<div class="d up">nieuw</div>':''; var pct=Math.round(((cur-prev)/Math.abs(prev))*1000)/10; if(pct===0) return '<div class="d" style="color:#9E919E">0%</div>'; var better=invert?pct<0:pct>0; return '<div class="d '+(better?'up':'down')+'">'+(pct>0?'+':'')+pct+'%</div>'; }
+function _pdfChartImg(canvasId){ var c=document.getElementById(canvasId); if(!c||!c.toDataURL) return ''; try{ return c.toDataURL('image/png',1.0); }catch(e){ return ''; } }
+function _pdfOpen(html){ var w=window.open('','_blank'); if(!w){ alert('Sta pop-ups toe om het PDF-rapport te openen, en probeer opnieuw.'); return; } w.document.open(); w.document.write(html); w.document.close(); }
+function s27PdfShell(docTitle,headTitle,headSub,bodyHTML){
+  var css='@page{size:A4;margin:13mm 11mm;}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'
+    +'body{font-family:Montserrat,system-ui,Arial,sans-serif;color:#230F23;margin:0;font-size:11px;line-height:1.45;}'
+    +'.pdf-band{background:linear-gradient(120deg,#3083DC,#9441DB);color:#fff;padding:20px 24px;border-radius:14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-end;}'
+    +'.pdf-brand{font-weight:800;font-size:12px;letter-spacing:.2em;opacity:.92;}.pdf-h1{font-weight:800;font-size:22px;letter-spacing:-.02em;margin:6px 0 0;}.pdf-sub{font-size:12px;opacity:.93;margin-top:3px;}.pdf-meta{text-align:right;font-size:11px;opacity:.93;}'
+    +'h2.pdf-sec{font-size:13.5px;font-weight:800;margin:18px 0 7px;border-bottom:2px solid #E7DFD3;padding-bottom:5px;}'
+    +'.pdf-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;}.pdf-kpi{border:1px solid #E7DFD3;border-radius:9px;padding:8px 10px;}'
+    +'.pdf-kpi .l{font-size:8px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#9E919E;}.pdf-kpi .v{font-size:15px;font-weight:800;margin-top:2px;}.pdf-kpi .d{font-size:9px;font-weight:800;margin-top:1px;}'
+    +'.up{color:#0E7A39;}.down{color:#B4540B;}'
+    +'table{width:100%;border-collapse:collapse;margin-top:6px;}th,td{text-align:left;padding:4px 7px;border-bottom:1px solid #EFEAE1;font-size:9.5px;}th{background:#FAF7F2;font-weight:800;font-size:8px;text-transform:uppercase;letter-spacing:.03em;color:#6B5B6B;}td.num,th.num{text-align:right;}'
+    +'.pdf-chart{border:1px solid #E7DFD3;border-radius:10px;padding:9px;margin-top:9px;page-break-inside:avoid;}.pdf-chart img{width:100%;display:block;}'
+    +'.pdf-rec{border-left:4px solid #E08A1E;background:#FBFAF8;border-radius:8px;padding:8px 12px;margin-top:7px;page-break-inside:avoid;}.pdf-rec.blue{border-left-color:#3083DC;}.pdf-rec.red{border-left-color:#DC2626;}.pdf-rec.green{border-left-color:#12AC4E;}.pdf-rec b{display:block;font-size:11px;}.pdf-rec span{color:#6B5B6B;}'
+    +'.pdf-camp{border:1px solid #E7DFD3;border-radius:12px;padding:12px 14px;margin-top:11px;page-break-inside:avoid;}.pdf-pill{display:inline-block;font-size:8px;font-weight:800;padding:2px 8px;border-radius:999px;background:#EEF1F4;color:#1F5FA8;}'
+    +'.pdf-foot{margin-top:20px;border-top:1px solid #E7DFD3;padding-top:8px;font-size:9px;color:#9E919E;text-align:center;}'
+    +'.pdf-actions{text-align:center;margin:18px 0;}.pdf-actions button{font:700 14px Montserrat,sans-serif;background:#3083DC;color:#fff;border:none;border-radius:10px;padding:11px 22px;cursor:pointer;}@media print{.pdf-actions{display:none;}}';
+  return '<!doctype html><html lang="nl"><head><meta charset="utf-8"><title>'+esc(docTitle)+'</title>'
+    +'<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">'
+    +'<style>'+css+'</style></head><body>'
+    +'<div class="pdf-band"><div><div class="pdf-brand">STUDIO 27</div><div class="pdf-h1">'+esc(headTitle)+'</div><div class="pdf-sub">'+esc(headSub)+'</div></div><div class="pdf-meta">'+esc(_pdfToday())+'</div></div>'
+    +bodyHTML
+    +'<div class="pdf-foot">Gegenereerd via het Studio 27 klantenportaal · portaal.studio27.be</div>'
+    +'<div class="pdf-actions"><button onclick="window.print()">Opslaan als PDF</button></div>'
+    +'<scr'+'ipt>window.addEventListener("load",function(){setTimeout(function(){try{window.print();}catch(e){}},450);});</scr'+'ipt>'
+    +'</body></html>';
+}
+/* ---- ads-PDF ---- */
+function _pdfAdTable(c,cur){
+  var ads=adsRichMergeAds(c.ads||[]).slice().sort(function(a,b){return b.spend-a.spend;});
+  var extra=ads.length>10?ads.length-10:0; ads=ads.slice(0,10);
+  if(!ads.length) return '';
+  var rows=ads.map(function(a){ return '<tr><td>'+esc(a.name||'–')+(a.merged?' ★'+a.count:'')+'</td><td class="num">'+metaEur(a.spend,cur)+'</td><td class="num">'+arNum(a.impressions)+'</td><td class="num">'+arNum(a.linkClicks||a.clicks)+'</td><td class="num">'+arPct(a.ctr)+'</td><td class="num">'+(a.leads?arNum(a.leads):'–')+'</td></tr>'; }).join('');
+  return '<table><thead><tr><th>Advertentie</th><th class="num">Besteed</th><th class="num">Vert.</th><th class="num">Klikken</th><th class="num">CTR</th><th class="num">Leads</th></tr></thead><tbody>'+rows+'</tbody></table>'+(extra?'<div style="font-size:9px;color:#9E919E;margin-top:3px">+ '+extra+' andere advertenties</div>':'');
+}
+function exportAdsPdf(){
+  var m=(window.S27DATA&&S27DATA.metaAdsRich&&S27DATA.metaAdsRich()); if(!m||!m.linked){ alert('Er is nog geen rapportdata om te exporteren. Laad eerst de rapportage.'); return; }
+  var cur=m.currency||'EUR', k=m.kpis||{}, p=m.prevKpis||null;
+  var company=(state._adminActiveName||(window.S27DATA&&S27DATA.bedrijfsnaam&&S27DATA.bedrijfsnaam())||'Klant');
+  function kc(lab,val,key,inv){ return '<div class="pdf-kpi"><div class="l">'+lab+'</div><div class="v">'+val+'</div>'+(p?_pdfDelta(k[key],p[key],inv):'')+'</div>'; }
+  var kpis='<div class="pdf-kpis">'+[kc('Besteed',metaEur(k.spend,cur),'spend',true),kc('Leads',arNum(k.leads),'leads',false),kc('CPL',k.leads?metaEur(k.cpl,cur):'–','cpl',true),kc('Klikken',arNum(k.linkClicks||k.clicks),'linkClicks',false),kc('Vertoningen',arNum(k.impressions),'impressions',false),kc('Bereik',arNum(k.reach),'reach',false),kc('CPM',metaEur(k.cpm,cur),'cpm',true),kc('CTR',arPct(k.ctr),'ctr',false),kc('CPC',metaEur(k.cpc,cur),'cpc',true),kc('Frequentie',arDec(k.frequency,2),'frequency',true)].join('')+'</div>';
+  var camps=(m.campaigns||[]).map(function(c){
+    var img=_pdfChartImg('arch_'+c.id); var chart=img?'<div class="pdf-chart"><img src="'+img+'"></div>':'';
+    return '<div class="pdf-camp"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:12.5px">'+esc(c.name||'Campagne')+'</b>'+(c.objective?'<span class="pdf-pill">'+esc(adsRichObjLabel(c.objective))+'</span>':'')+'</div>'
+      +'<div style="font-size:9.5px;color:#6B5B6B;margin:3px 0 5px">'+metaEur(c.spend,cur)+' besteed · '+arNum(c.leads)+' leads'+(c.leads?(' · '+metaEur(c.cpl,cur)+' CPL'):'')+' · '+arNum(c.linkClicks||c.clicks)+' klikken · CTR '+arPct(c.ctr)+' · CPM '+metaEur(c.cpm,cur)+'</div>'+chart+_pdfAdTable(c,cur)+'</div>';
+  }).join('');
+  var recs=adsRichOptimList(m.campaigns||[]).map(function(r){ return '<div class="pdf-rec '+(r[0]==='orange'?'':r[0])+'"><b>'+esc(r[1])+'</b><span>'+esc(r[2])+'</span></div>'; }).join('');
+  var body='<h2 class="pdf-sec">Samenvatting'+(m.compareLabel?' · vs '+esc(m.compareLabel):'')+'</h2>'+kpis
+    +'<h2 class="pdf-sec">Campagnes ('+(m.campaigns||[]).length+')</h2>'+(camps||'<p style="font-size:10px;color:#6B5B6B">Geen campagnes met activiteit in deze periode.</p>')
+    +'<h2 class="pdf-sec">Optimalisatie-aanbevelingen</h2>'+recs;
+  _pdfOpen(s27PdfShell('Advertentierapport — '+company,'Advertentierapport',company+' · '+_pdfPeriodFromUI('ads'),body));
+}
+/* ---- social-PDF ---- */
+function _pdfSocNetTable(s){
+  var nets=(s.networks||[]).filter(function(n){return n.followers||n.reach||n.interactions;});
+  if(!nets.length) return '';
+  var rows=nets.map(function(n){ return '<tr><td>'+esc(n.label||n.network)+'</td><td class="num">'+socialFmt(n.followers)+'</td><td class="num">'+(n.growth>0?'+':'')+socialFmt(n.growth)+'</td><td class="num">'+socialFmt(n.reach)+'</td><td class="num">'+socialFmt(n.interactions)+'</td><td class="num">'+(Number(n.engagementRate)||0)+'%</td></tr>'; }).join('');
+  return '<table><thead><tr><th>Netwerk</th><th class="num">Volgers</th><th class="num">Groei</th><th class="num">Bereik</th><th class="num">Interacties</th><th class="num">Engag.</th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
+function _pdfSocPostsTable(posts){
+  var top=(posts||[]).slice().sort(function(a,b){return (b.reach||0)-(a.reach||0);}).slice(0,20);
+  if(!top.length) return '';
+  var rows=top.map(function(p){ return '<tr><td>'+esc(p.label||p.network)+'</td><td>'+esc(_srDate(p.date))+'</td><td>'+esc(socialPostTypeLabel(p))+'</td><td class="num">'+socialFmt(p.reach)+'</td><td class="num">'+socialFmt(p.interactions)+'</td><td class="num">'+(Number(p.engagementRate)||0)+'%</td></tr>'; }).join('');
+  return '<table><thead><tr><th>Netwerk</th><th>Datum</th><th>Type</th><th class="num">Bereik</th><th class="num">Interacties</th><th class="num">Engag.</th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
+function _pdfSocInsightTables(s){
+  var out='';
+  var bt=s.bestTimes||[]; if(bt.length){ out+='<h2 class="pdf-sec">Beste momenten</h2><table><thead><tr><th>Dag</th><th>Dagdeel</th><th class="num">Posts</th><th class="num">Gem. bereik</th><th class="num">Engag.</th></tr></thead><tbody>'+bt.map(function(t){return '<tr><td>'+esc(t.day)+'</td><td>'+esc(t.part)+'</td><td class="num">'+socialFmt(t.count)+'</td><td class="num">'+socialFmt(t.avgReach)+'</td><td class="num">'+(Number(t.avgEngagementRate)||0)+'%</td></tr>';}).join('')+'</tbody></table>'; }
+  var fm=s.formats||[]; if(fm.length){ out+='<h2 class="pdf-sec">Sterkste formats</h2><table><thead><tr><th>Format</th><th class="num">Posts</th><th class="num">Gem. bereik</th><th class="num">Engag.</th></tr></thead><tbody>'+fm.map(function(f){return '<tr><td>'+esc(f.format)+'</td><td class="num">'+socialFmt(f.count)+'</td><td class="num">'+socialFmt(f.avgReach)+'</td><td class="num">'+(Number(f.avgEngagementRate)||0)+'%</td></tr>';}).join('')+'</tbody></table>'; }
+  var ht=s.hashtags||[]; if(ht.length){ out+='<h2 class="pdf-sec">Topscorende hashtags</h2><table><thead><tr><th>Hashtag</th><th class="num">Posts</th><th class="num">Gem. bereik</th><th class="num">Engag.</th></tr></thead><tbody>'+ht.map(function(h){return '<tr><td>'+esc(h.tag)+'</td><td class="num">'+socialFmt(h.count)+'</td><td class="num">'+socialFmt(h.avgReach)+'</td><td class="num">'+(Number(h.avgEngagementRate)||0)+'%</td></tr>';}).join('')+'</tbody></table>'; }
+  return out;
+}
+function exportSocialPdf(){
+  var s=(window.S27DATA&&S27DATA.metricoolStatsRich&&S27DATA.metricoolStatsRich()); if(!s||!s.linked){ alert('Er is nog geen rapportdata om te exporteren. Laad eerst de rapportage.'); return; }
+  var t=s.totals||{}, p=s.prevTotals||null;
+  var company=(state._adminActiveName||(window.S27DATA&&S27DATA.bedrijfsnaam&&S27DATA.bedrijfsnaam())||'Klant');
+  function kc(lab,val,key){ return '<div class="pdf-kpi"><div class="l">'+lab+'</div><div class="v">'+val+'</div>'+(p?_pdfDelta(t[key],p[key],false):'')+'</div>'; }
+  var kpis='<div class="pdf-kpis" style="grid-template-columns:repeat(4,1fr)">'+[kc('Volgers',socialFmt(t.followers),'followers'),kc('Bereik',socialFmt(t.reach),'reach'),kc('Interacties',socialFmt(t.interactions),'interactions'),kc('Engagement',(Number(t.engagementRate)||0)+'%','engagementRate')].join('')+'</div>';
+  var ov=_pdfChartImg('srOverviewChart'), fo=_pdfChartImg('srFollowersChart');
+  var charts=(ov?'<div class="pdf-chart"><div style="font-weight:800;font-size:10px;margin-bottom:4px">Bereik &amp; interacties per dag</div><img src="'+ov+'"></div>':'')+(fo?'<div class="pdf-chart"><div style="font-weight:800;font-size:10px;margin-bottom:4px">Volgersgroei per netwerk</div><img src="'+fo+'"></div>':'');
+  var body='<h2 class="pdf-sec">Samenvatting'+(s.compareLabel?' · vs '+esc(s.compareLabel):'')+'</h2>'+kpis+charts
+    +'<h2 class="pdf-sec">Per netwerk</h2>'+(_pdfSocNetTable(s)||'<p style="font-size:10px;color:#6B5B6B">Geen netwerkdata.</p>')
+    +'<h2 class="pdf-sec">Best presterende posts</h2>'+(_pdfSocPostsTable(s.posts)||'<p style="font-size:10px;color:#6B5B6B">Geen posts in deze periode.</p>')
+    +_pdfSocInsightTables(s);
+  _pdfOpen(s27PdfShell('Social media rapport — '+company,'Social media rapport',company+' · '+_pdfPeriodFromUI('social'),body));
 }
 function adsRichNotLinked(){ return '<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen Meta-advertentieaccount gekoppeld</div><div style="color:var(--ink-3);max-width:470px;margin:0 auto;line-height:1.55">Koppel het Meta-advertentieaccount van deze klant (veld “Meta Ads ID” op de bedrijf-taak) om hier de uitgebreide rapportage te zien.</div></div>'; }
 function adsRichInner(){
@@ -1200,7 +1296,8 @@ function adsRichAdsetTable(c,cur){ var s=arSortState(c.id,'adsets'); var rows=(c
 function adsRichAdTable(c,cur){ var s=arSortState(c.id,'ads'); var rows=adsRichMergeAds(c.ads).sort(function(a,b){return _arCmpVal(a,b,s);}); return _arTable('ads',c.id,AR_AD_COLS,s,rows,cur,'Geen advertenties met data in deze periode.'); }
 function adsRichSort(cid,which,key){ var s=arSortState(cid,which); if(s.key===key){ s.dir=-s.dir; } else { s.key=key; s.dir=(key==='name'||key==='status')?1:-1; } var c=_arFindCamp(cid); if(!c) return; var host=document.getElementById('art_'+which+'_'+cid); if(host){ host.outerHTML=(which==='adsets'?adsRichAdsetTable(c,_arCur()):adsRichAdTable(c,_arCur())); } }
 /* ---- optimalisatie-aanbevelingen (data-gedreven heuristieken) ---- */
-function adsRichOptim(camps,cur){
+// Lijst-vorm (gedeeld door de schermweergave + de PDF-export): [severity, titel, body].
+function adsRichOptimList(camps){
   var recs=[];
   (camps||[]).forEach(function(c){
     if(c.frequency>7) recs.push(['orange','Hoge frequentie bij “'+(c.name||'campagne')+'”','Frequentie '+arDec(c.frequency,1)+'× — dezelfde mensen zien je ad vaak. Overweeg nieuwe visuals of een breder publiek.']);
@@ -1209,6 +1306,10 @@ function adsRichOptim(camps,cur){
     if((c.leads||0)===0 && (c.linkClicks||c.clicks||0)>500) recs.push(['red','Klikken zonder leads bij “'+(c.name||'campagne')+'”',(c.linkClicks||c.clicks)+' klikken maar 0 leads. Controleer de landingspagina/het formulier of de conversie-tracking.']);
   });
   if(!recs.length) recs.push(['green','Geen knelpunten gevonden','De campagnes draaien gezond binnen de gangbare richtlijnen voor deze periode.']);
+  return recs;
+}
+function adsRichOptim(camps,cur){
+  var recs=adsRichOptimList(camps);
   return '<div class="section-head" style="margin-top:22px"><h2>Optimalisatie-aanbevelingen</h2><span class="count">'+recs.length+'</span></div>'
     +'<div class="ar-recs">'+recs.map(function(r){ return '<div class="ar-rec ar-rec-'+r[0]+'"><div class="ar-rec-t">'+esc(r[1])+'</div><div class="ar-rec-b">'+esc(r[2])+'</div></div>'; }).join('')+'</div>';
 }
