@@ -3386,34 +3386,61 @@ export async function googleAds(bedrijfId, body, env) {
   const br = await cu.get(env, `/task/${bedrijfId}`);
   const acct = (br.ok && br.data ? str(getCF(br.data, FIELD.googleAdsId)) : '').replace(/[^0-9]/g, '');
   if (!/^\d{8,12}$/.test(acct)) return { status: 200, body: { ok: true, linked: false } };
+  if (!str(env && env.GOOGLE_ADS_DEVELOPER_TOKEN) || !str(env && env.GOOGLE_ADS_REFRESH_TOKEN)) return { status: 200, body: { ok: true, linked: false, reason: 'no_token' } };
   const token = await googleAdsToken(env, Date.now());
   if (!token) return { status: 200, body: { ok: true, linked: false, reason: 'no_token' } };
-  const preset = GADS_PRESETS[str(body && body.period).trim()] || 'LAST_7_DAYS';
 
-  const campRes = await gadsQuery(env, token, acct,
-    `SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.ctr, metrics.average_cpc, metrics.conversions FROM campaign WHERE campaign.status = 'ENABLED' AND segments.date DURING ${preset} ORDER BY metrics.cost_micros DESC`);
+  // Periode: van/tot uit de gedeelde periodebalk (zelfde contract als metaAds), anders preset.
+  const from = str(body && body.from).trim(), to = str(body && body.to).trim();
+  const useRange = META_YMD.test(from) && META_YMD.test(to);
+  const preset = GADS_PRESETS[str(body && body.period).trim()] || 'LAST_7_DAYS';
+  const compare = ['previous', 'month', 'year'].indexOf(str(body && body.compare)) >= 0 ? str(body.compare) : 'none';
+  const dateFilter = useRange ? `segments.date BETWEEN '${from}' AND '${to}'` : `segments.date DURING ${preset}`;
+  const KPIQ = (where) => `SELECT metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions FROM customer WHERE ${where}`;
+  const aggKpi = (rows) => {
+    const m = (rows && rows[0] && rows[0].metrics) || {};
+    const spend = Number(m.costMicros || 0) / 1e6, impressions = Number(m.impressions || 0), clicks = Number(m.clicks || 0);
+    return { spend, impressions, clicks, cpc: clicks > 0 ? spend / clicks : 0, ctr: impressions > 0 ? (clicks / impressions * 100) : 0, results: Number(m.conversions || 0) };
+  };
+
+  // KPI's (account, gekozen venster) + actieve campagnes + dagtrend — parallel.
+  const [kpiRes, campRes, trendRes] = await Promise.all([
+    gadsQuery(env, token, acct, KPIQ(dateFilter)),
+    gadsQuery(env, token, acct,
+      `SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.ctr, metrics.average_cpc, metrics.conversions FROM campaign WHERE campaign.status = 'ENABLED' AND ${dateFilter} ORDER BY metrics.cost_micros DESC`),
+    gadsQuery(env, token, acct,
+      `SELECT segments.date, metrics.cost_micros, metrics.impressions, metrics.clicks FROM customer WHERE ${dateFilter} ORDER BY segments.date`),
+  ]);
+  const kpis = aggKpi(kpiRes.rows);
+
+  // periode-vergelijking (enkel bij expliciet datumbereik) — zelfde vensterlogica als Meta.
+  let prevKpis = null, compareLabel = '';
+  if (useRange && compare !== 'none') {
+    const cw = metaCompareWindow(from, to, compare);
+    const prev = await gadsQuery(env, token, acct, KPIQ(`segments.date BETWEEN '${cw[0]}' AND '${cw[1]}'`));
+    if (prev.ok) prevKpis = aggKpi(prev.rows);
+    compareLabel = compare === 'previous' ? 'vorige periode' : (compare === 'month' ? 'vorige maand' : 'vorig jaar');
+  }
+
   const campaigns = (campRes.rows || []).map((r) => {
-    const c = r.campaign || {}; const m = r.metrics || {};
+    const c = r.campaign || {}, m = r.metrics || {};
+    const spend = Number(m.costMicros || 0) / 1e6;
     return {
       id: String(c.id || ''), name: c.name || '', status: c.status || '',
       objective: GADS_CHANNEL[c.advertisingChannelType] || str(c.advertisingChannelType),
-      spend: Number(m.costMicros || 0) / 1e6, impressions: Number(m.impressions || 0), clicks: Number(m.clicks || 0),
+      spend, impressions: Number(m.impressions || 0), clicks: Number(m.clicks || 0),
       ctr: Number(m.ctr || 0) * 100, cpc: Number(m.averageCpc || 0) / 1e6, results: Number(m.conversions || 0),
     };
-  });
-  const sumBy = (k) => campaigns.reduce((a, c) => a + (Number(c[k]) || 0), 0);
-  const tImpr = sumBy('impressions'), tClicks = sumBy('clicks');
-  const kpis = { spend: sumBy('spend'), impressions: tImpr, clicks: tClicks, ctr: tImpr > 0 ? (tClicks / tImpr * 100) : 0, results: sumBy('results') };
+  }).filter((c) => c.spend > 0);
 
-  const trendRes = await gadsQuery(env, token, acct,
-    `SELECT segments.date, metrics.cost_micros, metrics.impressions, metrics.clicks FROM customer WHERE segments.date DURING LAST_30_DAYS ORDER BY segments.date`);
   const trend = (trendRes.rows || []).map((r) => {
-    const m = r.metrics || {}; const s = r.segments || {};
+    const m = r.metrics || {}, s = r.segments || {};
     return { date: s.date || '', spend: Number(m.costMicros || 0) / 1e6, impressions: Number(m.impressions || 0), clicks: Number(m.clicks || 0) };
   });
 
-  const error = (!campRes.ok && !trendRes.ok) ? (campRes.err || 'fetch_failed') : null;
-  return { status: 200, body: { ok: true, linked: true, account: acct, currency: 'EUR', period: preset, kpis, campaigns, trend, error } };
+  const error = (!kpiRes.ok && !campRes.ok) ? (kpiRes.err || campRes.err || 'fetch_failed') : null;
+  const period = useRange ? { from, to, compare } : { preset, compare: 'none' };
+  return { status: 200, body: { ok: true, linked: true, account: acct, currency: 'EUR', period, kpis, prevKpis, compareLabel, campaigns, trend, error } };
 }
 
 // SEC-4: bevestig dat een post-id ECHT tot de blogId van DEZE klant hoort (anti-IDOR).

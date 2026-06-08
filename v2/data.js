@@ -517,6 +517,24 @@
     }catch(e){ state.data.metaAds={linked:false}; return false; }
   };
   DATA.metaAds = function(){ return state.data.metaAds; };
+
+  // Google Ads real-time (direct via Google Ads API, geen Make) — zelfde periode-contract als Meta.
+  DATA.loadGoogleAds = async function(opts){
+    var o = (typeof opts === 'string') ? { period:opts } : (opts || {});
+    if(!live()){ state.data.googleAds={linked:false}; return false; }
+    var bid = state.activeBedrijf || '';
+    if(!bid){ state.data.googleAds={linked:false}; return false; }
+    try{
+      var payload = (o.from && o.to) ? base({ from:o.from, to:o.to, compare:o.compare||'none' }) : base({ period:(o.period||'last_7d') });
+      var res = await api(ENDPOINTS.googleAds, payload);
+      var j = (res && res.ok && res.data) ? res.data : null;
+      if(!j || !j.ok){ state.data.googleAds={linked:false}; return false; }
+      state.data.googleAds = j;   // { linked, account, currency, period, kpis, prevKpis, campaigns, trend, error }
+      return true;
+    }catch(e){ state.data.googleAds={linked:false}; return false; }
+  };
+  DATA.googleAds = function(){ return state.data.googleAds; };
+
   // Campagne-creatives ON-DEMAND (rijke media via page-tokens), gecachet per campagne-id.
   DATA.loadCampaignAds = async function(campaignId){
     var id = String(campaignId||'');

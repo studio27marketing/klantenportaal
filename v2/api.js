@@ -107,6 +107,9 @@ const ENDPOINTS = {
   metaAds:           GATEWAY_BASE + '/metaAds',
   // Campagne-creatives (rijke media: video/foto/carrousel) ON-DEMAND: { campaign_id } -> { ok, ads:[] }.
   metaCampaignAds:   GATEWAY_BASE + '/metaCampaignAds',
+  // Google Ads real-time (direct via Google Ads API, geen Make): { from,to,compare } -> zelfde vorm als
+  // metaAds { ok, linked, account, currency, kpis, prevKpis, compareLabel, campaigns:[], trend:[] }.
+  googleAds:         GATEWAY_BASE + '/googleAds',
   // ADMIN-only (staff): uitgebreide Meta-rapportage voor de team-weergave. { from,to,compare } ->
   // { ok, linked, kpis(8+leads/cpl), prevKpis, campaigns:[{...,daily,adsets,ads}] }. Acting-as scope.
   metaAdsRich:       GATEWAY_BASE + '/metaAdsRich',
