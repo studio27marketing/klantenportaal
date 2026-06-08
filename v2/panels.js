@@ -593,9 +593,15 @@ function metaEnsureStyles(){
 .meta-fmt{position:absolute;top:8px;left:8px;display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;color:#fff;border-radius:999px;padding:3px 9px;letter-spacing:.02em;box-shadow:0 2px 6px rgba(0,0,0,.22)}
 .meta-fmt.br-purple{background:#9441DB}.meta-fmt.br-blue{background:#3083DC}.meta-fmt.br-green{background:#12AC4E}
 .meta-lb{position:fixed;inset:0;z-index:9999;background:rgba(20,8,20,.78);display:none;align-items:center;justify-content:center;padding:24px;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
-.meta-lb-box{max-width:560px;width:100%;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.42)}
-.meta-lb-box img{width:100%;max-height:70vh;object-fit:contain;display:block;background:#000}
+.meta-lb-box{max-width:680px;width:100%;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.42)}
+.meta-lb-box img.meta-lb-media{width:100%;max-height:74vh;object-fit:contain;display:block;background:#000}
+.meta-lb-box video.meta-lb-vid{width:100%;max-height:74vh;display:block;background:#000;outline:none}
 .meta-lb-cap{padding:13px 16px;font-family:var(--font-display);font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.meta-car{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;background:#000}
+.meta-car>div{flex:0 0 100%;scroll-snap-align:center;position:relative}
+.meta-car img{width:100%;max-height:72vh;object-fit:contain;display:block;background:#000}
+.meta-car-t{position:absolute;left:0;right:0;bottom:0;padding:10px 14px;color:#fff;font-size:13px;font-weight:600;background:linear-gradient(transparent,rgba(0,0,0,.6))}
+.meta-car-n{position:absolute;top:10px;right:12px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;font-weight:800;border-radius:999px;padding:3px 10px;z-index:2}
 @media(max-width:560px){.meta-cre-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}`;
   document.head.appendChild(s);
 }
@@ -606,7 +612,7 @@ function metaFmt(f){ return ({video:['Video','purple'],carousel:['Carrousel','bl
 function setMetaPeriod(p){ state._metaPeriod=p; state.data.metaAds=null; renderPanel('advertenties'); if(window.S27DATA&&S27DATA.loadMetaAds){ S27DATA.loadMetaAds(p).then(function(){ if(document.querySelector('.panel[data-screen-label="advertenties"]')) renderPanel('advertenties'); }); } }
 function refreshMetaAds(){ setMetaPeriod(state._metaPeriod||'last_7d'); }
 function metaCreativeCard(a,i,cur){
-  var fm=metaFmt(a.format); var thumb=a.thumb||'';
+  var fm=metaFmt(a.format); var thumb=(a.format==='video'?(a.poster||a.image):a.image)||a.thumb||'';
   var img = thumb
     ? '<img src="'+esc(thumb)+'" alt="" loading="lazy" referrerpolicy="no-referrer" style="width:100%;height:142px;object-fit:cover;display:block;background:#f1ebe2">'
     : '<div style="width:100%;height:142px;display:flex;align-items:center;justify-content:center;background:#f1ebe2;color:var(--ink-4);font-size:12px;font-weight:600">geen voorbeeld</div>';
@@ -666,11 +672,22 @@ function metaCampaignDetail(m,cur){
   var creSec='<div class="section-head" style="margin-top:20px"><h2>Advertenties &amp; visuals</h2><span class="count">'+ads.length+'</span></div>'+(ads.length?('<div class="meta-cre-grid">'+ads.map(function(a,i){return metaCreativeCard(a,i,cur);}).join('')+'</div>'):'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">Geen actieve advertenties in deze campagne.</div>');
   return back+head+kpis+subGrid+creSec;
 }
+function metaCloseLightbox(){ var o=document.getElementById('metaLightbox'); if(o){ o.style.display='none'; o.innerHTML=''; } }
 function openMetaCreative(i){
-  var a=(state._metaAdsView||[])[i]; if(!a||!a.thumb) return;
+  var a=(state._metaAdsView||[])[i]; if(!a) return;
+  var media;
+  if(a.format==='video' && a.videoSrc){
+    media='<video class="meta-lb-vid" controls autoplay playsinline preload="metadata" poster="'+esc(a.poster||'')+'" src="'+esc(a.videoSrc)+'"></video>';
+  } else if(a.format==='carousel' && a.cards && a.cards.length){
+    media='<div class="meta-car"><span class="meta-car-n">'+a.cards.length+' kaarten</span>'+a.cards.map(function(c){ return '<div><img src="'+esc(c.image)+'" alt="" referrerpolicy="no-referrer">'+(c.title?'<div class="meta-car-t">'+esc(c.title)+'</div>':'')+'</div>'; }).join('')+'</div>';
+  } else {
+    var src=a.image||a.poster||a.thumb||''; if(!src) return;
+    media='<img class="meta-lb-media" src="'+esc(src)+'" alt="" referrerpolicy="no-referrer">';
+  }
   var ov=document.getElementById('metaLightbox');
-  if(!ov){ ov=document.createElement('div'); ov.id='metaLightbox'; ov.className='meta-lb'; ov.addEventListener('click',function(){ ov.style.display='none'; ov.innerHTML=''; }); document.body.appendChild(ov); }
-  ov.innerHTML='<div class="meta-lb-box" onclick="event.stopPropagation()"><img src="'+esc(a.thumb)+'" alt="" referrerpolicy="no-referrer"><div class="meta-lb-cap"><span>'+esc(a.name||'Advertentie')+'</span><button class="btn btn-ghost btn-sm" onclick="var o=document.getElementById(\'metaLightbox\');o.style.display=\'none\';o.innerHTML=\'\'">Sluiten</button></div></div>';
+  if(!ov){ ov=document.createElement('div'); ov.id='metaLightbox'; ov.className='meta-lb'; ov.addEventListener('click',metaCloseLightbox); document.body.appendChild(ov); }
+  var note=(a.format==='video' && !a.videoSrc)?' — video niet beschikbaar':'';
+  ov.innerHTML='<div class="meta-lb-box" onclick="event.stopPropagation()">'+media+'<div class="meta-lb-cap"><span>'+esc(a.name||'Advertentie')+note+'</span><button class="btn btn-ghost btn-sm" onclick="metaCloseLightbox()">Sluiten</button></div></div>';
   ov.style.display='flex';
 }
 

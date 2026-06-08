@@ -2859,20 +2859,52 @@ export async function metaAds(bedrijfId, body, env) {
     };
   });
 
-  // actieve advertenties + creatives (met mini-insights van dezelfde periode)
+  // actieve advertenties + creatives (incl. media in goede kwaliteit: video-source, full-res foto, carrousel)
   const adRes = await metaGet(env, `${act}/ads`, {
-    fields: 'name,effective_status,campaign_id,creative{thumbnail_url,image_url,object_type,video_id,object_story_spec,asset_feed_spec},insights.date_preset(' + preset + '){spend,impressions,clicks,ctr}',
+    fields: 'name,effective_status,campaign_id,creative{thumbnail_url,image_url,object_type,video_id,image_hash,effective_object_story_id,object_story_spec,asset_feed_spec},insights.date_preset(' + preset + '){spend,impressions,clicks,ctr}',
     effective_status: '["ACTIVE"]', limit: '50',
   });
-  const ads = ((adRes.ok && Array.isArray(adRes.data.data)) ? adRes.data.data : []).map((a) => {
+  const adRows = (adRes.ok && Array.isArray(adRes.data.data)) ? adRes.data.data : [];
+  const adVideoId = (cr) => cr.video_id || (cr.object_story_spec && cr.object_story_spec.video_data && cr.object_story_spec.video_data.video_id) || (cr.asset_feed_spec && Array.isArray(cr.asset_feed_spec.videos) && cr.asset_feed_spec.videos[0] && cr.asset_feed_spec.videos[0].video_id) || '';
+  const childAtts = (cr) => (cr.object_story_spec && cr.object_story_spec.link_data && Array.isArray(cr.object_story_spec.link_data.child_attachments)) ? cr.object_story_spec.link_data.child_attachments : [];
+  // media-bronnen verzamelen (gecapt tegen rate/subrequest-limieten)
+  const videoIds = []; const hashes = new Set(); const storyIds = [];
+  for (const a of adRows) {
+    const cr = a.creative || {};
+    const vid = adVideoId(cr); if (vid && videoIds.length < 20 && videoIds.indexOf(String(vid)) < 0) videoIds.push(String(vid));
+    if (cr.image_hash) hashes.add(cr.image_hash);
+    for (const ch of childAtts(cr)) if (ch.image_hash) hashes.add(ch.image_hash);
+    const afs = cr.asset_feed_spec || {}; if (Array.isArray(afs.images)) for (const im of afs.images) if (im.hash) hashes.add(im.hash);
+    const sid = cr.effective_object_story_id; if (sid && storyIds.length < 20 && storyIds.indexOf(sid) < 0) storyIds.push(sid);
+  }
+  const [videoRes, storyRes, imgRes] = await Promise.all([
+    Promise.all(videoIds.map((id) => metaGet(env, id, { fields: 'source,picture' }))),
+    Promise.all(storyIds.map((id) => metaGet(env, id, { fields: 'full_picture' }))),
+    hashes.size ? metaGet(env, `${act}/adimages`, { hashes: JSON.stringify([...hashes].slice(0, 100)), fields: 'hash,url' }) : Promise.resolve({ ok: false }),
+  ]);
+  const videoById = {}; videoIds.forEach((id, i) => { const d = videoRes[i]; if (d && d.ok && d.data) videoById[id] = { src: d.data.source || '', poster: d.data.picture || '' }; });
+  const picByStory = {}; storyIds.forEach((id, i) => { const d = storyRes[i]; if (d && d.ok && d.data && d.data.full_picture) picByStory[id] = d.data.full_picture; });
+  const urlByHash = {}; if (imgRes.ok && imgRes.data && Array.isArray(imgRes.data.data)) for (const im of imgRes.data.data) urlByHash[im.hash] = im.url || '';
+  const ads = adRows.map((a) => {
     const cr = a.creative || {};
     const ins = (a.insights && Array.isArray(a.insights.data) && a.insights.data[0]) || {};
-    return {
-      id: a.id, name: a.name || '', campaignId: a.campaign_id || '', format: metaCreativeFormat(cr),
-      thumb: cr.image_url || cr.thumbnail_url || '',
+    const fmt = metaCreativeFormat(cr);
+    const bestImg = urlByHash[cr.image_hash] || picByStory[cr.effective_object_story_id] || cr.image_url || cr.thumbnail_url || '';
+    const out = {
+      id: a.id, name: a.name || '', campaignId: a.campaign_id || '', format: fmt,
+      thumb: bestImg || cr.thumbnail_url || '', image: bestImg,
       spend: Number(ins.spend) || 0, impressions: Number(ins.impressions) || 0,
       clicks: Number(ins.clicks) || 0, ctr: Number(ins.ctr) || 0,
     };
+    if (fmt === 'video') {
+      const v = videoById[adVideoId(cr)];
+      out.videoSrc = (v && v.src) || ''; out.poster = (v && v.poster) || bestImg || cr.thumbnail_url || '';
+      if (!out.image) out.image = out.poster;
+    } else if (fmt === 'carousel') {
+      out.cards = childAtts(cr).map((ch) => ({ image: urlByHash[ch.image_hash] || ch.picture || '', title: ch.name || '' })).filter((c) => c.image);
+      if ((!out.image || out.image === cr.thumbnail_url) && out.cards[0]) out.image = out.cards[0].image;
+    }
+    return out;
   });
 
   // dagelijkse trend (laatste 30 dagen) voor de grafiek op de overzichtspagina
@@ -3250,6 +3282,33 @@ function freeHostIdsOnDate(avail, dateStr) {
   (avail.shoots_27m || []).forEach((s) => { if (s.dateStart === dateStr) (s.assignees || []).forEach((a) => busy.add(Number(a))); });
   (avail.vakantie || []).forEach((v) => { if (v.dateStart && dateStr >= v.dateStart && dateStr <= (v.dateEnd || v.dateStart)) (v.assignees || []).forEach((a) => busy.add(Number(a))); });
   return SHOOT_HOSTS.map((h) => h.id).filter((id) => !busy.has(Number(id)));
+}
+
+/* ---- publicShootAvailability (PUBLIEK, geen auth, geen klant-scope) ----------
+ * Geaggregeerde shoot-capaciteit per dag voor de publieke beschikbaarheidspagina
+ * die Studio 27 vrijblijvend naar prospects/klanten doorstuurt (geen offerte nodig).
+ * Geeft UITSLUITEND tellingen terug: per dag het aantal vrije content creators van
+ * de pool (van de SHOOT_HOSTS). NOOIT namen, task-ids, klant- of locatiedata - er mag
+ * niets gevoeligs lekken via deze open endpoint. Montage valt hier bewust buiten:
+ * enkel de twee shoot-lijsten (+ afwezigheid) bepalen de capaciteit, exact zoals de
+ * booking-widget. opts: { days } (default 120, cap 366). Fail-open -> lege dagen.
+ */
+export async function publicShootAvailability(env, opts) {
+  const days = Math.max(1, Math.min(366, (opts && Number(opts.days)) || 120));
+  let avail;
+  try { avail = await shootAvailability(env); }
+  catch (e) { avail = { shoots: [], shoots_27m: [], vakantie: [], hosts: SHOOT_HOSTS }; }
+  const total = SHOOT_HOSTS.length;
+  // Anker op 12:00 UTC per dag -> altijd dezelfde Brusselse kalenderdag (DST-veilig).
+  const now = new Date();
+  const base = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0);
+  const out = [];
+  for (let i = 0; i < days; i++) {
+    const ymd = msToBrusselsYmd(base + i * 86400000);
+    if (!ymd) continue;
+    out.push({ date: ymd, free: freeHostIdsOnDate(avail, ymd).length });
+  }
+  return { ok: true, total, days: out };
 }
 
 /* ---- shootContext (READ) - validatie + beschikbaarheid in één call ----------
