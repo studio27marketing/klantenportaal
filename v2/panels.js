@@ -577,7 +577,7 @@ function panelAdvertenties(){
   if(!ad) return head+'<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je campagnes worden geladen…</p></div>';
   if(!ad.linked) return head+'<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen advertentieaccount gekoppeld</div><div style="color:var(--ink-3);max-width:470px;margin:0 auto;line-height:1.55">Zodra je Meta- of Google Ads-account aan je portaal gekoppeld is, zie je hier al je campagnes met budget, vertoningen en klikken. Vraag gerust je contactpersoon bij Studio&nbsp;27.</div></div>';
   var camps=ad.campaigns||[];
-  if(!camps.length) return head+'<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Geen actieve campagnes</div><div style="color:var(--ink-3)">Er liepen de afgelopen 90 dagen geen campagnes met activiteit op je gekoppelde account.</div></div>';
+  if(!camps.length) return head+'<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Geen actieve campagnes</div><div style="color:var(--ink-3)">Er liepen de afgelopen 90 dagen geen campagnes met activiteit op je gekoppelde account.</div></div>'+metaCreativesSection();
   var plats=[]; camps.forEach(function(c){ if(plats.indexOf(c.platform)<0)plats.push(c.platform); });
   var sel=state._adsPlatform||'alle'; if(sel!=='alle' && plats.indexOf(sel)<0) sel='alle';
   var shown = sel==='alle'?camps:camps.filter(function(c){return c.platform===sel;});
@@ -593,7 +593,71 @@ function panelAdvertenties(){
   return head+kpis
     +'<div class="section-head"><h2>Campagnes</h2>'+filterBtns+'</div>'
     +'<p class="sdesc" style="margin:-6px 0 8px;max-width:62ch">Cijfers van de afgelopen 90 dagen, rechtstreeks uit je advertentieaccount. Voor de gedetailleerde analyse: zie <b>Resultaten</b>.</p>'
-    +body;
+    +body
+    +metaCreativesSection();
+}
+
+/* ---- Meta — live advertenties & creatives (real-time via metaAds, geen Make) ---- */
+function metaEnsureStyles(){
+  if(document.getElementById('metaCreStyles')) return;
+  var s=document.createElement('style'); s.id='metaCreStyles';
+  s.textContent=`.live-dot{width:9px;height:9px;border-radius:50%;background:#12AC4E;box-shadow:0 0 0 0 rgba(18,172,78,.5);animation:s27Live 1.8s infinite}
+@keyframes s27Live{0%{box-shadow:0 0 0 0 rgba(18,172,78,.45)}70%{box-shadow:0 0 0 8px rgba(18,172,78,0)}100%{box-shadow:0 0 0 0 rgba(18,172,78,0)}}
+.meta-cre-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:14px;margin-top:4px}
+.meta-cre-card{background:var(--paper,#fff);border:1px solid var(--line,#E7DFD3);border-radius:16px;overflow:hidden;cursor:pointer;transition:transform .18s ease,box-shadow .18s ease}
+.meta-cre-card:hover{transform:translateY(-3px);box-shadow:0 14px 30px rgba(35,15,35,.13)}
+.meta-cre-t{font-family:var(--font-display);font-weight:700;font-size:13px;padding:10px 12px 0;line-height:1.3}
+.meta-cre-m{display:flex;gap:13px;flex-wrap:wrap;padding:8px 12px 12px}
+.meta-cre-m .metric{display:flex;flex-direction:column;line-height:1.2}
+.meta-cre-m .metric b{font-family:var(--font-display);font-weight:800;font-size:14px;color:var(--ink)}
+.meta-cre-m .metric i{font-style:normal;font-size:10px;color:var(--ink-4);font-weight:600;margin-top:1px}
+.meta-fmt{position:absolute;top:8px;left:8px;display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;color:#fff;border-radius:999px;padding:3px 9px;letter-spacing:.02em;box-shadow:0 2px 6px rgba(0,0,0,.22)}
+.meta-fmt.br-purple{background:#9441DB}.meta-fmt.br-blue{background:#3083DC}.meta-fmt.br-green{background:#12AC4E}
+.meta-lb{position:fixed;inset:0;z-index:9999;background:rgba(20,8,20,.78);display:none;align-items:center;justify-content:center;padding:24px;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+.meta-lb-box{max-width:560px;width:100%;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.42)}
+.meta-lb-box img{width:100%;max-height:70vh;object-fit:contain;display:block;background:#000}
+.meta-lb-cap{padding:13px 16px;font-family:var(--font-display);font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:12px}
+@media(max-width:560px){.meta-cre-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}`;
+  document.head.appendChild(s);
+}
+function metaPeriodLabel(p){ return ({today:'Vandaag',last_7d:'7 dagen',last_30d:'30 dagen'})[p]||p; }
+function metaEur(n,cur){ var s=(Number(n)||0).toLocaleString('nl-BE',{minimumFractionDigits:2,maximumFractionDigits:2}); cur=cur||'EUR'; return cur==='EUR'?('€ '+s):(s+' '+cur); }
+function metaKpiCard(br,lab,val){ return '<div class="kpi br-'+br+'"><div class="kbar"></div><div class="klab">'+lab+'</div><div class="knum">'+val+'</div></div>'; }
+function metaFmt(f){ return ({video:['Video','purple'],carousel:['Carrousel','blue'],image:['Foto','green']})[f]||['Foto','green']; }
+function setMetaPeriod(p){ state._metaPeriod=p; state.data.metaAds=null; renderPanel('advertenties'); if(window.S27DATA&&S27DATA.loadMetaAds){ S27DATA.loadMetaAds(p).then(function(){ if(document.querySelector('.panel[data-screen-label="advertenties"]')) renderPanel('advertenties'); }); } }
+function refreshMetaAds(){ setMetaPeriod(state._metaPeriod||'last_7d'); }
+function metaCreativeCard(a,i,cur){
+  var fm=metaFmt(a.format); var thumb=a.thumb||'';
+  var img = thumb
+    ? '<img src="'+esc(thumb)+'" alt="" loading="lazy" referrerpolicy="no-referrer" style="width:100%;height:142px;object-fit:cover;display:block;background:#f1ebe2">'
+    : '<div style="width:100%;height:142px;display:flex;align-items:center;justify-content:center;background:#f1ebe2;color:var(--ink-4);font-size:12px;font-weight:600">geen voorbeeld</div>';
+  var badge='<span class="meta-fmt br-'+fm[1]+'">'+(a.format==='video'?ic('play',11):'')+esc(fm[0])+'</span>';
+  var mtr='<div class="meta-cre-m"><span class="metric"><b>'+metaEur(a.spend,cur)+'</b><i>besteed</i></span><span class="metric"><b>'+adsNum(a.impressions)+'</b><i>vertoningen</i></span><span class="metric"><b>'+(Number(a.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%</b><i>CTR</i></span></div>';
+  return '<div class="meta-cre-card" onclick="openMetaCreative('+i+')"><div style="position:relative">'+img+badge+'</div><div class="meta-cre-t">'+esc(a.name||'Advertentie')+'</div>'+mtr+'</div>';
+}
+function metaCreativesSection(){
+  var m=(window.S27DATA&&S27DATA.metaAds&&S27DATA.metaAds())||null;
+  var head='<div class="section-head" style="margin-top:26px"><h2 style="display:flex;align-items:center;gap:9px"><span class="live-dot"></span>Live advertenties &amp; creatives</h2>';
+  if(m===null){ return head+'</div><div class="empty" style="padding:30px"><div class="brand-spinner" style="margin:0 auto 10px"></div><p>Real-time data wordt opgehaald…</p></div>'; }
+  if(!m.linked) return '';
+  metaEnsureStyles();
+  var per=state._metaPeriod||m.period||'last_7d'; var cur=m.currency||'EUR'; var k=m.kpis||{};
+  var btns=['last_7d','last_30d','today'].map(function(p){ return '<button class="seg-btn'+(per===p?' active':'')+'" onclick="setMetaPeriod(\''+p+'\')">'+metaPeriodLabel(p)+'</button>'; }).join('');
+  head+='<span style="display:inline-flex;gap:5px;align-items:center;flex-wrap:wrap">'+btns+'<button class="seg-btn" onclick="refreshMetaAds()" title="Verversen" aria-label="Verversen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button></span></div>';
+  if(m.error){ return head+'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">De real-time Meta-data is even niet beschikbaar. Probeer straks opnieuw.</div>'; }
+  var strip='<div class="kpi-grid" style="margin-bottom:2px">'+metaKpiCard('orange','Besteding',metaEur(k.spend,cur))+metaKpiCard('blue','Vertoningen',adsNum(k.impressions))+metaKpiCard('green','Klikken',adsNum(k.clicks))+metaKpiCard('purple','CTR',(Number(k.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%')+'</div>';
+  var note='<p class="sdesc" style="margin:0 0 12px;max-width:62ch">Rechtstreeks en real-time uit je Meta-account — de advertenties die nú live staan, met hun visual. Klik op een creative om te vergroten.</p>';
+  var ads=(m.ads||[]).slice().sort(function(a,b){return (b.spend||0)-(a.spend||0);});
+  state._metaAdsView=ads;
+  var grid = ads.length ? ('<div class="meta-cre-grid">'+ads.map(function(a,i){return metaCreativeCard(a,i,cur);}).join('')+'</div>') : '<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">Geen actieve advertenties in deze periode.</div>';
+  return head+note+strip+grid;
+}
+function openMetaCreative(i){
+  var a=(state._metaAdsView||[])[i]; if(!a||!a.thumb) return;
+  var ov=document.getElementById('metaLightbox');
+  if(!ov){ ov=document.createElement('div'); ov.id='metaLightbox'; ov.className='meta-lb'; ov.addEventListener('click',function(){ ov.style.display='none'; ov.innerHTML=''; }); document.body.appendChild(ov); }
+  ov.innerHTML='<div class="meta-lb-box" onclick="event.stopPropagation()"><img src="'+esc(a.thumb)+'" alt="" referrerpolicy="no-referrer"><div class="meta-lb-cap"><span>'+esc(a.name||'Advertentie')+'</span><button class="btn btn-ghost btn-sm" onclick="var o=document.getElementById(\'metaLightbox\');o.style.display=\'none\';o.innerHTML=\'\'">Sluiten</button></div></div>';
+  ov.style.display='flex';
 }
 
 const ADS_ENGINE_URL='https://raw.githack.com/studio27marketing/klantenportaal/main/ads-report-engine.html';

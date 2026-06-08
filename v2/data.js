@@ -434,6 +434,23 @@
   };
   DATA.ads = function(){ return state.data.ads; };
 
+  /* ---- Meta Ads real-time (direct via Graph API, geen Make): KPI's + actieve campagnes
+     + advertenties met creatives. Account + bedrijf_id server-side; periode = allowlist. ---- */
+  DATA.loadMetaAds = async function(period){
+    var per = period || state._metaPeriod || 'last_7d';
+    if(!live()){ state.data.metaAds={linked:false}; return false; }
+    var bid = state.activeBedrijf || '';
+    if(!bid){ state.data.metaAds={linked:false}; return false; }
+    try{
+      var res = await api(ENDPOINTS.metaAds, base({ period:per }));
+      var j = (res && res.ok && res.data) ? res.data : null;
+      if(!j || !j.ok){ state.data.metaAds={linked:false}; return false; }
+      state.data.metaAds = j;   // { linked, account, currency, period, kpis, campaigns, ads, error }
+      return true;
+    }catch(e){ state.data.metaAds={linked:false}; return false; }
+  };
+  DATA.metaAds = function(){ return state.data.metaAds; };
+
   DATA.huisstijl = function(){ return state.data.huisstijl; };
 
   /* ---- relatieve tijd ---- */

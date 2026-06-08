@@ -222,7 +222,12 @@ async function ensureTabData(name){
   if(name==='performance'){ try{ state.perfUrl=(await S27DATA.performanceUrl())||null; }catch(e){ state.perfUrl=null; } }
   if(name==='offertes'){ var _t=[]; if(!state.data.offertes) _t.push(S27DATA.loadOffertes()); if(!state.data.bedrijf) _t.push(S27DATA.loadBedrijf()); if(_t.length){ try{ await Promise.all(_t); }catch(e){} } }
   if(name==='socials'){ var _s=[]; if(!state.data.metricool) _s.push(S27DATA.loadMetricool()); if(!state.data.metricoolStats) _s.push(S27DATA.loadMetricoolStats()); if(_s.length){ try{ await Promise.all(_s); }catch(e){} } }
-  if(name==='advertenties' && !state.data.ads){ try{ await S27DATA.loadAds(); }catch(e){} }
+  if(name==='advertenties'){
+    var _ad=[];
+    if(!state.data.ads){ _ad.push(S27DATA.loadAds().catch(function(){})); }
+    if(!state.data.metaAds && S27DATA.loadMetaAds){ _ad.push(S27DATA.loadMetaAds().catch(function(){})); }
+    if(_ad.length){ try{ await Promise.all(_ad); }catch(e){} }
+  }
 }
 function renderPanel(name){
   const page=$id('page');
