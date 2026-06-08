@@ -515,6 +515,23 @@
   };
   DATA.campaignAds = function(campaignId){ var m=state.data.metaCampaignAds||{}; return m[String(campaignId||'')]; };
 
+  // ADMIN (staff): uitgebreide Meta-rapportage (team-weergave). Acting-as-scoping via de gateway.
+  DATA.loadMetaAdsRich = async function(opts){
+    var o = (typeof opts === 'string') ? { period:opts } : (opts || {});
+    if(!live()){ state.data.metaAdsRich={linked:false}; return false; }
+    var bid = state.activeBedrijf || '';
+    if(!bid){ state.data.metaAdsRich={linked:false}; return false; }
+    try{
+      var payload = (o.from && o.to) ? base({ from:o.from, to:o.to, compare:o.compare||'none' }) : base({ period:(o.period||'last_30d') });
+      var res = await api(ENDPOINTS.metaAdsRich, payload);
+      var j = (res && res.ok && res.data) ? res.data : null;
+      if(!j || !j.ok){ state.data.metaAdsRich={linked:false}; return false; }
+      state.data.metaAdsRich = j;   // { linked, account, currency, period, kpis, prevKpis, compareLabel, campaigns }
+      return true;
+    }catch(e){ state.data.metaAdsRich={linked:false}; return false; }
+  };
+  DATA.metaAdsRich = function(){ return state.data.metaAdsRich; };
+
   // ADMIN (staff @studio27.be): alle bedrijven voor de bedrijvenkiezer/zoek. Geen bedrijf-scoping
   // (admin-global); de worker gate't strikt op het geverifieerde domein. -> [{id, naam}].
   DATA.loadAdminCompanies = async function(){

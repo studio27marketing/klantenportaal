@@ -3113,6 +3113,113 @@ export async function metaAds(bedrijfId, body, env) {
   return { status: 200, body: { ok: true, linked: true, account: acct, currency, period, kpis, prevKpis, compareLabel, campaigns, trend, error } };
 }
 
+/* ---- metaAdsRich (READ, ADMIN-only) — uitgebreide Meta-rapportage --------------
+ * Voor @studio27.be-teamleden (worker gate't op is_staff). Eén rijk rapport per klant,
+ * gebaseerd op Arne's MASTERPROMPT: 8 account-KPI's, Leads + CPL, per-campagne dag-
+ * evolutie, adset- én ad-niveau insights, en periode-vergelijking. Alles in ~8 PARALLELLE
+ * Graph-calls (geen per-campagne-loop): account-KPI's, campagne-meta, campagne-insights,
+ * campagne-DAG-insights (time_increment=1), adset-insights, ad-insights, adset-meta, ad-meta.
+ * Account UITSLUITEND uit de eigen bedrijf-taak (tenant-safe); token server-side.
+ */
+// Leads-detectie (Arne's rapport): 'lead' (on-Facebook lead form) en 'onsite_conversion.lead_grouped'.
+// We nemen het MAXIMUM i.p.v. de som: rapporteert Meta beide voor dezelfde leads, dan zou sommeren
+// dubbeltellen. CPL = besteed / leads (0 als geen leads). Houdt cijfers consistent met Meta Ads Manager.
+function metaLeads(actions) {
+  return Math.max(metaActionVal(actions, ['lead']), metaActionVal(actions, ['onsite_conversion.lead_grouped']));
+}
+function metaRichKpi(row) {
+  row = row || {};
+  const spend = Number(row.spend) || 0;
+  const leads = metaLeads(row.actions);
+  return {
+    spend, impressions: Number(row.impressions) || 0, reach: Number(row.reach) || 0,
+    clicks: Number(row.clicks) || 0, linkClicks: Number(row.inline_link_clicks) || 0,
+    ctr: Number(row.ctr) || 0, cpc: Number(row.cpc) || 0, cpm: Number(row.cpm) || 0,
+    frequency: Number(row.frequency) || 0,
+    leads, cpl: leads > 0 ? Math.round((spend / leads) * 100) / 100 : 0,
+    results: metaActionVal(row.actions, META_RESULT_ACTIONS),
+  };
+}
+export async function metaAdsRich(bedrijfId, body, env) {
+  const br = await cu.get(env, `/task/${bedrijfId}`);
+  const acct = br.ok && br.data ? str(getCF(br.data, FIELD.metaAdsId)).trim() : '';
+  if (!/^\d{6,20}$/.test(acct)) return { status: 200, body: { ok: true, linked: false } };
+  if (!str(env && env.META_SYSTEM_TOKEN)) return { status: 200, body: { ok: true, linked: false, reason: 'no_token' } };
+
+  const from = str(body && body.from).trim(), to = str(body && body.to).trim();
+  const useRange = META_YMD.test(from) && META_YMD.test(to);
+  const preset = META_PRESETS[str(body && body.period).trim()] || 'last_30d';
+  const compare = ['previous', 'month', 'year'].indexOf(str(body && body.compare)) >= 0 ? str(body.compare) : 'none';
+  const tp = metaTimeParams(from, to, preset);
+  const act = `act_${acct}`;
+  const INS = 'spend,impressions,reach,clicks,inline_link_clicks,ctr,cpc,cpm,frequency,actions';
+
+  const accInfo = await metaGet(env, act, { fields: 'currency,timezone_name,name' });
+  const currency = (accInfo.ok && accInfo.data && accInfo.data.currency) || 'EUR';
+
+  // 8 onafhankelijke calls parallel.
+  const [accCur, campMeta, campIns, campDaily, adsetIns, adIns, adsetMeta, adMeta] = await Promise.all([
+    metaGet(env, `${act}/insights`, Object.assign({ level: 'account', fields: INS }, tp)),
+    metaGet(env, `${act}/campaigns`, { fields: 'name,objective,effective_status,daily_budget,lifetime_budget', effective_status: '["ACTIVE","PAUSED"]', limit: '300' }),
+    metaGet(env, `${act}/insights`, Object.assign({ level: 'campaign', limit: '400', fields: 'campaign_id,campaign_name,' + INS }, tp)),
+    metaGet(env, `${act}/insights`, Object.assign({ level: 'campaign', time_increment: '1', limit: '800', fields: 'campaign_id,spend,impressions,clicks,actions' }, tp)),
+    metaGet(env, `${act}/insights`, Object.assign({ level: 'adset', limit: '500', fields: 'adset_id,adset_name,campaign_id,' + INS }, tp)),
+    metaGet(env, `${act}/insights`, Object.assign({ level: 'ad', limit: '800', fields: 'ad_id,ad_name,adset_id,campaign_id,' + INS }, tp)),
+    metaGet(env, `${act}/adsets`, { fields: 'name,effective_status,campaign_id', effective_status: '["ACTIVE","PAUSED"]', limit: '500' }),
+    metaGet(env, `${act}/ads`, { fields: 'name,effective_status,adset_id,campaign_id', effective_status: '["ACTIVE","PAUSED"]', limit: '800' }),
+  ]);
+
+  const accRow = (accCur.ok && accCur.data && Array.isArray(accCur.data.data) && accCur.data.data[0]) || {};
+  const kpis = metaRichKpi(accRow);
+
+  // periode-vergelijking (account-niveau) — enkel bij een expliciet datumbereik.
+  let prevKpis = null, compareLabel = '';
+  if (useRange && compare !== 'none') {
+    const cw = metaCompareWindow(from, to, compare);
+    const prev = await metaGet(env, `${act}/insights`, Object.assign({ level: 'account', fields: INS }, { time_range: JSON.stringify({ since: cw[0], until: cw[1] }) }));
+    prevKpis = metaRichKpi((prev.ok && prev.data && Array.isArray(prev.data.data) && prev.data.data[0]) || {});
+    compareLabel = compare === 'previous' ? 'vorige periode' : (compare === 'month' ? 'vorige maand' : 'vorig jaar');
+  }
+
+  // indexeer
+  const campMetaMap = {}; if (campMeta.ok && Array.isArray(campMeta.data.data)) for (const c of campMeta.data.data) campMetaMap[c.id] = c;
+  const dailyByCamp = {}; if (campDaily.ok && Array.isArray(campDaily.data.data)) for (const r of campDaily.data.data) (dailyByCamp[r.campaign_id] = dailyByCamp[r.campaign_id] || []).push(r);
+  const adsetMetaMap = {}; if (adsetMeta.ok && Array.isArray(adsetMeta.data.data)) for (const a of adsetMeta.data.data) adsetMetaMap[a.id] = a;
+  const adMetaMap = {}; if (adMeta.ok && Array.isArray(adMeta.data.data)) for (const a of adMeta.data.data) adMetaMap[a.id] = a;
+  const adsetsByCamp = {}; if (adsetIns.ok && Array.isArray(adsetIns.data.data)) for (const r of adsetIns.data.data) (adsetsByCamp[r.campaign_id] = adsetsByCamp[r.campaign_id] || []).push(r);
+  const adsByCamp = {}; if (adIns.ok && Array.isArray(adIns.data.data)) for (const r of adIns.data.data) (adsByCamp[r.campaign_id] = adsByCamp[r.campaign_id] || []).push(r);
+
+  // bouw per campagne (inclusie: spend>0 OF impressions>0 — dus alle leverende campagnes,
+  // ook gepauzeerde/afgeronde die in de periode spendeerden).
+  const campRows = (campIns.ok && Array.isArray(campIns.data.data)) ? campIns.data.data : [];
+  const campaigns = campRows.map((ins) => {
+    const cid = ins.campaign_id;
+    const meta = campMetaMap[cid] || {};
+    const k = metaRichKpi(ins);
+    const daily = (dailyByCamp[cid] || []).map((d) => {
+      const lds = metaLeads(d.actions), sp = Number(d.spend) || 0;
+      return { date: d.date_start || '', spend: sp, impressions: Number(d.impressions) || 0, clicks: Number(d.clicks) || 0, leads: lds, cpl: lds > 0 ? Math.round((sp / lds) * 100) / 100 : 0 };
+    }).sort((a, b) => (a.date < b.date ? -1 : 1));
+    const adsets = (adsetsByCamp[cid] || []).map((r) => {
+      const m = adsetMetaMap[r.adset_id] || {};
+      return Object.assign({ id: r.adset_id, name: r.adset_name || m.name || '', status: m.effective_status || '' }, metaRichKpi(r));
+    }).sort((a, b) => b.spend - a.spend);
+    const ads = (adsByCamp[cid] || []).map((r) => {
+      const m = adMetaMap[r.ad_id] || {};
+      return Object.assign({ id: r.ad_id, name: r.ad_name || m.name || '', status: m.effective_status || '', adsetId: r.adset_id || '' }, metaRichKpi(r));
+    }).sort((a, b) => b.spend - a.spend);
+    return Object.assign({
+      id: cid, name: ins.campaign_name || meta.name || '', objective: meta.objective || '', status: meta.effective_status || '',
+      budget: Number(meta.daily_budget || meta.lifetime_budget || 0) / 100, budgetType: meta.daily_budget ? 'daily' : (meta.lifetime_budget ? 'lifetime' : ''),
+      daily, adsets, ads,
+    }, k);
+  }).filter((c) => c.spend > 0 || c.impressions > 0).sort((a, b) => b.spend - a.spend);
+
+  const error = (!accCur.ok && !campIns.ok && !campMeta.ok) ? (accCur.err || 'fetch_failed') : null;
+  const period = useRange ? { from, to, compare } : { preset, compare: 'none' };
+  return { status: 200, body: { ok: true, linked: true, account: acct, currency, period, kpis, prevKpis, compareLabel, campaigns, error } };
+}
+
 /* ---- metaCampaignAds (READ) — rijke media per campagne, ON-DEMAND ----
  * Wordt aangeroepen wanneer een klant een campagne opent. Haalt de actieve ads van
  * DIE campagne (account-scoped + campagne-filter = tenant-safe) en hun media in goede

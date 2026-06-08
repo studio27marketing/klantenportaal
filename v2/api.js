@@ -104,6 +104,9 @@ const ENDPOINTS = {
   metaAds:           GATEWAY_BASE + '/metaAds',
   // Campagne-creatives (rijke media: video/foto/carrousel) ON-DEMAND: { campaign_id } -> { ok, ads:[] }.
   metaCampaignAds:   GATEWAY_BASE + '/metaCampaignAds',
+  // ADMIN-only (staff): uitgebreide Meta-rapportage voor de team-weergave. { from,to,compare } ->
+  // { ok, linked, kpis(8+leads/cpl), prevKpis, campaigns:[{...,daily,adsets,ads}] }. Acting-as scope.
+  metaAdsRich:       GATEWAY_BASE + '/metaAdsRich',
   // ADMIN-only (staff @studio27.be): lijst ALLE bedrijven voor de admin-bedrijvenkiezer/zoek.
   // {} -> { ok, companies:[{id,naam}], count }. Worker gate't strikt op het geverifieerde domein.
   adminCompanies:    GATEWAY_BASE + '/adminCompanies',

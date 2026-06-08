@@ -36,6 +36,7 @@ import {
   buildAiContext,
   publicShootAvailability,
   adminCompanies,
+  metaAdsRich,
 } from './handlers.mjs';
 
 // Pad → Make-webhook. Deze URLs zijn niet geheim (staan al in dashboard.js).
@@ -505,14 +506,15 @@ export default {
     if (path === 'provision') return handleProvision(request, env, ch);
 
     const isAdminApi = (path === 'adminCompanies');   // admin-only ClickUp-read (enkel staff)
+    const isStaffData = (path === 'metaAdsRich');      // admin-only rijke ads-rapportage (enkel staff, acting-as)
     const isPorted = !!(READ_HANDLERS[path] || WRITE_HANDLERS[path] || path === 'bedrijfBeheer');
     const target = MAKE_ENDPOINTS[path];
-    if (!isAdminApi && !isPorted && !target) return json({ ok: false, error: 'unknown_endpoint' }, 404, ch);
+    if (!isAdminApi && !isStaffData && !isPorted && !target) return json({ ok: false, error: 'unknown_endpoint' }, 404, ch);
 
     if (!env.PROJECT_ID) return json({ ok: false, error: 'gateway_misconfigured' }, 500, ch);
-    // Geporte ClickUp-paden (en admin-API) vereisen CLICKUP_TOKEN; Make-forward vereist GATEWAY_SECRET.
-    if ((isPorted || isAdminApi) && !env.CLICKUP_TOKEN) return json({ ok: false, error: 'gateway_misconfigured' }, 500, ch);
-    if (!isPorted && !isAdminApi && !env.GATEWAY_SECRET) return json({ ok: false, error: 'gateway_misconfigured' }, 500, ch);
+    // Geporte ClickUp-paden (en admin-API's) vereisen CLICKUP_TOKEN; Make-forward vereist GATEWAY_SECRET.
+    if ((isPorted || isAdminApi || isStaffData) && !env.CLICKUP_TOKEN) return json({ ok: false, error: 'gateway_misconfigured' }, 500, ch);
+    if (!isPorted && !isAdminApi && !isStaffData && !env.GATEWAY_SECRET) return json({ ok: false, error: 'gateway_misconfigured' }, 500, ch);
 
     // 1. Firebase ID-token
     const authz = request.headers.get('Authorization') || '';
@@ -557,6 +559,29 @@ export default {
       try { abody = await request.json(); } catch (e) { abody = {}; }
       try {
         const r = await adminCompanies(env, abody || {});
+        return json(r.body, r.status, ch);
+      } catch (e) {
+        return json({ ok: false, error: 'handler_error' }, 502, ch);
+      }
+    }
+
+    // Admin-only rijke ads-rapportage: enkel staff, gescoped op het acting-as-bedrijf. De heavy
+    // Graph-call blijft zo strikt intern (klanten krijgen de simpele metaAds-weergave).
+    if (isStaffData) {
+      if (!isStaff) return json({ ok: false, error: 'forbidden' }, 403, ch);
+      if (!bedrijfId) return json({ ok: false, error: 'no_company_link', message: 'Kies eerst een klant.' }, 403, ch);
+      if (env.KV) {
+        const rlKey = 'rl:' + claims.sub + ':' + Math.floor(Date.now() / 60000);
+        try {
+          const cur = parseInt((await env.KV.get(rlKey)) || '0', 10);
+          if (cur >= LIMIT_SENSITIVE) return json({ ok: false, error: 'rate_limited' }, 429, ch);
+          ctx.waitUntil(env.KV.put(rlKey, String(cur + 1), { expirationTtl: 120 }));
+        } catch (e) { /* fail-open op de teller */ }
+      }
+      let rbody = {};
+      try { rbody = await request.json(); } catch (e) { rbody = {}; }
+      try {
+        const r = await metaAdsRich(bedrijfId, rbody || {}, env);
         return json(r.body, r.status, ch);
       } catch (e) {
         return json({ ok: false, error: 'handler_error' }, 502, ch);
