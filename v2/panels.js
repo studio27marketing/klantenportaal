@@ -844,9 +844,42 @@ function metaEnsureStyles(){
 function metaPeriodLabel(p){ return ({today:'Vandaag',last_7d:'7 dagen',last_30d:'30 dagen'})[p]||p; }
 function metaEur(n,cur){ var s=(Number(n)||0).toLocaleString('nl-BE',{minimumFractionDigits:2,maximumFractionDigits:2}); cur=cur||'EUR'; return cur==='EUR'?('€ '+s):(s+' '+cur); }
 function metaKpiCard(br,lab,val){ return '<div class="kpi br-'+br+'"><div class="kbar"></div><div class="klab">'+lab+'</div><div class="knum">'+val+'</div></div>'; }
+function adsKpiDelta(cur,prev){ if(prev==null) return ''; cur=Number(cur)||0; prev=Number(prev)||0; if(!prev){ return cur>0?'<span class="kdelta up">nieuw</span>':''; } var pct=Math.round(((cur-prev)/prev)*1000)/10; var cls=pct>0?'up':(pct<0?'down':'flat'); return '<span class="kdelta '+cls+'">'+(pct>0?'+':'')+pct+'%</span>'; }
+function adsKpiCard(br,lab,val,d){ return '<div class="kpi br-'+br+'"><div class="kbar"></div><div class="klab">'+lab+'</div><div class="knum">'+val+'</div>'+(d?'<div class="kdrow">'+d+'</div>':'')+'</div>'; }
 function metaFmt(f){ return ({video:['Video','purple'],carousel:['Carrousel','blue'],image:['Foto','green']})[f]||['Foto','green']; }
-function setMetaPeriod(p){ state._metaPeriod=p; state.data.metaAds=null; renderPanel('advertenties'); if(window.S27DATA&&S27DATA.loadMetaAds){ S27DATA.loadMetaAds(p).then(function(){ if(document.querySelector('.panel[data-screen-label="advertenties"]')) renderPanel('advertenties'); }); } }
-function refreshMetaAds(){ setMetaPeriod(state._metaPeriod||'last_7d'); }
+/* ---- Ads periode-selector (custom range) + rolling vergelijking (spiegelt socials) ---- */
+function _adsYmd(d){ var p=function(n){return (n<10?'0':'')+n;}; return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); }
+function adsPeriodWindow(preset){
+  var now=new Date(), from;
+  if(preset==='today') from=now;
+  else if(preset==='7d') from=new Date(now.getTime()-6*86400000);
+  else if(preset==='30d') from=new Date(now.getTime()-29*86400000);
+  else if(preset==='90d') from=new Date(now.getTime()-89*86400000);
+  else return null;
+  return { from:_adsYmd(from), to:_adsYmd(now) };
+}
+function adsPeriod(){ if(!state._adsPeriod){ var w=adsPeriodWindow('7d'); state._adsPeriod={preset:'7d',compare:'none',from:w.from,to:w.to}; } return state._adsPeriod; }
+function _adsRefreshIc(){ return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>'; }
+function adsPeriodBar(){
+  var pp=adsPeriod();
+  var presets=[['today','Vandaag'],['7d','7 dagen'],['30d','30 dagen'],['90d','90 dagen'],['custom','Aangepast']];
+  var comps=[['none','Geen vergelijking'],['previous','Vorige periode'],['month','Vorige maand'],['year','Vorig jaar']];
+  var chips=presets.map(function(o){ return '<button class="soc-perchip'+(pp.preset===o[0]?' active':'')+'" onclick="adsSetPeriod(\''+o[0]+'\')">'+esc(o[1])+'</button>'; }).join('');
+  var custom = pp.preset==='custom' ? '<div class="soc-percustom"><input type="date" id="adsFrom" value="'+esc(pp.from||'')+'" onchange="adsCustomPeriod()"><span>tot</span><input type="date" id="adsTo" value="'+esc(pp.to||'')+'" onchange="adsCustomPeriod()"></div>' : '';
+  var comp='<div class="soc-percompare">'+ic('st_progress',15)+'<select onchange="adsSetCompare(this.value)" aria-label="Vergelijken met">'+comps.map(function(o){return '<option value="'+o[0]+'"'+(pp.compare===o[0]?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')+'</select><button class="seg-btn" onclick="adsReload()" title="Verversen" aria-label="Verversen" style="margin-left:4px">'+_adsRefreshIc()+'</button></div>';
+  return '<div class="soc-period"><div class="soc-perchips">'+chips+'</div>'+custom+comp+'</div>';
+}
+function _adsRerenderPeriodBar(){ var bar=document.querySelector('.panel[data-screen-label="advertenties"] .soc-period'); if(bar) bar.outerHTML=adsPeriodBar(); }
+function adsReload(){
+  var box=document.getElementById('adsBody'); if(box) box.innerHTML='<div class="empty" style="padding:50px"><div class="brand-spinner" style="margin:0 auto 10px"></div><p>Advertentiedata wordt opgehaald…</p></div>';
+  var pp=adsPeriod();
+  if(state.demoMode || !(window.S27DATA&&S27DATA.loadMetaAds)){ var b0=document.getElementById('adsBody'); if(b0) b0.innerHTML=adsOverviewInner(); return; }
+  S27DATA.loadMetaAds({from:pp.from,to:pp.to,compare:pp.compare}).then(function(){ var b=document.getElementById('adsBody'); if(b) b.innerHTML=adsOverviewInner(); }).catch(function(){ var b=document.getElementById('adsBody'); if(b) b.innerHTML=adsOverviewInner(); });
+}
+function adsSetPeriod(preset){ var pp=adsPeriod(); pp.preset=preset; if(preset!=='custom'){ var w=adsPeriodWindow(preset); if(w){ pp.from=w.from; pp.to=w.to; } } _adsRerenderPeriodBar(); if(preset!=='custom') adsReload(); }
+function adsCustomPeriod(){ var f=document.getElementById('adsFrom'),t=document.getElementById('adsTo'); if(!f||!t||!f.value||!t.value) return; var pp=adsPeriod(); pp.from=f.value; pp.to=t.value; adsReload(); }
+function adsSetCompare(mode){ var pp=adsPeriod(); pp.compare=mode; adsReload(); }
+function refreshMetaAds(){ adsReload(); }
 function metaCreativeCard(a,i,cur){
   var fm=metaFmt(a.format); var thumb=(a.format==='video'?(a.poster||a.image):a.image)||a.thumb||'';
   var img = thumb
@@ -858,20 +891,34 @@ function metaCreativeCard(a,i,cur){
 }
 function metaCampaignCard(c,cur){
   var obj=adsObjective(c.objective);
-  var ms=[['Besteed',metaEur(c.spend,cur)],['Vertoningen',adsNum(c.impressions)],['Klikken',adsNum(c.clicks)],['CTR',(Number(c.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%'],['Resultaten',adsNum(c.results)]];
+  var ms=[['Besteed',metaEur(c.spend,cur)],['Vertoningen',adsNum(c.impressions)],['Klikken',adsNum(c.clicks)],['CPC',metaEur(c.cpc,cur)],['CTR',(Number(c.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%'],['Resultaten',adsNum(c.results)]];
   var chev='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="color:var(--ink-4);flex:none"><path d="M9 6l6 6-6 6"/></svg>';
-  return '<div class="card" onclick="openMetaCampaign(\''+esc(c.id)+'\')" style="padding:14px 16px;margin-bottom:10px;cursor:pointer"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:11px"><span class="pill pill-prog"><span class="pdot"></span>Live</span><b style="font-family:var(--font-display);font-size:15px;flex:1;min-width:130px">'+esc(c.name||'Campagne')+'</b>'+(obj?'<span class="fs" style="color:var(--ink-4)">'+esc(obj)+'</span>':'')+chev+'</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));gap:10px">'+ms.map(function(m){return '<div><div style="color:var(--ink-4);font-size:11px;font-weight:600">'+m[0]+'</div><div style="font-family:var(--font-display);font-weight:800;font-size:16px;color:var(--ink)">'+m[1]+'</div></div>';}).join('')+'</div></div>';
+  return '<div class="card" onclick="openMetaCampaign(\''+esc(c.id)+'\')" style="padding:14px 16px;margin-bottom:10px;cursor:pointer"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:11px"><span class="pill pill-prog"><span class="pdot"></span>Live</span><b style="font-family:var(--font-display);font-size:15px;flex:1;min-width:130px">'+esc(c.name||'Campagne')+'</b>'+(obj?'<span class="fs" style="color:var(--ink-4)">'+esc(obj)+'</span>':'')+chev+'</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:10px">'+ms.map(function(m){return '<div><div style="color:var(--ink-4);font-size:11px;font-weight:600">'+m[0]+'</div><div style="font-family:var(--font-display);font-weight:800;font-size:16px;color:var(--ink)">'+m[1]+'</div></div>';}).join('')+'</div></div>';
 }
-function metaTrendMetricLabel(mt){ return ({spend:'Besteding',clicks:'Klikken',impressions:'Vertoningen'})[mt]||'Besteding'; }
-function setMetaTrendMetric(mt){ state._metaTrendMetric=mt; renderPanel('advertenties'); }
-function metaTrendBlock(m,cur){
-  var tr=(m.trend||[]); if(tr.length<2) return '';
-  var mt=state._metaTrendMetric||'spend';
-  var series=tr.map(function(d){ return {value:Number(d[mt])||0}; });
-  var btns=['spend','clicks','impressions'].map(function(x){ return '<button class="seg-btn'+(mt===x?' active':'')+'" onclick="setMetaTrendMetric(\''+x+'\')">'+metaTrendMetricLabel(x)+'</button>'; }).join('');
-  var total=tr.reduce(function(a,d){return a+(Number(d[mt])||0);},0);
-  var totLab=mt==='spend'?metaEur(total,cur):adsNum(total);
-  return '<div class="card" style="padding:16px 18px 12px;margin-bottom:14px"><div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px"><h3 style="font-size:15px;font-family:var(--font-display);font-weight:800;margin:0">Trend laatste 30 dagen</h3><span style="font-size:13px;color:var(--ink-4);font-weight:700">'+metaTrendMetricLabel(mt)+': '+totLab+'</span><span style="margin-left:auto;display:inline-flex;gap:5px;flex-wrap:wrap">'+btns+'</span></div>'+socialTrendSVG(series, metaTrendMetricLabel(mt))+'</div>';
+/* ---- Multi-series toggle-trend: besteding/klikken/vertoningen per dag, aan/uit te klikken ---- */
+var ADS_TREND_META={ spend:['Besteding','#C44514'], clicks:['Klikken','#147A50'], impressions:['Vertoningen','#1F5FA8'] };
+function adsTrendOn(){ if(!state._adsTrendOn) state._adsTrendOn={spend:true,clicks:true,impressions:false}; return state._adsTrendOn; }
+function adsToggleTrend(metric){ var on=adsTrendOn(); on[metric]=!on[metric]; var box=document.getElementById('adsTrendBox'); if(box) box.outerHTML=adsTrendBlock(); }
+function adsTrendSVG(tr, on){
+  var W=720,H=170,padL=6,padR=6,padT=12,padB=8,n=tr.length;
+  var X=function(i){ return padL+(i*(W-padL-padR)/(n-1)); };
+  var series=['spend','clicks','impressions'].filter(function(k){return on[k];});
+  if(!series.length) return '<div class="ads-tempty">Selecteer minstens één reeks om de evolutie te zien.</div>';
+  var paths=series.map(function(k){
+    var vals=tr.map(function(d){return Number(d[k])||0;});
+    var mn=Math.min.apply(null,vals), mx=Math.max.apply(null,vals); if(mx===mn) mx=mn+1;
+    var Y=function(v){ return H-padB-((v-mn)*(H-padT-padB)/(mx-mn)); };
+    var line=''; vals.forEach(function(v,i){ line+=(i?'L':'M')+X(i).toFixed(1)+','+Y(v).toFixed(1)+' '; });
+    return '<path d="'+line.trim()+'" fill="none" stroke="'+ADS_TREND_META[k][1]+'" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>';
+  }).join('');
+  var lab=function(ymd){ var p=String(ymd).split('-'); return p.length===3?(p[2]+'/'+p[1]):ymd; };
+  return '<svg class="ads-tsvg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" aria-hidden="true">'+paths+'</svg><div class="ads-txlab"><span>'+esc(lab(tr[0].date))+'</span><span>'+esc(lab(tr[n-1].date))+'</span></div>';
+}
+function adsTrendBlock(){
+  var m=(window.S27DATA&&S27DATA.metaAds&&S27DATA.metaAds())||{}; var tr=m.trend||[]; var cur=m.currency||'EUR'; var on=adsTrendOn();
+  var chips=['spend','clicks','impressions'].map(function(x){ var mm=ADS_TREND_META[x]; var tot=tr.reduce(function(a,d){return a+(Number(d[x])||0);},0); var tl=x==='spend'?metaEur(tot,cur):adsNum(tot); return '<button class="ads-tchip'+(on[x]?' on':'')+'" onclick="adsToggleTrend(\''+x+'\')" style="--tc:'+mm[1]+'"><span class="ads-tdot"></span>'+esc(mm[0])+' <b>'+tl+'</b></button>'; }).join('');
+  var svg=(tr.length<2)?'<div class="ads-tempty">Nog te weinig data voor een trend in deze periode.</div>':adsTrendSVG(tr,on);
+  return '<div class="card ads-trend" id="adsTrendBox" style="padding:15px 18px 12px;margin-bottom:14px"><div class="ads-thead"><h3>Evolutie per dag</h3><div class="ads-tchips">'+chips+'</div></div>'+svg+'</div>';
 }
 function metaAdsBody(){
   var m=(window.S27DATA&&S27DATA.metaAds&&S27DATA.metaAds())||null;
@@ -880,16 +927,44 @@ function metaAdsBody(){
   metaEnsureStyles();
   var cur=m.currency||'EUR';
   if(state._metaCampaign){ return metaCampaignDetail(m,cur); }
-  var per=state._metaPeriod||m.period||'last_7d'; var k=m.kpis||{};
-  var btns=['last_7d','last_30d','today'].map(function(p){ return '<button class="seg-btn'+(per===p?' active':'')+'" onclick="setMetaPeriod(\''+p+'\')">'+metaPeriodLabel(p)+'</button>'; }).join('');
-  var controls='<div class="section-head"><h2 style="display:flex;align-items:center;gap:9px"><span class="live-dot"></span>Live overzicht</h2><span style="display:inline-flex;gap:5px;align-items:center;flex-wrap:wrap">'+btns+'<button class="seg-btn" onclick="refreshMetaAds()" title="Verversen" aria-label="Verversen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button></span></div>';
-  if(m.error){ return controls+'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">De real-time Meta-data is even niet beschikbaar. Probeer straks opnieuw.</div>'; }
-  var strip='<div class="kpi-grid">'+metaKpiCard('orange','Besteding',metaEur(k.spend,cur))+metaKpiCard('blue','Vertoningen',adsNum(k.impressions))+metaKpiCard('green','Klikken',adsNum(k.clicks))+metaKpiCard('purple','CTR',(Number(k.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%')+'</div>';
-  var trend=metaTrendBlock(m,cur);
-  var note='<p class="sdesc" style="margin:-2px 0 12px;max-width:64ch">Rechtstreeks en real-time uit je Meta-account. Klik op een campagne voor de details en de gebruikte visuals.</p>';
+  var head='<div class="section-head" style="margin-bottom:4px"><h2 style="display:flex;align-items:center;gap:9px"><span class="live-dot"></span>Live overzicht</h2></div>';
+  return head+adsPeriodBar()+'<div id="adsBody">'+adsOverviewInner()+'</div>'+adsChatSection();
+}
+// Ads-chat: enkel zichtbaar als er een advertentietaak van de HUIDIGE MAAND bestaat (worker filtert
+// ad-taken al op due-date deze maand). Berichten/uploads gaan als comments naar die taak.
+function adsChatSection(){
+  var ad=_adProject(); if(!ad) return '';
+  return '<div class="ads-chat"><div class="section-head" style="margin-top:24px"><h2 style="display:flex;align-items:center;gap:8px">'+ic('msg',18)+' Chat over je advertenties</h2></div>'
+    +'<p class="sdesc" style="margin:-2px 0 12px;max-width:64ch">Stel je vraag over <b>'+esc(ad.name||'je advertentieproject')+'</b> of upload foto’s/video’s die we kunnen gebruiken voor je advertenties. Je bericht komt rechtstreeks bij je Studio 27-team terecht.</p>'
+    +'<div class="card ads-chatcard"><div id="adsChatBody">'+chatHTML(ad.id)+'</div></div></div>';
+}
+function adsChatMount(){
+  var ad=_adProject();
+  if(!ad || !document.getElementById('chatList')) return;   // geen ads-taak of geen chat in beeld (bv. campagne-detail)
+  state.activeProject=ad.id;
+  if(window.S27DATA && S27DATA.loadChat && !((state.data.chats||{})[ad.id])){
+    S27DATA.loadChat(ad.id).then(function(){ var h=document.getElementById('adsChatBody'); if(h && state.activeProject===ad.id) h.innerHTML=chatHTML(ad.id); }).catch(function(){});
+  }
+  if(typeof startChatPoll==='function') startChatPoll(ad.id);
+}
+function renderAds(){ renderPanel('advertenties'); if(typeof adsChatMount==='function') adsChatMount(); }
+function adsOverviewInner(){
+  var m=(window.S27DATA&&S27DATA.metaAds&&S27DATA.metaAds())||{}; var cur=m.currency||'EUR';
+  if(m.error){ return '<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">De real-time Meta-data is even niet beschikbaar. Probeer straks opnieuw.</div>'; }
+  var k=m.kpis||{}, pv=m.prevKpis||null, clab=m.compareLabel||'';
+  var resd = pv?('<div class="ads-reschip-d">'+adsKpiDelta(k.results,pv.results)+'<span>vs '+esc(clab)+'</span></div>'):'';
+  var resChip='<div class="ads-reschip"><div class="ads-reschip-ic">'+ic('st_approved',20)+'</div><div class="ads-reschip-tx"><div class="ads-reschip-lab">Resultaten in deze periode</div><div class="ads-reschip-num">'+adsNum(k.results)+'</div></div>'+resd+'</div>';
+  var strip='<div class="kpi-grid kpi-grid-5">'
+    +adsKpiCard('orange','Besteding',metaEur(k.spend,cur), pv?adsKpiDelta(k.spend,pv.spend):'')
+    +adsKpiCard('blue','Vertoningen',adsNum(k.impressions), pv?adsKpiDelta(k.impressions,pv.impressions):'')
+    +adsKpiCard('green','Klikken',adsNum(k.clicks), pv?adsKpiDelta(k.clicks,pv.clicks):'')
+    +adsKpiCard('indigo','CPC',metaEur(k.cpc,cur), pv?adsKpiDelta(k.cpc,pv.cpc):'')
+    +adsKpiCard('purple','CTR',(Number(k.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%', pv?adsKpiDelta(k.ctr,pv.ctr):'')
+    +'</div>';
+  var note='<p class="sdesc" style="margin:-2px 0 12px;max-width:64ch">Rechtstreeks en real-time uit je Meta-account. Klik op een campagne voor de advertenties en visuals.</p>';
   var camps=(m.campaigns||[]).slice().sort(function(a,b){return (b.spend||0)-(a.spend||0);});
-  var campSec='<div class="section-head" style="margin-top:18px"><h2>Live campagnes</h2><span class="count">'+camps.length+'</span></div>'+(camps.length?camps.map(function(c){return metaCampaignCard(c,cur);}).join(''):'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">Geen actieve campagnes in deze periode.</div>');
-  return controls+strip+trend+note+campSec;
+  var campSec='<div class="section-head" style="margin-top:18px"><h2>Actieve campagnes</h2><span class="count">'+camps.length+'</span></div>'+(camps.length?camps.map(function(c){return metaCampaignCard(c,cur);}).join(''):'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">Geen campagnes met besteding in deze periode.</div>');
+  return resChip+strip+adsTrendBlock()+note+campSec;
 }
 function openMetaCampaign(id){
   state._metaCampaign=String(id); renderPanel('advertenties'); if(window.scrollTo)window.scrollTo({top:0,behavior:'auto'});
@@ -897,7 +972,32 @@ function openMetaCampaign(id){
     S27DATA.loadCampaignAds(id).then(function(){ if(state._metaCampaign===String(id) && document.querySelector('.panel[data-screen-label="advertenties"]')) renderPanel('advertenties'); });
   }
 }
-function closeMetaCampaign(){ state._metaCampaign=null; renderPanel('advertenties'); }
+function closeMetaCampaign(){ state._metaCampaign=null; renderAds(); }
+function _adsChev(){ return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>'; }
+function metaAdRow(a,i,cur){
+  var fm=metaFmt(a.format); var thumb=(a.format==='video'?(a.poster||a.image):a.image)||a.thumb||'';
+  var th = thumb?'<img class="ads-adth" src="'+esc(thumb)+'" alt="" loading="lazy" referrerpolicy="no-referrer" onclick="event.stopPropagation();openMetaCreative('+i+')">':'<span class="ads-adth ads-adth-none">'+ic('img',16)+'</span>';
+  return '<div class="ads-adrow" onclick="adsToggleAdRow('+i+')">'
+    +'<div class="ads-adcell ads-adname">'+th+'<div class="ads-adnm"><b>'+esc(a.name||'Advertentie')+'</b><span class="ads-adfmt br-'+fm[1]+'">'+(a.format==='video'?ic('play',10):'')+esc(fm[0])+'</span></div></div>'
+    +'<div class="ads-adcell"><span class="ads-adm-lab">Besteed</span><b>'+metaEur(a.spend,cur)+'</b></div>'
+    +'<div class="ads-adcell"><span class="ads-adm-lab">Klikken</span><b>'+adsNum(a.clicks)+'</b></div>'
+    +'<div class="ads-adcell"><span class="ads-adm-lab">CTR</span><b>'+(Number(a.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%</b></div>'
+    +'<div class="ads-adcell"><span class="ads-adm-lab">CPC</span><b>'+metaEur(a.cpc,cur)+'</b></div>'
+    +'<span class="ads-adchev">'+_adsChev()+'</span></div>'
+    +'<div class="ads-adexp" id="adsAdExp'+i+'" style="display:none"></div>';
+}
+function adsToggleAdRow(i){
+  var exp=document.getElementById('adsAdExp'+i); if(!exp) return; var row=exp.previousElementSibling;
+  if(exp.style.display!=='none'){ exp.style.display='none'; exp.innerHTML=''; if(row) row.classList.remove('open'); return; }
+  var a=(state._metaAdsView||[])[i]; if(!a) return;
+  var cur=((window.S27DATA&&S27DATA.metaAds&&S27DATA.metaAds())||{}).currency||'EUR';
+  var media;
+  if(a.format==='video' && a.videoSrc){ media='<video class="ads-adexp-el" src="'+esc(a.videoSrc)+'" controls preload="metadata" poster="'+esc(a.poster||'')+'"></video>'; }
+  else { var vis=(a.format==='video'?(a.poster||a.image||a.thumb):(a.image||a.thumb)); media=vis?'<img class="ads-adexp-el" src="'+esc(vis)+'" alt="" referrerpolicy="no-referrer" onclick="openMetaCreative('+i+')">':'<div class="ads-adexp-el ads-adexp-none">geen voorbeeld</div>'; }
+  var stats=[['Besteed',metaEur(a.spend,cur)],['Vertoningen',adsNum(a.impressions)],['Klikken',adsNum(a.clicks)],['CTR',(Number(a.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%'],['CPC',metaEur(a.cpc,cur)]];
+  exp.innerHTML='<div class="ads-adexp-in"><div class="ads-adexp-media">'+media+'<button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openMetaCreative('+i+')">'+ic('arrow',13)+' Vergroot visual</button></div><div class="ads-adexp-stats">'+stats.map(function(s){return '<div><div class="ads-adexp-lab">'+esc(s[0])+'</div><div class="ads-adexp-num">'+s[1]+'</div></div>';}).join('')+'</div></div>';
+  exp.style.display='block'; if(row) row.classList.add('open');
+}
 function metaCampaignDetail(m,cur){
   var id=state._metaCampaign;
   var c=(m.campaigns||[]).filter(function(x){return String(x.id)===String(id);})[0];
@@ -916,7 +1016,7 @@ function metaCampaignDetail(m,cur){
   } else {
     var ads=loaded.slice().sort(function(a,b){return (b.spend||0)-(a.spend||0);});
     state._metaAdsView=ads;
-    creSec='<div class="section-head" style="margin-top:20px"><h2>Advertenties &amp; visuals</h2><span class="count">'+ads.length+'</span></div>'+(ads.length?('<div class="meta-cre-grid">'+ads.map(function(a,i){return metaCreativeCard(a,i,cur);}).join('')+'</div>'):'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">Geen actieve advertenties in deze campagne.</div>');
+    creSec='<div class="section-head" style="margin-top:20px"><h2>Advertenties &amp; visuals</h2><span class="count">'+ads.length+'</span></div>'+(ads.length?('<div class="ads-adtable"><div class="ads-adhead"><span>Advertentie</span><span>Besteed</span><span>Klikken</span><span>CTR</span><span>CPC</span><span></span></div>'+ads.map(function(a,i){return metaAdRow(a,i,cur);}).join('')+'</div>'):'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">Geen actieve advertenties in deze campagne.</div>');
   }
   return back+head+kpis+subGrid+creSec;
 }

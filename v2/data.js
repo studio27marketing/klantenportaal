@@ -485,13 +485,15 @@
 
   /* ---- Meta Ads real-time (direct via Graph API, geen Make): KPI's + actieve campagnes
      + advertenties met creatives. Account + bedrijf_id server-side; periode = allowlist. ---- */
-  DATA.loadMetaAds = async function(period){
-    var per = period || state._metaPeriod || 'last_7d';
+  DATA.loadMetaAds = async function(opts){
+    // backward-compat: string = legacy date_preset; object = { from, to, compare, period }
+    var o = (typeof opts === 'string') ? { period:opts } : (opts || {});
     if(!live()){ state.data.metaAds={linked:false}; return false; }
     var bid = state.activeBedrijf || '';
     if(!bid){ state.data.metaAds={linked:false}; return false; }
     try{
-      var res = await api(ENDPOINTS.metaAds, base({ period:per }));
+      var payload = (o.from && o.to) ? base({ from:o.from, to:o.to, compare:o.compare||'none' }) : base({ period:(o.period||state._metaPeriod||'last_7d') });
+      var res = await api(ENDPOINTS.metaAds, payload);
       var j = (res && res.ok && res.data) ? res.data : null;
       if(!j || !j.ok){ state.data.metaAds={linked:false}; return false; }
       state.data.metaAds = j;   // { linked, account, currency, period, kpis, campaigns, ads, error }

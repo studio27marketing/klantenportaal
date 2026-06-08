@@ -272,6 +272,7 @@ async function goTab(name){
   if(!state.demoMode && needsLoad(name)) renderLoading(name);
   await ensureTabData(name);
   renderPanel(name);
+  if(name==='advertenties' && typeof adsChatMount==='function') adsChatMount();   // ads-chat koppelen aan de huidige-maand-advertentietaak
   updateNavBadges();
   if(name==='berichten' && !state.demoMode){ var _fp=(window.S27DATA&&(S27DATA.projects()||[])[0]); if(_fp) openBerichtChat(_fp.id); }
   closeSidebar(); syncUrl();
@@ -381,12 +382,15 @@ function rerenderActiveChat(stickBottom){
   const p=(window.S27DATA&&(S27DATA.projects()||[]).find(function(x){return x.id===id;}))||null;
   const berHost=$id('berichtChat');
   const dcBody=$id('dcBody');
+  const adsBody=$id('adsChatBody');
   if(berHost && p && !dcBody){
     berHost.innerHTML=berichtChatInner(p);
   } else if(dcBody){
     // projectdetail-chat: enkel de chat-body verversen (laat de tabs/overzicht ongemoeid)
     const closed=!!(window.S27DATA && S27DATA.isChatClosed && p && p._raw && S27DATA.isChatClosed(p._raw.status));
     dcBody.innerHTML=chatHTML(id, closed);   // afgerond -> read-only historie (blijft zichtbaar + ververst mee)
+  } else if(adsBody){
+    adsBody.innerHTML=chatHTML(id);          // ads-chat: enkel de chat-body verversen bij een poll-update
   } else { return; }
   if(draft){ const newInp=document.querySelector('.chat-input input'); if(newInp) newInp.value=draft; }
   const newList=$id('chatList'); if(!newList) return;

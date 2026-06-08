@@ -2997,6 +2997,38 @@ function metaChildAtts(cr) {
   return (cr.object_story_spec && cr.object_story_spec.link_data && Array.isArray(cr.object_story_spec.link_data.child_attachments)) ? cr.object_story_spec.link_data.child_attachments : [];
 }
 
+const META_YMD = /^\d{4}-\d{2}-\d{2}$/;
+// time-params: time_range bij geldige from/to, anders date_preset (legacy).
+function metaTimeParams(from, to, preset) {
+  if (META_YMD.test(from) && META_YMD.test(to)) return { time_range: JSON.stringify({ since: from, until: to }) };
+  return { date_preset: preset || 'last_7d' };
+}
+function metaShiftYmd(ymd, mode) {
+  const m = String(ymd).match(/(\d{4})-(\d{2})-(\d{2})/); if (!m) return ymd;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  if (mode === 'month') d.setUTCMonth(d.getUTCMonth() - 1);
+  else if (mode === 'year') d.setUTCFullYear(d.getUTCFullYear() - 1);
+  return d.toISOString().slice(0, 10);
+}
+// rolling vergelijkings-venster: zelfde lengte ervoor / 1 maand / 1 jaar geleden.
+function metaCompareWindow(from, to, mode) {
+  if (mode === 'previous') {
+    const pf = Date.parse(from + 'T00:00:00Z'), pt = Date.parse(to + 'T00:00:00Z');
+    const len = Math.max(86400000, pt - pf + 86400000);
+    return [new Date(pf - len).toISOString().slice(0, 10), new Date(pf - 86400000).toISOString().slice(0, 10)];
+  }
+  return [metaShiftYmd(from, mode), metaShiftYmd(to, mode)];
+}
+async function metaKpiWindow(env, act, timeParams) {
+  const kins = await metaGet(env, `${act}/insights`, Object.assign({ level: 'account', fields: 'spend,impressions,reach,clicks,inline_link_clicks,ctr,cpc,cpm,frequency,actions' }, timeParams));
+  const k = (kins.ok && kins.data && Array.isArray(kins.data.data) && kins.data.data[0]) || {};
+  return { ok: kins.ok, err: kins.err, kpis: {
+    spend: Number(k.spend) || 0, impressions: Number(k.impressions) || 0, reach: Number(k.reach) || 0,
+    clicks: Number(k.clicks) || 0, linkClicks: Number(k.inline_link_clicks) || 0,
+    ctr: Number(k.ctr) || 0, cpc: Number(k.cpc) || 0, cpm: Number(k.cpm) || 0,
+    frequency: Number(k.frequency) || 0, results: metaActionVal(k.actions, META_RESULT_ACTIONS),
+  } };
+}
 export async function metaAds(bedrijfId, body, env) {
   const br = await cu.get(env, `/task/${bedrijfId}`);
   const acct = br.ok && br.data ? str(getCF(br.data, FIELD.metaAdsId)).trim() : '';
@@ -3004,35 +3036,37 @@ export async function metaAds(bedrijfId, body, env) {
   if (!/^\d{6,20}$/.test(acct)) return { status: 200, body: { ok: true, linked: false } };
   if (!str(env && env.META_SYSTEM_TOKEN)) return { status: 200, body: { ok: true, linked: false, reason: 'no_token' } };
 
+  const from = str(body && body.from).trim(), to = str(body && body.to).trim();
+  const useRange = META_YMD.test(from) && META_YMD.test(to);
   const preset = META_PRESETS[str(body && body.period).trim()] || 'last_7d';
+  const compare = ['previous', 'month', 'year'].indexOf(str(body && body.compare)) >= 0 ? str(body.compare) : 'none';
+  const tp = metaTimeParams(from, to, preset);
   const act = `act_${acct}`;
 
   // valuta (best-effort)
   const accInfo = await metaGet(env, act, { fields: 'currency,timezone_name,name' });
   const currency = (accInfo.ok && accInfo.data && accInfo.data.currency) || 'EUR';
 
-  // account-KPI's
-  const kins = await metaGet(env, `${act}/insights`, {
-    level: 'account', date_preset: preset,
-    fields: 'spend,impressions,reach,clicks,inline_link_clicks,ctr,cpc,cpm,frequency,actions',
-  });
-  const k = (kins.ok && kins.data && Array.isArray(kins.data.data) && kins.data.data[0]) || {};
-  const kpis = {
-    spend: Number(k.spend) || 0, impressions: Number(k.impressions) || 0, reach: Number(k.reach) || 0,
-    clicks: Number(k.clicks) || 0, linkClicks: Number(k.inline_link_clicks) || 0,
-    ctr: Number(k.ctr) || 0, cpc: Number(k.cpc) || 0, cpm: Number(k.cpm) || 0,
-    frequency: Number(k.frequency) || 0, results: metaActionVal(k.actions, META_RESULT_ACTIONS),
-  };
+  // account-KPI's (huidig venster) + optioneel rolling vergelijkings-venster
+  const cur = await metaKpiWindow(env, act, tp);
+  const kpis = cur.kpis;
+  let prevKpis = null, compareLabel = '';
+  if (useRange && compare !== 'none') {
+    const cw = metaCompareWindow(from, to, compare);
+    const prev = await metaKpiWindow(env, act, { time_range: JSON.stringify({ since: cw[0], until: cw[1] }) });
+    prevKpis = prev.kpis;
+    compareLabel = compare === 'previous' ? 'vorige periode' : (compare === 'month' ? 'vorige maand' : 'vorig jaar');
+  }
 
-  // actieve campagnes + per-campagne insights
+  // actieve campagnes + per-campagne insights; ENKEL campagnes die spendeerden in de periode.
   const campRes = await metaGet(env, `${act}/campaigns`, {
     fields: 'name,objective,effective_status,daily_budget,lifetime_budget',
     effective_status: '["ACTIVE"]', limit: '50',
   });
-  const cins = await metaGet(env, `${act}/insights`, {
-    level: 'campaign', date_preset: preset, limit: '200',
+  const cins = await metaGet(env, `${act}/insights`, Object.assign({
+    level: 'campaign', limit: '200',
     fields: 'campaign_id,spend,impressions,clicks,ctr,cpc,cpm,reach,frequency,actions',
-  });
+  }, tp));
   const cmap = {};
   if (cins.ok && Array.isArray(cins.data.data)) for (const row of cins.data.data) cmap[row.campaign_id] = row;
   const campaigns = ((campRes.ok && Array.isArray(campRes.data.data)) ? campRes.data.data : []).map((c) => {
@@ -3044,21 +3078,19 @@ export async function metaAds(bedrijfId, body, env) {
       reach: Number(m.reach) || 0, cpm: Number(m.cpm) || 0, frequency: Number(m.frequency) || 0,
       ctr: Number(m.ctr) || 0, cpc: Number(m.cpc) || 0, results: metaActionVal(m.actions, META_RESULT_ACTIONS),
     };
-  });
+  }).filter((c) => c.spend > 0);
 
-  // dagelijkse trend (laatste 30 dagen) voor de grafiek op de overzichtspagina
-  const tins = await metaGet(env, `${act}/insights`, {
-    level: 'account', date_preset: 'last_30d', time_increment: '1',
-    fields: 'spend,impressions,clicks', limit: '40',
-  });
+  // dagelijkse trend over het GEKOZEN venster (per dag spend/impressions/clicks)
+  const tins = await metaGet(env, `${act}/insights`, Object.assign({ level: 'account', time_increment: '1', fields: 'spend,impressions,clicks', limit: '200' }, tp));
   const trend = (tins.ok && Array.isArray(tins.data.data) ? tins.data.data : []).map((d) => ({
     date: d.date_start || '', spend: Number(d.spend) || 0,
     impressions: Number(d.impressions) || 0, clicks: Number(d.clicks) || 0,
   }));
 
   // Alleen een 'error' als beide primaire calls faalden (bv. token/permissie) → UI toont nette melding i.p.v. nullen.
-  const error = (!kins.ok && !campRes.ok) ? (kins.err || 'fetch_failed') : null;
-  return { status: 200, body: { ok: true, linked: true, account: acct, currency, period: preset, kpis, campaigns, trend, error } };
+  const error = (!cur.ok && !campRes.ok) ? (cur.err || 'fetch_failed') : null;
+  const period = useRange ? { from, to, compare } : { preset, compare: 'none' };
+  return { status: 200, body: { ok: true, linked: true, account: acct, currency, period, kpis, prevKpis, compareLabel, campaigns, trend, error } };
 }
 
 /* ---- metaCampaignAds (READ) — rijke media per campagne, ON-DEMAND ----
@@ -3078,7 +3110,7 @@ export async function metaCampaignAds(bedrijfId, body, env) {
   const act = `act_${acct}`;
 
   const adRes = await metaGet(env, `${act}/ads`, {
-    fields: 'name,effective_status,campaign_id,creative{thumbnail_url,image_url,object_type,video_id,effective_object_story_id,object_story_spec,asset_feed_spec},insights{spend,impressions,clicks,ctr}',
+    fields: 'name,effective_status,campaign_id,creative{thumbnail_url,image_url,object_type,video_id,effective_object_story_id,object_story_spec,asset_feed_spec},insights{spend,impressions,clicks,ctr,cpc}',
     filtering: JSON.stringify([{ field: 'campaign.id', operator: 'EQUAL', value: campId }]),
     effective_status: '["ACTIVE"]', limit: '50',
   });
@@ -3099,7 +3131,7 @@ export async function metaCampaignAds(bedrijfId, body, env) {
       id: a.id, name: a.name || '', campaignId: a.campaign_id || '', format: fmt,
       thumb: cr.thumbnail_url || cr.image_url || '', image: cr.image_url || '',
       spend: Number(ins.spend) || 0, impressions: Number(ins.impressions) || 0,
-      clicks: Number(ins.clicks) || 0, ctr: Number(ins.ctr) || 0,
+      clicks: Number(ins.clicks) || 0, ctr: Number(ins.ctr) || 0, cpc: Number(ins.cpc) || 0,
     };
     const vid = metaAdVideoId(cr);
     if (fmt === 'video' && vid && ptok) {
