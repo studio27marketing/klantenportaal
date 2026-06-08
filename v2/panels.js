@@ -1657,72 +1657,78 @@ function openMetaCreative(i){
 
 // (Resultaten-tab verwijderd — alle advertentiedata staat nu real-time op de Advertenties-tab via metaAds.)
 
+// Meetings-tab: geen hero (op vraag verwijderd — gaf te veel ruimteverlies). Frisse
+// overzicht-kaarten + "nog in te plannen"-signaal + de plan-tunnel (3 ingangen) die de
+// schermvullende planner-overlay opent (openMeetingPlanner in portal.js).
 function panelMeetings(){
   const mt=(window.S27DATA && S27DATA.meetings());
   const MAAND=['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
-  let meetHtml; let upCount=0;
+  const meetCard=(m,forceType)=>{
+    const d=m.dt; const uur=d?(('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)):'';
+    const online=!!m.link;
+    const typeLabel = forceType || (m.type==='Kickoff' ? 'Kick-off'
+      : (/kick-?off/i.test(m.titel||'') ? 'Kick-off'
+      : (/(project|overleg)/i.test(m.titel||'') ? 'Projectmeeting' : 'Algemene meeting')));
+    const actie = online
+      ? `<a class="mcard-cta btn btn-branch br-blue btn-sm" href="${esc(m.link)}" target="_blank" rel="noopener">Deelnemen</a>`
+      : `<button class="mcard-cta btn btn-outline btn-sm" onclick="meetRoute()">Route ${ic('pin',14)}</button>`;
+    return `<div class="mcard">
+      <div class="mcard-date ${online?'br-blue':'br-orange'}"><span class="d">${d?d.getDate():'–'}</span><span class="mo">${d?MAAND[d.getMonth()]:''}</span></div>
+      <div class="mcard-main">
+        <span class="mcard-type">${online?ic('video',13):ic('cal',13)} ${esc(typeLabel)}</span>
+        <b class="mcard-ttl">${esc(m.titel||'Meeting')}</b>
+        <div class="mcard-meta">${ic('clock',13)} ${uur} · ${ic('pin',13)} ${online?'Google Meet':'Studio 27, Rijkevorsel'}</div>
+      </div>
+      <div class="mcard-act">${actie}</div>
+    </div>`;
+  };
+  let upCount=0, listHtml='';
   if(mt){
-    // 'up' = enkel toekomstige meetings met geldige datum, chronologisch; de count-badge gebruikt
-    // exact deze lijst (up.length) zodat kop, lijst en zijbalk-badge consistent zijn.
+    // 'up' = enkel toekomstige meetings met geldige datum, chronologisch (consistent met de zijbalk-badge).
     const up=mt.list.filter(m=>m.dt && !isNaN(m.dt.getTime()) && m.dt.getTime()>=Date.now()-86400000)
                     .sort((a,b)=>a.dt.getTime()-b.dt.getTime());
     upCount=up.length;
-    meetHtml = up.length ? up.map(m=>{
-      const d=m.dt; const uur=d?(('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)):'';
-      return `<div class="meeting-row big"><div class="date-block"><div class="d">${d?d.getDate():'–'}</div><div class="m">${d?MAAND[d.getMonth()]:''}</div></div>
-        <div class="mr-tx"><span class="mr-type">${esc(m.type)}</span><b>${esc(m.titel)}</b><div class="mr-meta">${ic('clock',14)} ${uur} · ${ic('pin',14)} ${m.link?'Google Meet':'Studio 27'}</div></div>
-        <div class="avstack"><span class="av" style="background:var(--s27-blue)">S27</span></div></div>`;
-    }).join('') : `<div class="empty" style="padding:30px"><p>Nog geen geplande meetings. Plan er hieronder vlot eentje in.</p></div>`;
+    listHtml = up.length ? up.map(m=>meetCard(m)).join('')
+      : `<div class="mcard-empty"><div class="mcard-empty-ic">${ic('cal',32)}</div><b>Geen meetings gepland</b><p>Je hebt momenteel geen afspraken staan met Studio 27. Plan er hiernaast vlot eentje in, helemaal wanneer het jou past.</p></div>`;
   } else {
-    meetHtml = `<div class="meeting-row big"><div class="date-block"><div class="d">14</div><div class="m">mei</div></div>
-          <div class="mr-tx"><span class="mr-type">Algemene meeting</span><b>Maandelijkse rapportage</b><div class="mr-meta">${ic('clock',14)} 10:00 · ${ic('pin',14)} Google Meet</div></div>
-          <div class="avstack"><span class="av" style="background:var(--s27-blue)">IM</span></div></div>
-        <div class="meeting-row big"><div class="date-block"><div class="d">22</div><div class="m">mei</div></div>
-          <div class="mr-tx"><span class="mr-type">${ic('video',13)} Nieuw project · video</span><b>Kick-off recruitmentvideo</b><div class="mr-meta">${ic('clock',14)} 14:00 · ${ic('pin',14)} Studio 27, Rijkevorsel</div></div>
-          <div class="avstack"><span class="av" style="background:var(--s27-orange)">AG</span></div></div>`;
+    // demo: twee mock-afspraken in de nabije toekomst (zodat het overzicht leeft).
+    const d1=new Date(Date.now()+6*86400000); d1.setHours(10,0,0,0);
+    const d2=new Date(Date.now()+13*86400000); d2.setHours(14,0,0,0);
+    upCount=2;
+    listHtml = meetCard({dt:d1,titel:'Maandelijkse rapportage',link:'https://meet.google.com/'})
+             + meetCard({dt:d2,titel:'Kick-off recruitmentvideo',link:''},'Kick-off');
   }
-  return hero('blue','Plannen · Meetings',
-    `Jouw <span class="accent">agenda${squig()}</span> met Studio 27`)
-  +`<div class="meet-wrap">
-    <div class="meet-main">
-      <div class="section-head" style="margin-top:0"><h2>Geplande meetings</h2><span class="count">${mt?upCount+' gepland':'2 gepland'}</span></div>
-      <div class="meet-list">${meetHtml}</div>
+  // "Nog in te plannen": projecten met een wachtende meeting-plan-taak (cockpit plan_items, type meeting).
+  const todo=_meetingsTodo();
+  const todoHtml = todo.length ? `<div class="mtodo">
+      <div class="mtodo-h">${ic('st_plan',16)} Nog in te plannen</div>
+      <div class="mtodo-list">${todo.map(t=>`<button class="mtodo-row br-${t.br}" onclick="${t.action}"><span class="mtodo-dot"></span><span class="mtodo-tx"><b>${esc(t.cat)}</b><span>Voor dit project kun je een meeting inplannen.</span></span>${ic('arrow',15)}</button>`).join('')}</div>
+    </div>` : '';
+  return `<div class="meet2">
+    <div class="meet2-grid">
+      <section class="meet2-main">
+        <div class="section-head" style="margin-top:0"><h2>Geplande meetings</h2><span class="count">${upCount} gepland</span></div>
+        <div class="mcard-list">${listHtml}</div>
+        ${todoHtml}
+      </section>
+      <aside class="card meet2-plan">
+        <h3 class="meet2-plan-h">Plan een meeting</h3>
+        <p class="meet2-plan-sub">Kies wat je wil bespreken — je prikt zelf een vrij moment.</p>
+        <button class="planopt" onclick="openMeetingPlanner('algemeen')"><span class="planopt-ic br-blue">${ic('msg',20)}</span><span class="planopt-tx"><b>Algemene meeting</b><span>Bijpraten over de samenwerking</span></span>${ic('arrow',16)}</button>
+        <button class="planopt" onclick="openMeetingPlanner('project')"><span class="planopt-ic br-purple">${ic('video',20)}</span><span class="planopt-tx"><b>Projectmeeting</b><span>Over een lopend project</span></span>${ic('arrow',16)}</button>
+        <button class="planopt" onclick="openMeetingPlanner('nieuw')"><span class="planopt-ic br-orange">${ic('spark',20)}</span><span class="planopt-tx"><b>Nieuw project</b><span>Iets nieuws opstarten</span></span>${ic('arrow',16)}</button>
+      </aside>
     </div>
-    <aside class="card meet-side meet-side-accent">
-      <h3 class="ms-title">Plan een meeting</h3>
-      <label class="ms-label">Wat wil je inplannen?</label>
-      <div class="mtype-grid">
-        <button class="mtype" data-mtype="nieuwproject" onclick="pickMtype(this,'Arne','orange','Nieuw project')"><span class="mt-tx"><b>Nieuw project</b></span></button>
-        <button class="mtype" data-mtype="algemeen" onclick="pickMtype(this,'Ilke','blue','Algemene meeting')"><span class="mt-tx"><b>Algemene meeting</b></span></button>
-        <button class="mtype" data-mtype="project" onclick="pickProjectMeeting(this)"><span class="mt-tx"><b>Projectmeeting</b></span></button>
-      </div>
-      <div id="meetAgenda" class="np-hidden">
-        <div class="meet-who" id="meetWho"></div>
-        <div id="meetSlots"></div>
-      </div>
-      <div id="projMeetPick" class="np-hidden"></div>
-    </aside>
   </div>`;
 }
-// Projectmeeting: kies een project -> beschikbaarheid van de verantwoordelijke (assignee) via loadPlanSlots(task_id)
-function pickProjectMeeting(el){
-  if(el){ el.parentElement.querySelectorAll('.mtype').forEach(b=>b.classList.remove('sel')); el.classList.add('sel'); }
-  const ag=$id('meetAgenda'); if(ag)ag.classList.add('np-hidden');
-  const host=$id('projMeetPick'); if(!host) return;
-  host.classList.remove('np-hidden');
-  const projs=_nonAdProjects().filter(p=>p.status!=='done');
-  if(!projs.length){ host.innerHTML='<p class="fs" style="color:var(--ink-3);padding:8px 0">Je hebt momenteel geen lopende projecten om een meeting voor in te plannen.</p>'; return; }
-  host.innerHTML='<label class="ms-label" style="margin-top:6px">Voor welk project?</label>'
-    +'<div class="projmeet-list">'+projs.map(p=>{ const sae=saeNames(p.sae); return '<button class="projmeet-opt br-'+p.br+'" onclick="startProjectMeeting(\''+esc(p.id)+'\',this)"><span class="pm-dot"></span><span class="pm-tx"><b>'+esc(p.name)+'</b><span>'+esc(p.disc)+(sae?' · '+sae:'')+'</span></span>'+ic('arrow',15)+'</button>'; }).join('')+'</div>'
-    +'<div id="s27-plan-host"></div>';
+// "Nog in te plannen"-signaal: meeting-plan-items uit de cockpit (afgeleid uit p.plan_items,
+// type meeting → cta 'Plan moment'). Leeg in demo (geen live dashboard) → blok verbergt zich.
+function _meetingsTodo(){
+  try{ var cp=(window.S27DATA&&S27DATA.cockpit&&S27DATA.cockpit())||null; if(!cp)return [];
+    return cp.filter(function(c){ return c.title==='Klaar om in te plannen' && c.cta==='Plan moment'; }); }
+  catch(e){ return []; }
 }
-function startProjectMeeting(taskId, el){
-  if(el){ el.parentElement.querySelectorAll('.projmeet-opt').forEach(b=>b.classList.remove('sel')); el.classList.add('sel'); }
-  const host=$id('s27-plan-host'); if(!host) return;
-  // loadPlanSlots schrijft in #s27-plan-<taskId>; maak die container aan en start de bestaande plan-picker
-  host.innerHTML='<div id="s27-plan-'+esc(taskId)+'" style="margin-top:14px"></div>';
-  if(typeof loadPlanSlots==='function') loadPlanSlots(taskId);
-}
+function meetRoute(){ window.open('https://www.google.com/maps/search/?api=1&query=Studio+27+Sint-Lenaartsesteenweg+Rijkevorsel','_blank','noopener'); }
 
 const NP_OPTIONS = {
   'Strategie':[['Merkstrategie','€ 1.800 – € 3.500'],['Communicatiestrategie','€ 1.200 – € 2.800'],['Employer branding','€ 2.000 – € 4.000']],
@@ -2048,23 +2054,42 @@ function offSearch(v){
 function offAdd(sku){ var c=offCart(); c[sku]=(c[sku]||0)+1; refreshOfferteRow(sku); refreshOfferteCart(); }
 function offQty(sku,delta){ var c=offCart(); var n=(c[sku]||0)+delta; if(n<=0){ delete c[sku]; } else { c[sku]=n; } refreshOfferteRow(sku); refreshOfferteCart(); }
 function offRemove(sku){ var c=offCart(); delete c[sku]; refreshOfferteRow(sku); refreshOfferteCart(); }
-function panelOffertes(){
+/* Offertes-pagina: sub-nav "Mijn offertes" (overzicht lopende/eerdere) + "Nieuwe aanvraag"
+   (offerte-samensteller). Overzicht is de default; de bouwer zit nu achter de tweede tab i.p.v.
+   altijd onderaan de lijst. De topbar-knop "Offerteaanvragen" springt rechtstreeks naar 'nieuw'. */
+function offerteTab(){ return state._offTab||'overzicht'; }
+function offerteSubnav(){
+  var t=offerteTab();
+  var icDoc='<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M9 13h6M9 17h4"/></svg>';
+  var icPlus='<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>';
+  var tabs=[['overzicht','Mijn offertes',icDoc],['nieuw','Nieuwe aanvraag',icPlus]];
+  return '<div class="soc-subnav" id="offSubnav">'+tabs.map(function(x){ return '<button class="soc-subtab'+(t===x[0]?' active':'')+'" data-otab="'+x[0]+'" onclick="offerteSetTab(\''+x[0]+'\')">'+x[2]+'<span>'+esc(x[1])+'</span></button>'; }).join('')+'</div>';
+}
+function offerteSetTab(name){
+  state._offTab=name;
+  var box=document.getElementById('offBody');
+  if(box){ box.innerHTML=offerteBodyHTML();
+    var nav=document.getElementById('offSubnav'); if(nav){ [].slice.call(nav.children).forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-otab')===name); }); }
+    if(window.scrollTo) window.scrollTo({top:0,behavior:'smooth'});
+  } else { renderPanel('offertes'); }
+}
+function goOfferteNieuw(){ state._offTab='nieuw'; if(typeof goTab==='function') goTab('offertes'); }
+function offerteOverzichtHTML(){
   var live=_live(); var raw = live ? S27DATA.offertes() : OFFERTE_MOCK;
-  var head = hero('purple','Plannen · Offertes', 'Jouw <span class="accent">offertes'+squig()+'</span> in één overzicht');
-  if(raw===null||raw===undefined) return head+'<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je offertes worden geladen…</p></div>';
+  if(raw===null||raw===undefined) return '<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je offertes worden geladen…</p></div>';
   var offs = live ? raw.filter(function(o){return offerteVisible(o.status);}) : raw;  // verberg concept/draft
-  // Nieuwe offerte aanvragen = de offerte-samensteller (catalogus). De sectie 'Of vraag snel een
-  // richtprijs' (+ koffiegesprek-kaart) is verwijderd; facturatiegegevens staan nu op de
-  // facturatie-tab, niet meer hier.
-  var formSection = offerteSamensteller();
-  if(!offs.length) return head+'<div class="empty" style="padding:40px 20px"><div class="em-ic">'+ic('doc',52)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog geen offertes</b><p style="margin:6px 0 0">Hier verschijnen je verzonden offertes zodra we er één klaarzetten, of vraag er hieronder meteen één aan.</p></div>'+formSection;
+  if(!offs.length) return '<div class="empty" style="padding:44px 20px;text-align:center"><div class="em-ic">'+ic('doc',52)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog geen offertes</b><p style="margin:6px 0 16px;color:var(--ink-3)">Hier verschijnen je offertes zodra we er één klaarzetten.</p><button class="btn btn-primary btn-sm" onclick="offerteSetTab(\'nieuw\')">Nieuwe offerte aanvragen</button></div>';
   var lopend=offs.filter(function(o){return !offerteAfgerond(o.status);}), afge=offs.filter(function(o){return offerteAfgerond(o.status);});
-  return head
-    +'<p class="sdesc" style="margin:-4px 0 16px;max-width:60ch">Klik een offerte open om ze te bekijken of goed te keuren (PandaDoc). Een vraag? Stel ze per offerte, ze komt rechtstreeks bij je Studio 27-contact terecht.</p>'
+  return '<p class="sdesc" style="margin:-2px 0 16px;max-width:60ch">Klik een offerte open om ze te bekijken of goed te keuren (PandaDoc). Een vraag? Stel ze per offerte, ze komt rechtstreeks bij je Studio 27-contact terecht.</p>'
     +(lopend.length?'<div class="section-head" style="margin-top:4px"><h2>Lopend</h2><span class="count">'+lopend.length+'</span></div><div style="display:flex;flex-direction:column;gap:10px">'+lopend.map(offerteRow).join('')+'</div>':'')
     +(afge.length?'<div class="section-head" style="margin-top:30px"><h2>Goedgekeurd &amp; eerdere</h2><span class="count">'+afge.length+'</span></div><div style="display:flex;flex-direction:column;gap:10px">'+afge.map(offerteRow).join('')+'</div>':'')
-    +formSection;
+    +((lopend.length||afge.length)?'<div style="margin-top:24px;text-align:center"><button class="btn btn-outline btn-sm" onclick="offerteSetTab(\'nieuw\')">'+ic('doc',15)+' Nieuwe offerte aanvragen</button></div>':'');
 }
+function offerteBodyHTML(){
+  if(offerteTab()==='nieuw') return '<div class="section-head" style="margin-top:2px"><h2>Nieuwe offerte aanvragen</h2></div><p class="sdesc" style="margin:-2px 0 14px;max-width:62ch">Stel zelf je offerte samen uit de catalogus. Je aanvraag komt rechtstreeks bij je Studio 27-contact terecht.</p>'+offerteSamensteller();
+  return offerteOverzichtHTML();
+}
+function panelOffertes(){ return offerteSubnav()+'<div id="offBody">'+offerteBodyHTML()+'</div>'; }
 function contactRow(c, isMe){
   const nm=((c.voornaam||'')+' '+(c.achternaam||'')).trim()||'Contactpersoon';
   const init=(nm.split(/\s+/).map(x=>x[0]).join('').slice(0,2)||'?').toUpperCase();

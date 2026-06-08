@@ -234,6 +234,11 @@ function toggleClientView(){
   if(!state.adminMode) return;
   state._adminClientView=!state._adminClientView;
   updateAdminViewToggle();
+  // ALTIJD verse data bij het wisselen team<->klant: de twee weergaven cachen los (metaAds vs
+  // metaAdsRich, metricoolStats vs metricoolStatsRich) en kunnen op een ander periode-venster staan.
+  // Wis de periode-afhankelijke ads/social-cache zodat de doelweergave opnieuw ophaalt bij de
+  // ACTUELE periode (anders zie je foutieve bestedingen/cijfers van een vorig venster).
+  if(state.data){ state.data.metaAds=null; state.data.metaAdsRich=null; state.data.metricoolStats=null; state.data.metricoolStatsRich=null; state.data.metricoolPostStats=null; }
   if(typeof currentTab==='string' && currentTab) goTab(currentTab);   // huidige tab in de juiste weergave herladen
 }
 function updateAdminViewToggle(){
@@ -360,11 +365,11 @@ async function ensureTabData(name){
   if(name==='offertes'){ var _t=[]; if(!state.data.offertes) _t.push(S27DATA.loadOffertes()); if(!state.data.bedrijf) _t.push(S27DATA.loadBedrijf()); if(_t.length){ try{ await Promise.all(_t); }catch(e){} } }
   if(name==='socials'){ var _s=[]; if(!state.data.metricool) _s.push(S27DATA.loadMetricool());
     if(isRichView()){ if(!state.data.metricoolStatsRich){ var _sp=(typeof socialPeriod==='function')?socialPeriod():null; _s.push(S27DATA.loadMetricoolStatsRich(_sp?{from:_sp.from,to:_sp.to,compare:_sp.compare}:undefined)); } }
-    else { if(!state.data.metricoolStats) _s.push(S27DATA.loadMetricoolStats()); if(!state.data.metricoolPostStats) _s.push(S27DATA.loadMetricoolPostStats()); }
+    else { if(!state.data.metricoolStats){ var _spc=(typeof socialPeriod==='function')?socialPeriod():null; _s.push(S27DATA.loadMetricoolStats(_spc?{from:_spc.from,to:_spc.to,compare:_spc.compare}:undefined)); } if(!state.data.metricoolPostStats) _s.push(S27DATA.loadMetricoolPostStats()); }
     if(_s.length){ try{ await Promise.all(_s); }catch(e){} } }
   if(name==='advertenties'){
     if(isRichView()){ if(!state.data.metaAdsRich){ try{ var pp=(typeof adsPeriod==='function')?adsPeriod():null; await S27DATA.loadMetaAdsRich(pp?{from:pp.from,to:pp.to,compare:pp.compare}:undefined); }catch(e){} } }
-    else if(!state.data.metaAds){ try{ await S27DATA.loadMetaAds(); }catch(e){} }
+    else if(!state.data.metaAds){ try{ var _ap=(typeof adsPeriod==='function')?adsPeriod():null; await S27DATA.loadMetaAds(_ap?{from:_ap.from,to:_ap.to,compare:_ap.compare}:undefined); }catch(e){} }
   }
 }
 function renderPanel(name){
@@ -736,7 +741,7 @@ document.addEventListener('click',e=>{ if(!e.target.closest('.client-switch-wrap
 function filterDienst(disc,btn){ document.querySelectorAll('.proj-filter .fchip').forEach(c=>c.classList.remove('active')); if(btn)btn.classList.add('active'); const body=$id('projViewBody'); if(!body)return; body.querySelectorAll('.projflat-card').forEach(c=>{ const ds=(c.dataset.discs||'').split('|'); c.style.display=(disc==='all'||ds.indexOf(disc)>=0)?'':'none'; }); body.querySelectorAll('.projcluster').forEach(sec=>{ const vis=[].slice.call(sec.querySelectorAll('.projflat-card')).some(c=>c.style.display!=='none'); sec.style.display=vis?'':'none'; }); }
 function goDienst(disc){ goTab('projecten'); setTimeout(()=>{ const sel=document.querySelector('.proj-filter select'); if(sel){ sel.value=disc; filterDienst(disc); } },60); }
 // Kennismaking / koffiegesprek -> meetingpagina, automatisch bij Arne (kies een vrij moment in zijn agenda)
-function koffieMetArne(){ goTab('meetings'); setTimeout(()=>{ const btn=document.querySelector('.meet-side .mtype[data-mtype="nieuwproject"]')||document.querySelector('.meet-side .mtype'); if(btn) pickMtype(btn,'Arne','orange','Kennismaking / koffiegesprek'); const ag=$id('meetAgenda'); if(ag&&ag.scrollIntoView) ag.scrollIntoView({behavior:'smooth',block:'nearest'}); },120); }
+function koffieMetArne(){ if(typeof openMeetingPlanner==='function'){ openMeetingPlanner('nieuw'); } else { goTab('meetings'); } }
 function switchModalTab(name){
   state._mtab=name;
   const c=document.querySelector('.detail'); if(!c)return;
@@ -1004,6 +1009,318 @@ async function submitNieuwProject(btn){
     if(btn){ btn.disabled=false; btn.innerHTML='Aanvraag verstuurd ✓'; }
   } catch(e){ if(btn){ btn.disabled=false; btn.textContent='Opnieuw proberen'; } }
 }
+/* =============================================================================
+   MEETING-PLANNER — schermvullende plan-tunnel (Algemene meeting / Projectmeeting /
+   Nieuw project). Vervangt de oude smalle zijbalk-picker. Eén overlay op <body>
+   (zoals metaLightbox), ESC + scrim-klik sluiten. Flow:
+     algemeen → Ilke · project → kies project → kies Ilke of projectlead · nieuw → Arne
+   → schermvullende 14-daagse beschikbaarheid + tips → echte boeking via
+   ENDPOINTS.meetingBook (Google-agenda + invite). Valt vóór de worker-deploy terug op
+   directMessage; demoMode toont een mock-bevestiging.
+   ============================================================================= */
+const MP_HOSTS = {
+  ilke: { email:'ilke@studio27.be', naam:'Ilke', rol:'Accountmanager', color:'blue' },
+  arne: { email:'arne@studio27.be', naam:'Arne', rol:'Zaakvoerder',    color:'orange' },
+};
+const MP_DOW = ['ma','di','wo','do','vr','za','zo'];
+const MP_MA  = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
+const MP_DAYS_FULL = ['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];
+
+function mpEl(){
+  var el=$id('meetPlanner');
+  if(!el){ el=document.createElement('div'); el.id='meetPlanner'; el.className='mp-overlay';
+    el.addEventListener('click',function(e){ if(e.target===el) closeMeetingPlanner(); });
+    document.body.appendChild(el); }
+  return el;
+}
+function mpEsc(e){ if(e.key==='Escape') closeMeetingPlanner(); }
+function closeMeetingPlanner(){
+  var el=$id('meetPlanner'); if(el){ el.classList.remove('show'); el.innerHTML=''; }
+  document.removeEventListener('keydown',mpEsc);
+  document.body.classList.remove('mp-lock');
+  var wasMeetings = (typeof currentTab!=='undefined' && currentTab==='meetings');
+  state.mp=null;
+  // na een boeking: meetinglijst verversen zodat een nieuwe afspraak straks verschijnt.
+  if(wasMeetings){ try{ if(!state.demoMode) state.data.meetings=null; goTab('meetings'); }catch(e){} }
+}
+function openMeetingPlanner(mode){
+  state.mp={ mode:(mode==='project'||mode==='nieuw')?mode:'algemeen', step:'', project:null,
+             hostKey:'', host:null, online:true, note:'', dur:30*60000,
+             slots:null, byDay:null, weekStart:0, selDay:null, selSlot:null, _err:'', booking:false };
+  var s=state.mp;
+  if(s.mode==='project'){ s.step='project'; }
+  else if(s.mode==='nieuw'){ s.hostKey='arne'; s.host=Object.assign({},MP_HOSTS.arne); s.step='cal'; }
+  else { s.hostKey='ilke'; s.host=Object.assign({},MP_HOSTS.ilke); s.step='cal'; }
+  var el=mpEl(); el.classList.add('show'); document.body.classList.add('mp-lock');
+  document.addEventListener('keydown',mpEsc);
+  mpRender();
+  if(s.step==='cal') mpLoadAvail();
+}
+function mpRender(){
+  var el=$id('meetPlanner'); if(!el||!state.mp) return;
+  var s=state.mp, body;
+  if(s.step==='project') body=mpProjectStep();
+  else if(s.step==='host') body=mpHostStep();
+  else if(s.step==='cal') body=mpCalStep();
+  else if(s.step==='done') body=(s._doneHTML||'');
+  el.innerHTML='<div class="mp-modal" onclick="event.stopPropagation()">'+mpHeader()+'<div class="mp-scroll">'+body+'</div></div>';
+}
+function mpHeader(){
+  var s=state.mp;
+  var titles={ project:'Over welk project?', host:'Met wie wil je samenzitten?', cal:'Kies een moment', done:'Gepland' };
+  var canBack=(s.step==='host')||(s.step==='cal'&&s.mode==='project');
+  var back=canBack?'<button class="mp-back" onclick="mpBack()">'+ic('arrow',16)+'</button>':'<span class="mp-back-sp"></span>';
+  return '<div class="mp-head">'+back
+    +'<div class="mp-head-c"><span class="mp-head-eyebrow">Plan een meeting</span><b>'+escapeHtml(titles[s.step]||'Plan een meeting')+'</b></div>'
+    +'<button class="mp-close" onclick="closeMeetingPlanner()" aria-label="Sluiten">'+ic('plus',22)+'</button></div>';
+}
+function mpBack(){ var s=state.mp; if(!s)return;
+  if(s.step==='cal'&&s.mode==='project'){ s.step='host'; mpRender(); }
+  else if(s.step==='host'){ s.step='project'; mpRender(); }
+}
+/* ---- stap: projectkeuze (actieve + recent afgeronde projecten, ≤60 dagen) ---- */
+function mpActiveProjects(){
+  var out=[];
+  try{
+    (_nonAdProjects()||[]).filter(function(p){ return p.status!=='done'; }).forEach(function(p){
+      out.push({ id:p.id, name:p.name, br:p.br||'blue', disc:p.disc||'', sae:p.sae||[], done:false }); });
+    var done=(window.S27DATA&&S27DATA.done&&S27DATA.done())||[];
+    done.forEach(function(p){ if(!out.some(function(x){return x.id===p.id;}))
+      out.push({ id:p.id, name:p.name, br:p.br||'blue', disc:p.disc||'', sae:[], done:true }); });
+  }catch(e){}
+  return out;
+}
+function mpProjectStep(){
+  var projs=mpActiveProjects();
+  if(!projs.length) return '<div class="mp-empty">'+ic('cal',40)
+    +'<b>Geen lopende projecten</b><p>Je hebt momenteel geen actief project om over samen te zitten. Wil je iets nieuws opstarten?</p>'
+    +'<button class="btn btn-branch br-orange btn-sm" onclick="openMeetingPlanner(\'nieuw\')">Plan een gesprek over een nieuw project '+ic('arrow',15)+'</button></div>';
+  return '<p class="mp-intro">Kies het project waarover je wil samenzitten — je projecten van de afgelopen 60 dagen.</p>'
+    +'<div class="mp-projlist">'+projs.map(function(p){
+      var sae=(typeof saeNames==='function')?saeNames(p.sae):'';
+      return '<button class="mp-proj br-'+p.br+'" onclick="mpPickProject(\''+escapeHtml(p.id)+'\')">'
+        +'<span class="mp-proj-dot"></span><span class="mp-proj-tx"><b>'+escapeHtml(p.name)+'</b>'
+        +'<span>'+escapeHtml(p.disc)+(p.done?' · afgerond':'')+(sae?' · '+sae:'')+'</span></span>'+ic('arrow',16)+'</button>';
+    }).join('')+'</div>';
+}
+function mpPickProject(id){
+  var s=state.mp; if(!s)return;
+  s.project=mpActiveProjects().find(function(x){return x.id===id;})||{ id:id, name:'Project', sae:[] };
+  s.step='host'; mpRender();
+}
+/* ---- stap: hostkeuze (Ilke vs het teamlid dat het project droeg) ---- */
+function mpLeadName(p){ if(!p)return ''; var sae=p.sae||[]; var n=sae.map(function(x){return x.naam;}).filter(Boolean); return n.join(' & '); }
+function mpHostStep(){
+  var s=state.mp; var lead=mpLeadName(s.project);
+  return '<p class="mp-intro">Met wie wil je <b>'+escapeHtml(s.project?s.project.name:'dit project')+'</b> overlopen?</p>'
+    +'<div class="mp-hosts">'
+    +mpHostCard('ilke','Ilke','Accountmanager','Overzicht, planning & samenwerking','blue')
+    +mpHostCard('lead',(lead||'Je projectteam'),'Wie eraan werkte','Inhoudelijk de diepte in','purple')
+    +'</div>';
+}
+function mpHostCard(key,naam,rol,tag,color){
+  return '<button class="mp-host br-'+color+'" onclick="mpPickHost(\''+key+'\')">'
+    +'<span class="mp-host-av" style="background:var(--s27-'+color+')">'+escapeHtml(String(naam||'?').charAt(0).toUpperCase())+'</span>'
+    +'<span class="mp-host-tx"><b>'+escapeHtml(naam)+'</b><span class="mp-host-rol">'+escapeHtml(rol)+'</span>'
+    +'<span class="mp-host-tag">'+escapeHtml(tag)+'</span></span>'+ic('arrow',16)+'</button>';
+}
+function mpPickHost(key){
+  var s=state.mp; if(!s)return;
+  if(key==='ilke'){ s.hostKey='ilke'; s.host=Object.assign({},MP_HOSTS.ilke); }
+  else { s.hostKey='lead'; s.host={ email:'', naam:(mpLeadName(s.project)||'je projectteam'), rol:'Projectlead', color:'purple' }; }
+  s.step='cal'; mpRender(); mpLoadAvail();
+}
+/* ---- stap: beschikbaarheid laden ---- */
+function mpDemoBusy(){ var n=Date.now(); return [
+  {start:n+3*864e5+3*36e5,end:n+3*864e5+5*36e5},
+  {start:n+4*864e5+6*36e5,end:n+4*864e5+75*36e5/10},
+  {start:n+8*864e5+2*36e5,end:n+8*864e5+9*36e5} ]; }
+async function mpLoadAvail(){
+  var s=state.mp; if(!s)return;
+  s.slots=null; s._err=''; s.selDay=null; s.selSlot=null; mpRender();   // null = laad-toestand
+  var durMs=30*60000;
+  try{
+    if(s.hostKey==='lead' && s.project){
+      if(state.demoMode){ s.slots=computeFreeFromBusy(mpDemoBusy(),durMs); }
+      else {
+        var van=Date.now(), tot=Date.now()+21*86400000;
+        var res=await api(ENDPOINTS.beschikbaarheid,{ task_id:s.project.id, van:String(van), tot:String(tot) });
+        var d=(res&&res.ok&&res.data&&res.data.ok)?res.data:null;
+        if(d&&d.no_member){ s._err='no_member'; mpRender(); return; }
+        if(!d){ s._err='load'; mpRender(); return; }
+        durMs=planDurMs(d.taak_est);
+        if(d.assignee_naam) s.host.naam=d.assignee_naam;
+        s.host.email=String(d.assignee_emails||d.assignee_email||'').split(',').map(function(x){return x.trim();}).filter(Boolean)[0]||'';
+        s.slots=computeFreeSlots(d.blokken,durMs);
+      }
+    } else {
+      if(state.demoMode){ s.slots=computeFreeFromBusy(mpDemoBusy(),durMs); }
+      else {
+        var r2=await api(ENDPOINTS.meetingAvailability,{});
+        if(!(r2&&r2.data&&r2.data.ok)){ s._err='load'; mpRender(); return; }
+        var cal=((r2.data.calendars)||{})[s.host.email]||{};
+        var busy=(cal.busy||[]).map(function(b){return {start:new Date(b.start).getTime(),end:new Date(b.end).getTime()};})
+                               .filter(function(b){return b.end>b.start;});
+        s.slots=computeFreeFromBusy(busy,durMs);
+      }
+    }
+  }catch(e){ s._err='load'; mpRender(); return; }
+  s.dur=durMs;
+  // beperk tot het betrouwbare beschikbaarheidsvenster (~19 dagen) zodat we nooit
+  // vals-vrije dagen buiten de free/busy-horizon tonen.
+  s.slots=(s.slots||[]).filter(function(ms){ return ms<=Date.now()+19*86400000; });
+  if(s.slots.length){
+    var byDay={}; s.slots.forEach(function(ms){ var k=_dayKey(ms); (byDay[k]=byDay[k]||[]).push(ms); });
+    s.byDay=byDay; s.weekStart=_monday(s.slots[0]);
+  } else { s.byDay={}; }
+  mpRender();
+}
+/* ---- stap: kalender + tijdsloten + tips + bevestig ---- */
+function mpCalStep(){
+  var s=state.mp;
+  var color=(s.host&&s.host.color)||'blue';
+  var hostNaam=(s.host&&s.host.naam)||'Studio 27';
+  var rol=(s.host&&s.host.rol)||'';
+  var ctxLine = s.mode==='nieuw' ? 'Kennismaking over een nieuw project'
+    : (s.mode==='project'&&s.project ? ('Over '+escapeHtml(s.project.name)) : 'Bijpraten over de samenwerking');
+  var banner='<div class="mp-hostbar br-'+color+'"><span class="mp-host-av" style="background:var(--s27-'+color+')">'
+    +escapeHtml(String(hostNaam||'?').charAt(0).toUpperCase())+'</span><span class="mp-host-tx"><b>'+escapeHtml(hostNaam)+'</b>'
+    +'<span class="mp-host-rol">'+escapeHtml(rol)+(rol?' · ':'')+ctxLine+'</span></span></div>';
+  var toggle='<div class="mp-toggle">'
+    +'<button type="button" class="mp-tg'+(s.online?' on':'')+'" onclick="mpSetOnline(true)">'+ic('video',15)+' Online (Meet)</button>'
+    +'<button type="button" class="mp-tg'+(!s.online?' on':'')+'" onclick="mpSetOnline(false)">'+ic('pin',15)+' Bij Studio 27</button></div>';
+  var note = s.mode==='nieuw'
+    ? '<div class="mp-note"><label class="mp-lbl">Waar gaat het over? <span>(optioneel)</span></label><textarea id="mpNote" rows="2" placeholder="Vertel kort wat je idee of vraag is…" oninput="if(state.mp)state.mp.note=this.value">'+escapeHtml(s.note||'')+'</textarea></div>'
+    : '';
+  var avail='<div id="mpAvailMount" class="mp-availwrap">'+mpAvailHTML()+'</div>';
+  var tips=mpTipsHTML();
+  var foot='<div class="mp-foot"><button type="button" class="btn btn-branch br-'+color+' mp-confirm" id="mpConfirm" '
+    +(s.selSlot?'':'disabled')+' onclick="mpBook()">'+(s.selSlot?('Bevestig '+escapeHtml(mpSlotLabel(s.selSlot))):'Kies eerst een moment')+'</button></div>';
+  return banner+toggle+note+avail+tips+foot;
+}
+function mpAvailHTML(){
+  var s=state.mp;
+  if(s._err==='no_member') return '<div class="mp-notebox">Voor dit project is nog geen vaste contactpersoon toegewezen. Kies hierboven <b>Terug → Ilke</b>, of stuur ons een berichtje — dan koppelen we je meteen aan de juiste persoon.</div>';
+  if(s._err) return '<div class="mp-notebox">De agenda kon even niet geladen worden. Probeer het zo opnieuw of stuur ons gerust een berichtje.</div>';
+  if(s.slots===null) return '<div class="mp-loading"><div class="brand-spinner"></div><span>Vrije momenten ophalen…</span></div>';
+  if(!s.slots.length) return '<div class="mp-notebox">Geen vrije momenten in de komende twee weken. Stuur ons gerust een berichtje, dan zoeken we samen iets dat past.</div>';
+  return mpCalGrid()+'<div id="mpSlots" class="mp-slots">'+mpSlotsHTML(s.selDay)+'</div>';
+}
+function mpCalGrid(){
+  var s=state.mp, ws=s.weekStart;
+  var firstMon=_monday(s.slots[0]), lastMon=_monday(s.slots[s.slots.length-1]);
+  var canPrev=ws>firstMon, canNext=lastMon>=ws+14*864e5;
+  var lab=new Date(ws).getDate()+' '+MP_MA[new Date(ws).getMonth()]+' – '+new Date(ws+13*864e5).getDate()+' '+MP_MA[new Date(ws+13*864e5).getMonth()];
+  var head=''; for(var i=0;i<7;i++) head+='<span class="mp-cal-dow">'+MP_DOW[i]+'</span>';
+  var cells=''; var todK=_dayKey(Date.now());
+  for(var dd=0; dd<14; dd++){
+    var dms=ws+dd*864e5, k=_dayKey(dms), arr=s.byDay[k]||[], has=arr.length>0, dt=new Date(dms);
+    var cls='mp-cal-day'+(has?' free':' off')+(s.selDay===k?' sel':'')+(k===todK?' today':'');
+    cells+='<button type="button" class="'+cls+'" '+(has?('onclick="mpPickDay(\''+k+'\')"'):'disabled')+'>'
+      +'<span class="mp-cal-dnum">'+dt.getDate()+'</span><span class="mp-cal-mon">'+MP_MA[dt.getMonth()]+'</span>'
+      +(has?('<span class="mp-cal-cnt">'+arr.length+' vrij</span>'):'<span class="mp-cal-cnt mp-cal-cnt-off">—</span>')+'</button>';
+  }
+  return '<div class="mp-cal"><div class="mp-cal-nav">'
+    +'<button type="button" class="mp-cal-arrow" '+(canPrev?'':'disabled')+' onclick="mpCalNav(-1)">‹</button>'
+    +'<b>'+lab+'</b>'
+    +'<button type="button" class="mp-cal-arrow" '+(canNext?'':'disabled')+' onclick="mpCalNav(1)">›</button></div>'
+    +'<div class="mp-cal-head">'+head+'</div><div class="mp-cal-grid">'+cells+'</div></div>';
+}
+function mpSlotsHTML(k){
+  var s=state.mp;
+  if(!k) return '<div class="mp-slots-hint">'+ic('clock',15)+' Kies hierboven een dag om de vrije momenten te zien.</div>';
+  var arr=s.byDay[k]||[]; if(!arr.length) return '<div class="mp-slots-hint">Geen vrije momenten op deze dag.</div>';
+  var dt=new Date(arr[0]); var lab=MP_DAYS_FULL[dt.getDay()]+' '+dt.getDate()+' '+MP_MA[dt.getMonth()];
+  return '<div class="mp-slots-lab">Vrije momenten op <b>'+lab+'</b> · ± '+Math.round((s.dur||1800000)/60000)+' min</div>'
+    +'<div class="mp-slotgrid">'+arr.map(function(ms){ return '<button type="button" class="mp-slot'+(s.selSlot===ms?' sel':'')+'" data-ms="'+ms+'" onclick="mpPickSlot('+ms+')">'+mpTime(ms)+'</button>'; }).join('')+'</div>';
+}
+function mpPickDay(k){ var s=state.mp; if(!s)return; s.selDay=k; s.selSlot=null;
+  var m=$id('mpAvailMount'); if(m)m.innerHTML=mpAvailHTML(); mpUpdateConfirm(); }
+function mpPickSlot(ms){ var s=state.mp; if(!s)return; s.selSlot=ms;
+  var box=$id('mpSlots'); if(box)box.querySelectorAll('.mp-slot').forEach(function(b){ b.classList.toggle('sel',Number(b.dataset.ms)===ms); });
+  mpUpdateConfirm(); }
+function mpCalNav(dir){ var s=state.mp; if(!s||!s.slots||!s.slots.length)return;
+  var firstMon=_monday(s.slots[0]); s.weekStart+=dir*14*864e5; if(s.weekStart<firstMon)s.weekStart=firstMon;
+  s.selDay=null; s.selSlot=null; var m=$id('mpAvailMount'); if(m)m.innerHTML=mpAvailHTML(); mpUpdateConfirm(); }
+function mpSetOnline(v){ var s=state.mp; if(!s)return; s.online=!!v;
+  var tg=document.querySelectorAll('#meetPlanner .mp-tg'); if(tg&&tg.length>=2){ tg[0].classList.toggle('on',!!v); tg[1].classList.toggle('on',!v); } }
+function mpUpdateConfirm(){ var s=state.mp; var cf=$id('mpConfirm'); if(!cf||!s)return;
+  cf.disabled=!s.selSlot; cf.textContent=s.selSlot?('Bevestig '+mpSlotLabel(s.selSlot)):'Kies eerst een moment'; }
+function mpTime(ms){ return new Date(ms).toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'}); }
+function mpSlotLabel(ms){ return new Date(ms).toLocaleString('nl-BE',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}); }
+function mpSlotLabelLong(ms){ return new Date(ms).toLocaleString('nl-BE',{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'}); }
+/* ---- tips-strook (à la socials-inzichten) ---- */
+function mpTipsHTML(){
+  var s=state.mp; var tips=[];
+  tips.push(['spark','Online of bij ons?','Kies hierboven een gesprek via Google Meet of een koffie bij ons op kantoor in Rijkevorsel.']);
+  if(s.byDay){ var best=null,bestN=-1; Object.keys(s.byDay).forEach(function(k){ var n=s.byDay[k].length; if(n>bestN){bestN=n;best=k;} });
+    if(best&&bestN>0){ var dl=MP_DAYS_FULL[new Date(best).getDay()]; tips.push(['clock','Veel ruimte op '+dl,'Op '+dl+' staat de agenda het ruimst — handig als je flexibel bent.']); } }
+  tips.push(['info','Kort en krachtig','Reken op ± '+Math.round((s.dur||1800000)/60000)+' minuten. Genoeg om bij te praten of een project te overlopen.']);
+  return '<div class="mp-tips"><div class="mp-tips-h">'+ic('spark',15)+' Handig om te weten</div><div class="mp-tips-grid">'
+    +tips.map(function(t){ return '<div class="mp-tip"><span class="mp-tip-ic">'+ic(t[0],16)+'</span><div class="mp-tip-tx"><b>'+escapeHtml(t[1])+'</b><span>'+escapeHtml(t[2])+'</span></div></div>'; }).join('')
+    +'</div></div>';
+}
+/* ---- boeking ---- */
+function mpClientInfo(){
+  var cc=(state.data&&state.data.bedrijf&&state.data.bedrijf.contact)||{};
+  var naam=((cc.voornaam||'')+' '+(cc.achternaam||'')).trim();
+  var bedrijf=(window.S27DATA&&S27DATA.bedrijfsnaam&&S27DATA.bedrijfsnaam())||'';
+  if(!naam) naam=bedrijf;
+  var email=cc.email||(state.session&&state.session.email)||'';
+  return { naam:naam, email:email, bedrijf:bedrijf };
+}
+async function mpBook(){
+  var s=state.mp; if(!s||!s.selSlot||s.booking) return; s.booking=true;
+  var cf=$id('mpConfirm'); if(cf){ cf.disabled=true; cf.textContent='Inplannen…'; }
+  var start=s.selSlot, eind=s.selSlot+(s.dur||30*60000);
+  var iso=function(ms){ return new Date(ms).toISOString(); };
+  var ci=mpClientInfo(); var whenLabel=mpSlotLabelLong(start);
+  var hostNaam=(s.host&&s.host.naam)||'Studio 27';
+  var titel, beschrijving;
+  if(s.mode==='nieuw'){ titel='Nieuw project · '+(ci.bedrijf||'kennismaking'); beschrijving='Kennismaking / nieuw project via het portaal.'+(s.note?(' Onderwerp: '+s.note):''); }
+  else if(s.mode==='project'){ titel='Overleg '+((s.project&&s.project.name)||'project')+' · met '+hostNaam; beschrijving='Projectoverleg via het portaal'+(s.project?(' over '+s.project.name):'')+'.'; }
+  else { titel='Algemene meeting · '+(ci.bedrijf||''); beschrijving='Algemene meeting (bijpraten over de samenwerking) via het portaal.'; }
+  if(state.demoMode){ mpDone(start,'',false); return; }
+  var payload={ host_email:(s.host&&s.host.email)||'', host_naam:hostNaam, start:iso(start), eind:iso(eind), start_ms:String(start),
+    online:!!s.online, titel:titel, beschrijving:beschrijving, locatie:s.online?'':'Studio 27, Sint-Lenaartsesteenweg, Rijkevorsel',
+    client_email:ci.email, client_naam:ci.naam, when_label:whenLabel };
+  if(s.mode==='project'&&s.project){ payload.project_task_id=s.project.id; payload.project_naam=s.project.name; }
+  if(s.mode==='nieuw') payload.intake=true;
+  try{
+    var res=await api(ENDPOINTS.meetingBook,payload);
+    if(res&&res.ok&&res.data&&res.data.ok){ mpDone(start,res.data.meet_link||'',false); return; }
+    // worker nog niet gedeployed (onbekend endpoint) → val terug op een aanvraag-bericht.
+    var notDeployed = !res || res.status===404 || res.status===0 || (res.data&&(res.data.error==='unknown_endpoint'||res.data._raw!=null));
+    if(notDeployed){ try{ await mpFallbackRequest(s,whenLabel,ci); }catch(e){} mpDone(start,'',true); return; }
+    throw new Error('book_failed');
+  }catch(e){
+    s.booking=false; var cf2=$id('mpConfirm'); if(cf2){ cf2.disabled=false; cf2.textContent='Opnieuw proberen'; }
+    var mnt=$id('mpAvailMount'); if(mnt){ var w=document.createElement('div'); w.className='mp-notebox mp-notebox-err'; w.textContent='Het inplannen lukte niet. Probeer het zo opnieuw of stuur ons een berichtje.'; mnt.insertBefore(w,mnt.firstChild); }
+  }
+}
+async function mpFallbackRequest(s,whenLabel,ci){
+  var who=(s.host&&s.host.naam)||'Studio 27';
+  var type = s.mode==='nieuw' ? 'Nieuw project'
+    : (s.mode==='project' ? ('Projectoverleg'+((s.project&&s.project.name)?(' · '+s.project.name):'')) : 'Algemene meeting');
+  return api(ENDPOINTS.directMessage,{ klant_naam:(ci&&ci.bedrijf)||'', onderwerp:type+'-aanvraag via portaal',
+    bericht:'Graag een '+type+' met '+who+' op '+whenLabel+(s.online?' (online via Meet)':' (bij Studio 27)')+(s.note?('. Onderwerp: '+s.note):'')+'.' });
+}
+function mpDone(start,meetLink,viaRequest){
+  var s=state.mp; if(!s)return; s.step='done';
+  var color=(s.host&&s.host.color)||'blue';
+  var who=(s.host&&s.host.naam)||'Studio 27';
+  var when=mpSlotLabelLong(start);
+  var sub = viaRequest ? 'We bevestigen je afspraak zo snel mogelijk per mail.'
+    : (s.online ? 'Top — je krijgt een agenda-uitnodiging met een Google Meet-link.' : 'Top — je krijgt een agenda-uitnodiging. Tot bij ons in Rijkevorsel!');
+  s._doneHTML='<div class="mp-done"><div class="mp-done-ic br-'+color+'">'+ic('st_approved',60)+'</div>'
+    +'<b class="mp-done-h">'+(viaRequest?'Aanvraag verstuurd!':'Meeting ingepland!')+'</b>'
+    +'<p class="mp-done-when">'+escapeHtml(when)+'<br><span>met '+escapeHtml(who)+'</span></p>'
+    +'<p class="mp-done-sub">'+escapeHtml(sub)+'</p>'
+    +(meetLink?('<a class="btn btn-branch br-'+color+' btn-sm" href="'+escapeHtml(meetLink)+'" target="_blank" rel="noopener">'+ic('video',15)+' Open Meet-link</a>'):'')
+    +'<button class="btn btn-ghost btn-sm" onclick="closeMeetingPlanner()">Sluiten</button></div>';
+  mpRender();
+}
+
 /* ---- Offerte-samensteller: winkelmand -> gateway (PandaDoc via Make) ----
    Contract: api(ENDPOINTS.offerteGenereren, { items:[{sku,naam,prijs,aantal}], opmerking })
    -> { ok, offerte_task_id, offerte_task_url, pandadoc_id, message }. */
