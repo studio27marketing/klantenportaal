@@ -430,6 +430,24 @@
     }catch(e){ state.data.metricoolStats={linked:false}; return false; }
   };
   DATA.metricoolStats = function(){ return state.data.metricoolStats; };
+  /* ---- Metricool post-performance (fase 2), gateway-endpoint metricoolPostStats ----
+     Contract: { ok, linked, brandId, period:{from,to,days},
+     summary:{posts,reach,interactions,avgReach,avgInteractions,avgEngagementRate,bestPostId},
+     networks:[{network,label,posts,reach,interactions,engagementRate}],
+     posts:[{id,network,label,date,text,image,url,type,reach,impressions,interactions,likes,comments,shares,views,engagement,engagementRate}] }. */
+  DATA.loadMetricoolPostStats = async function(){
+    if(!live()){ state.data.metricoolPostStats={linked:false}; return false; }
+    var bid = state.activeBedrijf || '';
+    if(!bid){ state.data.metricoolPostStats={linked:false}; return false; }
+    try{
+      var res = await api(ENDPOINTS.metricoolPostStats, base({ bedrijf_id:bid }));
+      var j = (res && res.ok && res.data) ? res.data : null;
+      if(!j || !j.ok || !j.linked){ state.data.metricoolPostStats={linked:false}; return true; }
+      state.data.metricoolPostStats = j;
+      return true;
+    }catch(e){ state.data.metricoolPostStats={linked:false}; return false; }
+  };
+  DATA.metricoolPostStats = function(){ return state.data.metricoolPostStats; };
   // markeer een post lokaal als goedgekeurd (na een geslaagde metricoolApprove-call)
   DATA.markMetricoolApproved = function(postId){
     var mc = state.data.metricool; if(!mc || !mc.posts) return;

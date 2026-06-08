@@ -201,7 +201,7 @@ async function loadAndEnter(skipLink){
     return;
   }
   // CRUCIAAL bij bedrijf-switch: wis alle gecachete data van het vorige bedrijf, anders blijven team/meetings/huisstijl/offertes/metricool/ads/facturatie hangen
-  state.data = { dashboard:null, details:{}, chats:{}, meetings:null, bedrijf:null, team:null, huisstijl:null, offertes:null, metricool:null, metricoolStats:null, ads:null };
+  state.data = { dashboard:null, details:{}, chats:{}, meetings:null, bedrijf:null, team:null, huisstijl:null, offertes:null, metricool:null, metricoolStats:null, metricoolPostStats:null, ads:null };
   state.perfUrl = null;
   try {
     // skipLink (bedrijf-switch): switchCompany koppelde + ververste de claim al -> niet opnieuw provisionen
@@ -252,7 +252,7 @@ async function ensureTabData(name){
   if(name==='instellingen' && !state.data.huisstijl) await S27DATA.loadHuisstijl();
   // (Resultaten-tab verwijderd — advertentiedata staat real-time op de Advertenties-tab)
   if(name==='offertes'){ var _t=[]; if(!state.data.offertes) _t.push(S27DATA.loadOffertes()); if(!state.data.bedrijf) _t.push(S27DATA.loadBedrijf()); if(_t.length){ try{ await Promise.all(_t); }catch(e){} } }
-  if(name==='socials'){ var _s=[]; if(!state.data.metricool) _s.push(S27DATA.loadMetricool()); if(!state.data.metricoolStats) _s.push(S27DATA.loadMetricoolStats()); if(_s.length){ try{ await Promise.all(_s); }catch(e){} } }
+  if(name==='socials'){ var _s=[]; if(!state.data.metricool) _s.push(S27DATA.loadMetricool()); if(!state.data.metricoolStats) _s.push(S27DATA.loadMetricoolStats()); if(!state.data.metricoolPostStats) _s.push(S27DATA.loadMetricoolPostStats()); if(_s.length){ try{ await Promise.all(_s); }catch(e){} } }
   if(name==='advertenties' && !state.data.metaAds){ try{ await S27DATA.loadMetaAds(); }catch(e){} }
 }
 function renderPanel(name){

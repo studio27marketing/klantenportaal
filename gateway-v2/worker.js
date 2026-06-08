@@ -367,7 +367,7 @@ async function handlePerfReport(request, env) {
 async function tryHandle(path, bedrijfId, body, claims, env, ctx, ch, noCache) {
   // READS (met KV-cache voor dashboard/bedrijfContent)
   if (READ_HANDLERS[path]) {
-    const cacheable = (path === 'dashboard' || path === 'bedrijfContent' || path === 'metricoolStats');
+    const cacheable = (path === 'dashboard' || path === 'bedrijfContent' || path === 'metricoolStats' || path === 'metricoolPostStats');
     const run = () => READ_HANDLERS[path](bedrijfId, body, env);
     const res = cacheable
       ? await withCache(env, ctx, path, bedrijfId, noCache, run)

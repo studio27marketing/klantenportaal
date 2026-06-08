@@ -2775,6 +2775,122 @@ export async function metricoolStats(bedrijfId, body, env) {
   return { status: 200, body: { ok: true, linked: true, brandId: blogId, period: { from, to, days }, totals, networks: networksOut, trend, trendLabel: primary ? primary.label : '' } };
 }
 
+/* ---- metricoolPostStats (READ) - post-performance per gepubliceerde post (fase 2) ----
+ * Per gekoppeld netwerk GET /api/v2/analytics/posts/{network} (live geverifieerde shapes).
+ * Levert per post: bereik, interacties, likes/comments/shares, views, engagement-rate,
+ * thumbnail + permalink. Plus aggregaten en een per-netwerk-samenvatting. Fail-soft:
+ * netwerken/posts die falen worden overgeslagen, nooit 5xx (zoals de andere Metricool-reads).
+ */
+const MC_NUM = (v) => Number(v) || 0;
+function mcPostDate(p) {
+  const d = (p && (p.publishedAt || p.created)) || null;
+  if (d && d.dateTime) return str(d.dateTime);            // {dateTime,timezone}
+  if (p && p.createTime) return str(p.createTime);        // tiktok "YYYY-MM-DDTHH:mm:ss+02:00"
+  if (p && p.timestamp) { try { return new Date(Number(p.timestamp)).toISOString().slice(0, 19); } catch (e) {} }
+  return '';
+}
+// Eén ruwe post (per netwerk) -> uniforme performance-shape voor de FE.
+function mcMapPostStat(net, p) {
+  let text = '', image = '', url = '', reach = 0, impressions = 0, inter = 0, likes = 0, comments = 0, shares = 0, views = 0, eng = 0;
+  const type = str(p && p.type);
+  if (net === 'instagram') {
+    text = str(p.content); image = str(p.imageUrl); url = str(p.url);
+    reach = MC_NUM(p.reach); inter = MC_NUM(p.interactions); likes = MC_NUM(p.likes); comments = MC_NUM(p.comments); shares = MC_NUM(p.shares); views = MC_NUM(p.views); eng = MC_NUM(p.engagement);
+  } else if (net === 'facebook') {
+    text = str(p.text); image = str(p.picture); url = str(p.link);
+    reach = MC_NUM(p.impressionsUnique); impressions = MC_NUM(p.impressions); likes = MC_NUM(p.reactions); comments = MC_NUM(p.comments); shares = MC_NUM(p.shares); inter = likes + comments + shares; eng = MC_NUM(p.engagement);
+  } else if (net === 'linkedin') {
+    text = str(p.comment || p.title); image = ''; url = str(p.url);
+    reach = MC_NUM(p.impressions); impressions = MC_NUM(p.impressions); likes = MC_NUM(p.likes); inter = likes; eng = MC_NUM(p.engagement);
+  } else if (net === 'tiktok') {
+    text = str(p.videoDescription || p.title); image = str(p.coverImageUrl); url = str(p.shareUrl);
+    reach = MC_NUM(p.reach); views = MC_NUM(p.viewCount); likes = MC_NUM(p.likeCount); comments = MC_NUM(p.commentCount); shares = MC_NUM(p.shareCount); inter = likes + comments + shares; eng = MC_NUM(p.engagement);
+  } else if (net === 'youtube') {
+    text = str(p.title); image = str(p.thumbnailUrl); url = str(p.watchUrl);
+    views = MC_NUM(p.views); reach = views; likes = MC_NUM(p.likes); comments = MC_NUM(p.comments); shares = MC_NUM(p.shares); inter = likes + comments + shares;
+  } else { return null; }
+  if (!reach) reach = impressions || views;
+  const engagementRate = reach > 0 ? Math.round((inter / reach) * 1000) / 10 : 0; // interacties / bereik, %
+  const id = str((p && (p.postId || p.videoId)) || url);
+  if (!id && !reach && !inter && !views) return null;
+  return {
+    id, network: net, label: MC_NET_LABEL[net] || net, date: mcPostDate(p),
+    text: text.length > 280 ? text.slice(0, 280) : text, image, url, type,
+    reach, impressions, interactions: inter, likes, comments, shares, views,
+    engagement: eng, engagementRate,
+  };
+}
+async function mcFetchPosts(env, blogId, userId, net, from, to) {
+  const qs = new URLSearchParams({ from, to, timezone: METRICOOL_TZ, blogId: String(blogId) });
+  if (userId) qs.set('userId', String(userId));
+  let r;
+  try { r = await fetch(`${METRICOOL_BASE}/analytics/posts/${net}?${qs.toString()}`, { headers: mcHeaders(env) }); }
+  catch (e) { return []; }
+  if (!r.ok) return [];
+  const d = await r.json().catch(() => null);
+  const arr = d && Array.isArray(d.data) ? d.data : (Array.isArray(d) ? d : []);
+  return arr.map((p) => mcMapPostStat(net, p)).filter(Boolean);
+}
+// Kern: haalt + aggregeert post-performance voor een brand. Los van ClickUp zodat lokaal testbaar.
+async function mcPostStatsCore(env, blogId, userId, networks, days) {
+  const from = mcStamp(Date.now() - days * 86400000);
+  const to = mcStamp(Date.now());
+  const perNet = await Promise.all(networks.map((net) => mcFetchPosts(env, blogId, userId, net, from, to).catch(() => [])));
+  let posts = [];
+  const netAgg = {};
+  networks.forEach((net, i) => {
+    const list = perNet[i] || [];
+    if (list.length) netAgg[net] = list;
+    posts = posts.concat(list);
+  });
+  // nieuwste eerst; cap op 40 voor de FE (zware payload vermijden).
+  posts.sort((a, b) => (Date.parse(b.date) || 0) - (Date.parse(a.date) || 0));
+  const capped = posts.slice(0, 40);
+  // aggregaten over ALLE opgehaalde posts (niet enkel de cap).
+  const sum = (k) => posts.reduce((a, p) => a + (p[k] || 0), 0);
+  const totalReach = sum('reach'), totalInter = sum('interactions');
+  const n = posts.length || 1;
+  const best = posts.slice().sort((a, b) => (b.reach - a.reach) || (b.interactions - a.interactions))[0] || null;
+  const networksOut = networks.filter((net) => netAgg[net]).map((net) => {
+    const list = netAgg[net];
+    const r = list.reduce((a, p) => a + p.reach, 0), it = list.reduce((a, p) => a + p.interactions, 0);
+    return { network: net, label: MC_NET_LABEL[net] || net, posts: list.length, reach: r, interactions: it, engagementRate: r > 0 ? Math.round((it / r) * 1000) / 10 : 0 };
+  });
+  const summary = {
+    posts: posts.length,
+    reach: totalReach,
+    interactions: totalInter,
+    avgReach: Math.round(totalReach / n),
+    avgInteractions: Math.round(totalInter / n),
+    avgEngagementRate: totalReach > 0 ? Math.round((totalInter / totalReach) * 1000) / 10 : 0,
+    bestPostId: best ? best.id : '',
+  };
+  return { from, to, days, summary, networks: networksOut, posts: capped };
+}
+export async function metricoolPostStats(bedrijfId, body, env) {
+  const br = await cu.get(env, `/task/${bedrijfId}`);
+  const blogId = br.ok && br.data ? str(getCF(br.data, FIELD.metricoolId)).trim() : '';
+  if (!blogId) return { status: 200, body: { ok: true, linked: false } };
+  if (!str(env && env.METRICOOL_API_KEY)) return { status: 200, body: { ok: true, linked: false } };
+  // userId + gekoppelde netwerken uit simpleProfiles (identiek aan metricoolStats).
+  let userId = ''; let networks = [];
+  try {
+    const r = await fetch(`${METRICOOL_ADMIN}/admin/simpleProfiles`, { headers: mcHeaders(env) });
+    const list = r.ok ? await r.json().catch(() => []) : [];
+    const brand = (Array.isArray(list) ? list : []).find((b) => String(b && b.id) === String(blogId));
+    if (brand) {
+      userId = str(brand.userId || brand.ownerUserId || '');
+      const nd = brand.networksData || {};
+      networks = Object.keys(MC_NET_KEYS).filter((k) => nd[k]).map((k) => MC_NET_KEYS[k]);
+    }
+  } catch (e) { /* fail-soft */ }
+  if (!userId) userId = str(env && env.METRICOOL_USER_ID).trim();
+  if (!networks.length) networks = ['instagram', 'facebook'];
+  const days = Math.min(180, Math.max(7, Number(body && body.days) || 90));
+  const core = await mcPostStatsCore(env, blogId, userId, networks, days);
+  return { status: 200, body: { ok: true, linked: true, brandId: blogId, period: { from: core.from, to: core.to, days }, summary: core.summary, networks: core.networks, posts: core.posts } };
+}
+
 /* ---- metaAds (READ) — real-time Meta-insights RECHTSTREEKS via de Graph API ----
  * Geen Make. Leest het Meta-ad-account uit de bedrijf-taak (FIELD.metaAdsId) — dus
  * SERVER-SIDE en tenant-safe, NOOIT uit de body — en haalt live op: account-KPI's,
@@ -3513,6 +3629,8 @@ export const READ_HANDLERS = {
   metricool,
   // Metricool analytics: KPI-dashboard + trend per netwerk (fase 1 metriek-look-and-feel).
   metricoolStats,
+  // Metricool post-performance: per gepubliceerde post bereik/interacties/engagement (fase 2).
+  metricoolPostStats,
   // Meta Ads (DIRECT via de Graph API, geen Make): real-time KPI's + actieve campagnes +
   // advertenties met creatives. Account server-side uit FIELD.metaAdsId (tenant-safe).
   metaAds,

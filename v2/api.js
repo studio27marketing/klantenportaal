@@ -94,6 +94,7 @@ const ENDPOINTS = {
   metricoolUpdate:   GATEWAY_BASE + '/metricoolUpdate',
   // Metricool analytics (KPI-dashboard + trend): { days? } -> { ok, linked, totals, networks:[], trend:[] }.
   metricoolStats:    GATEWAY_BASE + '/metricoolStats',
+  metricoolPostStats:GATEWAY_BASE + '/metricoolPostStats',
   // SEC-6: ads-insights via de gateway (bedrijf_id server-side uit het token), niet meer direct.
   ads:               GATEWAY_BASE + '/ads',
   // Meta Ads real-time (direct via Graph API, geen Make): { period? } -> { ok, linked, account,
