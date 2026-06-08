@@ -103,6 +103,10 @@ const spill = (st)=>{const m=STATUS_LABEL[st]||STATUS_LABEL.prog;return `<span c
 /* ===== live-data brug (S27DATA) met mock-fallback ===== */
 function _live(){ return !!(window.S27DATA && typeof state!=='undefined' && !state.demoMode && state.session); }
 function _projects(){ const p = window.S27DATA && S27DATA.projects(); return (p && p.length!==undefined) ? p : PROJECTS; }
+// advertentie-taak = primaire discipline 'ads' OF uitsluitend ads-labels. Die leven ENKEL op de Ads-pagina.
+function _isAdProject(p){ if(!p) return false; if(p.discId==='ads') return true; var ls=p.labels||[]; return ls.length>0 && ls.every(function(l){return l.discId==='ads';}); }
+function _nonAdProjects(){ return _projects().filter(function(p){ return !_isAdProject(p); }); }
+function _adProject(){ return _projects().filter(_isAdProject)[0] || null; }   // huidige-maand ads-taak (worker filtert al op due deze maand)
 function _greetNaam(){ var n=(window.S27DATA && S27DATA.klantNaam && S27DATA.klantNaam())||''; if(n && n!=='daar') return n; return _live()?'daar':'Sarah'; }
 function _bedrijf(){ return (window.S27DATA && S27DATA.bedrijfsnaam && S27DATA.bedrijfsnaam()) || 'TEST CLIENT BV'; }
 /* SA&E-namen kort tonen (geen foto-iconen). Geeft "" terug als er geen toegewezen teamleden zijn. */
@@ -209,7 +213,7 @@ function berichtChatInner(p){
   </div><div style="padding:18px 22px">${chatHTML(p.id)}</div>`;
 }
 function panelBerichten(){
-  const projs=_projects(); const first=projs[0];
+  const projs=_nonAdProjects(); const first=projs[0];
   const rows = projs.map((p,idx)=>`
         <button class="proj-row br-${p.br} bericht-row" data-bid="${esc(p.id)}" style="border:none;border-radius:0;box-shadow:none;border-bottom:1px solid var(--line);${idx===0?'background:var(--paper-2)':''}" onclick="openBerichtChat('${esc(p.id)}',this)">
           <span class="ber-dot" style="background:var(--c)"></span>
@@ -251,7 +255,7 @@ function projCluster(cl, grp){
   </section>`;
 }
 function projDienst(){
-  const all=_projects().filter(p=>p.status!=='done');
+  const all=_nonAdProjects().filter(p=>p.status!=='done');
   if(!all.length) return `<div class="empty"><div class="em-ic">${ic('st_approved',64)}</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Geen actieve projecten</b><p style="margin:6px 0 0">Zodra we samen aan iets nieuws starten, verschijnt het hier.</p></div>`;
   const sortFn=(a,b)=>{ const ia=DISC_ORDER.indexOf(a.disc),ib=DISC_ORDER.indexOf(b.disc); return ((ia<0?99:ia)-(ib<0?99:ib))||String(a.name).localeCompare(String(b.name)); };
   let html='';
@@ -277,7 +281,7 @@ function projCardFlat(p){
 function panelProjecten(){
   // filter-opties = ALLE disciplines die ergens als label voorkomen (ook secundaire), zodat
   // je ook op 'Webdesign' kan filteren als dat enkel een tweede label van een hoofdtaak is.
-  const order=[]; _projects().filter(p=>p.status!=='done').forEach(p=>{ ((p.labels&&p.labels.length)?p.labels:[{label:p.disc}]).forEach(l=>{ if(l.label && order.indexOf(l.label)<0) order.push(l.label); }); });
+  const order=[]; _nonAdProjects().filter(p=>p.status!=='done').forEach(p=>{ ((p.labels&&p.labels.length)?p.labels:[{label:p.disc}]).forEach(l=>{ if(l.label && order.indexOf(l.label)<0) order.push(l.label); }); });
   order.sort((a,b)=>{ const ia=DISC_ORDER.indexOf(a),ib=DISC_ORDER.indexOf(b); return (ia<0?99:ia)-(ib<0?99:ib); });
   return hero('blue','Mijn werk · Actieve projecten',
     `Jouw <span class="accent">actieve${squig()}</span> projecten`)
@@ -990,7 +994,7 @@ function pickProjectMeeting(el){
   const ag=$id('meetAgenda'); if(ag)ag.classList.add('np-hidden');
   const host=$id('projMeetPick'); if(!host) return;
   host.classList.remove('np-hidden');
-  const projs=_projects().filter(p=>p.status!=='done');
+  const projs=_nonAdProjects().filter(p=>p.status!=='done');
   if(!projs.length){ host.innerHTML='<p class="fs" style="color:var(--ink-3);padding:8px 0">Je hebt momenteel geen lopende projecten om een meeting voor in te plannen.</p>'; return; }
   host.innerHTML='<label class="ms-label" style="margin-top:6px">Voor welk project?</label>'
     +'<div class="projmeet-list">'+projs.map(p=>{ const sae=saeNames(p.sae); return '<button class="projmeet-opt br-'+p.br+'" onclick="startProjectMeeting(\''+esc(p.id)+'\',this)"><span class="pm-dot"></span><span class="pm-tx"><b>'+esc(p.name)+'</b><span>'+esc(p.disc)+(sae?' · '+sae:'')+'</span></span>'+ic('arrow',15)+'</button>'; }).join('')+'</div>'

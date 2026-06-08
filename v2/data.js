@@ -228,6 +228,7 @@
     var raw = projList(); if(!raw) return null;
     var out=[];
     raw.forEach(function(p){
+      if(p.discipline==='ads') return;   // advertentie-taken leven enkel op de Ads-pagina, niet in 'Voor jou te doen'
       var br = DATA.disc(p.discipline);
       if(norm(p.status)==='doorgestuurd' || p.feedback_link){
         out.push({ br:br.br, cat:br.label, title:'Review nodig', ctx:'Er staat iets klaar voor jou bij <b>'+esc(p.naam)+'</b>. Geef je akkoord of je feedback.',
