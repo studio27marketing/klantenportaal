@@ -439,7 +439,7 @@ async function handleMediaServe(key, env) {
   key = String(key || '').trim();
   if (!/^[A-Za-z0-9_-]{1,80}$/.test(key) || !env || !env.KV) return new Response('Not found', { status: 404 });
   let res;
-  try { res = await env.KV.getWithMetadata('mcmedia:' + key, { type: 'arrayBuffer' }); }
+  try { res = await env.KV.getWithMetadata('mcmedia:' + key, 'arrayBuffer'); }
   catch (e) { return new Response('Not found', { status: 404 }); }
   if (!res || !res.value) return new Response('Not found', { status: 404 });
   const ct = (res.metadata && res.metadata.ct) || 'application/octet-stream';
