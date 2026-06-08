@@ -560,7 +560,7 @@ function campaignCard(c){
 function panelAdvertenties(){
   const head = hero('orange','Mijn werk · Advertenties',
     `Jouw <span class="accent">campagnes${squig()}</span> die draaien`,
-    'Een live overzicht van je advertenties over al je platformen.',
+    'Een real-time overzicht van je Meta-advertenties: campagnes, cijfers en de visuals die nu draaien.',
     scribble('krabbel-oranje.png','top:-4px;right:8px;width:120px;transform:rotate(-5deg)'));
   if(state.demoMode){
     return head+`<div class="kpi-grid">
@@ -573,28 +573,7 @@ function panelAdvertenties(){
         <div class="proj-row br-${c[1]}" style="cursor:default"><span class="pr-main"><span class="pr-name" style="font-size:15px">${c[0]}</span><span style="font-size:13px;color:var(--ink-3)">${c[2]}</span></span><span class="pill pill-prog"><span class="pdot"></span>Live</span></div>`).join('')}
     </div>`;
   }
-  var ad=(window.S27DATA&&S27DATA.ads())||null;
-  if(!ad) return head+'<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je campagnes worden geladen…</p></div>';
-  if(!ad.linked) return head+'<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen advertentieaccount gekoppeld</div><div style="color:var(--ink-3);max-width:470px;margin:0 auto;line-height:1.55">Zodra je Meta- of Google Ads-account aan je portaal gekoppeld is, zie je hier al je campagnes met budget, vertoningen en klikken. Vraag gerust je contactpersoon bij Studio&nbsp;27.</div></div>';
-  var camps=ad.campaigns||[];
-  if(!camps.length) return head+'<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Geen actieve campagnes</div><div style="color:var(--ink-3)">Er liepen de afgelopen 90 dagen geen campagnes met activiteit op je gekoppelde account.</div></div>'+metaCreativesSection();
-  var plats=[]; camps.forEach(function(c){ if(plats.indexOf(c.platform)<0)plats.push(c.platform); });
-  var sel=state._adsPlatform||'alle'; if(sel!=='alle' && plats.indexOf(sel)<0) sel='alle';
-  var shown = sel==='alle'?camps:camps.filter(function(c){return c.platform===sel;});
-  var totB=shown.reduce(function(a,c){return a+(c.budget||0);},0), totI=shown.reduce(function(a,c){return a+(c.impressies||0);},0), totK=shown.reduce(function(a,c){return a+(c.klikken||0);},0);
-  var kpis='<div class="kpi-grid"><div class="kpi br-orange"><div class="kbar"></div><div class="klab">Advertentie-uitgaven</div><div class="knum">'+adsEur(totB)+'</div></div><div class="kpi br-blue"><div class="kbar"></div><div class="klab">Vertoningen</div><div class="knum">'+adsNum(totI)+'</div></div><div class="kpi br-green"><div class="kbar"></div><div class="klab">Klikken</div><div class="knum">'+adsNum(totK)+'</div></div><div class="kpi br-purple"><div class="kbar"></div><div class="klab">Campagnes</div><div class="knum">'+shown.length+'</div></div></div>';
-  var filterBtns = (plats.length>1) ? ('<span style="display:inline-flex;gap:5px;flex-wrap:wrap"><button class="seg-btn'+(sel==='alle'?' active':'')+'" onclick="setAdsPlatform(\'alle\')">Alle platformen</button>'+plats.map(function(p){ return '<button class="seg-btn'+(sel===p?' active':'')+'" onclick="setAdsPlatform(\''+p+'\')">'+esc(adsPlat(p)[0])+'</button>'; }).join('')+'</span>') : '<span class="count">'+shown.length+'</span>';
-  var groups = sel==='alle'?plats:[sel];
-  var body = groups.map(function(p){
-    var cs=camps.filter(function(c){return c.platform===p;}); if(!cs.length) return '';
-    var pl=adsPlat(p);
-    return '<div class="section-head" style="margin-top:18px"><h2 style="display:flex;align-items:center;gap:8px"><span style="width:11px;height:11px;border-radius:3px;background:'+pl[1]+'"></span>'+esc(pl[0])+'</h2><span class="count">'+cs.length+'</span></div>'+cs.map(campaignCard).join('');
-  }).join('');
-  return head+kpis
-    +'<div class="section-head"><h2>Campagnes</h2>'+filterBtns+'</div>'
-    +'<p class="sdesc" style="margin:-6px 0 8px;max-width:62ch">Cijfers van de afgelopen 90 dagen, rechtstreeks uit je advertentieaccount. Voor de gedetailleerde analyse: zie <b>Resultaten</b>.</p>'
-    +body
-    +metaCreativesSection();
+  return head+metaAdsBody();
 }
 
 /* ---- Meta — live advertenties & creatives (real-time via metaAds, geen Make) ---- */
@@ -635,22 +614,28 @@ function metaCreativeCard(a,i,cur){
   var mtr='<div class="meta-cre-m"><span class="metric"><b>'+metaEur(a.spend,cur)+'</b><i>besteed</i></span><span class="metric"><b>'+adsNum(a.impressions)+'</b><i>vertoningen</i></span><span class="metric"><b>'+(Number(a.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%</b><i>CTR</i></span></div>';
   return '<div class="meta-cre-card" onclick="openMetaCreative('+i+')"><div style="position:relative">'+img+badge+'</div><div class="meta-cre-t">'+esc(a.name||'Advertentie')+'</div>'+mtr+'</div>';
 }
-function metaCreativesSection(){
+function metaCampaignCard(c,cur){
+  var obj=adsObjective(c.objective);
+  var ms=[['Besteed',metaEur(c.spend,cur)],['Vertoningen',adsNum(c.impressions)],['Klikken',adsNum(c.clicks)],['CTR',(Number(c.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%'],['Resultaten',adsNum(c.results)]];
+  return '<div class="card" style="padding:14px 16px;margin-bottom:10px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:11px"><span class="pill pill-prog"><span class="pdot"></span>Live</span><b style="font-family:var(--font-display);font-size:15px;flex:1;min-width:130px">'+esc(c.name||'Campagne')+'</b>'+(obj?'<span class="fs" style="color:var(--ink-4)">'+esc(obj)+'</span>':'')+'</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));gap:10px">'+ms.map(function(m){return '<div><div style="color:var(--ink-4);font-size:11px;font-weight:600">'+m[0]+'</div><div style="font-family:var(--font-display);font-weight:800;font-size:16px;color:var(--ink)">'+m[1]+'</div></div>';}).join('')+'</div></div>';
+}
+function metaAdsBody(){
   var m=(window.S27DATA&&S27DATA.metaAds&&S27DATA.metaAds())||null;
-  var head='<div class="section-head" style="margin-top:26px"><h2 style="display:flex;align-items:center;gap:9px"><span class="live-dot"></span>Live advertenties &amp; creatives</h2>';
-  if(m===null){ return head+'</div><div class="empty" style="padding:30px"><div class="brand-spinner" style="margin:0 auto 10px"></div><p>Real-time data wordt opgehaald…</p></div>'; }
-  if(!m.linked) return '';
+  if(m===null){ return '<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je advertenties worden real-time opgehaald…</p></div>'; }
+  if(!m.linked){ return '<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen Meta-advertentieaccount gekoppeld</div><div style="color:var(--ink-3);max-width:470px;margin:0 auto;line-height:1.55">Zodra je Meta-advertentieaccount aan je portaal gekoppeld is, zie je hier real-time je campagnes, cijfers en de gebruikte visuals. Vraag gerust je contactpersoon bij Studio&nbsp;27.</div></div>'; }
   metaEnsureStyles();
   var per=state._metaPeriod||m.period||'last_7d'; var cur=m.currency||'EUR'; var k=m.kpis||{};
   var btns=['last_7d','last_30d','today'].map(function(p){ return '<button class="seg-btn'+(per===p?' active':'')+'" onclick="setMetaPeriod(\''+p+'\')">'+metaPeriodLabel(p)+'</button>'; }).join('');
-  head+='<span style="display:inline-flex;gap:5px;align-items:center;flex-wrap:wrap">'+btns+'<button class="seg-btn" onclick="refreshMetaAds()" title="Verversen" aria-label="Verversen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button></span></div>';
-  if(m.error){ return head+'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">De real-time Meta-data is even niet beschikbaar. Probeer straks opnieuw.</div>'; }
-  var strip='<div class="kpi-grid" style="margin-bottom:2px">'+metaKpiCard('orange','Besteding',metaEur(k.spend,cur))+metaKpiCard('blue','Vertoningen',adsNum(k.impressions))+metaKpiCard('green','Klikken',adsNum(k.clicks))+metaKpiCard('purple','CTR',(Number(k.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%')+'</div>';
-  var note='<p class="sdesc" style="margin:0 0 12px;max-width:62ch">Rechtstreeks en real-time uit je Meta-account — de advertenties die nú live staan, met hun visual. Klik op een creative om te vergroten.</p>';
+  var controls='<div class="section-head"><h2 style="display:flex;align-items:center;gap:9px"><span class="live-dot"></span>Live overzicht</h2><span style="display:inline-flex;gap:5px;align-items:center;flex-wrap:wrap">'+btns+'<button class="seg-btn" onclick="refreshMetaAds()" title="Verversen" aria-label="Verversen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button></span></div>';
+  if(m.error){ return controls+'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">De real-time Meta-data is even niet beschikbaar. Probeer straks opnieuw.</div>'; }
+  var strip='<div class="kpi-grid">'+metaKpiCard('orange','Besteding',metaEur(k.spend,cur))+metaKpiCard('blue','Vertoningen',adsNum(k.impressions))+metaKpiCard('green','Klikken',adsNum(k.clicks))+metaKpiCard('purple','CTR',(Number(k.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%')+'</div>';
+  var note='<p class="sdesc" style="margin:-2px 0 12px;max-width:62ch">Rechtstreeks en real-time uit je Meta-account — je actieve campagnes en de advertenties die nú live staan, met hun visual. Klik op een creative om te vergroten.</p>';
+  var camps=(m.campaigns||[]).slice().sort(function(a,b){return (b.spend||0)-(a.spend||0);});
+  var campSec='<div class="section-head" style="margin-top:18px"><h2>Live campagnes</h2><span class="count">'+camps.length+'</span></div>'+(camps.length?camps.map(function(c){return metaCampaignCard(c,cur);}).join(''):'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">Geen actieve campagnes in deze periode.</div>');
   var ads=(m.ads||[]).slice().sort(function(a,b){return (b.spend||0)-(a.spend||0);});
   state._metaAdsView=ads;
-  var grid = ads.length ? ('<div class="meta-cre-grid">'+ads.map(function(a,i){return metaCreativeCard(a,i,cur);}).join('')+'</div>') : '<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">Geen actieve advertenties in deze periode.</div>';
-  return head+note+strip+grid;
+  var creSec='<div class="section-head" style="margin-top:18px"><h2>Advertenties &amp; creatives</h2><span class="count">'+ads.length+'</span></div>'+(ads.length?('<div class="meta-cre-grid">'+ads.map(function(a,i){return metaCreativeCard(a,i,cur);}).join('')+'</div>'):'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">Geen actieve advertenties in deze periode.</div>');
+  return controls+note+strip+campSec+creSec;
 }
 function openMetaCreative(i){
   var a=(state._metaAdsView||[])[i]; if(!a||!a.thumb) return;

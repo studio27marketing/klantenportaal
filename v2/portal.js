@@ -222,12 +222,7 @@ async function ensureTabData(name){
   if(name==='performance'){ try{ state.perfUrl=(await S27DATA.performanceUrl())||null; }catch(e){ state.perfUrl=null; } }
   if(name==='offertes'){ var _t=[]; if(!state.data.offertes) _t.push(S27DATA.loadOffertes()); if(!state.data.bedrijf) _t.push(S27DATA.loadBedrijf()); if(_t.length){ try{ await Promise.all(_t); }catch(e){} } }
   if(name==='socials'){ var _s=[]; if(!state.data.metricool) _s.push(S27DATA.loadMetricool()); if(!state.data.metricoolStats) _s.push(S27DATA.loadMetricoolStats()); if(_s.length){ try{ await Promise.all(_s); }catch(e){} } }
-  if(name==='advertenties'){
-    var _ad=[];
-    if(!state.data.ads){ _ad.push(S27DATA.loadAds().catch(function(){})); }
-    if(!state.data.metaAds && S27DATA.loadMetaAds){ _ad.push(S27DATA.loadMetaAds().catch(function(){})); }
-    if(_ad.length){ try{ await Promise.all(_ad); }catch(e){} }
-  }
+  if(name==='advertenties' && !state.data.metaAds){ try{ await S27DATA.loadMetaAds(); }catch(e){} }
 }
 function renderPanel(name){
   const page=$id('page');
@@ -269,7 +264,7 @@ function updateNavBadges(){
 function needsLoad(name){
   if(state.data.dashboard && ['start','projecten','diensten','berichten'].indexOf(name)>=0) return false;
   if(name==='socials') return !state.data.metricool;   // wacht op Metricool-data
-  if(name==='advertenties') return !state.data.ads;    // wacht op ads-data
+  if(name==='advertenties') return !state.data.metaAds;  // wacht op Meta-ads-data
   if(name==='meetings' && state.data.meetings) return false;
   if(name==='huisstijl' && state.data.huisstijl) return false;
   if((name==='facturatie'||name==='instellingen') && state.data.bedrijf && state.data.team) return false;
