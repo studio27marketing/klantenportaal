@@ -104,7 +104,7 @@ const SENSITIVE = new Set([
   'chatAttachment', 'chatPost', 'directMessage', 'feedbackV2', 'newProjectIntake',
   'facturatieSave', 'projectFacturatieSave', 'bedrijfVoorkeuren', 'bedrijfContact',
   'bedrijfBeheer', 'inplannen', 'offerteGenereren', 'metricoolApprove', 'metricoolUpdate',
-  'shootSubmit',
+  'metricoolMediaUpload', 'shootSubmit',
 ]);
 const LIMIT_SENSITIVE = 15; // per minuut, per gebruiker
 const LIMIT_DEFAULT   = 80;
@@ -367,7 +367,7 @@ async function handlePerfReport(request, env) {
 async function tryHandle(path, bedrijfId, body, claims, env, ctx, ch, noCache) {
   // READS (met KV-cache voor dashboard/bedrijfContent)
   if (READ_HANDLERS[path]) {
-    const cacheable = (path === 'dashboard' || path === 'bedrijfContent' || path === 'metricoolStats' || path === 'metricoolPostStats');
+    const cacheable = (path === 'dashboard' || path === 'bedrijfContent' || path === 'metricoolPostStats');
     const run = () => READ_HANDLERS[path](bedrijfId, body, env);
     const res = cacheable
       ? await withCache(env, ctx, path, bedrijfId, noCache, run)
@@ -433,6 +433,25 @@ async function handlePublicShoot(request, env, ctx) {
 }
 
 /* ---- Worker -------------------------------------------------------------- */
+// Serveert een klant-geüploade post-visual uit KV (mcmedia:{key}). Publiek leesbaar zodat
+// Metricool de URL kan ophalen; sleutel is onraadbaar; content-type vast + nosniff.
+async function handleMediaServe(key, env) {
+  key = String(key || '').trim();
+  if (!/^[A-Za-z0-9_-]{1,80}$/.test(key) || !env || !env.KV) return new Response('Not found', { status: 404 });
+  let res;
+  try { res = await env.KV.getWithMetadata('mcmedia:' + key, { type: 'arrayBuffer' }); }
+  catch (e) { return new Response('Not found', { status: 404 }); }
+  if (!res || !res.value) return new Response('Not found', { status: 404 });
+  const ct = (res.metadata && res.metadata.ct) || 'application/octet-stream';
+  return new Response(res.value, { status: 200, headers: {
+    'Content-Type': ct,
+    'Cache-Control': 'public, max-age=604800, immutable',
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Disposition': 'inline',
+    'Access-Control-Allow-Origin': '*',
+  } });
+}
+
 export default {
   async fetch(request, env, ctx) {
     // PUBLIEKE shoot-capaciteitspagina (geen auth): vroege, geisoleerde route met open
@@ -441,6 +460,11 @@ export default {
       const _pub = new URL(request.url).pathname.replace(/^\/+|\/+$/g, '');
       if (_pub === 'public/shoot-beschikbaarheid' || _pub === 'shoot-capaciteit') {
         return handlePublicShoot(request, env, ctx);
+      }
+      // Publieke media-serve (klant-geüploade post-visuals) zodat Metricool ze kan ophalen.
+      // GET-only, onraadbare sleutel, vaste content-type + nosniff (geen HTML/JS-uitvoering).
+      if (_pub.indexOf('media/') === 0 && request.method === 'GET') {
+        return handleMediaServe(_pub.slice(6), env);
       }
     }
     const allowed = String(env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);

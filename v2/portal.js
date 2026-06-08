@@ -974,6 +974,22 @@ async function socialFeedback(id, btn){
 }
 /* --- In-portal post-editor: kanalen toggelen, hashtag toevoegen, en DIRECT opslaan in Metricool --- */
 function socialToggleChan(btn){ if(btn) btn.classList.toggle('on'); }
+function _fileToBase64(f){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){ res(String(r.result||'')); }; r.onerror=function(){ rej(new Error('read')); }; r.readAsDataURL(f); }); }
+// klant uploadt een foto/video -> worker host ze -> publieke URL invullen + preview verversen
+async function socialUploadMedia(input){
+  var msg=$id('socUpMsg'); var f=input&&input.files&&input.files[0]; if(!f) return;
+  if(f.size>22*1024*1024){ if(msg) msg.innerHTML='<span class="soc-saveerr">Bestand te groot (max 22 MB). Plak voor grote video\'s een URL.</span>'; input.value=''; return; }
+  if(msg) msg.innerHTML='<span style="color:var(--ink-4);display:inline-flex;align-items:center;gap:6px">'+ic('upload',13)+' Uploaden…</span>';
+  try{
+    var b64=await _fileToBase64(f);
+    if(state.demoMode || !state.session){ var mi0=$id('socMedia'); if(mi0){ mi0.value=URL.createObjectURL(f); } socialPreviewMedia(); if(msg) msg.innerHTML='<span class="soc-saveok">'+ic('check',13)+' Klaar (demo)</span>'; input.value=''; return; }
+    var r=await api(ENDPOINTS.metricoolMediaUpload, { filename:f.name, content_type:f.type, file_data:b64 });
+    var d=(r&&r.ok&&r.data)?r.data:(r&&r.ok!==undefined?r:null);
+    if(d&&d.ok&&d.url){ var mi=$id('socMedia'); if(mi){ mi.value=d.url; } socialPreviewMedia(); if(msg) msg.innerHTML='<span class="soc-saveok">'+ic('check',13)+' Visual geüpload. Klik op Opslaan om te bevestigen.</span>'; }
+    else { var det=(d&&d.message)?(' '+escapeHtml(String(d.message))):''; if(msg) msg.innerHTML='<span class="soc-saveerr">Upload lukte niet.'+det+'</span>'; }
+  }catch(e){ if(msg) msg.innerHTML='<span class="soc-saveerr">Upload lukte niet. Probeer het opnieuw.</span>'; }
+  input.value='';
+}
 function socialAddHash(){
   var inp=$id('socHash'), cap=$id('socCap'); if(!inp||!cap) return;
   var h=String(inp.value||'').trim().replace(/^#+/,''); if(!h) return;

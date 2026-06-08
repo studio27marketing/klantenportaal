@@ -92,6 +92,8 @@ const ENDPOINTS = {
   metricoolFeedback: GATEWAY_BASE + '/metricoolFeedback',
   // Klant past een post DIRECT aan in Metricool: { post_id, text, providers:[net], media:[url] } -> { ok, id }.
   metricoolUpdate:   GATEWAY_BASE + '/metricoolUpdate',
+  // Klant uploadt een foto/video als post-visual: { filename, content_type, file_data(b64) } -> { ok, url }.
+  metricoolMediaUpload: GATEWAY_BASE + '/metricoolMediaUpload',
   // Metricool analytics (KPI-dashboard + trend): { days? } -> { ok, linked, totals, networks:[], trend:[] }.
   metricoolStats:    GATEWAY_BASE + '/metricoolStats',
   metricoolPostStats:GATEWAY_BASE + '/metricoolPostStats',

@@ -417,12 +417,14 @@
   /* ---- Metricool analytics (KPI-dashboard + trend), gateway-endpoint metricoolStats ----
      Contract: { ok, linked, totals:{followers,growth,reach,interactions,engagementRate},
      networks:[{network,label,followers,growth,reach,interactions}], trend:[{date,value}], trendLabel, period }. */
-  DATA.loadMetricoolStats = async function(){
+  DATA.loadMetricoolStats = async function(opts){
     if(!live()){ state.data.metricoolStats={linked:false}; return false; }
     var bid = state.activeBedrijf || '';
     if(!bid){ state.data.metricoolStats={linked:false}; return false; }
     try{
-      var res = await api(ENDPOINTS.metricoolStats, base({ bedrijf_id:bid }));
+      var payload = base({ bedrijf_id:bid });
+      if(opts){ if(opts.from) payload.from=opts.from; if(opts.to) payload.to=opts.to; if(opts.compare) payload.compare=opts.compare; }
+      var res = await api(ENDPOINTS.metricoolStats, payload);
       var j = (res && res.ok && res.data) ? res.data : null;
       if(!j || !j.ok || !j.linked){ state.data.metricoolStats={linked:false}; return true; }
       state.data.metricoolStats = j;

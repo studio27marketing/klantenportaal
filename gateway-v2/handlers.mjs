@@ -2723,29 +2723,8 @@ const mcSum = (s) => (s || []).reduce((a, x) => a + (Number(x.v) || 0), 0);
 const mcLast = (s) => (s && s.length ? Number(s[s.length - 1].v) || 0 : 0);
 const mcFirst = (s) => (s && s.length ? Number(s[0].v) || 0 : 0);
 
-export async function metricoolStats(bedrijfId, body, env) {
-  const br = await cu.get(env, `/task/${bedrijfId}`);
-  const blogId = br.ok && br.data ? str(getCF(br.data, FIELD.metricoolId)).trim() : '';
-  if (!blogId) return { status: 200, body: { ok: true, linked: false } };
-  if (!str(env && env.METRICOOL_API_KEY)) return { status: 200, body: { ok: true, linked: false } };
-  // brand-info (userId + gekoppelde netwerken) uit simpleProfiles.
-  let userId = ''; let networks = [];
-  try {
-    const r = await fetch(`${METRICOOL_ADMIN}/admin/simpleProfiles`, { headers: mcHeaders(env) });
-    const list = r.ok ? await r.json().catch(() => []) : [];
-    const brand = (Array.isArray(list) ? list : []).find((b) => String(b && b.id) === String(blogId));
-    if (brand) {
-      userId = str(brand.userId || brand.ownerUserId || '');
-      const nd = brand.networksData || {};
-      networks = Object.keys(MC_NET_KEYS).filter((k) => nd[k]).map((k) => MC_NET_KEYS[k]);
-    }
-  } catch (e) { /* fail-soft */ }
-  if (!userId) userId = str(env && env.METRICOOL_USER_ID).trim();
-  if (!networks.length) networks = ['instagram', 'facebook'];
-  const days = Math.min(180, Math.max(7, Number(body && body.days) || 90));
-  const from = mcStamp(Date.now() - days * 86400000);
-  const to = mcStamp(Date.now());
-
+// Aggregeert de KPI-totalen voor één venster [from,to] over de gekoppelde netwerken.
+async function mcStatsWindow(env, blogId, userId, networks, from, to) {
   const perNet = await Promise.all(networks.map(async (net) => {
     const m = MC_STAT_METRICS[net]; if (!m) return null;
     const [fSer, rSer, iSer] = await Promise.all([
@@ -2768,11 +2747,56 @@ export async function metricoolStats(bedrijfId, body, env) {
     interactions: a.interactions + (n.interactions || 0),
   }), { followers: 0, growth: 0, reach: 0, interactions: 0 });
   totals.engagementRate = totals.reach > 0 ? Math.round((totals.interactions / totals.reach) * 1000) / 10 : 0; // %
-  // trend = followers per dag van het netwerk met de langste reeks.
-  const primary = nets.slice().sort((a, b) => (b.trend.length - a.trend.length))[0];
+  return { nets, totals };
+}
+function mcParseStamp(s) { const ms = Date.parse(String(s || '')); return isNaN(ms) ? 0 : ms; }
+// vergelijkings-venster: zelfde lengte ervoor / één maand ervoor / één jaar ervoor.
+function mcShiftWindow(fromMs, toMs, mode) {
+  if (mode === 'previous') { const len = Math.max(0, toMs - fromMs); return [fromMs - len, fromMs]; }
+  const shift = (ms) => { const d = new Date(ms); if (mode === 'month') d.setUTCMonth(d.getUTCMonth() - 1); else d.setUTCFullYear(d.getUTCFullYear() - 1); return d.getTime(); };
+  return [shift(fromMs), shift(toMs)];
+}
+export async function metricoolStats(bedrijfId, body, env) {
+  const br = await cu.get(env, `/task/${bedrijfId}`);
+  const blogId = br.ok && br.data ? str(getCF(br.data, FIELD.metricoolId)).trim() : '';
+  if (!blogId) return { status: 200, body: { ok: true, linked: false } };
+  if (!str(env && env.METRICOOL_API_KEY)) return { status: 200, body: { ok: true, linked: false } };
+  // brand-info (userId + gekoppelde netwerken) uit simpleProfiles.
+  let userId = ''; let networks = [];
+  try {
+    const r = await fetch(`${METRICOOL_ADMIN}/admin/simpleProfiles`, { headers: mcHeaders(env) });
+    const list = r.ok ? await r.json().catch(() => []) : [];
+    const brand = (Array.isArray(list) ? list : []).find((b) => String(b && b.id) === String(blogId));
+    if (brand) {
+      userId = str(brand.userId || brand.ownerUserId || '');
+      const nd = brand.networksData || {};
+      networks = Object.keys(MC_NET_KEYS).filter((k) => nd[k]).map((k) => MC_NET_KEYS[k]);
+    }
+  } catch (e) { /* fail-soft */ }
+  if (!userId) userId = str(env && env.METRICOOL_USER_ID).trim();
+  if (!networks.length) networks = ['instagram', 'facebook'];
+  // venster: expliciete from/to (ISO) of legacy 'days'. Optionele vergelijkings-modus.
+  let fromMs, toMs;
+  const bFrom = mcParseStamp(body && body.from), bTo = mcParseStamp(body && body.to);
+  if (bFrom && bTo && bTo > bFrom) { fromMs = bFrom; toMs = bTo; }
+  else { const days = Math.min(400, Math.max(1, Number(body && body.days) || 90)); toMs = Date.now(); fromMs = toMs - days * 86400000; }
+  const from = mcStamp(fromMs), to = mcStamp(toMs);
+  const days = Math.max(1, Math.round((toMs - fromMs) / 86400000));
+  const compare = ['previous', 'month', 'year'].indexOf(str(body && body.compare)) >= 0 ? str(body.compare) : 'none';
+
+  const cur = await mcStatsWindow(env, blogId, userId, networks, from, to);
+  let prevTotals = null, compareLabel = '';
+  if (compare !== 'none') {
+    const sh = mcShiftWindow(fromMs, toMs, compare);
+    const prev = await mcStatsWindow(env, blogId, userId, networks, mcStamp(sh[0]), mcStamp(sh[1]));
+    prevTotals = prev.totals;
+    compareLabel = compare === 'previous' ? 'vorige periode' : (compare === 'month' ? 'vorige maand' : 'vorig jaar');
+  }
+  // trend = followers per dag van het netwerk met de langste reeks (huidig venster).
+  const primary = cur.nets.slice().sort((a, b) => (b.trend.length - a.trend.length))[0];
   const trend = (primary && primary.trend) ? primary.trend.map((x) => ({ date: msToBrusselsYmd(x.t), value: x.v })) : [];
-  const networksOut = nets.map((n) => ({ network: n.network, label: n.label, followers: n.followers, growth: n.growth, reach: n.reach, interactions: n.interactions }));
-  return { status: 200, body: { ok: true, linked: true, brandId: blogId, period: { from, to, days }, totals, networks: networksOut, trend, trendLabel: primary ? primary.label : '' } };
+  const networksOut = cur.nets.map((n) => ({ network: n.network, label: n.label, followers: n.followers, growth: n.growth, reach: n.reach, interactions: n.interactions }));
+  return { status: 200, body: { ok: true, linked: true, brandId: blogId, period: { from, to, days, compare }, totals: cur.totals, prevTotals, compareLabel, networks: networksOut, trend, trendLabel: primary ? primary.label : '' } };
 }
 
 /* ---- metricoolPostStats (READ) - post-performance per gepubliceerde post (fase 2) ----
@@ -3650,6 +3674,33 @@ export async function shootSubmit(bedrijfId, body, env) {
   return { status: 200, body: { ok: true, taskId, assignedTo: pickedHost ? pickedHost.id : null, assignedName: pickedHost ? pickedHost.name : '' } };
 }
 
+/* ---- metricoolMediaUpload (WRITE) — klant uploadt een foto/video als post-visual ----
+ * Metricool's scheduler verwacht een PUBLIEKE media-URL, geen bytes. We bewaren de upload
+ * daarom kort in KV en serveren ze via de publieke /media/{key}-route op de worker; die URL
+ * geven we terug zodat de editor ze als media meegeeft aan metricoolUpdate. Tenant-safe
+ * (enkel Metricool-gekoppelde bedrijven), type-allowlist (image/video) + nosniff bij serveren.
+ */
+export const MEDIA_PUBLIC_BASE = 'https://s27-portal-gateway-v2.studio27marketing.workers.dev';
+export async function metricoolMediaUpload(bedrijfId, body, env) {
+  const br = await cu.get(env, `/task/${bedrijfId}`);
+  const blogId = br.ok && br.data ? str(getCF(br.data, FIELD.metricoolId)).trim() : '';
+  if (!blogId) return { status: 403, body: { ok: false, error: 'not_linked' } };
+  if (!env.KV) return { status: 200, body: { ok: false, error: 'no_storage', message: 'Upload tijdelijk niet beschikbaar.' } };
+  const ct = str(body && (body.content_type || body.contentType)).toLowerCase().split(';')[0].trim();
+  if (!/^image\/(jpeg|jpg|png|gif|webp)$/.test(ct) && !/^video\/(mp4|quicktime|webm)$/.test(ct)) {
+    return { status: 200, body: { ok: false, error: 'bad_type', message: 'Enkel afbeeldingen (jpg, png, gif, webp) of video (mp4, mov, webm).' } };
+  }
+  let bytes;
+  try { bytes = base64ToBytes(str(body && (body.file_data != null ? body.file_data : body.data))); }
+  catch (e) { return { status: 200, body: { ok: false, error: 'bad_base64' } }; }
+  if (!bytes || !bytes.length) return { status: 200, body: { ok: false, error: 'empty' } };
+  if (bytes.length > 22 * 1024 * 1024) return { status: 200, body: { ok: false, error: 'too_large', message: 'Bestand te groot (max 22 MB). Plak voor grote video\'s een URL.' } };
+  const key = str(bedrijfId).replace(/[^A-Za-z0-9]/g, '').slice(0, 16) + '-' + Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
+  try { await env.KV.put('mcmedia:' + key, bytes.buffer, { expirationTtl: 60 * 86400, metadata: { ct } }); }
+  catch (e) { return { status: 200, body: { ok: false, error: 'store_failed' } }; }
+  return { status: 200, body: { ok: true, url: MEDIA_PUBLIC_BASE + '/media/' + key, contentType: ct } };
+}
+
 /* =============================================================================
    Handler-registry voor de router-shim + node-harness.
    READ_HANDLERS: testbaar zonder Firebase met (bedrijfId, body, env).
@@ -3696,6 +3747,8 @@ export const WRITE_HANDLERS = {
   // Metricool: klant keurt een geplande post goed (KV + ClickUp-melding) of geeft feedback.
   metricoolApprove,
   metricoolFeedback,
+  // Metricool: klant uploadt een foto/video als post-visual (KV-hosting -> publieke URL).
+  metricoolMediaUpload,
   metricoolUpdate,
   // Google Drive writes (directe API v3, geen Make).
   huisstijlUpload,

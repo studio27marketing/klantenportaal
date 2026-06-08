@@ -436,6 +436,8 @@
 .soc-chics-ro .soc-chic{cursor:default;}
 .soc-chics-ro .soc-chic:hover{transform:none;}
 .soc-visrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.soc-upor{font-family:var(--font-body);font-size:12px;color:var(--ink-4,#9E919E);}
+#socUpMsg .soc-saveok,#socUpMsg .soc-saveerr{display:inline-flex;}
 .soc-roinfo{display:flex;align-items:flex-start;gap:8px;margin-top:16px;font-family:var(--font-body);font-size:13px;line-height:1.5;color:var(--s27-green-ink,#147A50);background:var(--s27-green-soft,rgba(18,172,78,.09));border-radius:11px;padding:11px 13px;}
 .soc-roinfo svg{flex:none;margin-top:1px;}
 .soc-dtxt-box{white-space:pre-wrap;font-family:var(--font-body);font-size:14px;line-height:1.55;color:var(--ink-2,#3A2A3A);background:var(--paper-2,#FAF7F2);border:1px solid var(--line,#E7DFD3);border-radius:12px;padding:12px 14px;max-height:340px;overflow:auto;}
@@ -459,3 +461,16 @@
 /* kalender (planner): schermvullender */
 .soc-cal .soc-grid .soc-cell{min-height:118px;}
 @media(max-width:680px){.soc-cal .soc-grid .soc-cell{min-height:70px;}}
+
+/* ---- Analyse: periode-selector + vergelijking ---- */
+.soc-period{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 18px;}
+.soc-perchips{display:flex;gap:5px;flex-wrap:wrap;background:var(--paper-2,#FAF7F2);border:1px solid var(--line,#E7DFD3);border-radius:12px;padding:4px;}
+.soc-perchip{font-family:var(--font-display);font-weight:700;font-size:12.5px;color:var(--ink-3,#6B5B6B);padding:7px 13px;border-radius:9px;cursor:pointer;transition:background .15s,color .15s,box-shadow .15s;}
+.soc-perchip:hover{color:var(--ink,#230F23);}
+.soc-perchip.active{background:#fff;color:var(--ink,#230F23);box-shadow:0 2px 7px rgba(60,40,80,.10);}
+.soc-percustom{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-body);font-size:12.5px;color:var(--ink-4,#9E919E);}
+.soc-percustom input[type=date]{font-family:var(--font-body);font-size:13px;padding:7px 10px;border:1px solid var(--line,#E7DFD3);border-radius:9px;color:var(--ink-2,#3A2A3A);background:#fff;}
+.soc-percompare{display:inline-flex;align-items:center;gap:7px;margin-left:auto;color:var(--ink-4,#9E919E);}
+.soc-percompare svg{color:var(--ink-4,#9E919E);}
+.soc-percompare select{font-family:var(--font-display);font-weight:700;font-size:12.5px;color:var(--ink-2,#3A2A3A);padding:8px 11px;border:1px solid var(--line,#E7DFD3);border-radius:10px;background:var(--paper,#fff);cursor:pointer;}
+@media(max-width:560px){.soc-percompare{margin-left:0;}}

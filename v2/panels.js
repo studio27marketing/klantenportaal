@@ -409,7 +409,46 @@ function socialBodyHTML(){
   if(t==='inzichten') return socialInzichtenHTML();
   return socialPlannerHTML();
 }
-function socialAnalyseHTML(){ return '<div id="socialStats">'+socialStatsHTML()+'</div>'; }
+function socialAnalyseHTML(){ return socialPeriodBar()+'<div id="socialStats">'+socialStatsHTML()+'</div>'; }
+function _socIsoLocal(d){ var p=function(n){return (n<10?'0':'')+n;}; return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds()); }
+function socialPeriodWindow(preset){
+  var now=new Date(), from;
+  if(preset==='today') from=new Date(now.getFullYear(),now.getMonth(),now.getDate(),0,0,0);
+  else if(preset==='7d') from=new Date(now.getTime()-7*86400000);
+  else if(preset==='30d') from=new Date(now.getTime()-30*86400000);
+  else if(preset==='90d') from=new Date(now.getTime()-90*86400000);
+  else if(preset==='year') from=new Date(now.getFullYear(),0,1,0,0,0);
+  else return null;
+  return { from:_socIsoLocal(from), to:_socIsoLocal(now) };
+}
+function socialPeriod(){ if(!state._socPeriod){ var w=socialPeriodWindow('90d'); state._socPeriod={preset:'90d',compare:'none',from:w.from,to:w.to}; } return state._socPeriod; }
+function socialPeriodBar(){
+  var pp=socialPeriod();
+  var presets=[['today','Vandaag'],['7d','7 dagen'],['30d','30 dagen'],['90d','90 dagen'],['year','Dit jaar'],['custom','Aangepast']];
+  var comps=[['none','Geen vergelijking'],['previous','Vorige periode'],['month','Vorige maand'],['year','Vorig jaar']];
+  var chips=presets.map(function(o){ return '<button class="soc-perchip'+(pp.preset===o[0]?' active':'')+'" onclick="socialSetPeriod(\''+o[0]+'\')">'+esc(o[1])+'</button>'; }).join('');
+  var custom = pp.preset==='custom' ? '<div class="soc-percustom"><input type="date" id="socFrom" value="'+esc((pp.from||'').slice(0,10))+'" onchange="socialCustomPeriod()"><span>tot</span><input type="date" id="socTo" value="'+esc((pp.to||'').slice(0,10))+'" onchange="socialCustomPeriod()"></div>' : '';
+  var comp='<div class="soc-percompare">'+ic('st_progress',15)+'<select onchange="socialSetCompare(this.value)" aria-label="Vergelijken met">'+comps.map(function(o){return '<option value="'+o[0]+'"'+(pp.compare===o[0]?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')+'</select></div>';
+  return '<div class="soc-period"><div class="soc-perchips">'+chips+'</div>'+custom+comp+'</div>';
+}
+function socialReloadStats(){
+  var box=document.getElementById('socialStats'); if(box) box.innerHTML='<div class="soc-kpi-skel">Cijfers laden…</div>';
+  var pp=socialPeriod();
+  if(state.demoMode || !(window.S27DATA&&S27DATA.loadMetricoolStats)){ if(box) box.innerHTML=socialStatsHTML(); return; }
+  S27DATA.loadMetricoolStats({from:pp.from,to:pp.to,compare:pp.compare}).then(function(){ var b=document.getElementById('socialStats'); if(b) b.innerHTML=socialStatsHTML(); }).catch(function(){ var b=document.getElementById('socialStats'); if(b) b.innerHTML=socialStatsHTML(); });
+}
+function _socRerenderPeriodBar(){ var bar=document.querySelector('#socialBody .soc-period'); if(bar) bar.outerHTML=socialPeriodBar(); }
+function socialSetPeriod(preset){
+  var pp=socialPeriod(); pp.preset=preset;
+  if(preset!=='custom'){ var w=socialPeriodWindow(preset); if(w){ pp.from=w.from; pp.to=w.to; } }
+  _socRerenderPeriodBar();
+  if(preset!=='custom') socialReloadStats();
+}
+function socialCustomPeriod(){
+  var f=document.getElementById('socFrom'), t=document.getElementById('socTo'); if(!f||!t||!f.value||!t.value) return;
+  var pp=socialPeriod(); pp.from=f.value+'T00:00:00'; pp.to=t.value+'T23:59:59'; socialReloadStats();
+}
+function socialSetCompare(mode){ var pp=socialPeriod(); pp.compare=mode; socialReloadStats(); }
 function socialPlannerHTML(){ var posts=socialPostsAll(); return socialMatrixbar(posts)+socialFilters()+'<div id="socialCalContainer">'+socialCalendar(socialShownPosts())+'</div>'; }
 function socialInzichtenHTML(){
   var it=socialInzTab();
@@ -456,13 +495,21 @@ function socialStatsHTML(){
   return socialStatsBlock(s);
 }
 function socialStatsBlock(s){
-  var t=s.totals||{}; var dys=(s.period&&s.period.days)||90;
+  var t=s.totals||{}; var dys=(s.period&&s.period.days)||90; var pv=s.prevTotals||null; var clab=s.compareLabel||'';
   function grow(g){ g=Number(g)||0; var cls=g>0?'up':(g<0?'down':'flat'); return '<span class="soc-kpi-delta '+cls+'">'+(g>0?'+':'')+socialFmt(g)+'</span>'; }
+  // delta vs vergelijkingsperiode (procentueel); valt terug op de standaard-subtitel als er geen vergelijking is.
+  function cmp(cur,prev,fallback){
+    if(pv==null) return '<span class="soc-kpi-sub">'+fallback+'</span>';
+    cur=Number(cur)||0; prev=Number(prev)||0;
+    var d; if(!prev){ d= cur>0?'<span class="soc-kpi-delta up">nieuw</span>':'<span class="soc-kpi-delta flat">—</span>'; }
+    else { var pct=Math.round(((cur-prev)/prev)*1000)/10; var cls=pct>0?'up':(pct<0?'down':'flat'); d='<span class="soc-kpi-delta '+cls+'">'+(pct>0?'+':'')+pct+'%</span>'; }
+    return d+' <span class="soc-kpi-sub">vs '+esc(clab)+'</span>';
+  }
   var kpis=[
-    ['Volgers', socialFmt(t.followers), grow(t.growth)],
-    ['Bereik', socialFmt(t.reach), '<span class="soc-kpi-sub">laatste '+dys+' dagen</span>'],
-    ['Engagement', (Number(t.engagementRate)||0)+'%', '<span class="soc-kpi-sub">interacties / bereik</span>'],
-    ['Interacties', socialFmt(t.interactions), '<span class="soc-kpi-sub">laatste '+dys+' dagen</span>']
+    ['Volgers', socialFmt(t.followers), pv?cmp(t.followers,pv.followers,''):grow(t.growth)],
+    ['Bereik', socialFmt(t.reach), cmp(t.reach,pv&&pv.reach,'laatste '+dys+' dagen')],
+    ['Engagement', (Number(t.engagementRate)||0)+'%', cmp(t.engagementRate,pv&&pv.engagementRate,'interacties / bereik')],
+    ['Interacties', socialFmt(t.interactions), cmp(t.interactions,pv&&pv.interactions,'laatste '+dys+' dagen')]
   ];
   var cards='<div class="soc-kpis">'+kpis.map(function(k){ return '<div class="soc-kpi"><div class="soc-kpi-lab">'+esc(k[0])+'</div><div class="soc-kpi-num">'+k[1]+'</div><div class="soc-kpi-foot">'+k[2]+'</div></div>'; }).join('')+'</div>';
   var chart=socialTrendSVG(s.trend||[], s.trendLabel||'Trend');
@@ -695,8 +742,9 @@ function socialDetailPage(id){
       +'<label class="soc-elab">Kanalen</label><div class="soc-chics">'+chans+'</div>'
       +'<label class="soc-elab">Tekst &amp; hashtags</label><textarea id="socCap" class="soc-cap" rows="12" oninput="socialPreviewSync()" placeholder="Schrijf je caption… hashtags typ je gewoon mee (#voorbeeld)">'+esc(p.tekst||'')+'</textarea>'
       +'<label class="soc-elab">Visual</label>'
-      +'<div class="soc-visrow"><input id="socMedia" class="soc-hashin" style="flex:1;min-width:200px;box-sizing:border-box" placeholder="Plak een afbeeldings- of video-URL (of Google Drive-link)" oninput="socialPreviewMedia()"></div>'
-      +'<p class="fs" style="color:var(--ink-4);margin:6px 0 0">Laat leeg om de huidige visual te behouden.</p>'
+      +'<div class="soc-visrow"><button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById(\'socFile\').click()">'+ic('upload',15)+' Upload foto/video</button><input type="file" id="socFile" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/quicktime,video/webm" style="display:none" onchange="socialUploadMedia(this)"><span class="soc-upor">of</span><input id="socMedia" class="soc-hashin" style="flex:1;min-width:150px;box-sizing:border-box" placeholder="plak een URL" oninput="socialPreviewMedia()"></div>'
+      +'<div id="socUpMsg" class="fs" style="margin-top:7px"></div>'
+      +'<p class="fs" style="color:var(--ink-4);margin:6px 0 0">Laat leeg om de huidige visual te behouden. Een geüploade foto/video gebruiken we automatisch.</p>'
       +'<div id="socSaveMsg" style="margin-top:12px"></div>'
     +'</div></div></div>';
 }
