@@ -1208,7 +1208,14 @@ function adsGegevensTable(){
 }
 function adsGegVisual(i){
   var a=(state._adsGegRows||[])[i]; if(!a||!a.campaignId) return;
-  function show(){ var ads=(window.S27DATA&&S27DATA.campaignAds)?S27DATA.campaignAds(a.campaignId):[]; var ad=(ads||[]).filter(function(x){return a.name && x.name===a.name;})[0]||(ads||[])[0]; if(ad && typeof openMetaCreative==='function'){ openMetaCreative(ad); } else { alert('Geen visual gevonden voor deze advertentie.'); } }
+  // openMetaCreative(i) indexeert state._metaAdsView -> die array zetten + de juiste index doorgeven.
+  function show(){
+    var ads=((window.S27DATA&&S27DATA.campaignAds)?S27DATA.campaignAds(a.campaignId):[])||[];
+    var idx=-1; for(var j=0;j<ads.length;j++){ if(a.name && ads[j].name===a.name){ idx=j; break; } }
+    if(idx<0 && ads.length) idx=0;
+    if(idx<0 || typeof openMetaCreative!=='function'){ alert('Geen visual gevonden voor deze advertentie.'); return; }
+    state._metaAdsView=ads; openMetaCreative(idx);
+  }
   var have=(window.S27DATA&&S27DATA.campaignAds)?S27DATA.campaignAds(a.campaignId):null;
   if(have){ show(); return; }
   if(window.S27DATA&&S27DATA.loadCampaignAds){ S27DATA.loadCampaignAds(a.campaignId).then(show).catch(function(){ alert('De visual kon niet geladen worden.'); }); }
