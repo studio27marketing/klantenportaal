@@ -440,7 +440,7 @@
     var bid = state.activeBedrijf || '';
     if(!bid){ state.data.metricoolStatsRich={linked:false}; return false; }
     try{
-      var payload = (o.from && o.to) ? base({ from:o.from, to:o.to, compare:o.compare||'none' }) : base({ days:(o.days||30) });
+      var payload = (o.from && o.to) ? base({ from:o.from, to:o.to, compare:o.compare||'none' }) : base({ days:(o.days||90) });
       var res = await api(ENDPOINTS.metricoolStatsRich, payload);
       var j = (res && res.ok && res.data) ? res.data : null;
       if(!j || !j.ok || !j.linked){ state.data.metricoolStatsRich={linked:false}; return true; }

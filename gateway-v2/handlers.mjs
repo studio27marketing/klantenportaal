@@ -2805,24 +2805,9 @@ function mcShiftWindow(fromMs, toMs, mode) {
   return [shift(fromMs), shift(toMs)];
 }
 export async function metricoolStats(bedrijfId, body, env) {
-  const br = await cu.get(env, `/task/${bedrijfId}`);
-  const blogId = br.ok && br.data ? str(getCF(br.data, FIELD.metricoolId)).trim() : '';
+  // brand-resolutie (blogId/userId/gekoppelde netwerken) — gedeelde helper (geen drift met de rich-variant).
+  const { blogId, userId, networks } = await mcResolveBrand(env, bedrijfId);
   if (!blogId) return { status: 200, body: { ok: true, linked: false } };
-  if (!str(env && env.METRICOOL_API_KEY)) return { status: 200, body: { ok: true, linked: false } };
-  // brand-info (userId + gekoppelde netwerken) uit simpleProfiles.
-  let userId = ''; let networks = [];
-  try {
-    const r = await fetch(`${METRICOOL_ADMIN}/admin/simpleProfiles`, { headers: mcHeaders(env) });
-    const list = r.ok ? await r.json().catch(() => []) : [];
-    const brand = (Array.isArray(list) ? list : []).find((b) => String(b && b.id) === String(blogId));
-    if (brand) {
-      userId = str(brand.userId || brand.ownerUserId || '');
-      const nd = brand.networksData || {};
-      networks = Object.keys(MC_NET_KEYS).filter((k) => nd[k]).map((k) => MC_NET_KEYS[k]);
-    }
-  } catch (e) { /* fail-soft */ }
-  if (!userId) userId = str(env && env.METRICOOL_USER_ID).trim();
-  if (!networks.length) networks = ['instagram', 'facebook'];
   // venster: expliciete from/to (ISO) of legacy 'days'. Optionele vergelijkings-modus.
   let fromMs, toMs;
   const bFrom = mcParseStamp(body && body.from), bTo = mcParseStamp(body && body.to);
@@ -2877,7 +2862,7 @@ export async function metricoolStatsRich(bedrijfId, body, env) {
   let fromMs, toMs;
   const bFrom = mcParseStamp(body && body.from), bTo = mcParseStamp(body && body.to);
   if (bFrom && bTo && bTo > bFrom) { fromMs = bFrom; toMs = bTo; }
-  else { const days = Math.min(400, Math.max(1, Number(body && body.days) || 30)); toMs = Date.now(); fromMs = toMs - days * 86400000; }
+  else { const days = Math.min(400, Math.max(1, Number(body && body.days) || 90)); toMs = Date.now(); fromMs = toMs - days * 86400000; }
   const from = mcStamp(fromMs), to = mcStamp(toMs);
   const days = Math.max(1, Math.round((toMs - fromMs) / 86400000));
   const compare = ['previous', 'month', 'year'].indexOf(str(body && body.compare)) >= 0 ? str(body.compare) : 'none';
@@ -3038,24 +3023,8 @@ async function mcPostStatsCore(env, blogId, userId, networks, days, fromStamp, t
   return { from, to, days, summary, networks: networksOut, posts: capped, hashtags, formats, bestTimes };
 }
 export async function metricoolPostStats(bedrijfId, body, env) {
-  const br = await cu.get(env, `/task/${bedrijfId}`);
-  const blogId = br.ok && br.data ? str(getCF(br.data, FIELD.metricoolId)).trim() : '';
+  const { blogId, userId, networks } = await mcResolveBrand(env, bedrijfId);   // gedeelde brand-resolutie
   if (!blogId) return { status: 200, body: { ok: true, linked: false } };
-  if (!str(env && env.METRICOOL_API_KEY)) return { status: 200, body: { ok: true, linked: false } };
-  // userId + gekoppelde netwerken uit simpleProfiles (identiek aan metricoolStats).
-  let userId = ''; let networks = [];
-  try {
-    const r = await fetch(`${METRICOOL_ADMIN}/admin/simpleProfiles`, { headers: mcHeaders(env) });
-    const list = r.ok ? await r.json().catch(() => []) : [];
-    const brand = (Array.isArray(list) ? list : []).find((b) => String(b && b.id) === String(blogId));
-    if (brand) {
-      userId = str(brand.userId || brand.ownerUserId || '');
-      const nd = brand.networksData || {};
-      networks = Object.keys(MC_NET_KEYS).filter((k) => nd[k]).map((k) => MC_NET_KEYS[k]);
-    }
-  } catch (e) { /* fail-soft */ }
-  if (!userId) userId = str(env && env.METRICOOL_USER_ID).trim();
-  if (!networks.length) networks = ['instagram', 'facebook'];
   const days = Math.min(180, Math.max(7, Number(body && body.days) || 90));
   const core = await mcPostStatsCore(env, blogId, userId, networks, days);
   return { status: 200, body: { ok: true, linked: true, brandId: blogId, period: { from: core.from, to: core.to, days }, summary: core.summary, networks: core.networks, posts: core.posts, hashtags: core.hashtags, formats: core.formats, bestTimes: core.bestTimes } };

@@ -505,10 +505,13 @@ function socialRichKpis(s){
   var g=Number(t.growth)||0; var gchip=g?'<div class="sr-growth '+(g>0?'up':'down')+'">'+(g>0?'▲ +':'▼ ')+socialFmt(Math.abs(g))+' volgers in deze periode</div>':'';
   return '<div class="ar-summary"><div class="ar-kpigrid">'+cards+'</div>'+note+gchip+'</div>';
 }
+function _srHasOverview(s){ var d={}; (s.networks||[]).forEach(function(n){ ((n.series&&n.series.reach)||[]).forEach(function(x){d[x.date]=1;}); ((n.series&&n.series.interactions)||[]).forEach(function(x){d[x.date]=1;}); }); return Object.keys(d).length>=2; }
+function _srHasFollowers(s){ return (s.networks||[]).some(function(n){ return n.series&&n.series.followers&&n.series.followers.length>1; }); }
 function socialRichCharts(s){
+  var ov=_srHasOverview(s), fo=_srHasFollowers(s);
   return '<div class="sr-charts">'
-    +'<div class="sr-chartcard"><div class="sr-chtitle">Bereik &amp; interacties per dag</div><div class="ar-chartwrap"><canvas id="srOverviewChart"></canvas></div></div>'
-    +'<div class="sr-chartcard"><div class="sr-chtitle">Volgersgroei per netwerk</div><div class="ar-chartwrap"><canvas id="srFollowersChart"></canvas></div></div>'
+    +'<div class="sr-chartcard"><div class="sr-chtitle">Bereik &amp; interacties per dag</div>'+(ov?'<div class="ar-chartwrap"><canvas id="srOverviewChart"></canvas></div>':'<div class="sr-chempty">Nog te weinig dagen met data om een grafiek te tonen in deze periode.</div>')+'</div>'
+    +'<div class="sr-chartcard"><div class="sr-chtitle">Volgersgroei per netwerk</div>'+(fo?'<div class="ar-chartwrap"><canvas id="srFollowersChart"></canvas></div>':'<div class="sr-chempty">Nog te weinig datapunten voor een volgersgrafiek in deze periode.</div>')+'</div>'
     +'</div>';
 }
 function socialRichNetCards(s){
