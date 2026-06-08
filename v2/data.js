@@ -433,6 +433,22 @@
     }catch(e){ state.data.metricoolStats={linked:false}; return false; }
   };
   DATA.metricoolStats = function(){ return state.data.metricoolStats; };
+  // ADMIN (staff): uitgebreide social-rapportage (team-weergave). Acting-as-scoping via de gateway.
+  DATA.loadMetricoolStatsRich = async function(opts){
+    var o = opts || {};
+    if(!live()){ state.data.metricoolStatsRich={linked:false}; return false; }
+    var bid = state.activeBedrijf || '';
+    if(!bid){ state.data.metricoolStatsRich={linked:false}; return false; }
+    try{
+      var payload = (o.from && o.to) ? base({ from:o.from, to:o.to, compare:o.compare||'none' }) : base({ days:(o.days||30) });
+      var res = await api(ENDPOINTS.metricoolStatsRich, payload);
+      var j = (res && res.ok && res.data) ? res.data : null;
+      if(!j || !j.ok || !j.linked){ state.data.metricoolStatsRich={linked:false}; return true; }
+      state.data.metricoolStatsRich = j;
+      return true;
+    }catch(e){ state.data.metricoolStatsRich={linked:false}; return false; }
+  };
+  DATA.metricoolStatsRich = function(){ return state.data.metricoolStatsRich; };
   /* ---- Metricool post-performance (fase 2), gateway-endpoint metricoolPostStats ----
      Contract: { ok, linked, brandId, period:{from,to,days},
      summary:{posts,reach,interactions,avgReach,avgInteractions,avgEngagementRate,bestPostId},

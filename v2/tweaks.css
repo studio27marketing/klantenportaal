@@ -634,3 +634,27 @@ body.admin-mode .sb-client .nm::after{content:'TEAM';margin-left:8px;font-family
 .ar-rec-t{font-family:var(--font-display);font-weight:800;font-size:14px;color:var(--ink);margin-bottom:4px;}
 .ar-rec-b{font-size:13px;line-height:1.5;color:var(--ink-3);}
 @media(max-width:560px){.ar-camp-nm{font-size:15px;}.arkpi-v{font-size:18px;}}
+
+/* ===== ADMIN — uitgebreide social-rapportage (team-weergave) =============== */
+.sr-growth{margin-top:8px;display:inline-flex;align-items:center;gap:4px;font-family:var(--font-display);font-weight:800;font-size:12px;padding:4px 11px;border-radius:999px;}
+.sr-growth.up{color:#0E7A39;background:rgba(18,172,78,.13);}
+.sr-growth.down{color:#B4540B;background:rgba(220,120,20,.15);}
+.sr-charts{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:14px 0 4px;}
+.sr-chartcard{background:var(--paper);border:1px solid var(--line);border-radius:var(--r-lg,18px);box-shadow:var(--sh-sm);padding:16px 18px;}
+.sr-chtitle{font-family:var(--font-display);font-weight:800;font-size:13px;letter-spacing:-.01em;color:var(--ink);margin-bottom:8px;}
+.sr-netgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(192px,1fr));gap:12px;}
+.sr-netcard{background:var(--paper);border:1px solid var(--line);border-radius:var(--r-md,14px);box-shadow:var(--sh-sm);padding:14px 16px;}
+.sr-nethead{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.sr-netdot{width:10px;height:10px;border-radius:50%;flex:none;}
+.sr-netnm{font-family:var(--font-display);font-weight:800;font-size:14.5px;color:var(--ink);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sr-netg{font-family:var(--font-display);font-weight:800;font-size:11px;padding:2px 7px;border-radius:999px;flex:none;}
+.sr-netg.up{color:#0E7A39;background:rgba(18,172,78,.13);}
+.sr-netg.down{color:#B4540B;background:rgba(220,120,20,.15);}
+.sr-nrow{display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--paper-3);}
+.sr-nrow:first-of-type{border-top:none;}
+.sr-nrow i{font-style:normal;font-family:var(--font-display);font-weight:600;font-size:12px;color:var(--ink-3);}
+.sr-nrow b{font-family:var(--font-display);font-weight:800;font-size:13.5px;color:var(--ink);margin-left:auto;}
+.sr-pnet{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;flex:none;}
+.sr-plink{color:var(--ink-2);text-decoration:none;}
+.sr-plink:hover{color:var(--s27-blue-ink);text-decoration:underline;}
+@media(max-width:760px){.sr-charts{grid-template-columns:1fr;}}

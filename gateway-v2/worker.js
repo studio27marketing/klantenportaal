@@ -37,7 +37,11 @@ import {
   publicShootAvailability,
   adminCompanies,
   metaAdsRich,
+  metricoolStatsRich,
 } from './handlers.mjs';
+
+// Staff-only (is_staff) rijke-rapportage-handlers: gescoped op het acting-as-bedrijf, (bedrijfId, body, env).
+const STAFF_DATA_HANDLERS = { metaAdsRich, metricoolStatsRich };
 
 // Pad → Make-webhook. Deze URLs zijn niet geheim (staan al in dashboard.js).
 // Geporte paden gebruiken deze NIET meer (router-shim vangt ze af); de rest valt door.
@@ -506,7 +510,7 @@ export default {
     if (path === 'provision') return handleProvision(request, env, ch);
 
     const isAdminApi = (path === 'adminCompanies');   // admin-only ClickUp-read (enkel staff)
-    const isStaffData = (path === 'metaAdsRich');      // admin-only rijke ads-rapportage (enkel staff, acting-as)
+    const isStaffData = !!STAFF_DATA_HANDLERS[path];   // admin-only rijke rapportage (enkel staff, acting-as)
     const isPorted = !!(READ_HANDLERS[path] || WRITE_HANDLERS[path] || path === 'bedrijfBeheer');
     const target = MAKE_ENDPOINTS[path];
     if (!isAdminApi && !isStaffData && !isPorted && !target) return json({ ok: false, error: 'unknown_endpoint' }, 404, ch);
@@ -581,7 +585,7 @@ export default {
       let rbody = {};
       try { rbody = await request.json(); } catch (e) { rbody = {}; }
       try {
-        const r = await metaAdsRich(bedrijfId, rbody || {}, env);
+        const r = await STAFF_DATA_HANDLERS[path](bedrijfId, rbody || {}, env);
         return json(r.body, r.status, ch);
       } catch (e) {
         return json({ ok: false, error: 'handler_error' }, 502, ch);

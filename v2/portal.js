@@ -342,7 +342,10 @@ async function ensureTabData(name){
   if(name==='instellingen' && !state.data.huisstijl) await S27DATA.loadHuisstijl();
   // (Resultaten-tab verwijderd — advertentiedata staat real-time op de Advertenties-tab)
   if(name==='offertes'){ var _t=[]; if(!state.data.offertes) _t.push(S27DATA.loadOffertes()); if(!state.data.bedrijf) _t.push(S27DATA.loadBedrijf()); if(_t.length){ try{ await Promise.all(_t); }catch(e){} } }
-  if(name==='socials'){ var _s=[]; if(!state.data.metricool) _s.push(S27DATA.loadMetricool()); if(!state.data.metricoolStats) _s.push(S27DATA.loadMetricoolStats()); if(!state.data.metricoolPostStats) _s.push(S27DATA.loadMetricoolPostStats()); if(_s.length){ try{ await Promise.all(_s); }catch(e){} } }
+  if(name==='socials'){ var _s=[]; if(!state.data.metricool) _s.push(S27DATA.loadMetricool());
+    if(state.adminMode){ if(!state.data.metricoolStatsRich){ var _sp=(typeof socialPeriod==='function')?socialPeriod():null; _s.push(S27DATA.loadMetricoolStatsRich(_sp?{from:_sp.from,to:_sp.to,compare:_sp.compare}:undefined)); } }
+    else { if(!state.data.metricoolStats) _s.push(S27DATA.loadMetricoolStats()); if(!state.data.metricoolPostStats) _s.push(S27DATA.loadMetricoolPostStats()); }
+    if(_s.length){ try{ await Promise.all(_s); }catch(e){} } }
   if(name==='advertenties'){
     if(state.adminMode){ if(!state.data.metaAdsRich){ try{ var pp=(typeof adsPeriod==='function')?adsPeriod():null; await S27DATA.loadMetaAdsRich(pp?{from:pp.from,to:pp.to,compare:pp.compare}:undefined); }catch(e){} } }
     else if(!state.data.metaAds){ try{ await S27DATA.loadMetaAds(); }catch(e){} }
@@ -367,6 +370,7 @@ async function goTab(name){
   renderPanel(name);
   if(name==='advertenties' && typeof adsChatMount==='function') adsChatMount();   // ads-chat koppelen aan de huidige-maand-advertentietaak
   if(name==='advertenties' && state.adminMode && typeof adsRichMountCharts==='function') adsRichMountCharts();   // team-weergave: dag-evolutiegrafieken mounten
+  if(name==='socials' && state.adminMode && socialTab && socialTab()==='rapport' && typeof socialRichMountCharts==='function') socialRichMountCharts();   // team-weergave: social-rapport-grafieken mounten
   updateNavBadges();
   if(name==='berichten' && !state.demoMode){ var _fp=(window.S27DATA&&(S27DATA.projects()||[])[0]); if(_fp) openBerichtChat(_fp.id); }
   closeSidebar(); syncUrl();

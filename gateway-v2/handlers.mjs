@@ -2769,6 +2769,34 @@ async function mcStatsWindow(env, blogId, userId, networks, from, to) {
   totals.engagementRate = totals.reach > 0 ? Math.round((totals.interactions / totals.reach) * 1000) / 10 : 0; // %
   return { nets, totals };
 }
+// RIJKE variant (team-rapportage): zoals mcStatsWindow, maar behoudt PER NETWERK de volledige
+// dag-tijdreeksen voor followers/reach/interactions (voor de per-netwerk-grafieken) + engagementRate.
+async function mcStatsWindowRich(env, blogId, userId, networks, from, to) {
+  const toY = (s) => s.map((x) => ({ date: msToBrusselsYmd(x.t), value: x.v }));
+  const perNet = await Promise.all(networks.map(async (net) => {
+    const m = MC_STAT_METRICS[net]; if (!m) return null;
+    const [fSer, rSer, iSer] = await Promise.all([
+      m.followers ? mcTimeline(env, blogId, userId, net, m.followers[0], m.followers[1], from, to) : Promise.resolve([]),
+      m.reach ? mcTimeline(env, blogId, userId, net, m.reach[0], m.reach[1], from, to) : Promise.resolve([]),
+      m.inter ? mcTimeline(env, blogId, userId, net, m.inter[0], m.inter[1], from, to) : Promise.resolve([]),
+    ]);
+    const followers = mcLast(fSer), growth = fSer.length ? (mcLast(fSer) - mcFirst(fSer)) : 0;
+    const reach = mcSum(rSer), interactions = mcSum(iSer);
+    if (!followers && !reach && !interactions) return null;
+    return {
+      network: net, label: MC_NET_LABEL[net] || net, followers, growth, reach, interactions,
+      engagementRate: reach > 0 ? Math.round((interactions / reach) * 1000) / 10 : 0,
+      series: { followers: toY(fSer), reach: toY(rSer), interactions: toY(iSer) },
+    };
+  }));
+  const nets = perNet.filter(Boolean);
+  const totals = nets.reduce((a, n) => ({
+    followers: a.followers + (n.followers || 0), growth: a.growth + (n.growth || 0),
+    reach: a.reach + (n.reach || 0), interactions: a.interactions + (n.interactions || 0),
+  }), { followers: 0, growth: 0, reach: 0, interactions: 0 });
+  totals.engagementRate = totals.reach > 0 ? Math.round((totals.interactions / totals.reach) * 1000) / 10 : 0;
+  return { nets, totals };
+}
 function mcParseStamp(s) { const ms = Date.parse(String(s || '')); return isNaN(ms) ? 0 : ms; }
 // vergelijkings-venster: zelfde lengte ervoor / één maand ervoor / één jaar ervoor.
 function mcShiftWindow(fromMs, toMs, mode) {
@@ -2817,6 +2845,63 @@ export async function metricoolStats(bedrijfId, body, env) {
   const trend = (primary && primary.trend) ? primary.trend.map((x) => ({ date: msToBrusselsYmd(x.t), value: x.v })) : [];
   const networksOut = cur.nets.map((n) => ({ network: n.network, label: n.label, followers: n.followers, growth: n.growth, reach: n.reach, interactions: n.interactions }));
   return { status: 200, body: { ok: true, linked: true, brandId: blogId, period: { from, to, days, compare }, totals: cur.totals, prevTotals, compareLabel, networks: networksOut, trend, trendLabel: primary ? primary.label : '' } };
+}
+
+// Brand-resolver (blogId/userId/gekoppelde netwerken) — gedeeld tussen de Metricool-reads.
+async function mcResolveBrand(env, bedrijfId) {
+  const br = await cu.get(env, `/task/${bedrijfId}`);
+  const blogId = br.ok && br.data ? str(getCF(br.data, FIELD.metricoolId)).trim() : '';
+  if (!blogId || !str(env && env.METRICOOL_API_KEY)) return { blogId: '', userId: '', networks: [] };
+  let userId = '', networks = [];
+  try {
+    const r = await fetch(`${METRICOOL_ADMIN}/admin/simpleProfiles`, { headers: mcHeaders(env) });
+    const list = r.ok ? await r.json().catch(() => []) : [];
+    const brand = (Array.isArray(list) ? list : []).find((b) => String(b && b.id) === String(blogId));
+    if (brand) { userId = str(brand.userId || brand.ownerUserId || ''); const nd = brand.networksData || {}; networks = Object.keys(MC_NET_KEYS).filter((k) => nd[k]).map((k) => MC_NET_KEYS[k]); }
+  } catch (e) { /* fail-soft */ }
+  if (!userId) userId = str(env && env.METRICOOL_USER_ID).trim();
+  if (!networks.length) networks = ['instagram', 'facebook'];
+  return { blogId, userId, networks };
+}
+
+/* ---- metricoolStatsRich (READ, ADMIN-only) — uitgebreide social-rapportage --------
+ * Voor @studio27.be-teamleden (worker gate't op is_staff). Bundelt in ÉÉN call: account-KPI's
+ * met periode-vergelijking, PER-NETWERK breakdown (met eigen dag-tijdreeksen + per-netwerk
+ * vergelijking), én de volledige post-insights (top-posts, beste momenten, formats, hashtags).
+ * Account uitsluitend uit de bedrijf-taak (FIELD.metricoolId); fail-soft, nooit 5xx.
+ */
+export async function metricoolStatsRich(bedrijfId, body, env) {
+  const { blogId, userId, networks } = await mcResolveBrand(env, bedrijfId);
+  if (!blogId) return { status: 200, body: { ok: true, linked: false } };
+
+  let fromMs, toMs;
+  const bFrom = mcParseStamp(body && body.from), bTo = mcParseStamp(body && body.to);
+  if (bFrom && bTo && bTo > bFrom) { fromMs = bFrom; toMs = bTo; }
+  else { const days = Math.min(400, Math.max(1, Number(body && body.days) || 30)); toMs = Date.now(); fromMs = toMs - days * 86400000; }
+  const from = mcStamp(fromMs), to = mcStamp(toMs);
+  const days = Math.max(1, Math.round((toMs - fromMs) / 86400000));
+  const compare = ['previous', 'month', 'year'].indexOf(str(body && body.compare)) >= 0 ? str(body.compare) : 'none';
+
+  // huidig venster (rijk, met series) + post-insights over hetzelfde venster — parallel.
+  const [cur, post] = await Promise.all([
+    mcStatsWindowRich(env, blogId, userId, networks, from, to),
+    mcPostStatsCore(env, blogId, userId, networks, Math.min(180, days), from, to).catch(() => null),
+  ]);
+  let prevTotals = null, prevByNet = {}, compareLabel = '';
+  if (compare !== 'none') {
+    const sh = mcShiftWindow(fromMs, toMs, compare);
+    const prev = await mcStatsWindow(env, blogId, userId, networks, mcStamp(sh[0]), mcStamp(sh[1]));
+    prevTotals = prev.totals;
+    prev.nets.forEach((n) => { prevByNet[n.network] = { followers: n.followers, growth: n.growth, reach: n.reach, interactions: n.interactions, engagementRate: n.reach > 0 ? Math.round((n.interactions / n.reach) * 1000) / 10 : 0 }; });
+    compareLabel = compare === 'previous' ? 'vorige periode' : (compare === 'month' ? 'vorige maand' : 'vorig jaar');
+  }
+  const networksOut = cur.nets.map((n) => ({ network: n.network, label: n.label, followers: n.followers, growth: n.growth, reach: n.reach, interactions: n.interactions, engagementRate: n.engagementRate, prev: prevByNet[n.network] || null, series: n.series }));
+  const primary = cur.nets.slice().sort((a, b) => ((b.series.followers.length) - (a.series.followers.length)))[0];
+  const trend = primary ? primary.series.followers : [];
+  return { status: 200, body: { ok: true, linked: true, brandId: blogId, period: { from, to, days, compare },
+    totals: cur.totals, prevTotals, compareLabel, networks: networksOut, trend, trendLabel: primary ? primary.label : '',
+    posts: post ? post.posts : [], postSummary: post ? post.summary : null, postNetworks: post ? post.networks : [],
+    formats: post ? post.formats : [], hashtags: post ? post.hashtags : [], bestTimes: post ? post.bestTimes : [] } };
 }
 
 /* ---- metricoolPostStats (READ) - post-performance per gepubliceerde post (fase 2) ----
@@ -2894,9 +2979,10 @@ async function mcFetchPosts(env, blogId, userId, net, from, to) {
   return arr.map((p) => mcMapPostStat(net, p)).filter(Boolean);
 }
 // Kern: haalt + aggregeert post-performance voor een brand. Los van ClickUp zodat lokaal testbaar.
-async function mcPostStatsCore(env, blogId, userId, networks, days) {
-  const from = mcStamp(Date.now() - days * 86400000);
-  const to = mcStamp(Date.now());
+// fromStamp/toStamp optioneel: expliciet venster (rijke rapportage); anders 'laatste N dagen'.
+async function mcPostStatsCore(env, blogId, userId, networks, days, fromStamp, toStamp) {
+  const from = fromStamp || mcStamp(Date.now() - days * 86400000);
+  const to = toStamp || mcStamp(Date.now());
   const perNet = await Promise.all(networks.map((net) => mcFetchPosts(env, blogId, userId, net, from, to).catch(() => [])));
   let posts = [];
   const netAgg = {};
