@@ -1038,11 +1038,17 @@ function arSortState(cid,which){ state._arSort=state._arSort||{}; state._arSort[
 function _arCmpVal(a,b,s){ var k=s.key, c; if(k==='name'||k==='status'){ c=String(a[k]||'').localeCompare(String(b[k]||''),'nl'); } else { c=(Number(a[k])||0)-(Number(b[k])||0); } return c*s.dir; }
 function _arFindCamp(cid){ var m=(window.S27DATA&&S27DATA.metaAdsRich&&S27DATA.metaAdsRich()); if(!m||!m.campaigns) return null; for(var i=0;i<m.campaigns.length;i++){ if(String(m.campaigns[i].id)===String(cid)) return m.campaigns[i]; } return null; }
 function _arCur(){ var m=(window.S27DATA&&S27DATA.metaAdsRich&&S27DATA.metaAdsRich()); return (m&&m.currency)||'EUR'; }
-// advertenties met dezelfde naam samenvoegen (★) — som de metrics, herbereken ratio's.
+// advertenties met dezelfde naam samenvoegen (★). LOSSE ads (count=1) behouden de exacte
+// Graph-ratio's (ctr/cpc/cpl) zodat ze matchen met Ads Manager + de adset-tabel; enkel bij een
+// ECHTE merge (count>1) herberekenen we uit de gesommeerde metrics (Graph levert geen aggregaat).
 function adsRichMergeAds(ads){
   var map={}, order=[];
-  (ads||[]).forEach(function(a){ var nm=a.name||'(naamloos)'; if(!map[nm]){ map[nm]={name:nm,count:0,spend:0,impressions:0,clicks:0,linkClicks:0,leads:0,status:a.status}; order.push(nm); } var g=map[nm]; g.count++; g.spend+=a.spend||0; g.impressions+=a.impressions||0; g.clicks+=a.clicks||0; g.linkClicks+=a.linkClicks||0; g.leads+=a.leads||0; });
-  return order.map(function(nm){ var g=map[nm]; g.ctr=g.impressions?(g.clicks/g.impressions*100):0; g.cpc=g.clicks?(g.spend/g.clicks):0; g.cpl=g.leads?(g.spend/g.leads):0; g.merged=g.count>1; return g; });
+  (ads||[]).forEach(function(a){ var nm=a.name||'(naamloos)'; if(!map[nm]){ map[nm]={name:nm,count:0,spend:0,impressions:0,clicks:0,linkClicks:0,leads:0,status:a.status,_ctr:Number(a.ctr)||0,_cpc:Number(a.cpc)||0,_cpl:Number(a.cpl)||0}; order.push(nm); } var g=map[nm]; g.count++; g.spend+=a.spend||0; g.impressions+=a.impressions||0; g.clicks+=a.clicks||0; g.linkClicks+=a.linkClicks||0; g.leads+=a.leads||0; });
+  return order.map(function(nm){ var g=map[nm];
+    if(g.count>1){ g.ctr=g.impressions?(g.clicks/g.impressions*100):0; g.cpc=g.clicks?(g.spend/g.clicks):0; g.cpl=g.leads?(g.spend/g.leads):0; g.merged=true; }
+    else { g.ctr=g._ctr; g.cpc=g._cpc; g.cpl=g._cpl; g.merged=false; }
+    return g;
+  });
 }
 function _arGridCols(cols){ return cols.map(function(col,i){ return i===0?'minmax(190px,2.2fr)':(col[2]?'minmax(72px,1fr)':'minmax(96px,1fr)'); }).join(' '); }
 function _arCell(key,r,cur){
