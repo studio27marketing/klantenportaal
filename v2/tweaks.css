@@ -106,6 +106,19 @@
 .disc-chip .disc-chip-ic{width:14px;height:14px;object-fit:contain;flex:none;}
 .disc-chip svg{width:13px;height:13px;flex:none;}
 @media(max-width:560px){.projflat-card{align-items:flex-start;flex-direction:column;gap:9px;}}
+/* ---- Projecten geclusterd per actiepunt, ≥2 kolommen ---- */
+.projclusters{display:flex;flex-direction:column;gap:28px;}
+.projcluster-head{display:flex;align-items:center;gap:12px;margin:0 2px 13px;}
+.projcluster-head .pc-dot{width:11px;height:11px;border-radius:50%;background:var(--c,var(--s27-blue));flex:none;box-shadow:0 0 0 4px var(--c-soft,rgba(48,131,220,.16));}
+.projcluster-head .pc-htx{min-width:0;flex:1;}
+.projcluster-head h3{font-family:var(--font-display);font-weight:800;font-size:16px;letter-spacing:-0.01em;color:var(--ink,#230F23);margin:0;}
+.projcluster-head p{font-family:var(--font-body);font-size:12.5px;color:var(--ink-3,#6B5B6B);margin:2px 0 0;}
+.projcluster-head .pc-count{font-family:var(--font-display);font-weight:800;font-size:12px;min-width:24px;height:24px;padding:0 8px;border-radius:999px;background:var(--c-soft,rgba(48,131,220,.14));color:var(--c-ink,var(--s27-blue-ink));display:flex;align-items:center;justify-content:center;flex:none;}
+.projflat-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:stretch;}
+.projflat-grid .projflat-card{height:100%;flex-direction:column;align-items:flex-start;justify-content:space-between;gap:11px;}
+.projflat-grid .projflat-card .pf-foot{width:100%;}
+.pf-name--calm{font-weight:600!important;}
+@media(max-width:760px){.projflat-grid{grid-template-columns:1fr;}}
 
 /* ===== Proces-overzicht in de projectdetail (stand van zaken) ===== */
 .proces-panel{background:var(--paper-2,#FAF7F2);border:1px solid var(--line,#E7DFD3);border-radius:16px;padding:16px 18px;margin:0 0 18px;}
@@ -292,3 +305,48 @@
 .soc-knet-g.down{color:var(--s27-orange-ink,#C44514);}
 .soc-kpi-skel{min-height:96px;display:flex;align-items:center;justify-content:center;font-family:var(--font-body);font-size:13px;color:var(--ink-4,#9E919E);background:var(--paper-2,#FAF7F2);border:1px dashed var(--line,#E7DFD3);border-radius:16px;margin-bottom:4px;}
 @media(max-width:680px){.soc-kpis{grid-template-columns:1fr 1fr;}}
+
+/* ============================================================
+   Inklapbare auto-hide sidebar (macOS-dock) + fullscreen content
+   Desktop = min-width 981px (mobiel-hamburger start bij 980px).
+   ============================================================ */
+.sb-dock-toggle{display:none;}
+.sb-edge{display:none;}
+@media(min-width:981px){
+  /* vloeiende dock-overgangen */
+  .sidebar{transition:transform .34s cubic-bezier(.4,0,.2,1),box-shadow .30s ease;will-change:transform;}
+  .topbar{transition:margin-left .34s cubic-bezier(.4,0,.2,1);}
+  .page{transition:margin-left .34s cubic-bezier(.4,0,.2,1),padding .30s ease;}
+
+  /* toggle-knop links in de topbar */
+  .sb-dock-toggle{display:flex;width:40px;height:40px;border-radius:11px;align-items:center;justify-content:center;
+    color:var(--ink-2);flex:none;transition:background 150ms,color 150ms,transform 200ms var(--bounce,cubic-bezier(.34,1.56,.64,1));}
+  .sb-dock-toggle:hover{background:var(--paper-3);color:var(--ink);}
+  .sb-dock-toggle:active{transform:scale(.92);}
+  .sb-dock-toggle svg{width:22px;height:22px;}
+
+  /* INGEKLAPT: zijbalk weg, topbar + content fullscreen */
+  body.sb-collapsed .sidebar{transform:translateX(-100%);box-shadow:none;}
+  body.sb-collapsed .topbar{margin-left:0;}
+  body.sb-collapsed .page{margin-left:0;}
+
+  /* hover-reveal strip aan de linkerrand (enkel zichtbaar wanneer ingeklapt) */
+  body.sb-collapsed .sb-edge{display:block;position:fixed;top:0;left:0;bottom:0;width:16px;z-index:58;cursor:e-resize;}
+
+  /* PEEK: zijbalk zweeft als overlay terug in beeld */
+  body.sb-collapsed.sb-peek .sidebar{transform:none;box-shadow:0 22px 70px rgba(35,15,35,.30);z-index:62;}
+  body.sb-collapsed.sb-peek .sb-edge{width:280px;} /* houd reveal-zone open zolang je in de buurt bent */
+}
+/* op tablet/mobiel telt het bestaande hamburger-patroon: dock-elementen verbergen */
+@media(max-width:980px){ .sb-dock-toggle{display:none!important;} .sb-edge{display:none!important;} }
+
+/* scheidingsregel in Instellingen (Huisstijl-sectie) */
+.set-divider{display:flex;align-items:center;gap:12px;margin:30px 0 6px;}
+.set-divider::before,.set-divider::after{content:"";height:1px;flex:1;background:var(--line,#E7DFD3);}
+.set-divider span{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-display);font-weight:800;
+  font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3,#6B5B6B);white-space:nowrap;}
+.set-divider span svg{color:var(--ink-4,#9E919E);}
+
+/* Socials op volle breedte (kalender/matrix benutten de hele content-zone) */
+.panel[data-screen-label="socials"]{max-width:none;}
+.panel[data-screen-label="socials"] .soc-detail{max-width:880px;}

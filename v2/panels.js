@@ -103,7 +103,7 @@ const spill = (st)=>{const m=STATUS_LABEL[st]||STATUS_LABEL.prog;return `<span c
 /* ===== live-data brug (S27DATA) met mock-fallback ===== */
 function _live(){ return !!(window.S27DATA && typeof state!=='undefined' && !state.demoMode && state.session); }
 function _projects(){ const p = window.S27DATA && S27DATA.projects(); return (p && p.length!==undefined) ? p : PROJECTS; }
-function _greetNaam(){ return (window.S27DATA && S27DATA.klantNaam && S27DATA.klantNaam()) || 'Sarah'; }
+function _greetNaam(){ var n=(window.S27DATA && S27DATA.klantNaam && S27DATA.klantNaam())||''; if(n && n!=='daar') return n; return _live()?'daar':'Sarah'; }
 function _bedrijf(){ return (window.S27DATA && S27DATA.bedrijfsnaam && S27DATA.bedrijfsnaam()) || 'TEST CLIENT BV'; }
 /* SA&E-namen kort tonen (geen foto-iconen). Geeft "" terug als er geen toegewezen teamleden zijn. */
 function saeNames(sae){
@@ -177,34 +177,17 @@ function _doneRow(d){
 }
 function panelStart(){
   const cock = window.S27DATA && S27DATA.cockpit();
-  // live: echte data (geen mock-fallback voor "Recent afgerond"); demo: mock voor de showcase
-  const liveStart = _live();
-  const run  = (window.S27DATA && S27DATA.running()) || (liveStart?[]:_RUN_MOCK);
-  const done = liveStart ? ((window.S27DATA && S27DATA.done()) || []) : _DONE_MOCK;
   const head = hero('blue', _bedrijf(), `Welkom terug, <span class="accent">${esc(_greetNaam())}</span>`, true);
-  // Voor jou te doen
+  // Home toont enkel "Voor jou te doen" — het volledige projectenoverzicht leeft op de Projecten-pagina.
   let cockHtml;
   if(cock){
     cockHtml = cock.length
       ? `<div class="section-head"><h2>Voor jou te doen</h2><span class="count">${cock.length} ${cock.length===1?'item':'items'}</span></div><div class="cockpit-row">${cock.map(_cockpitCard).join('')}</div>`
-      : `<div class="empty" style="margin-top:24px"><div class="em-ic">${ic('st_approved',64)}</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Alles is bij!</b><p style="margin:6px 0 0">Er staat momenteel niets op jou te wachten, wij werken ondertussen verder.</p></div>`;
+      : `<div class="empty" style="margin-top:24px"><div class="em-ic">${ic('st_approved',64)}</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Alles is bij!</b><p style="margin:6px 0 0">Er staat momenteel niets op jou te wachten, wij werken ondertussen verder.</p><button class="btn btn-outline btn-sm" style="margin-top:16px" onclick="goTab('projecten')">${ic('arrow',14)} Bekijk je projecten</button></div>`;
   } else {
     cockHtml = `<div class="section-head"><h2>Voor jou te doen</h2><span class="count">${_COCKPIT_MOCK.length} items</span></div><div class="cockpit-row">${_COCKPIT_MOCK.map(_cockpitCard).join('')}</div>`;
   }
-  // "Recent afgerond" (afgerond_60d) enkel tonen als er items zijn, geen mock-fallback, geen lege kolom
-  const doneCol = done.length ? `
-    <div class="ov-col">
-      <div class="ov-head"><span class="pill pill-done"><span class="pdot"></span>Recent afgerond</span><span class="ov-n">${done.length}</span></div>
-      <div class="done-list">${done.map(_doneRow).join('')}</div>
-    </div>` : '';
-  return head + cockHtml + `
-  <div class="section-head"><h2>Jouw projecten</h2><button class="count linkish" onclick="goTab('projecten')">Naar Actieve projecten ${ic('arrow',13)}</button></div>
-  <div class="proj-overview${doneCol?'':' one-col'}">
-    <div class="ov-col">
-      <div class="ov-head"><span class="pill pill-prog"><span class="pdot"></span>Loopt nu</span><span class="ov-n">${run.length}</span></div>
-      <div class="run-list">${run.length?run.map(_runRow).join(''):'<div class="empty" style="padding:24px"><p>Geen lopende projecten.</p></div>'}</div>
-    </div>${doneCol}
-  </div>`;
+  return head + cockHtml;
 }
 
 // svc-kaart-key -> de offerte-samensteller-GROEP die we openen bij 'Vraag offerte aan'.
@@ -218,13 +201,6 @@ function goDienstOfferte(key){
     const card=document.getElementById('offBuilder'); if(card&&card.scrollIntoView) card.scrollIntoView({behavior:'smooth',block:'start'});
   },90);
 }
-function panelDiensten(){
-  const act=SERVICES.filter(svcActive), inact=SERVICES.filter(s=>!svcActive(s));
-  return hero('blue','Onze diensten', `Onze diensten <span class="accent">voor jou${squig()}</span>`)
-  + (act.length?`<div class="section-head" style="margin-top:8px"><h2>Actief</h2><span class="count">${act.length} ${act.length===1?'dienst':'diensten'}</span></div><div class="svc-grid">${act.map(svcCard).join('')}</div>`:'')
-  + (inact.length?`<div class="section-head" style="margin-top:36px"><h2>Niet actief</h2><span class="count">${inact.length}</span></div><p style="color:var(--ink-3);font-size:13.5px;margin:-6px 0 18px;max-width:60ch">Diensten die we nu (nog) niet voor je doen. Interesse? Vraag vrijblijvend een offerte aan, geen verplichtingen.</p><div class="svc-grid">${inact.map(svcCard).join('')}</div>`:'');
-}
-
 function berichtChatInner(p){
   return `<div style="padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:11px">
     <span class="ber-dot" style="background:var(--c)"></span>
@@ -258,14 +234,32 @@ function discChips(labels){
     return `<span class="disc-chip br-${l.br||'blue'}">${discMark(l.label,'disc-chip-ic')}<span>${esc(l.label)}</span></span>`;
   }).join('')+`</span>`;
 }
+// Projecten worden geclusterd per ACTIEPUNT (wat er van de klant verwacht wordt), elk cluster
+// in een grid van ≥2 kolommen. Eén hoofdtaak verschijnt ÉÉN keer met haar discipline-label(s).
+const PROJ_CLUSTERS = [
+  {key:'feedback', statuses:['wait','sent'], title:'Klaar voor jouw feedback', sub:'Hier wachten we op je akkoord of input om verder te kunnen.', br:'orange'},
+  {key:'plannen',  statuses:['todo'],        title:'Nog in te plannen of op te starten', sub:'Klaar om samen te beginnen — prik een moment of laat iets weten.', br:'blue'},
+  {key:'bezig',    statuses:['prog'],        title:'Wij werken eraan', sub:'Loopt bij ons, je hoeft nu even niets te doen.', br:'green'}
+];
+function projCluster(cl, grp){
+  if(!grp.length) return '';
+  return `<section class="projcluster" data-cluster="${cl.key}">
+    <div class="projcluster-head br-${cl.br}"><span class="pc-dot"></span>
+      <div class="pc-htx"><h3>${esc(cl.title)}</h3><p>${esc(cl.sub)}</p></div>
+      <span class="pc-count">${grp.length}</span></div>
+    <div class="projflat-grid">${grp.map(projCardFlat).join('')}</div>
+  </section>`;
+}
 function projDienst(){
-  // ENKEL de hoofdtaken (open projecten) in één platte lopende-projectlijst. Elke hoofdtaak
-  // verschijnt ÉÉN keer met haar discipline-label(s) ernaast (geen kolommen per tak meer,
-  // want een project kan meerdere disciplines hebben).
-  const projs=_projects().filter(p=>p.status!=='done');
-  if(!projs.length) return `<div class="empty"><div class="em-ic">${ic('st_approved',64)}</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Geen actieve projecten</b><p style="margin:6px 0 0">Zodra we samen aan iets nieuws starten, verschijnt het hier.</p></div>`;
-  projs.sort((a,b)=>{ const ia=DISC_ORDER.indexOf(a.disc),ib=DISC_ORDER.indexOf(b.disc); return ((ia<0?99:ia)-(ib<0?99:ib))||String(a.name).localeCompare(String(b.name)); });
-  return `<div class="projflat-list">${projs.map(projCardFlat).join('')}</div>`;
+  const all=_projects().filter(p=>p.status!=='done');
+  if(!all.length) return `<div class="empty"><div class="em-ic">${ic('st_approved',64)}</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Geen actieve projecten</b><p style="margin:6px 0 0">Zodra we samen aan iets nieuws starten, verschijnt het hier.</p></div>`;
+  const sortFn=(a,b)=>{ const ia=DISC_ORDER.indexOf(a.disc),ib=DISC_ORDER.indexOf(b.disc); return ((ia<0?99:ia)-(ib<0?99:ib))||String(a.name).localeCompare(String(b.name)); };
+  let html='';
+  PROJ_CLUSTERS.forEach(cl=>{ html+=projCluster(cl, all.filter(p=>cl.statuses.indexOf(p.status)>=0).sort(sortFn)); });
+  // statussen die in geen enkel cluster vallen: verzamelcluster zodat nooit een project verdwijnt
+  const rest=all.filter(p=>!PROJ_CLUSTERS.some(cl=>cl.statuses.indexOf(p.status)>=0)).sort(sortFn);
+  if(rest.length) html+=projCluster({key:'overig', statuses:[], title:'Overige projecten', sub:'Lopende trajecten bij Studio 27.', br:'blue'}, rest);
+  return `<div class="projclusters">${html}</div>`;
 }
 // platte hoofdtaak-kaart: naam + discipline-chip(s), status, deliverable-badge, SA&E-namen.
 function projCardFlat(p){
@@ -274,7 +268,7 @@ function projCardFlat(p){
   const dataDiscs=discs.map(function(l){return l.label;}).join('|');
   return `<button class="projflat-card br-${p.br}" data-discs="${esc(dataDiscs)}" data-status="${p.status}" onclick="openProject('${esc(p.id)}','projecten')">
     <span class="pf-main">
-      <span class="pf-name">${esc(p.name)}</span>
+      <span class="pf-name pf-name--calm">${esc(p.name)}</span>
       ${discChips(discs)}
     </span>
     <span class="pf-foot">${spill(p.status)}${sae?`<span class="sae-line">${sae}</span>`:''}${p.deliv?`<span class="pc-deliv">${ic('download',13)} klaar</span>`:''}</span>
@@ -318,7 +312,7 @@ function mcStyleOnce(){ if(typeof document==='undefined'||!document.head||docume
   +'.soc-fbar{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}.soc-fchip{font-family:var(--font-display);font-weight:700;font-size:12.5px;color:var(--ink-3);background:var(--paper-2,#FAF7F2);border:1px solid var(--line);padding:7px 13px;border-radius:999px;cursor:pointer;transition:all .15s}.soc-fchip:hover{border-color:var(--s27-yellow,#F2C14E)}.soc-fchip.active{background:var(--ink,#230F23);border-color:var(--ink);color:#fff}'
   +'.soc-nav{display:flex;gap:6px}.soc-nav button{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:var(--paper,#fff);color:var(--ink-3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}.soc-nav button:first-child svg{transform:rotate(180deg)}.soc-nav button:hover{border-color:var(--s27-yellow,#F2C14E);color:var(--ink)}'
   +'.soc-cal{background:var(--paper,#fff);border:1px solid var(--line);border-radius:18px;padding:12px}.soc-dow{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}.soc-dow span{font-family:var(--font-display);font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-4);text-align:center;padding:4px 0}.soc-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}.soc-cell{min-height:92px;background:var(--paper-2,#FAF7F2);border:1px solid var(--paper-3,#F1EBE2);border-radius:11px;padding:6px;display:flex;flex-direction:column;gap:4px}.soc-cell.soc-empty{background:transparent;border:none}.soc-cell.soc-today{border-color:var(--s27-yellow,#F2C14E);box-shadow:inset 0 0 0 1px var(--s27-yellow,#F2C14E)}.soc-daynum{font-family:var(--font-display);font-weight:800;font-size:12px;color:var(--ink-4)}.soc-chip{display:flex;align-items:center;gap:5px;width:100%;text-align:left;font-family:var(--font-body);font-weight:700;font-size:11px;color:var(--ink-2);background:#fff;border:1px solid var(--line);border-left:3px solid var(--cc,#667684);border-radius:7px;padding:3px 6px;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;transition:box-shadow .12s}.soc-chip:hover{box-shadow:0 3px 9px rgba(60,40,80,.12)}.soc-cdot{width:7px;height:7px;border-radius:99px;flex:none}@media(max-width:680px){.soc-cell{min-height:64px}.soc-chip{font-size:10px}}'
-  +'.soc-detail{max-width:760px}.soc-back{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-display);font-weight:700;font-size:13.5px;color:var(--ink-3);background:none;border:none;cursor:pointer;padding:6px 0;margin-bottom:8px}.soc-back svg{transform:rotate(180deg)}.soc-back:hover{color:var(--ink)}.soc-dcard{background:var(--paper,#fff);border:1px solid var(--line);border-radius:18px;overflow:hidden}.soc-dimg{width:100%;max-height:420px;object-fit:cover;display:block;background:var(--paper-3)}.soc-dbody{padding:20px 22px 22px}.soc-dmeta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}.soc-dtxt{white-space:pre-wrap;font-family:var(--font-body);font-size:15px;line-height:1.6;color:var(--ink-2)}.soc-badge{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-display);font-weight:700;font-size:12.5px;border-radius:999px;padding:4px 12px}.soc-net{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;border-radius:999px;padding:3px 10px}.soc-dact{margin-top:20px;padding-top:18px;border-top:1px dashed var(--paper-3,#F1EBE2)}.soc-fbok{display:flex;align-items:center;gap:8px;font-family:var(--font-display);font-weight:700;font-size:14px;color:var(--s27-green-ink,#147A50);background:var(--s27-green-soft,rgba(18,172,78,.10));border-radius:12px;padding:13px 15px}.soc-fbta{width:100%;box-sizing:border-box;font-family:var(--font-body);font-size:14px;padding:11px 13px;border:1px solid var(--line);border-radius:11px;outline:none;resize:vertical;margin-top:6px}.soc-fbta:focus{border-color:var(--s27-yellow,#F2C14E)}'
+  +'.soc-detail{max-width:760px}.soc-back{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-display);font-weight:700;font-size:13.5px;color:var(--ink-3);background:none;border:none;cursor:pointer;padding:6px 0;margin-bottom:8px}.soc-back svg{transform:rotate(180deg)}.soc-back:hover{color:var(--ink)}.soc-dcard{background:var(--paper,#fff);border:1px solid var(--line);border-radius:18px;overflow:hidden;display:flex;align-items:stretch}.soc-dmedia{flex:0 0 300px;max-width:300px;background:var(--paper-3);display:flex;align-items:center;justify-content:center;padding:16px}.soc-dmedia .soc-dimg{width:100%;max-height:360px;border-radius:13px}.soc-dimg{width:100%;object-fit:cover;display:block;background:var(--paper-3)}.soc-dbody{flex:1;min-width:0;padding:20px 22px 22px}@media(max-width:620px){.soc-dcard{flex-direction:column}.soc-dmedia{flex:none;max-width:none;width:100%}}.soc-dmeta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}.soc-dtxt{white-space:pre-wrap;font-family:var(--font-body);font-size:15px;line-height:1.6;color:var(--ink-2)}.soc-badge{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-display);font-weight:700;font-size:12.5px;border-radius:999px;padding:4px 12px}.soc-net{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;border-radius:999px;padding:3px 10px}.soc-dact{margin-top:20px;padding-top:18px;border-top:1px dashed var(--paper-3,#F1EBE2)}.soc-fbok{display:flex;align-items:center;gap:8px;font-family:var(--font-display);font-weight:700;font-size:14px;color:var(--s27-green-ink,#147A50);background:var(--s27-green-soft,rgba(18,172,78,.10));border-radius:12px;padding:13px 15px}.soc-fbta{width:100%;box-sizing:border-box;font-family:var(--font-body);font-size:14px;padding:11px 13px;border:1px solid var(--line);border-radius:11px;outline:none;resize:vertical;margin-top:6px}.soc-fbta:focus{border-color:var(--s27-yellow,#F2C14E)}'
   ); document.head.appendChild(__s); return ''; }
 function socialNetChips(p){ return (p.netwerken||[]).map(function(nw){ var n=mcNet(nw.netwerk),st=mcStatus(nw.status); return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:'+n[1]+';background:'+n[1]+'14;border-radius:999px;padding:2px 9px">'+esc(n[0])+'<span style="width:6px;height:6px;border-radius:99px;background:'+st[1]+'"></span></span>'; }).join(' '); }
 // een post is "goed te keuren" zolang die nog niet gepubliceerd/mislukt is (concept of gepland)
@@ -485,7 +479,7 @@ function socialDetailPage(id){
   var back='<button class="soc-back" onclick="socialCloseDetail()">'+ic('arrow',15)+' Terug naar de kalender</button>';
   if(published){
     var nets=(p.netwerken||[]).map(function(nw){ var n=mcNet(nw.netwerk); return '<span class="soc-net" style="color:'+n[1]+';background:'+n[1]+'15">'+esc(n[0])+'</span>'; }).join('');
-    return '<div class="soc-detail">'+back+'<div class="soc-dcard">'+mediaHtml+'<div class="soc-dbody">'
+    return '<div class="soc-detail">'+back+'<div class="soc-dcard">'+(mediaHtml?'<div class="soc-dmedia">'+mediaHtml+'</div>':'')+'<div class="soc-dbody">'
       +'<div class="soc-dmeta"><span class="soc-badge" style="color:'+m[1]+';background:'+m[2]+'">'+esc(m[0])+'</span>'+nets+'</div>'
       +(dd?'<div class="fs" style="color:var(--ink-4);margin-bottom:14px;display:flex;align-items:center;gap:6px">'+ic('cal',14)+' '+esc(dd)+(tt?' · '+tt:'')+'</div>':'')
       +'<div class="soc-dtxt">'+esc(p.tekst||'(geen tekst)')+'</div>'
@@ -500,7 +494,7 @@ function socialDetailPage(id){
     return '<button type="button" class="soc-chan'+(on[net]?' on':'')+'" data-net="'+net+'" onclick="socialToggleChan(this)" style="--cn:'+n[1]+'"><span class="soc-chan-dot"></span>'+esc(n[0])+'</button>';
   }).join('');
   var approved=(p.approved||(state._mcApproved&&state._mcApproved[p.id]));
-  return '<div class="soc-detail">'+back+'<div class="soc-dcard">'+mediaHtml+'<div class="soc-dbody">'
+  return '<div class="soc-detail">'+back+'<div class="soc-dcard">'+(mediaHtml?'<div class="soc-dmedia">'+mediaHtml+'</div>':'')+'<div class="soc-dbody">'
     +'<div class="soc-dmeta"><span class="soc-badge" style="color:'+m[1]+';background:'+m[2]+'">'+esc(m[0])+'</span>'+(dd?'<span class="fs" style="color:var(--ink-4);display:inline-flex;align-items:center;gap:5px">'+ic('cal',13)+' '+esc(dd)+(tt?' · '+tt:'')+'</span>':'')+'</div>'
     +'<p class="fs" style="color:var(--ink-3);margin:2px 0 14px">Pas je post zelf aan: kies de kanalen, herschrijf de tekst, voeg hashtags toe of wissel de visual. Je wijziging gaat meteen door.</p>'
     +'<label class="soc-elab">Kanalen</label><div class="soc-chans">'+chans+'</div>'
@@ -814,19 +808,15 @@ function offerteRequestForm(){
 // De losse 'Nieuw project'-aanvraagmodule is verwijderd en vervangen door de volledige
 // Offertes-pagina (panelOffertes). Zijbalk en topbar wijzen nu naar 'offertes'.
 
-function panelHuisstijl(){
+function huisstijlSecties(){
   const sw=[['Blauw','#3083DC'],['Roze','#F697CE'],['Paars','#9441DB'],['Groen','#12AC4E'],['Oranje','#F66131']];
-  const files=(window.S27DATA && S27DATA.huisstijl()); const team=(window.S27DATA && S27DATA.team());
+  const files=(window.S27DATA && S27DATA.huisstijl());
   const fmtBytes=(n)=>{ n=parseInt(n,10)||0; if(!n)return ''; if(n<1024)return n+' B'; if(n<1048576)return Math.round(n/1024)+' KB'; return (n/1048576).toFixed(1)+' MB'; };
   const mimeIc=(m)=>{ m=String(m||''); if(m.indexOf('image')===0)return 'img'; if(m.indexOf('video')===0)return 'video'; return 'doc'; };
   const fileMeta=(f)=>{ const p=[]; const b=fmtBytes(f.size); if(b)p.push(b); if(f.modified){ const d=new Date(f.modified); if(!isNaN(d.getTime()))p.push(d.toLocaleDateString('nl-BE',{day:'numeric',month:'short',year:'numeric'})); } return p.join(' · '); };
   const fileCards = files ? (files.length ? files.map(f=>`<div class="filecard" style="min-width:240px"><div class="ft">${ic(mimeIc(f.mime),20)}</div><div style="flex:1;min-width:0"><div class="fn" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</div><div class="fs">${esc(fileMeta(f))}</div></div><a class="icon-btn" style="width:34px;height:34px" href="${esc(f.url||'#')}" target="_blank" rel="noopener">${ic('download',16)}</a></div>`).join('') : '<div class="fs" style="color:var(--ink-4)">Nog geen bestanden in je Huisstijl-map. Sleep hieronder een bestand om te beginnen.</div>')
     : `<div class="filecard" style="min-width:240px"><div class="ft">${ic('img',20)}</div><div style="flex:1"><div class="fn">logo-tc-fullcolor.svg</div><div class="fs">Vector · 24 KB</div></div><button class="icon-btn" style="width:34px;height:34px">${ic('download',16)}</button></div><div class="filecard" style="min-width:240px"><div class="ft">${ic('img',20)}</div><div style="flex:1"><div class="fn">logo-tc-wit.png</div><div class="fs">PNG · 180 KB</div></div><button class="icon-btn" style="width:34px;height:34px">${ic('download',16)}</button></div>`;
-  return hero('pink','Mijn bedrijf · Huisstijl',
-    `Jouw <span class="accent">merk${squig()}</span> &amp; bestanden`,
-    'Alles wat we nodig hebben om consistent voor je te werken, netjes bij elkaar.',
-    scribble('krabbel-roze.png','top:-4px;right:8px;width:120px;transform:rotate(-6deg)'))
-  +`<div class="setsec">
+  return `<div class="setsec">
     <h3>Huisstijl-bestanden</h3><p class="sdesc">Alle bestanden uit je gedeelde Huisstijl-map op Google Drive, logo's, fonts, templates. Altijd up-to-date.</p>
     <div style="display:flex;gap:14px;flex-wrap:wrap">${fileCards}</div>
     <div class="dropzone" style="margin-top:14px" onclick="document.getElementById('hsFile').click()">${ic('upload',30)}<b>Sleep je bestand hierheen</b><div style="font-size:12.5px;margin-top:4px">of klik om te bladeren · SVG, PNG, AI, PDF</div></div>
@@ -843,6 +833,13 @@ function panelHuisstijl(){
       <div class="filecard" style="min-width:220px"><div class="ft" style="font-family:var(--font-body);font-weight:800;color:var(--ink)">Aa</div><div><div class="fn">Nunito</div><div class="fs">Body · 400–700</div></div></div>
     </div>
   </div>`;
+}
+function panelHuisstijl(){
+  return hero('pink','Mijn bedrijf · Huisstijl',
+    `Jouw <span class="accent">merk${squig()}</span> &amp; bestanden`,
+    'Alles wat we nodig hebben om consistent voor je te werken, netjes bij elkaar.',
+    scribble('krabbel-roze.png','top:-4px;right:8px;width:120px;transform:rotate(-6deg)'))
+  + huisstijlSecties();
 }
 
 function panelFacturatie(){
@@ -1169,7 +1166,10 @@ function panelInstellingen(){
       <div id="contactFormHost"></div>
     </div>
   </div>
-  <div class="setsec" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+  <div class="set-divider"><span>${ic('img',15)} Huisstijl &amp; bestanden</span></div>
+  <p class="sdesc" style="margin:-4px 0 14px;max-width:64ch">Alles wat we nodig hebben om consistent voor je te werken, netjes bij elkaar, logo's, kleuren, fonts en je gedeelde Drive-map.</p>
+  ${huisstijlSecties()}
+  <div class="setsec" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:18px">
     <div><b style="font-family:var(--font-display);font-size:15px">Uitloggen</b><div style="font-size:13px;color:var(--ink-3)">Log veilig uit op dit toestel.</div></div>
     <button class="btn btn-outline" onclick="logout()">${ic('logout',16)} Uitloggen</button>
   </div>`;
@@ -1413,12 +1413,7 @@ function buildModal(id, from){
     ${showDeliv?`<h4 style="font-family:var(--font-display);font-size:15px;margin:0 0 4px">${(delivList&&delivList.length>1)||(delivList===null)?'Jouw deliverables':'Jouw deliverable'}</h4>
     <p class="sdesc" style="margin:0 0 10px">Bekijk wat we voor je klaarzetten en laat meteen weten of je akkoord gaat of feedback hebt. Opmerkingen passen we volledig gratis aan.</p>
     ${delivBlock}`:''}
-    <h4 style="font-family:var(--font-display);font-size:15px;margin:${showDeliv?'22px':'0'} 0 8px">Tijdlijn</h4>
-    <div class="timeline-mini">
-      ${timelineSteps(p).map((t,i,a)=>`
-        <div class="tl-step"><span class="tl-dot ${t[1]}">${t[1]==='done'?ic('check',10):''}</span><span class="tl-lab ${t[1]==='todo'?'muted':''}">${t[0]}</span>${i<a.length-1?'<span class="tl-line"></span>':''}</div>`).join('')}
-    </div>
-    ${hasProces?'':`<h4 style="font-family:var(--font-display);font-size:15px;margin:22px 0 10px">Goedgekeurde taken</h4>
+    ${hasProces?'':`<h4 style="font-family:var(--font-display);font-size:15px;margin:${showDeliv?'22px':'0'} 0 10px">Goedgekeurde taken</h4>
     <div class="approved-list">
       ${approvedTasks ? (approvedTasks.length?approvedTasks.map(approvedTaskRow).join(''):'<div class="fs" style="color:var(--ink-4)">Nog niets goedgekeurd.</div>')
         : approved.map(t=>`<div class="approved-row"><span class="check-circ">${ic('check',13)}</span><span>${t}</span></div>`).join('')}
@@ -1530,10 +1525,10 @@ function buildOverlays(){
 
 /* ---- panel registry ---- */
 const PANELS={
-  start:panelStart, berichten:panelBerichten, projecten:panelProjecten, diensten:panelDiensten,
+  start:panelStart, berichten:panelBerichten, projecten:panelProjecten,
   socials:panelSocials, advertenties:panelAdvertenties,
   meetings:panelMeetings, nieuwproject:panelOffertes, offertes:panelOffertes,
   huisstijl:panelHuisstijl, facturatie:panelFacturatie, instellingen:panelInstellingen,
 };
-const TAB_BRANCH={start:'blue',berichten:'blue',projecten:'blue',diensten:'blue',socials:'yellow',advertenties:'orange',meetings:'blue',nieuwproject:'blue',offertes:'purple',huisstijl:'pink',facturatie:'green',instellingen:'indigo'};
-const TAB_GROUP={projecten:'werk',diensten:'werk',socials:'werk',advertenties:'werk',meetings:'plannen',nieuwproject:'plannen',offertes:'plannen',huisstijl:'bedrijf',facturatie:'bedrijf',instellingen:'bedrijf'};
+const TAB_BRANCH={start:'blue',berichten:'blue',projecten:'blue',socials:'yellow',advertenties:'orange',meetings:'blue',nieuwproject:'blue',offertes:'purple',huisstijl:'pink',facturatie:'green',instellingen:'indigo'};
+const TAB_GROUP={projecten:'werk',socials:'werk',advertenties:'werk',meetings:'plannen',nieuwproject:'plannen',offertes:'plannen',huisstijl:'bedrijf',facturatie:'bedrijf',instellingen:'bedrijf'};

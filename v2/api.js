@@ -23,7 +23,7 @@ var state = window.S27State = {
 };
 
 /* ---- UI-hooks (portal.js vult deze in) ---- */
-var S27 = window.S27 = { onSessionExpired: null, reloadDashboard: null, onSwitchFailed: null, closeSwitchMenu: null, stopChatPoll: null };
+var S27 = window.S27 = { onSessionExpired: null, reloadDashboard: null, onSwitchFailed: null, closeSwitchMenu: null, stopChatPoll: null, showSwitching: null, stashData: null };
 
 /* Cloudflare-gateway-basis (de v2-handlers achter Firebase-auth). Vooraan gedeclareerd
    zodat ENDPOINTS hieronder de gateway-gerouteerde endpoints kan opbouwen. */
@@ -254,6 +254,11 @@ async function switchCompany(id){
   // menu sluiten + chat-poll stoppen aan het begin (los van slagen/falen)
   if(typeof S27.closeSwitchMenu === 'function') S27.closeSwitchMenu();
   if(typeof S27.stopChatPoll === 'function') S27.stopChatPoll();
+  // snapshot van de huidige (nog het OUDE bedrijf) data bewaren voor instant terugschakelen
+  if(typeof S27.stashData === 'function') S27.stashData(state.activeBedrijf);
+  // ONMIDDELLIJK de loader tonen: provision + forced token-refresh hieronder kunnen seconden kosten
+  // vóór loadAndEnter de loader zelf opzet -> anders voelt de switch "blind" aan.
+  if(typeof S27.showSwitching === 'function') S27.showSwitching(id);
   const token = window.S27Auth ? await window.S27Auth.token() : null;
   if(!token){ if(typeof S27.onSwitchFailed === 'function') S27.onSwitchFailed('Je bent niet meer ingelogd. Log opnieuw in om van bedrijf te wisselen.'); return; }
   const d = await provisionFetch(token, id);

@@ -114,3 +114,39 @@
   apply();
   window.parent.postMessage({type:'__edit_mode_available'},'*');
 })();
+
+/* ============================================================
+   Inklapbare auto-hide sidebar (macOS-dock)
+   - toggleDock(): klapt de zijbalk in/uit, content wordt fullscreen
+   - bij ingeklapt: hover aan de linkerrand laat de zijbalk terugzweven
+   - state bewaard in localStorage (per toestel)
+   ============================================================ */
+(function(){
+  var KEY='s27_sb_collapsed';
+  var body=document.body;
+  function collapsed(){ return body.classList.contains('sb-collapsed'); }
+  function setCollapsed(on){
+    body.classList.toggle('sb-collapsed', !!on);
+    if(!on) body.classList.remove('sb-peek');
+    try{ localStorage.setItem(KEY, on?'1':'0'); }catch(_){}
+  }
+  // globale toggle (vanaf de topbar-knop)
+  window.toggleDock=function(){ setCollapsed(!collapsed()); };
+
+  // herstel bewaarde staat (alleen op desktop zinvol; CSS negeert het op mobiel)
+  try{ if(localStorage.getItem(KEY)==='1') body.classList.add('sb-collapsed'); }catch(_){}
+
+  // hover-reveal aan de linkerrand
+  var edge=document.getElementById('sbEdge');
+  var sidebar=document.getElementById('sidebar');
+  var peekTimer=null;
+  function peekOn(){ if(!collapsed())return; if(peekTimer){clearTimeout(peekTimer);peekTimer=null;} body.classList.add('sb-peek'); }
+  function peekOffSoon(){ if(peekTimer)clearTimeout(peekTimer); peekTimer=setTimeout(function(){ body.classList.remove('sb-peek'); peekTimer=null; }, 180); }
+  if(edge){ edge.addEventListener('mouseenter', peekOn); edge.addEventListener('mouseleave', peekOffSoon); }
+  if(sidebar){
+    sidebar.addEventListener('mouseenter', peekOn);
+    sidebar.addEventListener('mouseleave', peekOffSoon);
+    // klik op een menu-item terwijl de zijbalk zweeft: peek sluiten zodat content weer fullscreen gaat
+    sidebar.addEventListener('click', function(e){ if(collapsed() && e.target.closest && e.target.closest('.sb-item')){ setTimeout(function(){ body.classList.remove('sb-peek'); }, 60); } });
+  }
+})();

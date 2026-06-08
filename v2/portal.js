@@ -9,7 +9,7 @@
 "use strict";
 
 let currentTab = 'start';
-const SECTION_LABEL = { start:'Start', berichten:'Berichten', projecten:'Actieve projecten', socials:'Socials', advertenties:'Advertenties', diensten:'Onze diensten', meetings:'Meetings', nieuwproject:'Offerte aanvragen', offertes:'Offertes', huisstijl:'Huisstijl & bestanden', facturatie:'Facturatie', instellingen:'Instellingen' };
+const SECTION_LABEL = { start:'Home', berichten:'Berichten', projecten:'Actieve projecten', socials:'Socials', advertenties:'Advertenties', meetings:'Meetings', nieuwproject:'Offerte aanvragen', offertes:'Offertes', facturatie:'Facturatie', instellingen:'Instellingen' };
 
 function qsp(){ return new URLSearchParams(location.search); }
 function $id(x){ return document.getElementById(x); }
@@ -66,6 +66,17 @@ function init(){
   S27.onSwitchFailed = onSwitchFailed;
   S27.closeSwitchMenu = closeSwitchMenu;
   S27.stopChatPoll = function(){ stopChatPoll(); };
+  // Bedrijf-switch: meteen de '27'-loader tonen + sidebar-naam optimistisch updaten (geen blind moment).
+  S27.showSwitching = function(id){
+    try {
+      var comps = state.portalCompanies||[], nm='';
+      for(var i=0;i<comps.length;i++){ if(comps[i].id===id){ nm=comps[i].naam||''; break; } }
+      var el=document.querySelector('.sb-client .nm'); if(el && nm) el.textContent=nm;
+    } catch(e){}
+    showApp(); playLoader();
+  };
+  // snapshot van het VORIGE bedrijf bewaren (met het oude id) voor instant terugschakelen
+  S27.stashData = function(prevId){ if(prevId && state.data && state.data.dashboard){ state._dataByBedrijf = state._dataByBedrijf||{}; state._dataByBedrijf[prevId] = state.data; } };
   const q = qsp();
   if(q.get('demo')==='1'){ state.demoMode = true; renderLogin('demo'); }
   else if(!AUTH_V2){ renderLogin('v1'); }
@@ -145,7 +156,7 @@ async function initRealAuth(){
       if(!_enrollStarted){ _enrollStarted=true; try { const r=await window.S27Auth.enrollBegin(); renderLoginEnroll(r.secret, r.qrUrl); } catch(e){ _enrollStarted=false; loginErr(e.message); } }
     } else if(s.phase==='ready'){
       const u=s.user||{};
-      state.session = { bedrijf_id:'via-gateway', bedrijfsnaam:(u.email||'Klant'), session_token:'firebase', uid:u.uid, email:u.email };
+      state.session = { bedrijf_id:'via-gateway', bedrijfsnaam:(u.email||'Klant'), session_token:'firebase', uid:u.uid, email:u.email, displayName:u.displayName||'' };
       state.demoMode = false; loginErr('');
       await loadAndEnter();
     }
@@ -174,14 +185,33 @@ function enterDemo(){
 async function loadAndEnter(skipLink){
   playLoader(); showApp();
   state._sessionExpiredHandled=false;
+  // INSTANT terugschakelen: als dit bedrijf al eerder geladen werd, toon meteen de gecachte
+  // snapshot (geen blind moment) en ververs stil op de achtergrond. state.activeBedrijf is bij
+  // een switch al het NIEUWE bedrijf (switchCompany zette het via provisionFetch).
+  var cached = (skipLink && state.activeBedrijf && state._dataByBedrijf) ? state._dataByBedrijf[state.activeBedrijf] : null;
+  if(cached && cached.dashboard){
+    state.data = cached; state.perfUrl = null;
+    try { await applyRoute(); afterEnter(); renderCompanySwitcher(); updateNavBadges(); } catch(e){}
+    hideLoader();
+    try {
+      await Promise.all([ S27DATA.loadDashboard(), S27DATA.loadBedrijf().catch(function(){ return false; }) ]);
+      if(typeof renderPanel==='function' && currentTab && state.viewMode==='tab') renderPanel(currentTab);
+      updateNavBadges();
+    } catch(e){}
+    return;
+  }
   // CRUCIAAL bij bedrijf-switch: wis alle gecachete data van het vorige bedrijf, anders blijven team/meetings/huisstijl/offertes/metricool/ads/facturatie hangen
   state.data = { dashboard:null, details:{}, chats:{}, meetings:null, bedrijf:null, team:null, huisstijl:null, offertes:null, metricool:null, metricoolStats:null, ads:null };
   state.perfUrl = null;
   try {
     // skipLink (bedrijf-switch): switchCompany koppelde + ververste de claim al -> niet opnieuw provisionen
     if(!skipLink){ try { await loadCompaniesAndLink(); } catch(e){} }
-    await S27DATA.loadDashboard();
-    try { await S27DATA.loadBedrijf(); } catch(e){}   // voor de begroeting (voornaam)
+    // dashboard + bedrijf zijn onafhankelijk -> parallel (scheelt 1 seriële round-trip vóór de render).
+    // loadBedrijf (enkel voor de voornaam in de begroeting) mag de boot nooit breken: eigen catch.
+    await Promise.all([
+      S27DATA.loadDashboard(),
+      S27DATA.loadBedrijf().catch(function(){ return false; })
+    ]);
     await applyRoute();
     afterEnter();
     renderCompanySwitcher();
@@ -215,10 +245,11 @@ function logout(){ stopChatPoll(); try{ if(window.S27Auth) window.S27Auth.logout
    ============================================================================= */
 async function ensureTabData(name){
   if(state.demoMode) return;
-  if(['start','projecten','diensten','berichten','socials','advertenties'].indexOf(name)>=0){ if(!state.data.dashboard) await S27DATA.loadDashboard(); }
+  if(['start','projecten','berichten','socials','advertenties'].indexOf(name)>=0){ if(!state.data.dashboard) await S27DATA.loadDashboard(); }
   if(name==='meetings' && !state.data.meetings) await S27DATA.loadMeetings();
   if(name==='huisstijl' && !state.data.huisstijl) await S27DATA.loadHuisstijl();
   if(name==='facturatie'||name==='instellingen'){ if(!state.data.bedrijf) await S27DATA.loadBedrijf(); if(!state.data.team) await S27DATA.loadTeam(); }
+  if(name==='instellingen' && !state.data.huisstijl) await S27DATA.loadHuisstijl();
   // (Resultaten-tab verwijderd — advertentiedata staat real-time op de Advertenties-tab)
   if(name==='offertes'){ var _t=[]; if(!state.data.offertes) _t.push(S27DATA.loadOffertes()); if(!state.data.bedrijf) _t.push(S27DATA.loadBedrijf()); if(_t.length){ try{ await Promise.all(_t); }catch(e){} } }
   if(name==='socials'){ var _s=[]; if(!state.data.metricool) _s.push(S27DATA.loadMetricool()); if(!state.data.metricoolStats) _s.push(S27DATA.loadMetricoolStats()); if(_s.length){ try{ await Promise.all(_s); }catch(e){} } }
@@ -262,12 +293,13 @@ function updateNavBadges(){
   }catch(e){}
 }
 function needsLoad(name){
-  if(state.data.dashboard && ['start','projecten','diensten','berichten'].indexOf(name)>=0) return false;
+  if(state.data.dashboard && ['start','projecten','berichten'].indexOf(name)>=0) return false;
   if(name==='socials') return !state.data.metricool;   // wacht op Metricool-data
   if(name==='advertenties') return !state.data.metaAds;  // wacht op Meta-ads-data
   if(name==='meetings' && state.data.meetings) return false;
   if(name==='huisstijl' && state.data.huisstijl) return false;
-  if((name==='facturatie'||name==='instellingen') && state.data.bedrijf && state.data.team) return false;
+  if(name==='facturatie' && state.data.bedrijf && state.data.team) return false;
+  if(name==='instellingen' && state.data.bedrijf && state.data.team && state.data.huisstijl) return false;
   if(name==='offertes' && state.data.offertes && state.data.bedrijf) return false;
   if(name==='nieuwproject') return false;
   return true;
@@ -501,6 +533,7 @@ function toggleSwitch(e){ e.stopPropagation(); const m=$id('switchMenu'); const 
 function closeSwitchMenu(){ const m=$id('switchMenu'); if(m)m.style.display='none'; const sw=$id('clientSwitch'); if(sw)sw.classList.remove('open'); }
 // nette melding wanneer een bedrijf-switch faalt (zelfde stijl als onSessionExpired, maar zonder uitloggen)
 function onSwitchFailed(msg){
+  hideLoader();   // de switch-loader stond al aan (showSwitching); bij faal komt loadAndEnter niet -> zelf verbergen
   const b=document.createElement('div');
   b.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#fef2f2;color:#991b1b;border:1px solid #fecaca;padding:14px 22px;border-radius:12px;font:700 14px/1.4 var(--font-display);z-index:99999;box-shadow:var(--sh-md)';
   b.textContent=msg||'Wisselen van bedrijf lukte niet. Probeer het zo opnieuw.'; document.body.appendChild(b);
@@ -574,7 +607,7 @@ function markAllSeen(){
   const b=document.querySelector('#bellBtn .badge'); if(b)b.style.display='none';
 }
 document.addEventListener('click',e=>{ if(!e.target.closest('.client-switch-wrap')){ const m=$id('switchMenu'); if(m)m.style.display='none'; const sw=$id('clientSwitch'); if(sw)sw.classList.remove('open'); } if(!e.target.closest('#notifPanel')&&!e.target.closest('#bellBtn')){ const np=$id('notifPanel'); if(np)np.classList.remove('show'); } });
-function filterDienst(disc,btn){ document.querySelectorAll('.proj-filter .fchip').forEach(c=>c.classList.remove('active')); if(btn)btn.classList.add('active'); const body=$id('projViewBody'); if(!body)return; body.querySelectorAll('.projflat-card').forEach(c=>{ const ds=(c.dataset.discs||'').split('|'); c.style.display=(disc==='all'||ds.indexOf(disc)>=0)?'':'none'; }); }
+function filterDienst(disc,btn){ document.querySelectorAll('.proj-filter .fchip').forEach(c=>c.classList.remove('active')); if(btn)btn.classList.add('active'); const body=$id('projViewBody'); if(!body)return; body.querySelectorAll('.projflat-card').forEach(c=>{ const ds=(c.dataset.discs||'').split('|'); c.style.display=(disc==='all'||ds.indexOf(disc)>=0)?'':'none'; }); body.querySelectorAll('.projcluster').forEach(sec=>{ const vis=[].slice.call(sec.querySelectorAll('.projflat-card')).some(c=>c.style.display!=='none'); sec.style.display=vis?'':'none'; }); }
 function goDienst(disc){ goTab('projecten'); setTimeout(()=>{ const sel=document.querySelector('.proj-filter select'); if(sel){ sel.value=disc; filterDienst(disc); } },60); }
 // Kennismaking / koffiegesprek -> meetingpagina, automatisch bij Arne (kies een vrij moment in zijn agenda)
 function koffieMetArne(){ goTab('meetings'); setTimeout(()=>{ const btn=document.querySelector('.meet-side .mtype[data-mtype="nieuwproject"]')||document.querySelector('.meet-side .mtype'); if(btn) pickMtype(btn,'Arne','orange','Kennismaking / koffiegesprek'); const ag=$id('meetAgenda'); if(ag&&ag.scrollIntoView) ag.scrollIntoView({behavior:'smooth',block:'nearest'}); },120); }
@@ -974,7 +1007,7 @@ async function uploadHuisstijl(input){
   if(state.demoMode){ return; }
   const rd=new FileReader();
   rd.onload=async function(){ const b64=String(rd.result).split(',')[1]||'';
-    try{ await api(ENDPOINTS.huisstijlUpload, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, filename:f.name, file_data:b64 }); state.data.huisstijl=null; goTab('huisstijl'); }catch(e){}
+    try{ await api(ENDPOINTS.huisstijlUpload, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, filename:f.name, file_data:b64 }); state.data.huisstijl=null; goTab('instellingen'); }catch(e){}
   };
   rd.readAsDataURL(f);
 }
@@ -1274,7 +1307,7 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($id('tourScrim
 /* ---------- Onboarding tour (1x + opt-out) ---------- */
 const TOUR=[
   {t:'Jouw startscherm',b:'Hier vind je altijd wat er voor jóu klaarstaat, reviews, feedback en meetings. Begin hier elke dag.',target:'.sb-item[data-tab="start"]'},
-  {t:'Al je werk, gebundeld',b:'In de zijbalk staat alles altijd zichtbaar: je projecten, socials, advertenties én onze diensten.',target:'.sb-item[data-tab="projecten"]'},
+  {t:'Al je werk, gebundeld',b:'In de zijbalk staat alles altijd zichtbaar: je projecten, socials én advertenties.',target:'.sb-item[data-tab="projecten"]'},
   {t:'Altijd in contact',b:'Vragen? Onze slimme assistent helpt je meteen op weg en schakelt zo nodig door naar een echt mens.',target:'#botFab'},
   {t:'Plan vlot een moment',b:'Een meeting nodig? Prik zelf een vrij tijdslot. Wij staan klaar, vrijblijvend.',target:'.sb-item[data-tab="meetings"]'},
 ];

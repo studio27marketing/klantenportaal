@@ -49,10 +49,38 @@
   function S(){ return state.session || {}; }
   function base(extra){ var s=S(); return Object.assign({ bedrijf_id:s.bedrijf_id, session_token:s.session_token }, extra||{}); }
   function live(){ return !state.demoMode && state.session; }
+  // Voornaam van de INGELOGDE gebruiker (volgt het account, niet het eerste bedrijfscontact).
+  // 1) match het ingelogde e-mailadres tegen de contacten van het huidige bedrijf -> die voornaam
+  // 2) geen match -> Firebase displayName (eerste woord)
+  // 3) anders -> local-part van het e-mailadres met hoofdletter
+  // 4) anders -> 'daar'
+  function _firstWord(s){ return String(s||'').trim().split(/\s+/)[0] || ''; }
+  function _capit(s){ s=String(s||''); return s ? s.charAt(0).toUpperCase()+s.slice(1) : ''; }
+  function _contactsPool(){
+    var out=[], b=state.data.bedrijf;
+    if(b){
+      if(Array.isArray(b.contacten)) out=out.concat(b.contacten);
+      if(Array.isArray(b.contactpersonen)) out=out.concat(b.contactpersonen);
+      if(b.contact && typeof b.contact==='object') out.push(b.contact);
+    }
+    var t=state.data.team;
+    if(t && Array.isArray(t.contactpersonen)) out=out.concat(t.contactpersonen);
+    return out;
+  }
   DATA.klantNaam = function(){
-    var b = state.data.bedrijf;
-    if(b && b.contact && b.contact.voornaam) return b.contact.voornaam;
-    return 'Sarah';
+    var email = String((S().email)||'').toLowerCase().trim();
+    if(email){
+      var pool=_contactsPool();
+      for(var i=0;i<pool.length;i++){
+        var c=pool[i]||{};
+        if(String(c.email||'').toLowerCase().trim()===email && c.voornaam) return c.voornaam;
+      }
+      var dn=_firstWord(S().displayName);
+      if(dn) return dn;
+      var local=email.split('@')[0].split(/[._+-]/)[0];
+      if(local) return _capit(local);
+    }
+    return 'daar';
   };
   DATA.bedrijfsnaam = function(){
     // echte naam uit de provisioning-lijst (portalCompanies + activeBedrijf), de v1-feed
