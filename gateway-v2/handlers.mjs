@@ -3344,6 +3344,78 @@ export async function metaCampaignAds(bedrijfId, body, env) {
   return { status: 200, body: { ok: true, linked: true, campaign_id: campId, ads } };
 }
 
+/* ---- Google Ads (READ) — rechtstreeks via de Google Ads API (Explorer-toegang, geen Make) ----
+ * Leest het Google Ads klant-id uit de bedrijf-taak (FIELD.googleAdsId, server-side/tenant-safe),
+ * mint een access token uit de refresh token (env), en haalt via GAQL de account-KPI's, actieve
+ * campagnes en een dagtrend op onder de MCC (login-customer-id). Zelfde output-vorm als metaAds,
+ * zodat de frontend dezelfde KPI-/trend-/campagne-rendering kan hergebruiken.
+ */
+const GADS_API = 'https://googleads.googleapis.com/v20';
+const GADS_MCC = '4589076421';
+const GADS_PRESETS = { today: 'TODAY', yesterday: 'YESTERDAY', last_7d: 'LAST_7_DAYS', last_14d: 'LAST_14_DAYS', last_30d: 'LAST_30_DAYS', this_month: 'THIS_MONTH', last_month: 'LAST_MONTH' };
+const GADS_CHANNEL = { SEARCH: 'Search', DISPLAY: 'Display', SHOPPING: 'Shopping', VIDEO: 'Video', PERFORMANCE_MAX: 'Performance Max', MULTI_CHANNEL: 'Multichannel', LOCAL: 'Lokaal', LOCAL_SERVICES: 'Lokale diensten', SMART: 'Smart', DISCOVERY: 'Demand Gen', DEMAND_GEN: 'Demand Gen' };
+let _gadsTok = { v: '', exp: 0 };
+async function googleAdsToken(env, now) {
+  if (_gadsTok.v && _gadsTok.exp > now + 60000) return _gadsTok.v;
+  if (!str(env && env.GOOGLE_OAUTH_CLIENT_ID) || !str(env && env.GOOGLE_ADS_REFRESH_TOKEN)) return '';
+  try {
+    const r = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ client_id: str(env.GOOGLE_OAUTH_CLIENT_ID), client_secret: str(env.GOOGLE_OAUTH_CLIENT_SECRET), refresh_token: str(env.GOOGLE_ADS_REFRESH_TOKEN), grant_type: 'refresh_token' }).toString(),
+    });
+    const d = await r.json().catch(() => null);
+    if (d && d.access_token) { _gadsTok = { v: d.access_token, exp: now + (Number(d.expires_in) || 3600) * 1000 }; return d.access_token; }
+  } catch (e) { /* fail-soft */ }
+  return '';
+}
+async function gadsQuery(env, token, customerId, query) {
+  try {
+    const r = await fetch(`${GADS_API}/customers/${customerId}/googleAds:searchStream`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'developer-token': str(env.GOOGLE_ADS_DEVELOPER_TOKEN), 'login-customer-id': GADS_MCC, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+    });
+    const d = await r.json().catch(() => null);
+    if (!r.ok) return { ok: false, rows: [], err: (d && d.error && d.error.message) || ('http_' + r.status) };
+    const rows = [];
+    if (Array.isArray(d)) for (const b of d) for (const row of (b.results || [])) rows.push(row);
+    return { ok: true, rows };
+  } catch (e) { return { ok: false, rows: [], err: 'unreachable' }; }
+}
+export async function googleAds(bedrijfId, body, env) {
+  const br = await cu.get(env, `/task/${bedrijfId}`);
+  const acct = (br.ok && br.data ? str(getCF(br.data, FIELD.googleAdsId)) : '').replace(/[^0-9]/g, '');
+  if (!/^\d{8,12}$/.test(acct)) return { status: 200, body: { ok: true, linked: false } };
+  const token = await googleAdsToken(env, Date.now());
+  if (!token) return { status: 200, body: { ok: true, linked: false, reason: 'no_token' } };
+  const preset = GADS_PRESETS[str(body && body.period).trim()] || 'LAST_7_DAYS';
+
+  const campRes = await gadsQuery(env, token, acct,
+    `SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.ctr, metrics.average_cpc, metrics.conversions FROM campaign WHERE campaign.status = 'ENABLED' AND segments.date DURING ${preset} ORDER BY metrics.cost_micros DESC`);
+  const campaigns = (campRes.rows || []).map((r) => {
+    const c = r.campaign || {}; const m = r.metrics || {};
+    return {
+      id: String(c.id || ''), name: c.name || '', status: c.status || '',
+      objective: GADS_CHANNEL[c.advertisingChannelType] || str(c.advertisingChannelType),
+      spend: Number(m.costMicros || 0) / 1e6, impressions: Number(m.impressions || 0), clicks: Number(m.clicks || 0),
+      ctr: Number(m.ctr || 0) * 100, cpc: Number(m.averageCpc || 0) / 1e6, results: Number(m.conversions || 0),
+    };
+  });
+  const sumBy = (k) => campaigns.reduce((a, c) => a + (Number(c[k]) || 0), 0);
+  const tImpr = sumBy('impressions'), tClicks = sumBy('clicks');
+  const kpis = { spend: sumBy('spend'), impressions: tImpr, clicks: tClicks, ctr: tImpr > 0 ? (tClicks / tImpr * 100) : 0, results: sumBy('results') };
+
+  const trendRes = await gadsQuery(env, token, acct,
+    `SELECT segments.date, metrics.cost_micros, metrics.impressions, metrics.clicks FROM customer WHERE segments.date DURING LAST_30_DAYS ORDER BY segments.date`);
+  const trend = (trendRes.rows || []).map((r) => {
+    const m = r.metrics || {}; const s = r.segments || {};
+    return { date: s.date || '', spend: Number(m.costMicros || 0) / 1e6, impressions: Number(m.impressions || 0), clicks: Number(m.clicks || 0) };
+  });
+
+  const error = (!campRes.ok && !trendRes.ok) ? (campRes.err || 'fetch_failed') : null;
+  return { status: 200, body: { ok: true, linked: true, account: acct, currency: 'EUR', period: preset, kpis, campaigns, trend, error } };
+}
+
 // SEC-4: bevestig dat een post-id ECHT tot de blogId van DEZE klant hoort (anti-IDOR).
 // Zonder deze check kon klant A met het post-id van klant B een misleidende interne
 // goedkeuring/feedback-melding triggeren. Hergebruikt het blogId-gescopete scheduler-venster.
@@ -3941,6 +4013,8 @@ export const READ_HANDLERS = {
   metaAds,
   // Meta-campagne-creatives (rijke media: video/foto/carrousel) ON-DEMAND, via page-tokens.
   metaCampaignAds,
+  // Google Ads (DIRECT via de Google Ads API, Explorer-toegang, geen Make): KPI's + campagnes + dagtrend.
+  googleAds,
   // Shoot-inplannen: validatie + beschikbaarheid (port van de externe widget, geen Make).
   shootContext,
   // NB: de AI-chatbot loopt (op vraag) weer via Make, niet via de worker. De aiChat-handler
