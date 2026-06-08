@@ -981,7 +981,7 @@ function socialAddHash(){
 }
 async function socialSavePost(id, btn){
   var cap=$id('socCap'), media=$id('socMedia'), msg=$id('socSaveMsg');
-  var chans=[].slice.call(document.querySelectorAll('.soc-chan.on')).map(function(b){return b.getAttribute('data-net');});
+  var chans=[].slice.call(document.querySelectorAll('.soc-chic.on')).map(function(b){return b.getAttribute('data-net');});
   if(!chans.length){ if(msg) msg.innerHTML='<div class="soc-saveerr">Kies minstens één kanaal.</div>'; return; }
   if(btn){ btn.disabled=true; btn.dataset.orig=btn.innerHTML; btn.textContent='Opslaan…'; }
   var payload={ post_id:id, text:(cap?cap.value:''), providers:chans };

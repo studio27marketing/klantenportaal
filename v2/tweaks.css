@@ -400,3 +400,62 @@
 .soc-tag{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-body);font-weight:700;font-size:12px;color:var(--ink-2,#3A2A3A);background:var(--paper-2,#FAF7F2);border:1px solid var(--line,#E7DFD3);border-radius:999px;padding:5px 10px;}
 .soc-tag b{font-family:var(--font-display);font-weight:800;font-size:11.5px;color:var(--s27-blue-ink,#1F5FA8);}
 @media(max-width:900px){.soc-igrid{grid-template-columns:1fr;}}
+
+/* ---- Socials sub-navigatie (Analyse / Planner / Inzichten) ---- */
+.soc-subnav{display:flex;gap:6px;background:var(--paper-2,#FAF7F2);border:1px solid var(--line,#E7DFD3);border-radius:14px;padding:5px;margin:2px 0 20px;width:fit-content;max-width:100%;flex-wrap:wrap;}
+.soc-subtab{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-display);font-weight:800;font-size:14px;color:var(--ink-3,#6B5B6B);padding:9px 18px;border-radius:10px;cursor:pointer;transition:background .15s,color .15s,box-shadow .15s;}
+.soc-subtab svg{width:17px;height:17px;color:var(--ink-4,#9E919E);transition:color .15s;}
+.soc-subtab:hover{color:var(--ink,#230F23);}
+.soc-subtab:hover svg{color:var(--ink-2,#3A2A3A);}
+.soc-subtab.active{background:#fff;color:var(--ink,#230F23);box-shadow:0 2px 8px rgba(60,40,80,.10);}
+.soc-subtab.active svg{color:var(--s27-orange-ink,#C44514);}
+/* inner-tabs binnen Inzichten */
+.soc-inznav{display:flex;gap:2px;border-bottom:1.5px solid var(--line,#E7DFD3);margin:0 0 16px;flex-wrap:wrap;}
+.soc-inztab{font-family:var(--font-display);font-weight:700;font-size:13.5px;color:var(--ink-4,#9E919E);padding:9px 15px;cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-1.5px;transition:color .15s,border-color .15s;}
+.soc-inztab:hover{color:var(--ink-2,#3A2A3A);}
+.soc-inztab.active{color:var(--ink,#230F23);border-bottom-color:var(--s27-yellow,#F2C14E);}
+.soc-icard-wide{width:100%;}
+@media(max-width:520px){.soc-subnav{width:100%;}.soc-subtab{flex:1;justify-content:center;padding:9px 8px;font-size:12.5px;}}
+
+/* ---- Post-editor (planner): gsm-mockup + compacte 2-koloms + icoon-kanalen ---- */
+.soc-editor{max-width:1040px;}
+.soc-etopbar{position:sticky;top:60px;z-index:8;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 0;margin-bottom:8px;background:rgba(251,248,243,.86);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-radius:0 0 12px 12px;}
+.soc-etop-act{margin-left:auto;display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+.soc-egrid{display:grid;grid-template-columns:330px 1fr;gap:28px;align-items:start;}
+.soc-ecol-pv{position:sticky;top:124px;}
+.soc-ecol-form{min-width:0;}
+.soc-ecol-form .soc-cap{min-height:230px;}
+.soc-emeta{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:4px;}
+.soc-emeta-date{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-body);font-weight:700;font-size:12.5px;color:var(--ink-3,#6B5B6B);}
+.soc-emeta-hint{font-family:var(--font-body);font-size:12px;color:var(--ink-4,#9E919E);}
+.soc-chics{display:flex;gap:10px;flex-wrap:wrap;}
+.soc-chic{width:46px;height:46px;border-radius:13px;border:1.5px solid var(--line,#E7DFD3);background:var(--paper-2,#FAF7F2);color:var(--ink-4,#9E919E);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:border-color .15s,color .15s,background .15s,box-shadow .15s,transform .12s;}
+.soc-chic svg{width:24px;height:24px;}
+.soc-chic:hover{color:var(--cn);border-color:var(--cn);transform:translateY(-1px);}
+.soc-chic.on{color:#fff;background:var(--cn);border-color:var(--cn);box-shadow:0 4px 12px color-mix(in srgb,var(--cn) 32%,transparent);}
+.soc-chics-ro .soc-chic{cursor:default;}
+.soc-chics-ro .soc-chic:hover{transform:none;}
+.soc-visrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.soc-roinfo{display:flex;align-items:flex-start;gap:8px;margin-top:16px;font-family:var(--font-body);font-size:13px;line-height:1.5;color:var(--s27-green-ink,#147A50);background:var(--s27-green-soft,rgba(18,172,78,.09));border-radius:11px;padding:11px 13px;}
+.soc-roinfo svg{flex:none;margin-top:1px;}
+.soc-dtxt-box{white-space:pre-wrap;font-family:var(--font-body);font-size:14px;line-height:1.55;color:var(--ink-2,#3A2A3A);background:var(--paper-2,#FAF7F2);border:1px solid var(--line,#E7DFD3);border-radius:12px;padding:12px 14px;max-height:340px;overflow:auto;}
+/* gsm-mockup met Instagram-look */
+.soc-phone{display:flex;justify-content:center;}
+.soc-phone-scr{width:100%;max-width:330px;background:#fff;border:1px solid var(--line,#E7DFD3);border-radius:22px;overflow:hidden;box-shadow:0 18px 50px rgba(60,40,80,.16);}
+.soc-ph-top{display:flex;align-items:center;gap:9px;padding:11px 13px;}
+.soc-ph-av{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:linear-gradient(45deg,#f9ce34,#ee2a7b,#6228d7);color:#fff;flex:none;}
+.soc-ph-av svg{width:16px;height:16px;}
+.soc-ph-user{font-family:var(--font-display);font-weight:800;font-size:13px;color:var(--ink,#230F23);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.soc-ph-more{color:var(--ink-3,#6B5B6B);font-weight:900;letter-spacing:1px;}
+.soc-ph-mediawrap{width:100%;aspect-ratio:1/1;background:var(--paper-3,#F1EBE2);display:flex;align-items:center;justify-content:center;overflow:hidden;}
+.soc-ph-mediawrap img,.soc-ph-mediawrap video{width:100%;height:100%;object-fit:cover;display:block;}
+.soc-ph-empty{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--ink-4,#9E919E);font-family:var(--font-body);font-size:12.5px;}
+.soc-ph-bar{display:flex;align-items:center;gap:15px;padding:11px 13px 5px;color:var(--ink,#230F23);}
+.soc-ph-bar svg{width:23px;height:23px;}
+.soc-ph-bk{margin-left:auto;}
+.soc-ph-cap{padding:2px 13px 16px;font-family:var(--font-body);font-size:12.5px;line-height:1.45;color:var(--ink-2,#3A2A3A);white-space:pre-wrap;word-break:break-word;max-height:190px;overflow:auto;}
+.soc-ph-cap b{font-family:var(--font-display);font-weight:800;color:var(--ink,#230F23);}
+@media(max-width:760px){.soc-egrid{grid-template-columns:1fr;gap:18px;}.soc-ecol-pv{position:static;max-width:330px;margin:0 auto;}.soc-etopbar{top:0;}}
+/* kalender (planner): schermvullender */
+.soc-cal .soc-grid .soc-cell{min-height:118px;}
+@media(max-width:680px){.soc-cal .soc-grid .soc-cell{min-height:70px;}}
