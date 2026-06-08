@@ -34,6 +34,7 @@ import {
   bustCache,
   provisionLookup,
   buildAiContext,
+  publicShootAvailability,
 } from './handlers.mjs';
 
 // Pad → Make-webhook. Deze URLs zijn niet geheim (staan al in dashboard.js).
@@ -409,9 +410,39 @@ async function tryHandle(path, bedrijfId, body, claims, env, ctx, ch, noCache) {
   return null; // niet geport → Make-forward
 }
 
+/* ---- PUBLIEK: geaggregeerde shoot-capaciteit (geen auth, alleen tellingen) ----
+   Open GET-endpoint voor de publieke beschikbaarheidspagina (vrijblijvend door te
+   sturen, geen offerte/login nodig). Lekt NIETS gevoeligs: enkel het aantal vrije
+   content creators per dag. KV-cache (10 min) begrenst ClickUp-load en misbruik. */
+async function handlePublicShoot(request, env, ctx) {
+  const cors = { 'Access-Control-Allow-Origin': '*', 'Vary': 'Origin' };
+  if (request.method === 'OPTIONS')
+    return new Response(null, { status: 204, headers: { ...cors, 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' } });
+  if (request.method !== 'GET') return json({ ok: false, error: 'method_not_allowed' }, 405, cors);
+  if (!env.CLICKUP_TOKEN) return json({ ok: false, error: 'gateway_misconfigured' }, 500, cors);
+  const CK = 'pubshoot:v1';
+  if (env.KV) {
+    try { const hit = await env.KV.get(CK); if (hit) return new Response(hit, { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300', 'X-Cache': 'hit', ...cors } }); } catch (e) {}
+  }
+  let res;
+  try { res = await publicShootAvailability(env, { days: 120 }); }
+  catch (e) { return json({ ok: false, error: 'unavailable', total: 4, days: [] }, 200, cors); }
+  const payload = JSON.stringify(res);
+  if (env.KV) { try { ctx.waitUntil(env.KV.put(CK, payload, { expirationTtl: 600 })); } catch (e) {} }
+  return new Response(payload, { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300', 'X-Cache': 'miss', ...cors } });
+}
+
 /* ---- Worker -------------------------------------------------------------- */
 export default {
   async fetch(request, env, ctx) {
+    // PUBLIEKE shoot-capaciteitspagina (geen auth): vroege, geisoleerde route met open
+    // CORS, vóór de origin-allowlist en de Firebase-gate. Raakt de auth-router niet.
+    {
+      const _pub = new URL(request.url).pathname.replace(/^\/+|\/+$/g, '');
+      if (_pub === 'public/shoot-beschikbaarheid' || _pub === 'shoot-capaciteit') {
+        return handlePublicShoot(request, env, ctx);
+      }
+    }
     const allowed = String(env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
     const origin = request.headers.get('Origin') || '';
     const ch = corsHeaders(origin, allowed);

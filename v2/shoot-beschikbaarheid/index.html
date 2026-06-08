@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shoot-beschikbaarheid · Studio 27</title>
+<meta name="description" content="Bekijk in een oogopslag hoeveel content creators van Studio 27 vrij zijn om bij jou langs te komen voor een shoot. Geen offerte nodig om te kijken.">
+<meta name="robots" content="noindex, follow">
+<meta name="theme-color" content="#9441DB">
+<!-- Open Graph: nette preview als Vincent de link doorstuurt -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Onze shoot-beschikbaarheid · Studio 27">
+<meta property="og:description" content="Zie zelf wanneer ons content-team vrij is voor een shoot. Geen offerte nodig om te kijken.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Studio 27 huisstijl-tokens */
+    --blue:#3083DC; --purple:#9441DB; --green:#12AC4E; --orange:#F66131;
+    --yellow:#F8C028; --pink:#F697CE;
+    --ink:#230F23; --ink-2:#3A2A3A; --ink-3:#6B5B6B; --ink-4:#9E919E;
+    --paper:#FFFFFF; --paper-2:#FAF7F2; --paper-3:#F1EBE2; --line:#E7DFD3;
+    --shadow:0 1px 2px rgba(35,15,35,.05), 0 8px 24px rgba(35,15,35,.07);
+    --shadow-sm:0 1px 2px rgba(35,15,35,.06), 0 3px 10px rgba(35,15,35,.06);
+    --r-lg:24px; --r-md:16px; --r-sm:10px; --pill:999px;
+    /* capaciteits-tinten (warm, vlak, geen gradient) */
+    --cap-veel:#12AC4E; --cap-veel-bg:#E7F6EC;
+    --cap-plek:#F8C028; --cap-plek-bg:#FCF3D8;
+    --cap-beperkt:#F66131; --cap-beperkt-bg:#FDE7DC;
+    --cap-vol:#9E919E; --cap-vol-bg:#F1EBE2;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:'Nunito',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    color:var(--ink-2); background:var(--paper-2);
+    line-height:1.6; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+    background-image:radial-gradient(var(--paper-3) 1px, transparent 1px);
+    background-size:26px 26px; background-position:-13px -13px;
+  }
+  .wrap{max-width:960px; margin:0 auto; padding:24px 20px 56px}
+  /* ---- wordmark ---- */
+  .brandbar{display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:28px}
+  .wm{font-family:'Montserrat',sans-serif; font-weight:900; font-size:26px; letter-spacing:-.02em; color:var(--ink); text-decoration:none; line-height:1}
+  .wm b{color:var(--blue); font-weight:900}
+  .brandbar .tak{display:inline-flex; align-items:center; gap:8px; font-family:'Montserrat',sans-serif; font-weight:800; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--purple); background:#F3E8FB; border:1px solid #E6D2F8; padding:7px 12px; border-radius:var(--pill)}
+  .brandbar .tak svg{width:15px; height:15px; display:block}
+  /* ---- hero ---- */
+  .hero{margin:6px 0 26px}
+  .hero h1{font-family:'Montserrat',sans-serif; font-weight:900; color:var(--ink); font-size:clamp(28px,5.4vw,46px); line-height:1.05; letter-spacing:-.02em; margin:0 0 14px}
+  .hero h1 .u{position:relative; white-space:nowrap; color:var(--purple)}
+  .hero h1 .u svg{position:absolute; left:0; right:0; bottom:-.34em; width:100%; height:.34em; overflow:visible}
+  .hero p{font-size:clamp(16px,2.4vw,19px); color:var(--ink-3); max-width:62ch; margin:0}
+  /* ---- stat-strip ---- */
+  .stats{display:flex; flex-wrap:wrap; gap:12px; margin:24px 0 8px}
+  .stat{flex:1 1 180px; background:var(--paper); border:1px solid var(--line); border-radius:var(--r-md); padding:14px 16px; box-shadow:var(--shadow-sm); position:relative; overflow:hidden}
+  .stat::before{content:""; position:absolute; left:0; top:0; bottom:0; width:5px; background:var(--purple)}
+  .stat .k{font-family:'Montserrat',sans-serif; font-weight:900; font-size:24px; color:var(--ink); line-height:1.1}
+  .stat .l{font-size:13.5px; color:var(--ink-3); margin-top:2px}
+  .stat.b::before{background:var(--blue)}
+  .stat.g::before{background:var(--green)}
+  /* ---- kalenderkaart ---- */
+  .card{background:var(--paper); border:1px solid var(--line); border-radius:var(--r-lg); box-shadow:var(--shadow); padding:20px 20px 24px; margin-top:20px}
+  .calhead{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px}
+  .calhead .month{font-family:'Montserrat',sans-serif; font-weight:800; font-size:clamp(18px,3vw,22px); color:var(--ink); text-transform:capitalize; letter-spacing:-.01em}
+  .nav{display:flex; gap:8px}
+  .nav button{width:42px; height:42px; border-radius:var(--pill); border:1px solid var(--line); background:var(--paper-2); color:var(--ink-2); font-size:18px; cursor:pointer; display:grid; place-items:center; transition:background .15s, border-color .15s, transform .05s}
+  .nav button:hover:not(:disabled){background:#F3E8FB; border-color:#E6D2F8; color:var(--purple)}
+  .nav button:active:not(:disabled){transform:translateY(1px)}
+  .nav button:disabled{opacity:.35; cursor:not-allowed}
+  .dow{display:grid; grid-template-columns:repeat(7,1fr); gap:7px; margin-bottom:7px}
+  .dow span{text-align:center; font-family:'Montserrat',sans-serif; font-weight:800; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-4)}
+  .grid{display:grid; grid-template-columns:repeat(7,1fr); gap:7px}
+  .cell{position:relative; border-radius:var(--r-sm); border:1px solid var(--line); background:var(--paper-2); min-height:74px; padding:8px 8px 7px; display:flex; flex-direction:column; justify-content:space-between; overflow:hidden}
+  .cell.empty{background:transparent; border:none}
+  .cell .num{font-family:'Montserrat',sans-serif; font-weight:800; font-size:14px; color:var(--ink-3); line-height:1}
+  .cell .cap{display:flex; flex-direction:column; gap:5px}
+  .cell .dots{display:flex; gap:3px}
+  .cell .dots i{width:7px; height:7px; border-radius:50%; background:var(--line); display:block}
+  .cell .tag{font-family:'Nunito',sans-serif; font-weight:700; font-size:11.5px; line-height:1.15; color:var(--ink-3)}
+  /* capaciteits-varianten */
+  .cell.veel{background:var(--cap-veel-bg); border-color:#CDEBD6}
+  .cell.veel .num{color:#0B7A37}
+  .cell.veel .dots i.on{background:var(--cap-veel)}
+  .cell.veel .tag{color:#0B7A37}
+  .cell.plek{background:var(--cap-plek-bg); border-color:#F3E2A8}
+  .cell.plek .num{color:#9A7400}
+  .cell.plek .dots i.on{background:var(--cap-plek)}
+  .cell.plek .tag{color:#9A7400}
+  .cell.beperkt{background:var(--cap-beperkt-bg); border-color:#F8CDB7}
+  .cell.beperkt .num{color:#C2401A}
+  .cell.beperkt .dots i.on{background:var(--cap-beperkt)}
+  .cell.beperkt .tag{color:#C2401A}
+  .cell.vol{background:var(--cap-vol-bg); border-color:var(--line)}
+  .cell.vol .num{color:var(--ink-4)}
+  .cell.vol .tag{color:var(--ink-4)}
+  .cell.rust{background:#FBF8F3; border-style:dashed; border-color:var(--line)}
+  .cell.rust .num{color:var(--ink-4)}
+  .cell.rust .tag{color:var(--ink-4)}
+  .cell.today{box-shadow:0 0 0 2px var(--purple)}
+  .cell.today .num::after{content:" · vandaag"; font-weight:700; font-size:10px; color:var(--purple)}
+  /* legenda */
+  .legend{display:flex; flex-wrap:wrap; gap:14px 18px; margin-top:18px; padding-top:16px; border-top:1px dashed var(--line)}
+  .legend .li{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink-3)}
+  .legend .sw{width:14px; height:14px; border-radius:4px; border:1px solid rgba(35,15,35,.08)}
+  .sw.veel{background:var(--cap-veel)} .sw.plek{background:var(--cap-plek)}
+  .sw.beperkt{background:var(--cap-beperkt)} .sw.vol{background:var(--cap-vol)}
+  .sw.rust{background:#FBF8F3; border:1px dashed var(--ink-4)}
+  /* states */
+  .state{padding:46px 20px; text-align:center; color:var(--ink-3)}
+  .spinner{width:34px; height:34px; border-radius:50%; border:3px solid var(--paper-3); border-top-color:var(--purple); margin:0 auto 14px; animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .state .retry{margin-top:14px; font-family:'Montserrat',sans-serif; font-weight:800; font-size:14px; background:var(--purple); color:#fff; border:none; border-radius:var(--pill); padding:11px 22px; cursor:pointer}
+  /* CTA */
+  .cta{margin-top:26px; background:var(--ink); color:#fff; border-radius:var(--r-lg); padding:26px 26px; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:18px; box-shadow:var(--shadow)}
+  .cta h2{font-family:'Montserrat',sans-serif; font-weight:900; font-size:clamp(19px,3vw,24px); margin:0 0 4px; color:#fff; letter-spacing:-.01em}
+  .cta p{margin:0; color:#D9CCD9; font-size:15px; max-width:46ch}
+  .cta a.btn{flex:0 0 auto; font-family:'Montserrat',sans-serif; font-weight:800; font-size:15px; background:var(--purple); color:#fff; text-decoration:none; border-radius:var(--pill); padding:14px 26px; display:inline-flex; align-items:center; gap:9px; transition:transform .05s, background .15s; white-space:nowrap}
+  .cta a.btn:hover{background:#A85AE6}
+  .cta a.btn:active{transform:translateY(1px)}
+  .cta a.btn svg{width:16px; height:16px}
+  /* footer */
+  footer{margin-top:30px; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; color:var(--ink-4); font-size:13px}
+  footer .wm{font-size:18px}
+  .updated{font-size:12.5px; color:var(--ink-4)}
+  /* mobiel */
+  @media (max-width:560px){
+    .wrap{padding:18px 14px 44px}
+    .cell{min-height:62px; padding:6px 6px 6px; border-radius:9px}
+    .cell .num{font-size:12.5px}
+    .cell .tag{font-size:10px}
+    .grid,.dow{gap:5px}
+    .cell .dots i{width:6px; height:6px}
+    .cell.today .num::after{content:none}
+    .cta{flex-direction:column; align-items:flex-start}
+    .cta a.btn{width:100%; justify-content:center}
+  }
+  @media (max-width:380px){
+    .cell .tag{display:none}
+    .dow span{font-size:10px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="brandbar">
+    <a class="wm" href="https://studio27.be" aria-label="Studio 27">studio<b>27</b></a>
+    <span class="tak" title="Discipline Video- en fotografie">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7.6c0-1 .8-1.8 1.8-1.8h9c1 0 1.8.8 1.8 1.8v8.8c0 1-.8 1.8-1.8 1.8h-9c-1 0-1.8-.8-1.8-1.8z"/><path d="M15.1 10.4l5-2.7c.5-.3 1.1.1 1.1.7v7.2c0 .6-.6 1-1.1.7l-5-2.7z"/></svg>
+      Video- en fotografie
+    </span>
+  </div>
+
+  <div class="hero">
+    <h1>Onze <span class="u">shoot-beschikbaarheid<svg viewBox="0 0 300 12" preserveAspectRatio="none" aria-hidden="true"><path d="M3 8.5C70 3.5 150 2.5 297 6.5" fill="none" stroke="#9441DB" stroke-width="4" stroke-linecap="round"/></svg></span></h1>
+    <p>Bekijk in een oogopslag hoeveel van ons content-team vrij is om bij jou langs te komen voor een shoot. Je hoeft geen offerte te bevestigen om te kijken, kies gerust een paar dagen die voor jou passen.</p>
+  </div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="k" id="stat-team">4</div>
+      <div class="l">content creators in ons shoot-team</div>
+    </div>
+    <div class="stat b">
+      <div class="k" id="stat-best">&mdash;</div>
+      <div class="l">werkdagen met volledige ploeg vrij</div>
+    </div>
+    <div class="stat g">
+      <div class="k">4 mnd</div>
+      <div class="l">vooruit te plannen</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="calhead">
+      <div class="month" id="monthLabel">&nbsp;</div>
+      <div class="nav">
+        <button id="prevBtn" aria-label="Vorige maand" disabled>&#8592;</button>
+        <button id="nextBtn" aria-label="Volgende maand" disabled>&#8594;</button>
+      </div>
+    </div>
+
+    <div id="calBody">
+      <div class="state" id="loading">
+        <div class="spinner"></div>
+        Beschikbaarheid ophalen...
+      </div>
+    </div>
+
+    <div class="legend" id="legend" hidden>
+      <div class="li"><span class="sw veel"></span> Volop ruimte</div>
+      <div class="li"><span class="sw plek"></span> Nog plek</div>
+      <div class="li"><span class="sw beperkt"></span> Beperkt vrij</div>
+      <div class="li"><span class="sw vol"></span> Volzet</div>
+      <div class="li"><span class="sw rust"></span> Weekend of feestdag</div>
+    </div>
+  </div>
+
+  <div class="cta">
+    <div>
+      <h2>Een datum gezien die past?</h2>
+      <p>Laat het ons weten, dan houden we die dag voor jou vrij en regelen we de rest.</p>
+    </div>
+    <a class="btn" id="contactBtn" href="https://studio27.be/contact">
+      Neem contact op
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+    </a>
+  </div>
+
+  <footer>
+    <a class="wm" href="https://studio27.be" aria-label="Studio 27">studio<b>27</b></a>
+    <span class="updated" id="updated">Beschikbaarheid wordt live bijgewerkt.</span>
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---- configuratie ---- */
+  // De publieke gateway-endpoint (zelfde worker als het klantenportaal). Op de
+  // workers.dev-host praten we same-origin; overal anders (Pages / portaal.studio27.be)
+  // cross-origin naar de vaste worker-URL. De endpoint zet open CORS.
+  var GATEWAY_BASE = (function(){
+    try { if (/\.workers\.dev$/.test(location.hostname||"")) return location.origin; } catch(e){}
+    return "https://s27-portal-gateway-v2.studio27marketing.workers.dev";
+  })();
+  var ENDPOINT = GATEWAY_BASE + "/public/shoot-beschikbaarheid";
+  // Pas dit aan als de contactpagina elders staat:
+  document.getElementById("contactBtn").href = "https://studio27.be/contact";
+
+  var MONTHS = ["januari","februari","maart","april","mei","juni","juli","augustus","september","oktober","november","december"];
+  var DOW = ["ma","di","wo","do","vr","za","zo"];
+
+  var state = { total:4, byDate:{}, days:[], view:null, min:null, max:null, today:null };
+
+  /* ---- helpers ---- */
+  function pad(n){ return (n<10?"0":"")+n; }
+  function ymd(y,m,d){ return y+"-"+pad(m+1)+"-"+pad(d); }            // m = 0-based
+  function parseYmd(s){ var p=String(s).split("-"); return {y:+p[0], m:+p[1]-1, d:+p[2]}; }
+  // weekdag 0=ma .. 6=zo (via UTC zodat er geen tijdzone-verschuiving optreedt)
+  function dowMon(y,m,d){ var g=new Date(Date.UTC(y,m,d)).getUTCDay(); return (g+6)%7; }
+
+  // Belgische wettelijke feestdagen voor een jaar -> set van "YYYY-MM-DD".
+  function beHolidays(year){
+    var set={};
+    function add(m,d){ set[ymd(year,m-1,d)]=1; }
+    add(1,1); add(5,1); add(7,21); add(8,15); add(11,1); add(11,11); add(12,25);
+    // Pasen (Anonymous Gregorian / Meeus-Jones-Butcher)
+    var a=year%19, b=Math.floor(year/100), c=year%100, d=Math.floor(b/4), e=b%4,
+        f=Math.floor((b+8)/25), g=Math.floor((b-f+1)/3), h=(19*a+b-d-g+15)%30,
+        i=Math.floor(c/4), k=c%4, l=(32+2*e+2*i-h-k)%7, mm=Math.floor((a+11*h+22*l)/451),
+        month=Math.floor((h+l-7*mm+114)/31), day=((h+l-7*mm+114)%31)+1;
+    var easter=new Date(Date.UTC(year, month-1, day));
+    function fromEaster(off){ var t=new Date(easter.getTime()+off*86400000); return ymd(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate()); }
+    set[fromEaster(1)]=1;   // paasmaandag
+    set[fromEaster(39)]=1;  // O.H. Hemelvaart
+    set[fromEaster(50)]=1;  // pinkstermaandag
+    return set;
+  }
+  var holCache={};
+  function isHoliday(y,m,d){ if(!holCache[y]) holCache[y]=beHolidays(y); return !!holCache[y][ymd(y,m,d)]; }
+
+  // free -> capaciteitsklasse (relatief tot de pool).
+  function capClass(free,total){
+    if(free<=0) return {c:"vol", t:"Volzet"};
+    if(free>=total) return {c:"veel", t:"Volledige ploeg"};
+    var ratio=free/total;
+    if(ratio>=0.6) return {c:"veel", t:free+" vrij"};
+    if(ratio>=0.4) return {c:"plek", t:free+" vrij"};
+    return {c:"beperkt", t:free+" vrij"};
+  }
+
+  /* ---- render ---- */
+  function render(){
+    var body=document.getElementById("calBody");
+    var v=state.view; if(!v){ return; }
+    var y=v.y, m=v.m;
+    document.getElementById("monthLabel").textContent = MONTHS[m]+" "+y;
+
+    var first=dowMon(y,m,1);
+    var daysInMonth=new Date(Date.UTC(y,m+1,0)).getUTCDate();
+
+    var html='<div class="dow">'+DOW.map(function(x){return "<span>"+x+"</span>";}).join("")+'</div>';
+    html+='<div class="grid">';
+    for(var i=0;i<first;i++) html+='<div class="cell empty"></div>';
+    for(var d=1; d<=daysInMonth; d++){
+      var key=ymd(y,m,d);
+      var wd=dowMon(y,m,d);
+      var weekend=(wd>=5);
+      var holiday=isHoliday(y,m,d);
+      var past=(state.today && key < state.today);
+      var has=Object.prototype.hasOwnProperty.call(state.byDate,key);
+      var isToday=(key===state.today);
+
+      var cls="cell", num='<span class="num">'+d+'</span>', capHtml="";
+
+      if(past || !has){
+        cls+=" empty";
+        // verleden of buiten databereik: lege, rustige cel met enkel het dagnummer
+        html+='<div class="'+cls+'">'+(past?'':'<span class="num" style="color:var(--ink-4)">'+d+'</span>')+'</div>';
+        continue;
+      }
+      if(weekend || holiday){
+        cls+=" rust";
+        capHtml='<div class="cap"><span class="tag">'+(holiday?"Feestdag":"Weekend")+'</span></div>';
+      } else {
+        var free=state.byDate[key];
+        var cap=capClass(free, state.total);
+        cls+=" "+cap.c;
+        var dots="";
+        for(var k=0;k<state.total;k++) dots+='<i class="'+(k<free?"on":"")+'"></i>';
+        capHtml='<div class="cap"><div class="dots">'+dots+'</div><span class="tag">'+cap.t+'</span></div>';
+      }
+      if(isToday) cls+=" today";
+      html+='<div class="'+cls+'">'+num+capHtml+'</div>';
+    }
+    html+='</div>';
+    body.innerHTML=html;
+    document.getElementById("legend").hidden=false;
+
+    // nav-grenzen
+    var atMin = state.min && (y<state.min.y || (y===state.min.y && m<=state.min.m));
+    var atMax = state.max && (y>state.max.y || (y===state.max.y && m>=state.max.m));
+    document.getElementById("prevBtn").disabled = !!atMin;
+    document.getElementById("nextBtn").disabled = !!atMax;
+  }
+
+  function shiftMonth(delta){
+    var v=state.view; var nm=v.m+delta, ny=v.y;
+    if(nm<0){nm=11;ny--;} if(nm>11){nm=0;ny++;}
+    state.view={y:ny,m:nm}; render();
+  }
+
+  /* ---- data ---- */
+  function applyData(data){
+    var days=(data && Array.isArray(data.days))?data.days:[];
+    if(!days.length){ showError(); return; }
+    state.total = (data && data.total) ? data.total : 4;
+    state.byDate={}; var fullDays=0;
+    days.forEach(function(d){
+      if(!d || !d.date) return;
+      state.byDate[d.date]= (typeof d.free==="number"?d.free:0);
+      // tel enkel WERKDAGEN met de volledige ploeg vrij (weekend/feestdag tonen we
+      // niet als shootcapaciteit, dus die horen ook niet in de teller)
+      var p=parseYmd(d.date);
+      var werkdag = dowMon(p.y,p.m,p.d) < 5 && !isHoliday(p.y,p.m,p.d);
+      if(werkdag && d.free>=state.total) fullDays++;
+    });
+    state.days=days;
+    state.today=days[0].date;                     // server-Brussels "vandaag"
+    state.min=parseYmd(days[0].date);
+    state.max=parseYmd(days[days.length-1].date);
+    state.view={y:state.min.y, m:state.min.m};
+    document.getElementById("stat-team").textContent=state.total;
+    document.getElementById("stat-best").textContent=fullDays;
+    render();
+  }
+
+  function showError(){
+    document.getElementById("calBody").innerHTML =
+      '<div class="state">Onze beschikbaarheid is even niet op te halen. Probeer het zo nog eens, of neem gerust contact met ons op.'+
+      '<br><button class="retry" id="retryBtn">Opnieuw proberen</button></div>';
+    document.getElementById("legend").hidden=true;
+    var rb=document.getElementById("retryBtn"); if(rb) rb.addEventListener("click", load);
+  }
+
+  function load(){
+    document.getElementById("calBody").innerHTML='<div class="state"><div class="spinner"></div>Beschikbaarheid ophalen...</div>';
+    document.getElementById("legend").hidden=true;
+    fetch(ENDPOINT, {method:"GET", headers:{"Accept":"application/json"}})
+      .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function(data){ if(data && data.ok===false && (!data.days||!data.days.length)) return showError(); applyData(data); })
+      .catch(function(){ showError(); });
+  }
+
+  document.getElementById("prevBtn").addEventListener("click", function(){ shiftMonth(-1); });
+  document.getElementById("nextBtn").addEventListener("click", function(){ shiftMonth(1); });
+  load();
+})();
+</script>
+</body>
+</html>
