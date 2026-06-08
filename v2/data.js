@@ -450,6 +450,19 @@
     }catch(e){ state.data.metaAds={linked:false}; return false; }
   };
   DATA.metaAds = function(){ return state.data.metaAds; };
+  // Campagne-creatives ON-DEMAND (rijke media via page-tokens), gecachet per campagne-id.
+  DATA.loadCampaignAds = async function(campaignId){
+    var id = String(campaignId||'');
+    if(!live() || !state.activeBedrijf || !id) return false;
+    state.data.metaCampaignAds = state.data.metaCampaignAds || {};
+    try{
+      var res = await api(ENDPOINTS.metaCampaignAds, base({ campaign_id:id }));
+      var j = (res && res.ok && res.data) ? res.data : null;
+      state.data.metaCampaignAds[id] = (j && j.ok && Array.isArray(j.ads)) ? j.ads : [];
+      return true;
+    }catch(e){ state.data.metaCampaignAds[id] = state.data.metaCampaignAds[id]||[]; return false; }
+  };
+  DATA.campaignAds = function(campaignId){ var m=state.data.metaCampaignAds||{}; return m[String(campaignId||'')]; };
 
   DATA.huisstijl = function(){ return state.data.huisstijl; };
 

@@ -2787,8 +2787,8 @@ export async function metricoolStats(bedrijfId, body, env) {
 const META_GRAPH = 'https://graph.facebook.com/v21.0';
 const META_PRESETS = { today: 'today', yesterday: 'yesterday', last_7d: 'last_7d', last_14d: 'last_14d', last_30d: 'last_30d', this_month: 'this_month', last_month: 'last_month' };
 const META_RESULT_ACTIONS = ['offsite_conversion.fb_pixel_purchase', 'purchase', 'lead', 'onsite_conversion.lead_grouped', 'offsite_conversion.fb_pixel_lead'];
-async function metaGet(env, path, params) {
-  const qs = new URLSearchParams(Object.assign({ access_token: str(env && env.META_SYSTEM_TOKEN) }, params || {}));
+async function metaGet(env, path, params, token) {
+  const qs = new URLSearchParams(Object.assign({ access_token: token || str(env && env.META_SYSTEM_TOKEN) }, params || {}));
   let r;
   try { r = await fetch(`${META_GRAPH}/${path}?${qs.toString()}`); }
   catch (e) { return { ok: false, data: null, err: 'unreachable' }; }
@@ -2808,6 +2808,13 @@ function metaCreativeFormat(cr) {
   if (oss.link_data && Array.isArray(oss.link_data.child_attachments) && oss.link_data.child_attachments.length > 1) return 'carousel';
   if (cr.asset_feed_spec && Array.isArray(cr.asset_feed_spec.images) && cr.asset_feed_spec.images.length > 1) return 'carousel';
   return 'image';
+}
+function metaAdVideoId(cr) {
+  return cr.video_id || (cr.object_story_spec && cr.object_story_spec.video_data && cr.object_story_spec.video_data.video_id)
+    || (cr.asset_feed_spec && Array.isArray(cr.asset_feed_spec.videos) && cr.asset_feed_spec.videos[0] && cr.asset_feed_spec.videos[0].video_id) || '';
+}
+function metaChildAtts(cr) {
+  return (cr.object_story_spec && cr.object_story_spec.link_data && Array.isArray(cr.object_story_spec.link_data.child_attachments)) ? cr.object_story_spec.link_data.child_attachments : [];
 }
 
 export async function metaAds(bedrijfId, body, env) {
@@ -2859,54 +2866,6 @@ export async function metaAds(bedrijfId, body, env) {
     };
   });
 
-  // actieve advertenties + creatives (incl. media in goede kwaliteit: video-source, full-res foto, carrousel)
-  const adRes = await metaGet(env, `${act}/ads`, {
-    fields: 'name,effective_status,campaign_id,creative{thumbnail_url,image_url,object_type,video_id,image_hash,effective_object_story_id,object_story_spec,asset_feed_spec},insights.date_preset(' + preset + '){spend,impressions,clicks,ctr}',
-    effective_status: '["ACTIVE"]', limit: '50',
-  });
-  const adRows = (adRes.ok && Array.isArray(adRes.data.data)) ? adRes.data.data : [];
-  const adVideoId = (cr) => cr.video_id || (cr.object_story_spec && cr.object_story_spec.video_data && cr.object_story_spec.video_data.video_id) || (cr.asset_feed_spec && Array.isArray(cr.asset_feed_spec.videos) && cr.asset_feed_spec.videos[0] && cr.asset_feed_spec.videos[0].video_id) || '';
-  const childAtts = (cr) => (cr.object_story_spec && cr.object_story_spec.link_data && Array.isArray(cr.object_story_spec.link_data.child_attachments)) ? cr.object_story_spec.link_data.child_attachments : [];
-  // media-bronnen verzamelen (gecapt tegen rate/subrequest-limieten)
-  const videoIds = []; const hashes = new Set(); const storyIds = [];
-  for (const a of adRows) {
-    const cr = a.creative || {};
-    const vid = adVideoId(cr); if (vid && videoIds.length < 20 && videoIds.indexOf(String(vid)) < 0) videoIds.push(String(vid));
-    if (cr.image_hash) hashes.add(cr.image_hash);
-    for (const ch of childAtts(cr)) if (ch.image_hash) hashes.add(ch.image_hash);
-    const afs = cr.asset_feed_spec || {}; if (Array.isArray(afs.images)) for (const im of afs.images) if (im.hash) hashes.add(im.hash);
-    const sid = cr.effective_object_story_id; if (sid && storyIds.length < 20 && storyIds.indexOf(sid) < 0) storyIds.push(sid);
-  }
-  const [videoRes, storyRes, imgRes] = await Promise.all([
-    Promise.all(videoIds.map((id) => metaGet(env, id, { fields: 'source,picture' }))),
-    Promise.all(storyIds.map((id) => metaGet(env, id, { fields: 'full_picture' }))),
-    hashes.size ? metaGet(env, `${act}/adimages`, { hashes: JSON.stringify([...hashes].slice(0, 100)), fields: 'hash,url' }) : Promise.resolve({ ok: false }),
-  ]);
-  const videoById = {}; videoIds.forEach((id, i) => { const d = videoRes[i]; if (d && d.ok && d.data) videoById[id] = { src: d.data.source || '', poster: d.data.picture || '' }; });
-  const picByStory = {}; storyIds.forEach((id, i) => { const d = storyRes[i]; if (d && d.ok && d.data && d.data.full_picture) picByStory[id] = d.data.full_picture; });
-  const urlByHash = {}; if (imgRes.ok && imgRes.data && Array.isArray(imgRes.data.data)) for (const im of imgRes.data.data) urlByHash[im.hash] = im.url || '';
-  const ads = adRows.map((a) => {
-    const cr = a.creative || {};
-    const ins = (a.insights && Array.isArray(a.insights.data) && a.insights.data[0]) || {};
-    const fmt = metaCreativeFormat(cr);
-    const bestImg = urlByHash[cr.image_hash] || picByStory[cr.effective_object_story_id] || cr.image_url || cr.thumbnail_url || '';
-    const out = {
-      id: a.id, name: a.name || '', campaignId: a.campaign_id || '', format: fmt,
-      thumb: bestImg || cr.thumbnail_url || '', image: bestImg,
-      spend: Number(ins.spend) || 0, impressions: Number(ins.impressions) || 0,
-      clicks: Number(ins.clicks) || 0, ctr: Number(ins.ctr) || 0,
-    };
-    if (fmt === 'video') {
-      const v = videoById[adVideoId(cr)];
-      out.videoSrc = (v && v.src) || ''; out.poster = (v && v.poster) || bestImg || cr.thumbnail_url || '';
-      if (!out.image) out.image = out.poster;
-    } else if (fmt === 'carousel') {
-      out.cards = childAtts(cr).map((ch) => ({ image: urlByHash[ch.image_hash] || ch.picture || '', title: ch.name || '' })).filter((c) => c.image);
-      if ((!out.image || out.image === cr.thumbnail_url) && out.cards[0]) out.image = out.cards[0].image;
-    }
-    return out;
-  });
-
   // dagelijkse trend (laatste 30 dagen) voor de grafiek op de overzichtspagina
   const tins = await metaGet(env, `${act}/insights`, {
     level: 'account', date_preset: 'last_30d', time_increment: '1',
@@ -2917,9 +2876,78 @@ export async function metaAds(bedrijfId, body, env) {
     impressions: Number(d.impressions) || 0, clicks: Number(d.clicks) || 0,
   }));
 
-  // Alleen een 'error' als ALLE primaire calls faalden (bv. token/permissie) → UI toont nette melding i.p.v. nullen.
-  const error = (!kins.ok && !campRes.ok && !adRes.ok) ? (kins.err || 'fetch_failed') : null;
-  return { status: 200, body: { ok: true, linked: true, account: acct, currency, period: preset, kpis, campaigns, ads, trend, error } };
+  // Alleen een 'error' als beide primaire calls faalden (bv. token/permissie) → UI toont nette melding i.p.v. nullen.
+  const error = (!kins.ok && !campRes.ok) ? (kins.err || 'fetch_failed') : null;
+  return { status: 200, body: { ok: true, linked: true, account: acct, currency, period: preset, kpis, campaigns, trend, error } };
+}
+
+/* ---- metaCampaignAds (READ) — rijke media per campagne, ON-DEMAND ----
+ * Wordt aangeroepen wanneer een klant een campagne opent. Haalt de actieve ads van
+ * DIE campagne (account-scoped + campagne-filter = tenant-safe) en hun media in goede
+ * kwaliteit: video-source (afspeelbaar) + poster, full-res foto, carrousel-kaarten —
+ * opgehaald met het PAGE-token (de System User beheert de pagina), want het ads_read-
+ * token alleen mag de post-media (dark posts) niet lezen.
+ */
+export async function metaCampaignAds(bedrijfId, body, env) {
+  const br = await cu.get(env, `/task/${bedrijfId}`);
+  const acct = br.ok && br.data ? str(getCF(br.data, FIELD.metaAdsId)).trim() : '';
+  if (!/^\d{6,20}$/.test(acct)) return { status: 200, body: { ok: true, linked: false, ads: [] } };
+  if (!str(env && env.META_SYSTEM_TOKEN)) return { status: 200, body: { ok: true, linked: false, ads: [] } };
+  const campId = String((body && body.campaign_id) || '').trim();
+  if (!/^\d{6,25}$/.test(campId)) return { status: 200, body: { ok: true, ads: [] } };
+  const act = `act_${acct}`;
+
+  const adRes = await metaGet(env, `${act}/ads`, {
+    fields: 'name,effective_status,campaign_id,creative{thumbnail_url,image_url,object_type,video_id,effective_object_story_id,object_story_spec,asset_feed_spec},insights{spend,impressions,clicks,ctr}',
+    filtering: JSON.stringify([{ field: 'campaign.id', operator: 'EQUAL', value: campId }]),
+    effective_status: '["ACTIVE"]', limit: '50',
+  });
+  const adRows = (adRes.ok && Array.isArray(adRes.data.data)) ? adRes.data.data : [];
+
+  // page-tokens voor de betrokken pagina's (gericht; System User beheert de pagina's)
+  const pageOf = (cr) => { const sid = cr.effective_object_story_id || ''; return sid.indexOf('_') > 0 ? sid.split('_')[0] : ''; };
+  const pageIds = [...new Set(adRows.map((a) => pageOf(a.creative || {})).filter(Boolean))];
+  const pageTok = {};
+  await Promise.all(pageIds.map(async (pid) => { const d = await metaGet(env, pid, { fields: 'access_token' }); if (d.ok && d.data && d.data.access_token) pageTok[pid] = d.data.access_token; }));
+
+  const ads = await Promise.all(adRows.map(async (a) => {
+    const cr = a.creative || {};
+    const ins = (a.insights && Array.isArray(a.insights.data) && a.insights.data[0]) || {};
+    const fmt = metaCreativeFormat(cr);
+    const sid = cr.effective_object_story_id || ''; const ptok = pageTok[pageOf(cr)] || '';
+    const out = {
+      id: a.id, name: a.name || '', campaignId: a.campaign_id || '', format: fmt,
+      thumb: cr.thumbnail_url || cr.image_url || '', image: cr.image_url || '',
+      spend: Number(ins.spend) || 0, impressions: Number(ins.impressions) || 0,
+      clicks: Number(ins.clicks) || 0, ctr: Number(ins.ctr) || 0,
+    };
+    const vid = metaAdVideoId(cr);
+    if (fmt === 'video' && vid && ptok) {
+      const v = await metaGet(env, String(vid), { fields: 'source,picture' }, ptok);
+      if (v.ok && v.data) { out.videoSrc = v.data.source || ''; out.poster = v.data.picture || ''; }
+    }
+    if (fmt === 'carousel') {
+      let cards = [];
+      if (ptok && sid) {
+        const pr = await metaGet(env, sid, { fields: 'attachments{subattachments{media}}' }, ptok);
+        const at = pr.ok && pr.data && pr.data.attachments && Array.isArray(pr.data.attachments.data) && pr.data.attachments.data[0];
+        const subs = at && at.subattachments && at.subattachments.data;
+        if (Array.isArray(subs)) cards = subs.map((s) => ({ image: ((s.media || {}).image || {}).src || '', title: '' })).filter((c) => c.image);
+      }
+      if (!cards.length) cards = metaChildAtts(cr).map((ch) => ({ image: ch.picture || '', title: ch.name || '' })).filter((c) => c.image);
+      out.cards = cards;
+      if (cards[0]) out.image = cards[0].image;
+    }
+    if (ptok && sid && (fmt === 'image' || (fmt === 'video' && !out.poster))) {
+      const pr = await metaGet(env, sid, { fields: 'full_picture' }, ptok);
+      if (pr.ok && pr.data && pr.data.full_picture) { if (fmt === 'image') out.image = pr.data.full_picture; if (fmt === 'video' && !out.poster) out.poster = pr.data.full_picture; }
+    }
+    if (!out.image) out.image = out.poster || cr.thumbnail_url || '';
+    if (!out.thumb) out.thumb = out.image;
+    return out;
+  }));
+
+  return { status: 200, body: { ok: true, linked: true, campaign_id: campId, ads } };
 }
 
 // SEC-4: bevestig dat een post-id ECHT tot de blogId van DEZE klant hoort (anti-IDOR).
@@ -3488,6 +3516,8 @@ export const READ_HANDLERS = {
   // Meta Ads (DIRECT via de Graph API, geen Make): real-time KPI's + actieve campagnes +
   // advertenties met creatives. Account server-side uit FIELD.metaAdsId (tenant-safe).
   metaAds,
+  // Meta-campagne-creatives (rijke media: video/foto/carrousel) ON-DEMAND, via page-tokens.
+  metaCampaignAds,
   // Shoot-inplannen: validatie + beschikbaarheid (port van de externe widget, geen Make).
   shootContext,
   // NB: de AI-chatbot loopt (op vraag) weer via Make, niet via de worker. De aiChat-handler
