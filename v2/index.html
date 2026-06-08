@@ -16,9 +16,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=28">
-<link rel="stylesheet" href="glass.css?v=28">
-<link rel="stylesheet" href="tweaks.css?v=28">
+<link rel="stylesheet" href="styles.css?v=29">
+<link rel="stylesheet" href="glass.css?v=29">
+<link rel="stylesheet" href="tweaks.css?v=29">
 <template id="__bundler_thumbnail">
 <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="disc" cx="34%" cy="30%" r="80%"><stop offset="0" stop-color="#52a0ee"/><stop offset="58%" stop-color="#3083DC"/><stop offset="100%" stop-color="#1F5FA8"/></radialGradient><radialGradient id="glow" cx="50%" cy="55%" r="50%"><stop offset="45%" stop-color="#9441DB" stop-opacity=".42"/><stop offset="100%" stop-color="#9441DB" stop-opacity="0"/></radialGradient></defs><rect width="100" height="100" fill="#faf9f5"/><circle cx="50" cy="51" r="17" fill="url(#glow)"/><circle cx="50" cy="50" r="12" fill="url(#disc)"/><svg x="41.5" y="45.5" width="17" height="10.5" viewBox="782 34 210 130"><path fill="#fff" d="M788.07,158.63v-24.58l42.88-39.66c2.71-2.6,4.71-4.86,6.02-6.78,1.3-1.92,2.17-3.64,2.63-5.17,.45-1.52,.68-2.97,.68-4.32,0-2.94-.96-5.22-2.88-6.86-1.92-1.64-4.8-2.46-8.64-2.46-3.5,0-6.84,.93-10,2.8-3.16,1.86-5.65,4.61-7.46,8.22l-30.17-15.08c4.29-8.13,10.73-14.74,19.32-19.83,8.59-5.09,19.26-7.63,32.03-7.63,9.38,0,17.68,1.53,24.91,4.58,7.23,3.05,12.88,7.35,16.95,12.88,4.07,5.54,6.1,12.09,6.1,19.66,0,3.84-.48,7.68-1.44,11.52-.96,3.84-2.91,7.88-5.85,12.12-2.94,4.24-7.29,8.96-13.05,14.15l-32.2,29.32-6.27-13.9h61.52v31.01h-95.08Z"/><path fill="#fff" d="M908.23,158.63l44.74-104.4,10.68,16.78h-56.27l15.59-18.13v35.42h-33.05V40h101.52v24.58l-39.49,94.06h-43.72Z"/></svg></svg>
 </template>
@@ -121,13 +121,13 @@
 
 <!-- Vaste versie-parameter (?v=) i.p.v. een dynamische: githack geeft 425 op telkens-nieuwe
      query-URLs, dus we gebruiken een stabiele versie die na elke deploy wordt opgewarmd. -->
-<script src="api.js?v=28" data-s27-api></script>
-<script src="data.js?v=28"></script>
-<script src="assets-data.js?v=28"></script>
-<script src="catalog-data.js?v=28"></script>
-<script src="panels.js?v=28"></script>
-<script src="portal.js?v=28"></script>
-<script src="tweaks.js?v=28"></script>
+<script src="api.js?v=29" data-s27-api></script>
+<script src="data.js?v=29"></script>
+<script src="assets-data.js?v=29"></script>
+<script src="catalog-data.js?v=29"></script>
+<script src="panels.js?v=29"></script>
+<script src="portal.js?v=29"></script>
+<script src="tweaks.js?v=29"></script>
 <script>
 /* PWA: service worker registreren (offline app-shell + installeerbaar). Faalt stil op niet-ondersteunde browsers. */
 if('serviceWorker' in navigator){ window.addEventListener('load', function(){ navigator.serviceWorker.register('/sw.js').catch(function(){}); }); }

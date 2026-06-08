@@ -379,3 +379,24 @@
 .soc-pcard:hover .soc-parrow{color:var(--ink-2,#3A2A3A);}
 @media(max-width:760px){.soc-plist{grid-template-columns:1fr;}}
 @media(max-width:480px){.soc-pstats{gap:12px;}.soc-pthumb{width:54px;height:54px;}}
+
+/* ---- "Wat werkt het best" (fase 3) ---- */
+.soc-insights{margin-top:18px;}
+.soc-isub{font-family:var(--font-body);font-size:12px;color:var(--ink-4,#9E919E);font-weight:600;}
+.soc-igrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px;}
+.soc-icard{background:var(--paper,#fff);border:1px solid var(--line,#E7DFD3);border-radius:16px;padding:15px 16px;display:flex;flex-direction:column;gap:10px;}
+.soc-ihead{display:flex;align-items:center;gap:8px;font-family:var(--font-display);font-weight:800;font-size:13.5px;color:var(--ink,#230F23);}
+.soc-ihead svg{color:var(--ink-3,#6B5B6B);}
+.soc-ihead-tags span{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:6px;background:var(--ink,#230F23);color:#fff;font-weight:900;font-size:12px;}
+.soc-irow{display:flex;align-items:center;gap:10px;}
+.soc-ilab{min-width:0;flex:0 0 42%;display:flex;flex-direction:column;line-height:1.15;}
+.soc-ilab b{font-family:var(--font-display);font-weight:700;font-size:13px;color:var(--ink,#230F23);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.soc-ilab span{font-family:var(--font-body);font-size:11px;color:var(--ink-4,#9E919E);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.soc-ibar{flex:1;height:7px;border-radius:999px;background:var(--paper-3,#F1EBE2);overflow:hidden;}
+.soc-ibar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--s27-blue,#3083DC),var(--s27-purple,#9441DB));}
+.soc-ival{font-family:var(--font-display);font-weight:800;font-size:12.5px;color:var(--ink-2,#3A2A3A);flex:none;min-width:34px;text-align:right;}
+.soc-iempty{font-family:var(--font-body);font-size:12.5px;color:var(--ink-4,#9E919E);padding:4px 0;}
+.soc-tags{display:flex;flex-wrap:wrap;gap:7px;}
+.soc-tag{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-body);font-weight:700;font-size:12px;color:var(--ink-2,#3A2A3A);background:var(--paper-2,#FAF7F2);border:1px solid var(--line,#E7DFD3);border-radius:999px;padding:5px 10px;}
+.soc-tag b{font-family:var(--font-display);font-weight:800;font-size:11.5px;color:var(--s27-blue-ink,#1F5FA8);}
+@media(max-width:900px){.soc-igrid{grid-template-columns:1fr;}}

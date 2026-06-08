@@ -2813,12 +2813,30 @@ function mcMapPostStat(net, p) {
   const engagementRate = reach > 0 ? Math.round((inter / reach) * 1000) / 10 : 0; // interacties / bereik, %
   const id = str((p && (p.postId || p.videoId)) || url);
   if (!id && !reach && !inter && !views) return null;
+  const hashtags = (text.match(/#[A-Za-z0-9_]+/g) || []).map((t) => t.toLowerCase());   // uit de VOLLEDIGE tekst (vóór inkorten)
   return {
     id, network: net, label: MC_NET_LABEL[net] || net, date: mcPostDate(p),
-    text: text.length > 280 ? text.slice(0, 280) : text, image, url, type,
+    text: text.length > 280 ? text.slice(0, 280) : text, image, url, type, hashtags,
     reach, impressions, interactions: inter, likes, comments, shares, views,
     engagement: eng, engagementRate,
   };
+}
+// post-type -> klantvriendelijk format-label (per netwerk).
+function mcFormatLabel(net, type) {
+  const t = str(type).toUpperCase();
+  if (net === 'youtube' || net === 'tiktok') return 'Reel / video';
+  if (/REEL/.test(t)) return 'Reel / video';
+  if (/VIDEO/.test(t)) return 'Video';
+  if (/CAROUSEL|ALBUM/.test(t)) return 'Carrousel';
+  if (/IMAGE|PHOTO|FEED_IMAGE/.test(t)) return 'Foto';
+  if (/STATUS|TEXT|SHARE|LINK/.test(t)) return 'Tekst / link';
+  return 'Overig';
+}
+// wall-clock weekdag (0=zo) + uur uit een Metricool-datumstring (lokaal, offset-agnostisch).
+function mcDayHour(iso) {
+  const m = String(iso || '').match(/(\d{4})-(\d{2})-(\d{2})T(\d{2})/);
+  if (!m) return null;
+  return { dow: new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay(), hour: +m[4] };
 }
 async function mcFetchPosts(env, blogId, userId, net, from, to) {
   const qs = new URLSearchParams({ from, to, timezone: METRICOOL_TZ, blogId: String(blogId) });
@@ -2865,7 +2883,29 @@ async function mcPostStatsCore(env, blogId, userId, networks, days) {
     avgEngagementRate: totalReach > 0 ? Math.round((totalInter / totalReach) * 1000) / 10 : 0,
     bestPostId: best ? best.id : '',
   };
-  return { from, to, days, summary, networks: networksOut, posts: capped };
+  // ---- fase 3: inzichten afgeleid uit de EIGEN posthistoriek (alle posts, niet de cap) ----
+  const er = (re, it) => (re > 0 ? Math.round((it / re) * 1000) / 10 : 0);
+  // (a) hashtag-prestaties: per hashtag gem. bereik/engagement (min. 2 posts).
+  const hmap = {};
+  posts.forEach((p) => (p.hashtags || []).forEach((h) => { const k = hmap[h] || (hmap[h] = { tag: h, count: 0, reach: 0, inter: 0 }); k.count++; k.reach += p.reach; k.inter += p.interactions; }));
+  let hashtags = Object.keys(hmap).map((h) => hmap[h]).filter((h) => h.count >= 2)
+    .map((h) => ({ tag: h.tag, count: h.count, avgReach: Math.round(h.reach / h.count), avgInteractions: Math.round(h.inter / h.count), avgEngagementRate: er(h.reach, h.inter) }))
+    .sort((a, b) => (b.avgEngagementRate - a.avgEngagementRate) || (b.avgReach - a.avgReach)).slice(0, 12);
+  // (b) format-prestaties: per post-type gem. bereik/engagement.
+  const fmap = {};
+  posts.forEach((p) => { const lab = mcFormatLabel(p.network, p.type); const k = fmap[lab] || (fmap[lab] = { format: lab, count: 0, reach: 0, inter: 0 }); k.count++; k.reach += p.reach; k.inter += p.interactions; });
+  const formats = Object.keys(fmap).map((f) => fmap[f])
+    .map((f) => ({ format: f.format, count: f.count, avgReach: Math.round(f.reach / f.count), avgInteractions: Math.round(f.inter / f.count), avgEngagementRate: er(f.reach, f.inter) }))
+    .sort((a, b) => (b.avgEngagementRate - a.avgEngagementRate) || (b.count - a.count));
+  // (c) beste momenten: weekdag x dagdeel, gem. engagement (min. 2 posts in de bucket).
+  const DAYP = (h) => (h < 6 ? 'Nacht' : h < 12 ? 'Ochtend' : h < 18 ? 'Middag' : 'Avond');
+  const tmap = {};
+  posts.forEach((p) => { const dh = mcDayHour(p.date); if (!dh) return; const key = dh.dow + '|' + DAYP(dh.hour); const k = tmap[key] || (tmap[key] = { dow: dh.dow, part: DAYP(dh.hour), count: 0, reach: 0, inter: 0 }); k.count++; k.reach += p.reach; k.inter += p.interactions; });
+  const DOW = ['Zondag', 'Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag'];
+  let bestTimes = Object.keys(tmap).map((t) => tmap[t]).filter((t) => t.count >= 2)
+    .map((t) => ({ day: DOW[t.dow], dayIdx: t.dow, part: t.part, count: t.count, avgReach: Math.round(t.reach / t.count), avgInteractions: Math.round(t.inter / t.count), avgEngagementRate: er(t.reach, t.inter) }))
+    .sort((a, b) => (b.avgEngagementRate - a.avgEngagementRate) || (b.avgReach - a.avgReach)).slice(0, 6);
+  return { from, to, days, summary, networks: networksOut, posts: capped, hashtags, formats, bestTimes };
 }
 export async function metricoolPostStats(bedrijfId, body, env) {
   const br = await cu.get(env, `/task/${bedrijfId}`);
@@ -2888,7 +2928,7 @@ export async function metricoolPostStats(bedrijfId, body, env) {
   if (!networks.length) networks = ['instagram', 'facebook'];
   const days = Math.min(180, Math.max(7, Number(body && body.days) || 90));
   const core = await mcPostStatsCore(env, blogId, userId, networks, days);
-  return { status: 200, body: { ok: true, linked: true, brandId: blogId, period: { from: core.from, to: core.to, days }, summary: core.summary, networks: core.networks, posts: core.posts } };
+  return { status: 200, body: { ok: true, linked: true, brandId: blogId, period: { from: core.from, to: core.to, days }, summary: core.summary, networks: core.networks, posts: core.posts, hashtags: core.hashtags, formats: core.formats, bestTimes: core.bestTimes } };
 }
 
 /* ---- metaAds (READ) — real-time Meta-insights RECHTSTREEKS via de Graph API ----

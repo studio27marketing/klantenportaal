@@ -376,7 +376,7 @@ function socialFilter(){ return state._socialFilter||'alles'; }
 // Maand-/filter-navigatie verspringt NIET meer: enkel de deelcontainer wordt ververst (geen
 // full-panel renderPanel + scroll-to-top). Maand-nav raakt enkel de grid, filter de hele body.
 function socialShownPosts(){ var posts=socialPostsAll(); var f=socialFilter(); return f==='alles'?posts:posts.filter(function(p){return socialStatus(p)===f;}); }
-function socialBodyHTML(){ var posts=socialPostsAll(); return '<div id="socialStats">'+socialStatsHTML()+'</div><div id="socialPosts">'+socialPostStatsHTML()+'</div>'+socialMatrixbar(posts)+socialFilters()+'<div id="socialCalContainer">'+socialCalendar(socialShownPosts())+'</div>'; }
+function socialBodyHTML(){ var posts=socialPostsAll(); return '<div id="socialStats">'+socialStatsHTML()+'</div><div id="socialPosts">'+socialPostStatsHTML()+'</div><div id="socialInsights">'+socialInsightsHTML()+'</div>'+socialMatrixbar(posts)+socialFilters()+'<div id="socialCalContainer">'+socialCalendar(socialShownPosts())+'</div>'; }
 function socialMonthNav(d){ var mo=socialMonth(); var dt=new Date(mo.y,mo.m+d,1); state._socialMonth={y:dt.getFullYear(),m:dt.getMonth()}; var box=document.getElementById('socialCalContainer'); if(box){ box.innerHTML=socialCalendar(socialShownPosts()); } else { renderPanel('socials'); } }
 function socialSetFilter(f){ state._socialFilter=f; var box=document.getElementById('socialBody'); if(box){ box.innerHTML=socialBodyHTML(); } else { renderPanel('socials'); } }
 function socialOpenDetail(id){ state._socialDetail=String(id); renderPanel('socials'); if(window.scrollTo)window.scrollTo({top:0,behavior:'smooth'}); }
@@ -487,6 +487,42 @@ function socialPostStatsDemo(){
       mk('instagram','Instagram','5-12',3980,360,9.0,12400,'Reel: van concept tot oplevering in 30s',''),
       mk('linkedin','LinkedIn','5-08',3450,150,4.3,0,'Waarom merkconsistentie het verschil maakt',''),
       mk('facebook','Facebook','5-02',2980,120,4.0,0,'Klant in de kijker: een sterke samenwerking','') ] };
+}
+/* ---- "Wat werkt het best" (fase 3): beste momenten + formats + hashtags ---- */
+function socialInsightsHTML(){
+  var s=state.demoMode?socialInsightsDemo():((window.S27DATA&&S27DATA.metricoolPostStats)?S27DATA.metricoolPostStats():null);
+  if(!s){ return ''; }                                    // (skel toont het postprestatie-blok al)
+  if(!s.linked) return '';
+  var bt=s.bestTimes||[], fm=s.formats||[], ht=s.hashtags||[];
+  if(!bt.length && !fm.length && !ht.length) return '';
+  return socialInsightsBlock(bt,fm,ht);
+}
+function socialInsightsBar(val,max){ var w=max>0?Math.max(6,Math.round((val/max)*100)):0; return '<span class="soc-ibar"><i style="width:'+w+'%"></i></span>'; }
+function socialInsightsBlock(bt,fm,ht){
+  var maxBt=Math.max.apply(null,bt.map(function(t){return t.avgEngagementRate;}).concat([0]));
+  var maxFm=Math.max.apply(null,fm.map(function(f){return f.avgEngagementRate;}).concat([0]));
+  var moments=bt.length?bt.map(function(t){
+    return '<div class="soc-irow"><div class="soc-ilab"><b>'+esc(t.day)+'</b><span>'+esc(t.part)+' · '+socialFmt(t.count)+' posts</span></div>'+socialInsightsBar(t.avgEngagementRate,maxBt)+'<span class="soc-ival">'+(Number(t.avgEngagementRate)||0)+'%</span></div>';
+  }).join(''):'<div class="soc-iempty">Nog te weinig posts om een patroon te zien.</div>';
+  var formats=fm.length?fm.map(function(f){
+    return '<div class="soc-irow"><div class="soc-ilab"><b>'+esc(f.format)+'</b><span>'+socialFmt(f.count)+' posts · '+socialFmt(f.avgReach)+' bereik</span></div>'+socialInsightsBar(f.avgEngagementRate,maxFm)+'<span class="soc-ival">'+(Number(f.avgEngagementRate)||0)+'%</span></div>';
+  }).join(''):'<div class="soc-iempty">Nog geen formatdata.</div>';
+  var tags=ht.length?('<div class="soc-tags">'+ht.map(function(h){
+    return '<span class="soc-tag" title="'+socialFmt(h.avgReach)+' gem. bereik · '+socialFmt(h.count)+' posts">'+esc(h.tag)+'<b>'+(Number(h.avgEngagementRate)||0)+'%</b></span>';
+  }).join('')+'</div>'):'<div class="soc-iempty">Voeg hashtags toe aan je posts om hier inzicht te krijgen.</div>';
+  return '<div class="soc-stats soc-insights">'
+    +'<div class="soc-phead"><h3>Wat werkt het best</h3><span class="soc-isub">afgeleid uit je eigen posts · engagement = interacties / bereik</span></div>'
+    +'<div class="soc-igrid">'
+      +'<div class="soc-icard"><div class="soc-ihead">'+ic('cal',16)+' Beste momenten</div>'+moments+'</div>'
+      +'<div class="soc-icard"><div class="soc-ihead">'+ic('st_approved',16)+' Sterkste formats</div>'+formats+'</div>'
+      +'<div class="soc-icard"><div class="soc-ihead soc-ihead-tags"><span>#</span> Topscorende hashtags</div>'+tags+'</div>'
+    +'</div></div>';
+}
+function socialInsightsDemo(){
+  return { linked:true,
+    bestTimes:[{day:'Donderdag',part:'Ochtend',count:5,avgReach:4200,avgInteractions:240,avgEngagementRate:7.1},{day:'Dinsdag',part:'Avond',count:4,avgReach:3800,avgInteractions:190,avgEngagementRate:6.2},{day:'Zaterdag',part:'Ochtend',count:3,avgReach:3100,avgInteractions:150,avgEngagementRate:5.4},{day:'Maandag',part:'Middag',count:3,avgReach:2600,avgInteractions:110,avgEngagementRate:4.2}],
+    formats:[{format:'Reel / video',count:6,avgReach:5200,avgInteractions:360,avgEngagementRate:6.9},{format:'Carrousel',count:8,avgReach:3600,avgInteractions:210,avgEngagementRate:5.8},{format:'Foto',count:9,avgReach:2400,avgInteractions:96,avgEngagementRate:4.0}],
+    hashtags:[{tag:'#studio27',count:12,avgReach:3800,avgEngagementRate:6.4},{tag:'#contentcreatie',count:6,avgReach:3200,avgEngagementRate:5.9},{tag:'#marketing',count:8,avgReach:2900,avgEngagementRate:5.1},{tag:'#webdesign',count:4,avgReach:2600,avgEngagementRate:4.7},{tag:'#branding',count:5,avgReach:2400,avgEngagementRate:4.3}] };
 }
 function socialMatrixbar(posts){
   var c={feedback:0,goedgekeurd:0,gepubliceerd:0}; posts.forEach(function(p){ c[socialStatus(p)]++; });
