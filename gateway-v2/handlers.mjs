@@ -2844,7 +2844,7 @@ export async function metaAds(bedrijfId, body, env) {
   });
   const cins = await metaGet(env, `${act}/insights`, {
     level: 'campaign', date_preset: preset, limit: '200',
-    fields: 'campaign_id,spend,impressions,clicks,ctr,cpc,actions',
+    fields: 'campaign_id,spend,impressions,clicks,ctr,cpc,cpm,reach,frequency,actions',
   });
   const cmap = {};
   if (cins.ok && Array.isArray(cins.data.data)) for (const row of cins.data.data) cmap[row.campaign_id] = row;
@@ -2854,6 +2854,7 @@ export async function metaAds(bedrijfId, body, env) {
       id: c.id, name: c.name || '', objective: c.objective || '', status: c.effective_status || '',
       budget: Number(c.daily_budget || c.lifetime_budget || 0) / 100,
       spend: Number(m.spend) || 0, impressions: Number(m.impressions) || 0, clicks: Number(m.clicks) || 0,
+      reach: Number(m.reach) || 0, cpm: Number(m.cpm) || 0, frequency: Number(m.frequency) || 0,
       ctr: Number(m.ctr) || 0, cpc: Number(m.cpc) || 0, results: metaActionVal(m.actions, META_RESULT_ACTIONS),
     };
   });
@@ -2874,9 +2875,19 @@ export async function metaAds(bedrijfId, body, env) {
     };
   });
 
+  // dagelijkse trend (laatste 30 dagen) voor de grafiek op de overzichtspagina
+  const tins = await metaGet(env, `${act}/insights`, {
+    level: 'account', date_preset: 'last_30d', time_increment: '1',
+    fields: 'spend,impressions,clicks', limit: '40',
+  });
+  const trend = (tins.ok && Array.isArray(tins.data.data) ? tins.data.data : []).map((d) => ({
+    date: d.date_start || '', spend: Number(d.spend) || 0,
+    impressions: Number(d.impressions) || 0, clicks: Number(d.clicks) || 0,
+  }));
+
   // Alleen een 'error' als ALLE primaire calls faalden (bv. token/permissie) → UI toont nette melding i.p.v. nullen.
   const error = (!kins.ok && !campRes.ok && !adRes.ok) ? (kins.err || 'fetch_failed') : null;
-  return { status: 200, body: { ok: true, linked: true, account: acct, currency, period: preset, kpis, campaigns, ads, error } };
+  return { status: 200, body: { ok: true, linked: true, account: acct, currency, period: preset, kpis, campaigns, ads, trend, error } };
 }
 
 // SEC-4: bevestig dat een post-id ECHT tot de blogId van DEZE klant hoort (anti-IDOR).

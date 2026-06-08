@@ -9,7 +9,7 @@
 "use strict";
 
 let currentTab = 'start';
-const SECTION_LABEL = { start:'Start', berichten:'Berichten', projecten:'Actieve projecten', socials:'Socials', advertenties:'Advertenties', performance:'Resultaten', diensten:'Onze diensten', meetings:'Meetings', nieuwproject:'Offerte aanvragen', offertes:'Offertes', huisstijl:'Huisstijl & bestanden', facturatie:'Facturatie', instellingen:'Instellingen' };
+const SECTION_LABEL = { start:'Start', berichten:'Berichten', projecten:'Actieve projecten', socials:'Socials', advertenties:'Advertenties', diensten:'Onze diensten', meetings:'Meetings', nieuwproject:'Offerte aanvragen', offertes:'Offertes', huisstijl:'Huisstijl & bestanden', facturatie:'Facturatie', instellingen:'Instellingen' };
 
 function qsp(){ return new URLSearchParams(location.search); }
 function $id(x){ return document.getElementById(x); }
@@ -219,7 +219,7 @@ async function ensureTabData(name){
   if(name==='meetings' && !state.data.meetings) await S27DATA.loadMeetings();
   if(name==='huisstijl' && !state.data.huisstijl) await S27DATA.loadHuisstijl();
   if(name==='facturatie'||name==='instellingen'){ if(!state.data.bedrijf) await S27DATA.loadBedrijf(); if(!state.data.team) await S27DATA.loadTeam(); }
-  if(name==='performance'){ try{ state.perfUrl=(await S27DATA.performanceUrl())||null; }catch(e){ state.perfUrl=null; } }
+  // (Resultaten-tab verwijderd — advertentiedata staat real-time op de Advertenties-tab)
   if(name==='offertes'){ var _t=[]; if(!state.data.offertes) _t.push(S27DATA.loadOffertes()); if(!state.data.bedrijf) _t.push(S27DATA.loadBedrijf()); if(_t.length){ try{ await Promise.all(_t); }catch(e){} } }
   if(name==='socials'){ var _s=[]; if(!state.data.metricool) _s.push(S27DATA.loadMetricool()); if(!state.data.metricoolStats) _s.push(S27DATA.loadMetricoolStats()); if(_s.length){ try{ await Promise.all(_s); }catch(e){} } }
   if(name==='advertenties' && !state.data.metaAds){ try{ await S27DATA.loadMetaAds(); }catch(e){} }
@@ -236,7 +236,7 @@ function renderLoading(name){
 async function goTab(name){
   if(!PANELS[name]) return;
   stopChatPoll();   // tab-wissel/modal-sluiten -> chat-poller stoppen (berichten herstart 'm hieronder)
-  currentTab=name; state.viewMode='tab'; state.activeProject=null;
+  currentTab=name; state.viewMode='tab'; state.activeProject=null; state._metaCampaign=null;
   setActiveNav(name);
   if(!state.demoMode && needsLoad(name)) renderLoading(name);
   await ensureTabData(name);
@@ -269,7 +269,7 @@ function needsLoad(name){
   if(name==='huisstijl' && state.data.huisstijl) return false;
   if((name==='facturatie'||name==='instellingen') && state.data.bedrijf && state.data.team) return false;
   if(name==='offertes' && state.data.offertes && state.data.bedrijf) return false;
-  if(['nieuwproject','performance'].indexOf(name)>=0) return false;
+  if(name==='nieuwproject') return false;
   return true;
 }
 function setActiveNav(name){
@@ -1274,7 +1274,7 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($id('tourScrim
 /* ---------- Onboarding tour (1x + opt-out) ---------- */
 const TOUR=[
   {t:'Jouw startscherm',b:'Hier vind je altijd wat er voor jóu klaarstaat, reviews, feedback en meetings. Begin hier elke dag.',target:'.sb-item[data-tab="start"]'},
-  {t:'Al je werk, gebundeld',b:'In de zijbalk staat alles altijd zichtbaar: je projecten, socials, advertenties, resultaten én onze diensten.',target:'.sb-item[data-tab="projecten"]'},
+  {t:'Al je werk, gebundeld',b:'In de zijbalk staat alles altijd zichtbaar: je projecten, socials, advertenties én onze diensten.',target:'.sb-item[data-tab="projecten"]'},
   {t:'Altijd in contact',b:'Vragen? Onze slimme assistent helpt je meteen op weg en schakelt zo nodig door naar een echt mens.',target:'#botFab'},
   {t:'Plan vlot een moment',b:'Een meeting nodig? Prik zelf een vrij tijdslot. Wij staan klaar, vrijblijvend.',target:'.sb-item[data-tab="meetings"]'},
 ];

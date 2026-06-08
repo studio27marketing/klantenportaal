@@ -617,25 +617,54 @@ function metaCreativeCard(a,i,cur){
 function metaCampaignCard(c,cur){
   var obj=adsObjective(c.objective);
   var ms=[['Besteed',metaEur(c.spend,cur)],['Vertoningen',adsNum(c.impressions)],['Klikken',adsNum(c.clicks)],['CTR',(Number(c.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%'],['Resultaten',adsNum(c.results)]];
-  return '<div class="card" style="padding:14px 16px;margin-bottom:10px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:11px"><span class="pill pill-prog"><span class="pdot"></span>Live</span><b style="font-family:var(--font-display);font-size:15px;flex:1;min-width:130px">'+esc(c.name||'Campagne')+'</b>'+(obj?'<span class="fs" style="color:var(--ink-4)">'+esc(obj)+'</span>':'')+'</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));gap:10px">'+ms.map(function(m){return '<div><div style="color:var(--ink-4);font-size:11px;font-weight:600">'+m[0]+'</div><div style="font-family:var(--font-display);font-weight:800;font-size:16px;color:var(--ink)">'+m[1]+'</div></div>';}).join('')+'</div></div>';
+  var chev='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="color:var(--ink-4);flex:none"><path d="M9 6l6 6-6 6"/></svg>';
+  return '<div class="card" onclick="openMetaCampaign(\''+esc(c.id)+'\')" style="padding:14px 16px;margin-bottom:10px;cursor:pointer"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:11px"><span class="pill pill-prog"><span class="pdot"></span>Live</span><b style="font-family:var(--font-display);font-size:15px;flex:1;min-width:130px">'+esc(c.name||'Campagne')+'</b>'+(obj?'<span class="fs" style="color:var(--ink-4)">'+esc(obj)+'</span>':'')+chev+'</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));gap:10px">'+ms.map(function(m){return '<div><div style="color:var(--ink-4);font-size:11px;font-weight:600">'+m[0]+'</div><div style="font-family:var(--font-display);font-weight:800;font-size:16px;color:var(--ink)">'+m[1]+'</div></div>';}).join('')+'</div></div>';
+}
+function metaTrendMetricLabel(mt){ return ({spend:'Besteding',clicks:'Klikken',impressions:'Vertoningen'})[mt]||'Besteding'; }
+function setMetaTrendMetric(mt){ state._metaTrendMetric=mt; renderPanel('advertenties'); }
+function metaTrendBlock(m,cur){
+  var tr=(m.trend||[]); if(tr.length<2) return '';
+  var mt=state._metaTrendMetric||'spend';
+  var series=tr.map(function(d){ return {value:Number(d[mt])||0}; });
+  var btns=['spend','clicks','impressions'].map(function(x){ return '<button class="seg-btn'+(mt===x?' active':'')+'" onclick="setMetaTrendMetric(\''+x+'\')">'+metaTrendMetricLabel(x)+'</button>'; }).join('');
+  var total=tr.reduce(function(a,d){return a+(Number(d[mt])||0);},0);
+  var totLab=mt==='spend'?metaEur(total,cur):adsNum(total);
+  return '<div class="card" style="padding:16px 18px 12px;margin-bottom:14px"><div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px"><h3 style="font-size:15px;font-family:var(--font-display);font-weight:800;margin:0">Trend laatste 30 dagen</h3><span style="font-size:13px;color:var(--ink-4);font-weight:700">'+metaTrendMetricLabel(mt)+': '+totLab+'</span><span style="margin-left:auto;display:inline-flex;gap:5px;flex-wrap:wrap">'+btns+'</span></div>'+socialTrendSVG(series, metaTrendMetricLabel(mt))+'</div>';
 }
 function metaAdsBody(){
   var m=(window.S27DATA&&S27DATA.metaAds&&S27DATA.metaAds())||null;
   if(m===null){ return '<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je advertenties worden real-time opgehaald…</p></div>'; }
   if(!m.linked){ return '<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen Meta-advertentieaccount gekoppeld</div><div style="color:var(--ink-3);max-width:470px;margin:0 auto;line-height:1.55">Zodra je Meta-advertentieaccount aan je portaal gekoppeld is, zie je hier real-time je campagnes, cijfers en de gebruikte visuals. Vraag gerust je contactpersoon bij Studio&nbsp;27.</div></div>'; }
   metaEnsureStyles();
-  var per=state._metaPeriod||m.period||'last_7d'; var cur=m.currency||'EUR'; var k=m.kpis||{};
+  var cur=m.currency||'EUR';
+  if(state._metaCampaign){ return metaCampaignDetail(m,cur); }
+  var per=state._metaPeriod||m.period||'last_7d'; var k=m.kpis||{};
   var btns=['last_7d','last_30d','today'].map(function(p){ return '<button class="seg-btn'+(per===p?' active':'')+'" onclick="setMetaPeriod(\''+p+'\')">'+metaPeriodLabel(p)+'</button>'; }).join('');
   var controls='<div class="section-head"><h2 style="display:flex;align-items:center;gap:9px"><span class="live-dot"></span>Live overzicht</h2><span style="display:inline-flex;gap:5px;align-items:center;flex-wrap:wrap">'+btns+'<button class="seg-btn" onclick="refreshMetaAds()" title="Verversen" aria-label="Verversen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button></span></div>';
   if(m.error){ return controls+'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">De real-time Meta-data is even niet beschikbaar. Probeer straks opnieuw.</div>'; }
   var strip='<div class="kpi-grid">'+metaKpiCard('orange','Besteding',metaEur(k.spend,cur))+metaKpiCard('blue','Vertoningen',adsNum(k.impressions))+metaKpiCard('green','Klikken',adsNum(k.clicks))+metaKpiCard('purple','CTR',(Number(k.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%')+'</div>';
-  var note='<p class="sdesc" style="margin:-2px 0 12px;max-width:62ch">Rechtstreeks en real-time uit je Meta-account — je actieve campagnes en de advertenties die nú live staan, met hun visual. Klik op een creative om te vergroten.</p>';
+  var trend=metaTrendBlock(m,cur);
+  var note='<p class="sdesc" style="margin:-2px 0 12px;max-width:64ch">Rechtstreeks en real-time uit je Meta-account. Klik op een campagne voor de details en de gebruikte visuals.</p>';
   var camps=(m.campaigns||[]).slice().sort(function(a,b){return (b.spend||0)-(a.spend||0);});
   var campSec='<div class="section-head" style="margin-top:18px"><h2>Live campagnes</h2><span class="count">'+camps.length+'</span></div>'+(camps.length?camps.map(function(c){return metaCampaignCard(c,cur);}).join(''):'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">Geen actieve campagnes in deze periode.</div>');
-  var ads=(m.ads||[]).slice().sort(function(a,b){return (b.spend||0)-(a.spend||0);});
+  return controls+strip+trend+note+campSec;
+}
+function openMetaCampaign(id){ state._metaCampaign=String(id); renderPanel('advertenties'); if(window.scrollTo)window.scrollTo({top:0,behavior:'auto'}); }
+function closeMetaCampaign(){ state._metaCampaign=null; renderPanel('advertenties'); }
+function metaCampaignDetail(m,cur){
+  var id=state._metaCampaign;
+  var c=(m.campaigns||[]).filter(function(x){return String(x.id)===String(id);})[0];
+  var back='<button class="btn btn-ghost btn-sm" onclick="closeMetaCampaign()" style="margin-bottom:14px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M15 18l-6-6 6-6"/></svg> Terug naar overzicht</button>';
+  if(!c){ return back+'<div class="card" style="padding:24px;text-align:center;color:var(--ink-3)">Deze campagne heeft geen activiteit in de gekozen periode.</div>'; }
+  var obj=adsObjective(c.objective);
+  var head='<div class="section-head" style="margin-bottom:8px"><h2 style="display:flex;align-items:center;gap:9px;min-width:0"><span class="pill pill-prog"><span class="pdot"></span>Live</span><span style="overflow:hidden;text-overflow:ellipsis">'+esc(c.name||'Campagne')+'</span></h2>'+(obj?'<span class="count">'+esc(obj)+'</span>':'')+'</div>';
+  var kpis='<div class="kpi-grid">'+metaKpiCard('orange','Besteding',metaEur(c.spend,cur))+metaKpiCard('blue','Vertoningen',adsNum(c.impressions))+metaKpiCard('green','Klikken',adsNum(c.clicks))+metaKpiCard('purple','CTR',(Number(c.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%')+'</div>';
+  var sub=[['Bereik',adsNum(c.reach)],['CPC',metaEur(c.cpc,cur)],['CPM',metaEur(c.cpm,cur)],['Frequentie',(Number(c.frequency)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})],['Resultaten',adsNum(c.results)]];
+  var subGrid='<div class="card" style="padding:14px 16px;margin-top:2px"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:12px">'+sub.map(function(s){return '<div><div style="color:var(--ink-4);font-size:11px;font-weight:600">'+s[0]+'</div><div style="font-family:var(--font-display);font-weight:800;font-size:16px;color:var(--ink)">'+s[1]+'</div></div>';}).join('')+'</div></div>';
+  var ads=(m.ads||[]).filter(function(a){return String(a.campaignId)===String(id);}).sort(function(a,b){return (b.spend||0)-(a.spend||0);});
   state._metaAdsView=ads;
-  var creSec='<div class="section-head" style="margin-top:18px"><h2>Advertenties &amp; creatives</h2><span class="count">'+ads.length+'</span></div>'+(ads.length?('<div class="meta-cre-grid">'+ads.map(function(a,i){return metaCreativeCard(a,i,cur);}).join('')+'</div>'):'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">Geen actieve advertenties in deze periode.</div>');
-  return controls+note+strip+campSec+creSec;
+  var creSec='<div class="section-head" style="margin-top:20px"><h2>Advertenties &amp; visuals</h2><span class="count">'+ads.length+'</span></div>'+(ads.length?('<div class="meta-cre-grid">'+ads.map(function(a,i){return metaCreativeCard(a,i,cur);}).join('')+'</div>'):'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">Geen actieve advertenties in deze campagne.</div>');
+  return back+head+kpis+subGrid+creSec;
 }
 function openMetaCreative(i){
   var a=(state._metaAdsView||[])[i]; if(!a||!a.thumb) return;
@@ -645,54 +674,7 @@ function openMetaCreative(i){
   ov.style.display='flex';
 }
 
-const ADS_ENGINE_URL='https://raw.githack.com/studio27marketing/klantenportaal/main/ads-report-engine.html';
-function panelPerformance(){
-  const head = hero('purple','Resultaten', `Jouw <span class="accent">resultaten${squig()}</span> in cijfers`);
-  const url = _live() ? (state.perfUrl||null) : null;
-  if(url){
-    const src = ADS_ENGINE_URL+'?embed=1&data='+encodeURIComponent(url);
-    return head
-      +`<p class="sdesc" style="margin:-4px 0 16px;max-width:64ch">Je live advertentieresultaten over de afgelopen ~30 dagen, automatisch bijgewerkt vanuit je campagnes (Meta, Google, TikTok &amp; Snapchat).</p>
-      <div class="card" style="padding:0;overflow:hidden;border-radius:var(--r-lg,20px)">
-        <iframe id="perfFrame" src="${esc(src)}" title="Jouw advertentierapport" loading="lazy" style="width:100%;border:0;display:block;min-height:760px;background:transparent"></iframe>
-      </div>
-      <p class="fs" style="color:var(--ink-4);margin-top:12px">Zie je nog geen cijfers? Dan lopen je campagnes nog niet of verzamelen ze nog data, zodra er resultaten zijn, verschijnen ze hier vanzelf.</p>`;
-  }
-  return head + perfMockHTML();
-}
-function perfMockHTML(){
-  const bars=[40,55,48,70,62,85,78,92];
-  return `${_live()?'<div class="fb-banner" style="margin-bottom:18px"><div class="fb-ic">'+ic('info',20)+'</div><div class="fb-tx"><b>Voorbeeldweergave</b><p>Zodra je advertentiecampagnes data verzamelen, zie je hier je échte cijfers in dit overzicht.</p></div></div>':''}<div class="kpi-grid">
-    <div class="kpi br-blue"><div class="kbar"></div><div class="klab">Totaal bereik</div><div class="knum">412K</div><span class="chip chip-up">${ic('up',12)} +14% t.o.v. vorige</span></div>
-    <div class="kpi br-green"><div class="kbar"></div><div class="klab">Websiteklikken</div><div class="knum">9.840</div><span class="chip chip-up">${ic('up',12)} +9%</span></div>
-    <div class="kpi br-orange"><div class="kbar"></div><div class="klab">Advertentiekost</div><div class="knum">€ 2.840</div><span class="chip chip-flat">${ic('flat',12)} stabiel</span></div>
-    <div class="kpi br-purple"><div class="kbar"></div><div class="klab">Conversies</div><div class="knum">186</div><span class="chip chip-up">${ic('up',12)} +22%</span></div>
-  </div>
-  <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:18px;margin-top:24px" class="perf-charts">
-    <div class="chart-card">
-      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><h3 style="font-size:16px">Bereik per maand</h3><span style="font-size:12px;color:var(--ink-4);font-weight:700;margin-left:auto">laatste 8 maanden</span></div>
-      <svg viewBox="0 0 480 200" style="width:100%;height:auto;margin-top:10px">
-        <polyline fill="none" stroke="#3083DC" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="${bars.map((b,i)=>`${20+i*64},${180-b*1.7}`).join(' ')}"/>
-        ${bars.map((b,i)=>`<circle cx="${20+i*64}" cy="${180-b*1.7}" r="4.5" fill="#fff" stroke="#3083DC" stroke-width="3"/>`).join('')}
-        <polygon fill="rgba(48,131,220,.10)" points="20,180 ${bars.map((b,i)=>`${20+i*64},${180-b*1.7}`).join(' ')} ${20+7*64},180"/>
-      </svg>
-    </div>
-    <div class="chart-card">
-      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><h3 style="font-size:16px">Leads per platform</h3></div>
-      <svg viewBox="0 0 320 200" style="width:100%;height:auto;margin-top:10px">
-        ${[['Meta','#3083DC',58],['TikTok','#9441DB',88],['Snapchat','#F8C028',40],['Google','#F66131',72]].map((p,i)=>`
-          <rect x="${30+i*72}" y="${180-p[2]*1.6}" width="44" height="${p[2]*1.6}" rx="8" fill="${p[1]}"/>
-          <text x="${52+i*72}" y="196" text-anchor="middle" font-family="Montserrat" font-size="11" font-weight="700" fill="#6B5B6B">${p[0]}</text>`).join('')}
-      </svg>
-      <div class="legend"><span><i style="background:#3083DC"></i>Meta</span><span><i style="background:#9441DB"></i>TikTok</span><span><i style="background:#F8C028"></i>Snapchat</span><span><i style="background:#F66131"></i>Google</span></div>
-    </div>
-  </div>
-  <div class="section-head"><h2>Periode-vergelijking</h2></div>
-  <div style="display:flex;flex-direction:column;gap:10px">
-    <div class="accordion"><button class="acc-head" onclick="toggleAcc(this)">Q1 2026 vs Q4 2025 <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button><div class="acc-body"><div style="padding:0 18px 18px;color:var(--ink-3);font-size:14px">Bereik +14%, conversies +22%, kost per lead daalde van € 24 naar € 19. Vooral je Google Search-campagne en de social reels deden het knap.</div></div></div>
-    <div class="accordion"><button class="acc-head" onclick="toggleAcc(this)">Per kanaal uitgesplitst <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button><div class="acc-body"><div style="padding:0 18px 18px;color:var(--ink-3);font-size:14px">Meta levert het meeste volume, TikTok de laagste kost per lead. Google blijft je sterkste kanaal voor échte aanvragen.</div></div></div>
-  </div>`;
-}
+// (Resultaten-tab verwijderd — alle advertentiedata staat nu real-time op de Advertenties-tab via metaAds.)
 
 function panelMeetings(){
   const mt=(window.S27DATA && S27DATA.meetings());
@@ -1520,9 +1502,9 @@ function buildOverlays(){
 /* ---- panel registry ---- */
 const PANELS={
   start:panelStart, berichten:panelBerichten, projecten:panelProjecten, diensten:panelDiensten,
-  socials:panelSocials, advertenties:panelAdvertenties, performance:panelPerformance,
+  socials:panelSocials, advertenties:panelAdvertenties,
   meetings:panelMeetings, nieuwproject:panelOffertes, offertes:panelOffertes,
   huisstijl:panelHuisstijl, facturatie:panelFacturatie, instellingen:panelInstellingen,
 };
-const TAB_BRANCH={start:'blue',berichten:'blue',projecten:'blue',diensten:'blue',socials:'yellow',advertenties:'orange',performance:'purple',meetings:'blue',nieuwproject:'blue',offertes:'purple',huisstijl:'pink',facturatie:'green',instellingen:'indigo'};
-const TAB_GROUP={projecten:'werk',diensten:'werk',socials:'werk',advertenties:'werk',performance:'werk',meetings:'plannen',nieuwproject:'plannen',offertes:'plannen',huisstijl:'bedrijf',facturatie:'bedrijf',instellingen:'bedrijf'};
+const TAB_BRANCH={start:'blue',berichten:'blue',projecten:'blue',diensten:'blue',socials:'yellow',advertenties:'orange',meetings:'blue',nieuwproject:'blue',offertes:'purple',huisstijl:'pink',facturatie:'green',instellingen:'indigo'};
+const TAB_GROUP={projecten:'werk',diensten:'werk',socials:'werk',advertenties:'werk',meetings:'plannen',nieuwproject:'plannen',offertes:'plannen',huisstijl:'bedrijf',facturatie:'bedrijf',instellingen:'bedrijf'};
