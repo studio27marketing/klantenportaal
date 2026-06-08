@@ -381,12 +381,16 @@ function socialFilter(){ return state._socialFilter||'alles'; }
 // full-panel renderPanel + scroll-to-top). Maand-nav raakt enkel de grid, filter de hele body.
 function socialShownPosts(){ var posts=socialPostsAll(); var f=socialFilter(); return f==='alles'?posts:posts.filter(function(p){return socialStatus(p)===f;}); }
 /* ===== Sub-navigatie binnen Socials: Analyse / Planner / Inzichten ===== */
-function socialTab(){ return state._socTab||(state.adminMode?'rapport':'planner'); }
+// Team-medewerker (adminMode) ziet de UITGEBREIDE rapportage, TENZIJ hij bewust de klantweergave
+// nabootst (_adminClientView). adminMode blijft de identiteit/acting-as; isRichView() bepaalt enkel
+// welke WEERGAVE getoond wordt. Een gewone klant is nooit adminMode → altijd de simpele weergave.
+function isRichView(){ return !!(state.adminMode && !state._adminClientView); }
+function socialTab(){ return state._socTab||(isRichView()?'rapport':'planner'); }
 function socialInzTab(){ return state._socInzTab||'momenten'; }
 function socialSubnav(){
   var active=state._socialDetail?'planner':socialTab();
-  var tabs=state.adminMode
-    ? [['rapport','Rapport','st_progress'],['planner','Planner','cal']]
+  var tabs=isRichView()
+    ? [['rapport','Samenvatting','st_progress'],['planner','Planner','cal'],['aanbevelingen','Aanbevelingen','st_approved']]
     : [['analyse','Analyse','st_progress'],['planner','Planner','cal'],['inzichten','Inzichten','st_approved']];
   return '<div class="soc-subnav" id="socialSubnav">'+tabs.map(function(t){
     return '<button class="soc-subtab'+(active===t[0]?' active':'')+'" data-stab="'+t[0]+'" onclick="socialSetTab(\''+t[0]+'\')">'+ic(t[2],17)+'<span>'+esc(t[1])+'</span></button>';
@@ -397,7 +401,7 @@ function socialSetTab(name){
   var box=document.getElementById('socialBody');
   if(box){ box.innerHTML=socialBodyHTML();
     var nav=document.getElementById('socialSubnav'); if(nav){ [].slice.call(nav.children).forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-stab')===name); }); }
-    if(state.adminMode && name==='rapport' && typeof socialRichMountCharts==='function') socialRichMountCharts();
+    if(isRichView() && name==='rapport' && typeof socialRichMountCharts==='function') socialRichMountCharts();
     if(window.scrollTo) window.scrollTo({top:0,behavior:'smooth'});
   } else { renderPanel('socials'); }
 }
@@ -412,7 +416,8 @@ function socialSetInzTab(name){
 function socialBodyHTML(){
   if(state._socialDetail) return socialDetailPage(state._socialDetail);
   var t=socialTab();
-  if(state.adminMode && t==='rapport') return socialRichReport();   // team-weergave: uitgebreide rapportage
+  if(isRichView() && t==='rapport') return socialRichReport();          // team-weergave: samenvatting
+  if(isRichView() && t==='aanbevelingen') return socialRichAanbevelingen();   // team-weergave: aanbevelingen
   if(t==='analyse') return socialAnalyseHTML();
   if(t==='inzichten') return socialInzichtenHTML();
   return socialPlannerHTML();
@@ -436,15 +441,16 @@ function socialPeriodBar(){
   var comps=[['none','Geen vergelijking'],['previous','Vorige periode'],['month','Vorige maand'],['year','Vorig jaar']];
   var chips=presets.map(function(o){ return '<button class="soc-perchip'+(pp.preset===o[0]?' active':'')+'" onclick="socialSetPeriod(\''+o[0]+'\')">'+esc(o[1])+'</button>'; }).join('');
   var custom = pp.preset==='custom' ? '<div class="soc-percustom"><input type="date" id="socFrom" value="'+esc((pp.from||'').slice(0,10))+'" onchange="socialCustomPeriod()"><span>tot</span><input type="date" id="socTo" value="'+esc((pp.to||'').slice(0,10))+'" onchange="socialCustomPeriod()"></div>' : '';
-  var comp='<div class="soc-percompare">'+ic('st_progress',15)+'<select onchange="socialSetCompare(this.value)" aria-label="Vergelijken met">'+comps.map(function(o){return '<option value="'+o[0]+'"'+(pp.compare===o[0]?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')+'</select></div>';
+  var comp='<div class="soc-percompare">'+'<select onchange="socialSetCompare(this.value)" aria-label="Vergelijken met">'+comps.map(function(o){return '<option value="'+o[0]+'"'+(pp.compare===o[0]?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')+'</select></div>';
   return '<div class="soc-period"><div class="soc-perchips">'+chips+'</div>'+custom+comp+'</div>';
 }
 function socialReloadStats(){
   var box=document.getElementById('socialStats'); if(box) box.innerHTML='<div class="soc-kpi-skel">Cijfers laden…</div>';
   var pp=socialPeriod();
-  if(state.adminMode){
-    if(state.demoMode || !(window.S27DATA&&S27DATA.loadMetricoolStatsRich)){ if(box) box.innerHTML=socialRichInner(); return; }
-    S27DATA.loadMetricoolStatsRich({from:pp.from,to:pp.to,compare:pp.compare}).then(function(){ var b=document.getElementById('socialStats'); if(b){ b.innerHTML=socialRichInner(); socialRichMountCharts(); } }).catch(function(){ var b=document.getElementById('socialStats'); if(b) b.innerHTML=socialRichInner(); });
+  if(isRichView()){
+    var _aanbev=(socialTab()==='aanbevelingen');
+    if(state.demoMode || !(window.S27DATA&&S27DATA.loadMetricoolStatsRich)){ if(box) box.innerHTML=(_aanbev?socialRichAanbevInner():socialRichInner()); return; }
+    S27DATA.loadMetricoolStatsRich({from:pp.from,to:pp.to,compare:pp.compare}).then(function(){ var b=document.getElementById('socialStats'); if(b){ if(_aanbev){ b.innerHTML=socialRichAanbevInner(); } else { b.innerHTML=socialRichInner(); socialRichMountCharts(); } } }).catch(function(){ var b=document.getElementById('socialStats'); if(b) b.innerHTML=(_aanbev?socialRichAanbevInner():socialRichInner()); });
     return;
   }
   if(state.demoMode || !(window.S27DATA&&S27DATA.loadMetricoolStats)){ if(box) box.innerHTML=socialStatsHTML(); return; }
@@ -478,7 +484,7 @@ function socialInzBody(){
 function socialInsightsData(){
   if(state.demoMode) return socialInsightsDemo();
   // ADMIN: de inzichten (momenten/formats/hashtags/posts) komen uit de gebundelde rijke rapportage.
-  if(state.adminMode){ var r=(window.S27DATA&&S27DATA.metricoolStatsRich)?S27DATA.metricoolStatsRich():null; if(r&&r.linked) return { linked:true, posts:r.posts||[], summary:r.postSummary||null, networks:r.postNetworks||[], formats:r.formats||[], hashtags:r.hashtags||[], bestTimes:r.bestTimes||[] }; if(r&&!r.linked) return { linked:false }; return null; }
+  if(isRichView()){ var r=(window.S27DATA&&S27DATA.metricoolStatsRich)?S27DATA.metricoolStatsRich():null; if(r&&r.linked) return { linked:true, posts:r.posts||[], summary:r.postSummary||null, networks:r.postNetworks||[], formats:r.formats||[], hashtags:r.hashtags||[], bestTimes:r.bestTimes||[] }; if(r&&!r.linked) return { linked:false }; return null; }
   return (window.S27DATA&&S27DATA.metricoolPostStats)?S27DATA.metricoolPostStats():null;
 }
 
@@ -488,14 +494,35 @@ function socialInsightsData(){
    met dag-series + vergelijking + post-insights (top-posts, beste momenten, formats,
    hashtags). Hergebruikt de bestaande inzicht-renderers via socialInsightsData().
    ============================================================================= */
-function socialRichReport(){ return '<div class="ar-rephead"><h2 style="display:flex;align-items:center;gap:9px;margin:0"><span class="live-dot"></span>Uitgebreide rapportage</h2>'+_pdfBtn('exportSocialPdf')+'</div>'+socialPeriodBar()+'<div id="socialStats">'+socialRichInner()+'</div>'; }
+function socialRichReport(){ return socialPeriodBar()+'<div id="socialStats">'+socialRichInner()+'</div>'; }
+function socialRichAanbevelingen(){ return socialPeriodBar()+'<div id="socialStats">'+socialRichAanbevInner()+'</div>'; }
+// Data-gedreven social-aanbevelingen uit de eigen posthistoriek/KPI's.
+function socialRichAanbevList(s){
+  var recs=[];
+  var bt=(s.bestTimes||[])[0]; if(bt) recs.push(['blue','Beste moment om te posten','Op '+String(bt.day||'').toLowerCase()+' ('+String(bt.part||'').toLowerCase()+') haal je gemiddeld '+(Number(bt.avgEngagementRate)||0)+'% engagement. Plan hier meer content.']);
+  var fm=(s.formats||[])[0]; if(fm) recs.push(['green','Sterkste format','“'+fm.format+'” presteert het best ('+(Number(fm.avgEngagementRate)||0)+'% engagement, '+socialFmt(fm.avgReach)+' gem. bereik). Zet hier meer op in.']);
+  var ht=(s.hashtags||[])[0]; if(ht) recs.push(['blue','Topscorende hashtag','Posts met '+ht.tag+' halen gemiddeld '+(Number(ht.avgEngagementRate)||0)+'% engagement. Gebruik deze vaker waar relevant.']);
+  var nets=(s.networks||[]).filter(function(n){return n.reach;}); if(nets.length){ var topN=nets.slice().sort(function(a,b){return (b.engagementRate||0)-(a.engagementRate||0);})[0]; if(topN&&topN.engagementRate) recs.push(['blue','Sterkste netwerk',(topN.label||topN.network)+' heeft de hoogste engagement ('+(Number(topN.engagementRate)||0)+'%). Overweeg hier extra in te investeren.']); }
+  var posts=(s.postSummary&&s.postSummary.posts)||0, days=(s.period&&s.period.days)||0;
+  if(posts && days){ var perWeek=Math.round((posts/days)*7*10)/10; if(perWeek<3) recs.push(['orange','Postfrequentie','Je plaatste '+posts+' posts ('+perWeek+'/week). Meer consistentie (richtlijn 3-5/week) vergroot doorgaans je bereik.']); }
+  if(s.prevTotals){ var cur=Number((s.totals||{}).engagementRate)||0, prev=Number(s.prevTotals.engagementRate)||0; if(prev){ var d=Math.round((cur-prev)/prev*1000)/10; if(d<=-10) recs.push(['orange','Dalende engagement','Je engagement daalde '+Math.abs(d)+'% t.o.v. '+(s.compareLabel||'de vorige periode')+'. Test nieuwe formats of posttijden.']); else if(d>=10) recs.push(['green','Stijgende engagement','Je engagement steeg '+d+'% t.o.v. '+(s.compareLabel||'de vorige periode')+'. Wat je doet werkt — houd deze lijn aan.']); } }
+  if(!recs.length) recs.push(['green','Nog te weinig data','Er zijn nog te weinig posts in deze periode om concrete aanbevelingen te doen.']);
+  return recs;
+}
+function socialRichAanbevInner(){
+  var s=(window.S27DATA&&S27DATA.metricoolStatsRich)?S27DATA.metricoolStatsRich():null;
+  if(s===undefined||s===null) return '<div class="soc-kpi-skel">De aanbevelingen worden opgehaald…</div>';
+  if(!s.linked) return '<div class="card" style="padding:26px;text-align:center;color:var(--ink-3)">Nog geen Metricool-koppeling voor deze klant.</div>';
+  var recs=socialRichAanbevList(s);
+  var recHTML='<div class="ar-recs" style="margin-top:6px">'+recs.map(function(r){ return '<div class="ar-rec ar-rec-'+r[0]+'"><div class="ar-rec-t">'+esc(r[1])+'</div><div class="ar-rec-b">'+esc(r[2])+'</div></div>'; }).join('')+'</div>';
+  return '<div class="section-head"><h2>Aanbevelingen</h2><span class="count">'+recs.length+'</span></div>'+recHTML
+    +'<div class="section-head" style="margin-top:22px"><h2>Wat werkt het best</h2></div>'+socialMomentenHTML()+socialFormatsHTML()+socialHashtagsHTML();
+}
 function socialRichInner(){
   var s=(window.S27DATA&&S27DATA.metricoolStatsRich)?S27DATA.metricoolStatsRich():null;
   if(s===undefined||s===null) return '<div class="soc-kpi-skel">De uitgebreide rapportage wordt opgehaald…</div>';
   if(!s.linked) return '<div class="card" style="padding:26px;text-align:center;color:var(--ink-3)">Nog geen Metricool-koppeling voor deze klant. Koppel de brand (veld “Metricool ID” op de bedrijf-taak).</div>';
-  var moments=socialMomentenHTML(), formats=socialFormatsHTML(), hashtags=socialHashtagsHTML();
-  return socialRichKpis(s)+socialRichCharts(s)+socialRichNetCards(s)+socialRichPostsBlock(s)
-    +'<div class="section-head" style="margin-top:20px"><h2>Wat werkt het best</h2></div>'+moments+formats+hashtags;
+  return socialRichKpis(s)+socialRichCharts(s)+socialRichNetCards(s)+socialRichPostsBlock(s);
 }
 function socialRichKpis(s){
   var t=s.totals||{}, p=s.prevTotals||null, cl=s.compareLabel||'';
@@ -563,7 +590,7 @@ function _srChartOpts(single){
   return {responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{font:{family:'Montserrat',size:11,weight:'600'},color:'#6B5B6B',boxWidth:12,padding:14,usePointStyle:true}}},scales:sc};
 }
 function socialRichMountCharts(){
-  if(!state.adminMode) return;
+  if(!isRichView()) return;
   var s=(window.S27DATA&&S27DATA.metricoolStatsRich)?S27DATA.metricoolStatsRich():null; if(!s||!s.linked) return;
   adsRichLoadChart().then(function(ok){ if(!ok||!window.Chart) return; socialRichBuildOverview(s); socialRichBuildFollowers(s); });
 }
@@ -875,10 +902,7 @@ function socialDetailPage(id){
     +'</div></div></div>';
 }
 function panelSocials(){
-  const head = hero('yellow','Mijn werk · Socials',
-    `Jouw <span class="accent">socials${squig()}</span>, strak gepland`,
-    'Je goedgekeurde en geplande content over alle kanalen, in één kalender.',
-    scribble('stralen-geel.png','top:-12px;right:8px;width:124px;transform:rotate(6deg)'));
+  const head = '';   // hero/titel "Jouw socials strak gepland" verwijderd (overbodig — altijd de klant zelf)
   var mc = state.demoMode ? {linked:true,posts:socialDemoPosts()} : ((window.S27DATA&&S27DATA.metricool())||null);
   if(!mc) return head+'<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je socials worden geladen…</p></div>';
   if(!mc.linked) return head+'<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen Metricool-koppeling</div><div style="color:var(--ink-3);max-width:460px;margin:0 auto;line-height:1.55">Zodra je social-kanalen gekoppeld zijn, zie je hier je analyse, planner en inzichten. Vraag gerust je contactpersoon bij Studio&nbsp;27.</div></div>';
@@ -916,10 +940,7 @@ function campaignCard(c){
   +'</div>';
 }
 function panelAdvertenties(){
-  const head = hero('orange','Mijn werk · Advertenties',
-    `Jouw <span class="accent">campagnes${squig()}</span> die draaien`,
-    'Een real-time overzicht van je Meta-advertenties: campagnes, cijfers en de visuals die nu draaien.',
-    scribble('krabbel-oranje.png','top:-4px;right:8px;width:120px;transform:rotate(-5deg)'));
+  const head = '';   // hero/titel "Jouw campagnes die draaien" verwijderd (overbodig — altijd de klant zelf)
   if(state.demoMode){
     return head+`<div class="kpi-grid">
       ${[['orange','Advertentie-uitgaven','€ 2.840'],['blue','Vertoningen','318K'],['green','Klikken','7.412'],['purple','Campagnes','3']].map(k=>`
@@ -980,7 +1001,7 @@ function adsPeriodWindow(preset){
   else return null;
   return { from:_adsYmd(from), to:_adsYmd(now) };
 }
-function adsPeriod(){ if(!state._adsPeriod){ var def=state.adminMode?'30d':'7d'; var w=adsPeriodWindow(def); state._adsPeriod={preset:def,compare:'none',from:w.from,to:w.to}; } return state._adsPeriod; }
+function adsPeriod(){ if(!state._adsPeriod){ var def=isRichView()?'30d':'7d'; var w=adsPeriodWindow(def); state._adsPeriod={preset:def,compare:'none',from:w.from,to:w.to}; } return state._adsPeriod; }
 function _adsRefreshIc(){ return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>'; }
 function adsPeriodBar(){
   var pp=adsPeriod();
@@ -988,16 +1009,16 @@ function adsPeriodBar(){
   var comps=[['none','Geen vergelijking'],['previous','Vorige periode'],['month','Vorige maand'],['year','Vorig jaar']];
   var chips=presets.map(function(o){ return '<button class="soc-perchip'+(pp.preset===o[0]?' active':'')+'" onclick="adsSetPeriod(\''+o[0]+'\')">'+esc(o[1])+'</button>'; }).join('');
   var custom = pp.preset==='custom' ? '<div class="soc-percustom"><input type="date" id="adsFrom" value="'+esc(pp.from||'')+'" onchange="adsCustomPeriod()"><span>tot</span><input type="date" id="adsTo" value="'+esc(pp.to||'')+'" onchange="adsCustomPeriod()"></div>' : '';
-  var comp='<div class="soc-percompare">'+ic('st_progress',15)+'<select onchange="adsSetCompare(this.value)" aria-label="Vergelijken met">'+comps.map(function(o){return '<option value="'+o[0]+'"'+(pp.compare===o[0]?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')+'</select><button class="seg-btn" onclick="adsReload()" title="Verversen" aria-label="Verversen" style="margin-left:4px">'+_adsRefreshIc()+'</button></div>';
+  var comp='<div class="soc-percompare">'+'<select onchange="adsSetCompare(this.value)" aria-label="Vergelijken met">'+comps.map(function(o){return '<option value="'+o[0]+'"'+(pp.compare===o[0]?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')+'</select><button class="seg-btn" onclick="adsReload()" title="Verversen" aria-label="Verversen" style="margin-left:4px">'+_adsRefreshIc()+'</button></div>';
   return '<div class="soc-period"><div class="soc-perchips">'+chips+'</div>'+custom+comp+'</div>';
 }
 function _adsRerenderPeriodBar(){ var bar=document.querySelector('.panel[data-screen-label="advertenties"] .soc-period'); if(bar) bar.outerHTML=adsPeriodBar(); }
 function adsReload(){
-  var box=document.getElementById('adsBody'); if(box) box.innerHTML='<div class="empty" style="padding:50px"><div class="brand-spinner" style="margin:0 auto 10px"></div><p>'+(state.adminMode?'De uitgebreide rapportage wordt opgehaald…':'Advertentiedata wordt opgehaald…')+'</p></div>';
+  var box=document.getElementById('adsBody'); if(box) box.innerHTML='<div class="empty" style="padding:50px"><div class="brand-spinner" style="margin:0 auto 10px"></div><p>'+(isRichView()?'De uitgebreide rapportage wordt opgehaald…':'Advertentiedata wordt opgehaald…')+'</p></div>';
   var pp=adsPeriod();
-  if(state.adminMode){
-    if(state.demoMode || !(window.S27DATA&&S27DATA.loadMetaAdsRich)){ if(box) box.innerHTML=adsRichInner(); return; }
-    S27DATA.loadMetaAdsRich({from:pp.from,to:pp.to,compare:pp.compare}).then(function(){ var b=document.getElementById('adsBody'); if(b){ b.innerHTML=adsRichInner(); adsRichMountCharts(); } }).catch(function(){ var b=document.getElementById('adsBody'); if(b) b.innerHTML=adsRichInner(); });
+  if(isRichView()){
+    if(state.demoMode || !(window.S27DATA&&S27DATA.loadMetaAdsRich)){ if(box) box.innerHTML=adsRichTabBody(); return; }
+    S27DATA.loadMetaAdsRich({from:pp.from,to:pp.to,compare:pp.compare}).then(function(){ var b=document.getElementById('adsBody'); if(b){ b.innerHTML=adsRichTabBody(); adsRichMountTabCharts(); } }).catch(function(){ var b=document.getElementById('adsBody'); if(b) b.innerHTML=adsRichTabBody(); });
     return;
   }
   if(state.demoMode || !(window.S27DATA&&S27DATA.loadMetaAds)){ var b0=document.getElementById('adsBody'); if(b0) b0.innerHTML=adsOverviewInner(); return; }
@@ -1048,7 +1069,7 @@ function adsTrendBlock(){
   return '<div class="card ads-trend" id="adsTrendBox" style="padding:15px 18px 12px;margin-bottom:14px"><div class="ads-thead"><h3>Evolutie per dag</h3><div class="ads-tchips">'+chips+'</div></div>'+svg+'</div>';
 }
 function metaAdsBody(){
-  if(state.adminMode) return metaAdsBodyRich();   // team-weergave: uitgebreide Meta-rapportage
+  if(isRichView()) return metaAdsBodyRich();   // team-weergave: uitgebreide Meta-rapportage
   var m=(window.S27DATA&&S27DATA.metaAds&&S27DATA.metaAds())||null;
   if(m===null){ return '<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je advertenties worden real-time opgehaald…</p></div>'; }
   if(!m.linked){ return '<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen Meta-advertentieaccount gekoppeld</div><div style="color:var(--ink-3);max-width:470px;margin:0 auto;line-height:1.55">Zodra je Meta-advertentieaccount aan je portaal gekoppeld is, zie je hier real-time je campagnes, cijfers en de gebruikte visuals. Vraag gerust je contactpersoon bij Studio&nbsp;27.</div></div>'; }
@@ -1075,7 +1096,7 @@ function adsChatMount(){
   }
   if(typeof startChatPoll==='function') startChatPoll(ad.id);
 }
-function renderAds(){ renderPanel('advertenties'); if(typeof adsChatMount==='function') adsChatMount(); if(state.adminMode) adsRichMountCharts(); }
+function renderAds(){ renderPanel('advertenties'); if(typeof adsChatMount==='function') adsChatMount(); if(isRichView()) adsRichMountTabCharts(); }
 
 /* =============================================================================
    ADMIN — uitgebreide Meta-rapportage (team-weergave). Enkel zichtbaar voor
@@ -1086,8 +1107,135 @@ function renderAds(){ renderPanel('advertenties'); if(typeof adsChatMount==='fun
    ============================================================================= */
 function metaAdsBodyRich(){
   metaEnsureStyles();
-  var head='<div class="ar-rephead"><h2 style="display:flex;align-items:center;gap:9px;margin:0"><span class="live-dot"></span>Uitgebreide rapportage</h2>'+_pdfBtn('exportAdsPdf')+'</div>';
-  return head+adsPeriodBar()+'<div id="adsBody">'+adsRichInner()+'</div>'+adsChatSection();
+  return adsPeriodBar()+adsRichSubnav()+'<div id="adsBody">'+adsRichTabBody()+'</div>'+adsRichPdfFooter();
+}
+/* ---- ads-menubalk (team-weergave): Samengevat / Campagnes / Uitgebreide gegevens / Aanbevelingen ---- */
+function adsRichTab(){ return state._adsTab||'samengevat'; }
+function adsRichSubnav(){
+  var t=adsRichTab();
+  var tabs=[['samengevat','Samengevat','st_progress'],['campagnes','Campagnes','cal'],['gegevens','Uitgebreide gegevens','st_approved'],['aanbevelingen','Aanbevelingen','msg']];
+  return '<div class="soc-subnav" id="adsSubnav">'+tabs.map(function(x){ return '<button class="soc-subtab'+(t===x[0]?' active':'')+'" data-atab="'+x[0]+'" onclick="adsRichSetTab(\''+x[0]+'\')">'+ic(x[2],17)+'<span>'+esc(x[1])+'</span></button>'; }).join('')+'</div>';
+}
+function adsRichSetTab(name){
+  state._adsTab=name;
+  var box=document.getElementById('adsBody');
+  if(box){ box.innerHTML=adsRichTabBody();
+    var nav=document.getElementById('adsSubnav'); if(nav){ [].slice.call(nav.children).forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-atab')===name); }); }
+    adsRichMountTabCharts();
+    if(window.scrollTo) window.scrollTo({top:0,behavior:'smooth'});
+  } else { renderPanel('advertenties'); }
+}
+function adsRichTabBody(){
+  var m=(window.S27DATA&&S27DATA.metaAdsRich&&S27DATA.metaAdsRich());
+  if(m===undefined||m===null) return '<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>De uitgebreide rapportage wordt opgehaald…</p></div>';
+  if(!m.linked) return adsRichNotLinked();
+  if(m.error && !(m.campaigns&&m.campaigns.length) && !(m.kpis&&m.kpis.spend)) return '<div class="card" style="padding:26px;text-align:center;color:var(--ink-3)">De Meta-data kon even niet opgehaald worden. Klik op verversen om opnieuw te proberen.</div>';
+  var cur=m.currency||'EUR', t=adsRichTab();
+  if(t==='campagnes') return adsRichCampagnesTab(m,cur);
+  if(t==='gegevens') return adsRichGegevensTab(m,cur);
+  if(t==='aanbevelingen') return adsRichOptim(m.campaigns||[],cur);
+  return adsRichSamengevatTab(m,cur);
+}
+function adsRichSamengevatTab(m,cur){
+  var camps=(m.campaigns||[]);
+  var hasDaily=camps.some(function(c){return (c.daily||[]).length>1;});
+  return adsRichKpiGrid(m.kpis||{}, m.prevKpis||null, cur, m.compareLabel)
+    +'<div class="ar-camp" style="margin-top:14px"><div class="ar-camp-head"><span class="ar-camp-nm">Account-overzicht per dag</span></div>'
+    +(hasDaily?'<div class="ar-chartwrap"><canvas id="arch_account"></canvas></div>':'<div class="sr-chempty">Nog te weinig dagen met data om een grafiek te tonen in deze periode.</div>')+'</div>';
+}
+function adsRichCampagnesTab(m,cur){
+  var camps=(m.campaigns||[]);
+  if(!camps.length) return '<div class="card" style="padding:24px;text-align:center;color:var(--ink-3)">Geen campagnes met activiteit in deze periode.</div>';
+  return '<div class="section-head" style="margin-top:2px"><h2>Campagnes</h2><span class="count">'+camps.length+'</span></div>'+camps.map(function(c){ return adsRichCampaign(c,cur); }).join('');
+}
+/* Uitgebreide gegevens: alle ads over alle campagnes, eigen filterregels + drill naar de visual. */
+var ADS_FILTER_METRICS=[['linkClicks','Klikken'],['spend','Besteed (€)'],['impressions','Vertoningen'],['ctr','CTR (%)'],['cpc','CPC (€)'],['leads','Leads']];
+var ADS_GEG_SORT={key:'linkClicks',dir:-1};
+function adsFilters(){ if(!state._adsFilters) state._adsFilters=[]; return state._adsFilters; }
+function adsRichGegevensTab(m,cur){
+  var all=[];
+  (m.campaigns||[]).forEach(function(c){ adsRichMergeAds(c.ads||[]).forEach(function(a){ var x=Object.assign({},a); x.campaign=c.name||''; x.campaignId=c.id; all.push(x); }); });
+  state._adsGegevensAll=all;
+  return '<div class="section-head" style="margin-top:2px"><h2>Advertenties — alle campagnes</h2><span class="count" id="adsGegCount">'+all.length+'</span></div>'
+    +'<p class="sdesc" style="margin:-2px 0 10px;max-width:66ch">Alle advertenties samen, met gelijke namen samengeteld (★). Stel eigen filterregels in (bv. enkel ads met meer dan 50 klikken) en klik op het oog om de visual te bekijken.</p>'
+    +'<div id="adsGegWrap">'+adsGegInner()+'</div>';
+}
+function adsGegInner(){ return adsGegevensControls()+'<div id="adsGegBody">'+adsGegevensTable()+'</div>'; }
+function adsGegevensControls(){
+  var fs=adsFilters();
+  var plus='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+  var rules=fs.map(function(f,i){ return '<div class="ads-frule">'
+    +'<select aria-label="Statistiek" onchange="adsFilterSet('+i+',\'metric\',this.value)">'+ADS_FILTER_METRICS.map(function(mm){return '<option value="'+mm[0]+'"'+(f.metric===mm[0]?' selected':'')+'>'+esc(mm[1])+'</option>';}).join('')+'</select>'
+    +'<select aria-label="Operator" onchange="adsFilterSet('+i+',\'op\',this.value)">'+['>','>=','=','<=','<'].map(function(o){return '<option'+(f.op===o?' selected':'')+'>'+o+'</option>';}).join('')+'</select>'
+    +'<input type="number" inputmode="decimal" value="'+esc(String(f.value))+'" oninput="adsFilterSet('+i+',\'value\',this.value)" placeholder="waarde">'
+    +'<button class="ads-frm" onclick="adsFilterRemove('+i+')" title="Regel verwijderen" aria-label="Regel verwijderen">✕</button></div>'; }).join('');
+  return '<div class="ads-filters"><div class="ads-frules">'+rules+'</div><div class="ads-factions"><button class="ads-faddbtn" onclick="adsFilterAdd()">'+plus+' Filterregel</button>'+(fs.length?'<button class="ads-fclear" onclick="adsFilterClear()">Wissen</button>':'')+'</div></div>';
+}
+function adsFilterAdd(){ adsFilters().push({metric:'linkClicks',op:'>',value:50}); _adsGegRefresh(true); }
+function adsFilterRemove(i){ adsFilters().splice(i,1); _adsGegRefresh(true); }
+function adsFilterClear(){ state._adsFilters=[]; _adsGegRefresh(true); }
+function adsFilterSet(i,k,v){ var f=adsFilters()[i]; if(!f) return; f[k]=(k==='value')?(parseFloat(v)||0):v; _adsGegRefresh(false); }
+function _adsGegRefresh(structure){
+  if(structure){ var w=document.getElementById('adsGegWrap'); if(w) w.innerHTML=adsGegInner(); }
+  else { var b=document.getElementById('adsGegBody'); if(b) b.innerHTML=adsGegevensTable(); }
+  var cnt=document.getElementById('adsGegCount'); if(cnt) cnt.textContent=_adsGegFiltered().length;
+}
+function _adsGegFiltered(){
+  var all=state._adsGegevensAll||[], fs=adsFilters();
+  return all.filter(function(a){ return fs.every(function(f){ var v=Number(a[f.metric])||0, t=Number(f.value)||0; switch(f.op){case '>':return v>t;case '>=':return v>=t;case '=':return v===t;case '<=':return v<=t;case '<':return v<t;default:return true;} }); });
+}
+function adsGegSort(key){ if(ADS_GEG_SORT.key===key){ ADS_GEG_SORT.dir=-ADS_GEG_SORT.dir; } else { ADS_GEG_SORT.key=key; ADS_GEG_SORT.dir=(key==='name'||key==='campaign')?1:-1; } _adsGegRefresh(false); }
+function adsGegevensTable(){
+  var cur=_arCur();
+  var rows=_adsGegFiltered().slice().sort(function(a,b){ var k=ADS_GEG_SORT.key,c; if(k==='name'||k==='campaign'){ c=String(a[k]||'').localeCompare(String(b[k]||''),'nl'); } else { c=(Number(a[k])||0)-(Number(b[k])||0); } return c*ADS_GEG_SORT.dir; });
+  state._adsGegRows=rows;
+  if(!rows.length) return '<div class="ar-empty" style="border:1px solid var(--line);border-radius:14px;margin-top:4px">Geen advertenties die aan de filters voldoen.</div>';
+  var eye='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
+  var cols=[['name','Advertentie',0],['campaign','Campagne',0],['spend','Besteed',1],['impressions','Vert.',1],['linkClicks','Klikken',1],['ctr','CTR',1],['cpc','CPC',1],['leads','Leads',1],['_v','Visual',0]];
+  var tpl=cols.map(function(c,i){ return i===0?'minmax(150px,1.5fr)':(c[0]==='campaign'?'minmax(110px,1.1fr)':(c[0]==='_v'?'66px':(c[2]?'minmax(70px,1fr)':'minmax(80px,1fr)'))); }).join(' ');
+  var head=cols.map(function(c){ if(c[0]==='_v') return '<span class="ar-th" style="text-align:center">'+esc(c[1])+'</span>'; var on=ADS_GEG_SORT.key===c[0]; var arr=on?(ADS_GEG_SORT.dir<0?' ▼':' ▲'):''; return '<button class="ar-th'+(c[2]?' num':'')+(on?' on':'')+'" onclick="adsGegSort(\''+c[0]+'\')">'+esc(c[1])+arr+'</button>'; }).join('');
+  var body=rows.map(function(a,i){ return '<div class="ar-trow" style="grid-template-columns:'+tpl+'">'
+    +'<span class="ar-td"><span class="ar-nm">'+esc(a.name||'–')+'</span>'+(a.merged?' <span class="ar-star">★'+a.count+'</span>':'')+'</span>'
+    +'<span class="ar-td">'+esc(a.campaign||'')+'</span>'
+    +'<span class="ar-td num">'+metaEur(a.spend,cur)+'</span>'
+    +'<span class="ar-td num">'+arNum(a.impressions)+'</span>'
+    +'<span class="ar-td num">'+arNum(a.linkClicks||a.clicks)+'</span>'
+    +'<span class="ar-td num">'+arPct(a.ctr)+'</span>'
+    +'<span class="ar-td num">'+metaEur(a.cpc,cur)+'</span>'
+    +'<span class="ar-td num">'+(a.leads?arNum(a.leads):'–')+'</span>'
+    +'<span class="ar-td" style="justify-content:center"><button class="ads-vbtn" onclick="adsGegVisual('+i+')" title="Bekijk de visual" aria-label="Bekijk de visual">'+eye+'</button></span></div>'; }).join('');
+  return '<div class="ar-table"><div class="ar-tscroll"><div class="ar-thead" style="grid-template-columns:'+tpl+'">'+head+'</div>'+body+'</div></div>';
+}
+function adsGegVisual(i){
+  var a=(state._adsGegRows||[])[i]; if(!a||!a.campaignId) return;
+  function show(){ var ads=(window.S27DATA&&S27DATA.campaignAds)?S27DATA.campaignAds(a.campaignId):[]; var ad=(ads||[]).filter(function(x){return a.name && x.name===a.name;})[0]||(ads||[])[0]; if(ad && typeof openMetaCreative==='function'){ openMetaCreative(ad); } else { alert('Geen visual gevonden voor deze advertentie.'); } }
+  var have=(window.S27DATA&&S27DATA.campaignAds)?S27DATA.campaignAds(a.campaignId):null;
+  if(have){ show(); return; }
+  if(window.S27DATA&&S27DATA.loadCampaignAds){ S27DATA.loadCampaignAds(a.campaignId).then(show).catch(function(){ alert('De visual kon niet geladen worden.'); }); }
+}
+/* PDF subtiel onderaan (team kiest zelf wanneer) */
+function adsRichPdfFooter(){ return '<div class="ads-pdffoot"><button class="ads-pdflink" onclick="exportAdsPdf()"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Exporteer dit rapport als PDF</button></div>'; }
+/* per-tab charts: Samengevat = account-overzicht; Campagnes = per-campagne dag-evolutie */
+function adsRichMountTabCharts(){
+  if(!isRichView()) return;
+  var t=adsRichTab();
+  if(t==='samengevat'){ adsRichLoadChart().then(function(ok){ if(ok&&window.Chart){ var m=(window.S27DATA&&S27DATA.metaAdsRich)?S27DATA.metaAdsRich():null; if(m&&m.linked) adsRichBuildAccountChart(m, m.currency||'EUR'); } }); }
+  else if(t==='campagnes'){ adsRichMountCharts(); }
+}
+function adsRichBuildAccountChart(m,cur){
+  var cv=document.getElementById('arch_account'); if(!cv||!window.Chart) return;
+  state._arCharts=state._arCharts||{}; try{ if(state._arCharts.account){ state._arCharts.account.destroy(); delete state._arCharts.account; } }catch(e){}
+  var sMap={}, cMap={}, lMap={}, dates={};
+  (m.campaigns||[]).forEach(function(c){ (c.daily||[]).forEach(function(d){ sMap[d.date]=(sMap[d.date]||0)+(d.spend||0); cMap[d.date]=(cMap[d.date]||0)+(d.clicks||0); lMap[d.date]=(lMap[d.date]||0)+(d.leads||0); dates[d.date]=1; }); });
+  var labels=Object.keys(dates).sort(); if(labels.length<2) return;
+  var spend=labels.map(function(d){return Math.round((sMap[d]||0)*100)/100;}), clicks=labels.map(function(d){return cMap[d]||0;}), leads=labels.map(function(d){return lMap[d]||0;});
+  var hasLeads=leads.some(function(v){return v>0;});
+  var ds=[{type:'bar',label:'Besteed',data:spend,backgroundColor:'rgba(48,131,220,.5)',borderColor:'rgba(48,131,220,.9)',borderWidth:1,borderRadius:4,yAxisID:'y',order:3},{type:'line',label:'Klikken',data:clicks,borderColor:'#230F23',backgroundColor:'#230F23',borderWidth:2,tension:.32,pointRadius:0,yAxisID:'y1',order:2}];
+  if(hasLeads) ds.push({type:'line',label:'Leads',data:leads,borderColor:'#9441DB',backgroundColor:'#9441DB',borderWidth:2,tension:.32,pointRadius:0,yAxisID:'y1',order:1});
+  try{ state._arCharts.account=new window.Chart(cv.getContext('2d'),{ data:{labels:labels.map(_arDayLabel),datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{labels:{font:{family:'Montserrat',size:11,weight:'600'},color:'#6B5B6B',boxWidth:12,padding:14,usePointStyle:true}},tooltip:{callbacks:{label:function(x){ if(x.dataset.label==='Besteed') return ' Besteed: '+metaEur(x.parsed.y,cur); return ' '+x.dataset.label+': '+(Number(x.parsed.y)||0).toLocaleString('nl-BE'); }}}},
+      scales:{ y:{position:'left',beginAtZero:true,ticks:{font:{family:'Montserrat',size:10},color:'#9E919E',callback:function(v){return '€'+v;}},grid:{color:'rgba(231,223,211,.55)'}}, y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false},ticks:{font:{family:'Montserrat',size:10},color:'#9E919E',precision:0}}, x:{ticks:{font:{family:'Montserrat',size:10},color:'#9E919E',maxRotation:0,autoSkip:true,maxTicksLimit:12},grid:{display:false}} } } }); }catch(e){}
 }
 
 /* =============================================================================
@@ -1317,7 +1465,7 @@ function adsRichOptim(camps,cur){
 function adsRichLoadChart(){ return new Promise(function(res){ if(window.Chart) return res(true); var ex=document.getElementById('s27-chartjs'); if(ex){ ex.addEventListener('load',function(){res(!!window.Chart);}); ex.addEventListener('error',function(){res(false);}); return; } var el=document.createElement('script'); el.id='s27-chartjs'; el.src='https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js'; el.onload=function(){res(!!window.Chart);}; el.onerror=function(){res(false);}; document.head.appendChild(el); }); }
 function _arDayLabel(ymd){ var m=String(ymd||'').match(/(\d{4})-(\d{2})-(\d{2})/); return m?(m[3]+'/'+m[2]):(ymd||''); }
 function adsRichMountCharts(){
-  if(!state.adminMode) return;
+  if(!isRichView()) return;
   var m=(window.S27DATA&&S27DATA.metaAdsRich&&S27DATA.metaAdsRich()); if(!m||!m.linked||!m.campaigns) return;
   adsRichLoadChart().then(function(ok){ if(!ok||!window.Chart) return; m.campaigns.forEach(function(c){ adsRichBuildChart(c, m.currency||'EUR'); }); });
 }

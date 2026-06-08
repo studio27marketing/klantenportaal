@@ -225,8 +225,23 @@ function afterEnter(){
   applyTakVisibility();
   initSbGlass();
   // ADMIN: geen klant-onboardingtour; toon i.p.v. de naam-begroeting een "team"-context.
-  if(state.adminMode){ document.body.classList.add('admin-mode'); }
+  if(state.adminMode){ document.body.classList.add('admin-mode'); updateAdminViewToggle(); }
   else if(!localStorage.getItem('s27_tour_completed')){ setTimeout(openTour,500); }
+}
+// Klant/Team-weergave-toggle (enkel staff): wissel tussen de uitgebreide teamweergave en de
+// simpele klantweergave om mee te kijken. Acting-as blijft actief; enkel de WEERGAVE verandert.
+function toggleClientView(){
+  if(!state.adminMode) return;
+  state._adminClientView=!state._adminClientView;
+  updateAdminViewToggle();
+  if(typeof currentTab==='string' && currentTab) goTab(currentTab);   // huidige tab in de juiste weergave herladen
+}
+function updateAdminViewToggle(){
+  var b=$id('adminViewToggle'); if(!b) return;
+  var client=!!(state.adminMode && state._adminClientView);
+  document.body.classList.toggle('client-preview', client);
+  var lab=b.querySelector('.avt-lab'); if(lab) lab.textContent=client?'Teamweergave':'Klantweergave';
+  b.setAttribute('title', client?'Je bekijkt nu de klantweergave — klik om terug te keren naar de teamweergave':'Bekijk dit portaal zoals de klant het ziet');
 }
 
 /* =============================================================================
@@ -304,6 +319,7 @@ async function adminEnterCompany(id){
   if(typeof S27.stopChatPoll==='function') S27.stopChatPoll();
   var c=(state.adminCompanies||[]).find(function(x){return x.id===id;});
   state.activeBedrijf=id;
+  state._adminClientView=false;   // elke klant opent standaard in de teamweergave
   state._adminActiveName=(c&&c.naam)||'';
   try{ localStorage.setItem('s27_admin_bedrijf', id); }catch(e){}
   state._provisionTried=true;        // admin: nooit de klant-provisionflow proberen
@@ -327,7 +343,7 @@ function onSessionExpired(msg){
 }
 function logout(){ stopChatPoll(); try{ if(window.S27Auth) window.S27Auth.logout(); }catch(e){} state.session=null; state.data={dashboard:null,details:{},chats:{},meetings:null,bedrijf:null,team:null,huisstijl:null};
   // ADMIN-staat volledig opruimen zodat een volgende (klant-)login niet in adminMode blijft hangen.
-  state.adminMode=false; state.activeBedrijf=''; state.adminCompanies=null; state._adminActiveName=''; hideAdminPicker(); document.body.classList.remove('admin-mode');
+  state.adminMode=false; state._adminClientView=false; state.activeBedrijf=''; state.adminCompanies=null; state._adminActiveName=''; hideAdminPicker(); document.body.classList.remove('admin-mode'); document.body.classList.remove('client-preview');
   showLogin(); if(AUTH_V2 && !state.demoMode) initRealAuth(); else renderLogin(state.demoMode?'demo':'v1'); }
 
 /* =============================================================================
@@ -343,11 +359,11 @@ async function ensureTabData(name){
   // (Resultaten-tab verwijderd — advertentiedata staat real-time op de Advertenties-tab)
   if(name==='offertes'){ var _t=[]; if(!state.data.offertes) _t.push(S27DATA.loadOffertes()); if(!state.data.bedrijf) _t.push(S27DATA.loadBedrijf()); if(_t.length){ try{ await Promise.all(_t); }catch(e){} } }
   if(name==='socials'){ var _s=[]; if(!state.data.metricool) _s.push(S27DATA.loadMetricool());
-    if(state.adminMode){ if(!state.data.metricoolStatsRich){ var _sp=(typeof socialPeriod==='function')?socialPeriod():null; _s.push(S27DATA.loadMetricoolStatsRich(_sp?{from:_sp.from,to:_sp.to,compare:_sp.compare}:undefined)); } }
+    if(isRichView()){ if(!state.data.metricoolStatsRich){ var _sp=(typeof socialPeriod==='function')?socialPeriod():null; _s.push(S27DATA.loadMetricoolStatsRich(_sp?{from:_sp.from,to:_sp.to,compare:_sp.compare}:undefined)); } }
     else { if(!state.data.metricoolStats) _s.push(S27DATA.loadMetricoolStats()); if(!state.data.metricoolPostStats) _s.push(S27DATA.loadMetricoolPostStats()); }
     if(_s.length){ try{ await Promise.all(_s); }catch(e){} } }
   if(name==='advertenties'){
-    if(state.adminMode){ if(!state.data.metaAdsRich){ try{ var pp=(typeof adsPeriod==='function')?adsPeriod():null; await S27DATA.loadMetaAdsRich(pp?{from:pp.from,to:pp.to,compare:pp.compare}:undefined); }catch(e){} } }
+    if(isRichView()){ if(!state.data.metaAdsRich){ try{ var pp=(typeof adsPeriod==='function')?adsPeriod():null; await S27DATA.loadMetaAdsRich(pp?{from:pp.from,to:pp.to,compare:pp.compare}:undefined); }catch(e){} } }
     else if(!state.data.metaAds){ try{ await S27DATA.loadMetaAds(); }catch(e){} }
   }
 }
@@ -369,8 +385,8 @@ async function goTab(name){
   await ensureTabData(name);
   renderPanel(name);
   if(name==='advertenties' && typeof adsChatMount==='function') adsChatMount();   // ads-chat koppelen aan de huidige-maand-advertentietaak
-  if(name==='advertenties' && state.adminMode && typeof adsRichMountCharts==='function') adsRichMountCharts();   // team-weergave: dag-evolutiegrafieken mounten
-  if(name==='socials' && state.adminMode && socialTab && socialTab()==='rapport' && typeof socialRichMountCharts==='function') socialRichMountCharts();   // team-weergave: social-rapport-grafieken mounten
+  if(name==='advertenties' && isRichView() && typeof adsRichMountTabCharts==='function') adsRichMountTabCharts();   // team-weergave: tab-grafieken mounten
+  if(name==='socials' && isRichView() && socialTab && socialTab()==='rapport' && typeof socialRichMountCharts==='function') socialRichMountCharts();   // team-weergave: social-rapport-grafieken mounten
   updateNavBadges();
   if(name==='berichten' && !state.demoMode){ var _fp=(window.S27DATA&&(S27DATA.projects()||[])[0]); if(_fp) openBerichtChat(_fp.id); }
   closeSidebar(); syncUrl();
@@ -394,7 +410,7 @@ function updateNavBadges(){
 function needsLoad(name){
   if(state.data.dashboard && ['start','projecten','berichten'].indexOf(name)>=0) return false;
   if(name==='socials') return !state.data.metricool;   // wacht op Metricool-data
-  if(name==='advertenties') return state.adminMode ? !state.data.metaAdsRich : !state.data.metaAds;  // wacht op Meta-ads-data
+  if(name==='advertenties') return isRichView() ? !state.data.metaAdsRich : !state.data.metaAds;  // wacht op Meta-ads-data
   if(name==='meetings' && state.data.meetings) return false;
   if(name==='huisstijl' && state.data.huisstijl) return false;
   if(name==='facturatie' && state.data.bedrijf && state.data.team) return false;

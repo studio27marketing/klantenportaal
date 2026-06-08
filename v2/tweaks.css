@@ -665,3 +665,34 @@ body.admin-mode .sb-client .nm::after{content:'TEAM';margin-left:8px;font-family
 .ar-pdfbtn{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-display);font-weight:700;font-size:12.5px;color:#fff;background:var(--grad-bp);border:none;border-radius:999px;padding:8px 16px;cursor:pointer;box-shadow:0 6px 16px rgba(94,80,200,.26);transition:transform .15s var(--ease-out,ease),box-shadow .15s;}
 .ar-pdfbtn:hover{transform:translateY(-1px);box-shadow:0 9px 20px rgba(94,80,200,.34);}
 .ar-pdfbtn svg{flex:none;}
+
+/* ===== Klant/Team-weergave-toggle (topbar, enkel staff) =================== */
+#adminViewToggle{display:none;}
+body.admin-mode #adminViewToggle{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-display);font-weight:700;font-size:12.5px;color:var(--s27-blue-ink);background:var(--s27-blue-soft);border:1px solid transparent;border-radius:999px;padding:7px 14px;cursor:pointer;transition:background .15s var(--ease-out,ease),color .15s,filter .15s;white-space:nowrap;}
+body.admin-mode #adminViewToggle:hover{background:var(--s27-blue);color:#fff;}
+body.admin-mode #adminViewToggle svg{flex:none;}
+body.client-preview #adminViewToggle{color:#fff;background:linear-gradient(120deg,#E08A1E,#DC7A14);}
+body.client-preview #adminViewToggle:hover{filter:brightness(1.06);}
+/* persistente banner zodat een teamlid weet dat het in klantweergave kijkt */
+body.client-preview #page::before{content:'Klantweergave — je bekijkt dit portaal zoals de klant het ziet. Klik rechtsboven op “Teamweergave” om terug te keren.';display:block;background:#FEF3E2;color:#B4540B;font-family:var(--font-display);font-weight:700;font-size:12px;line-height:1.4;text-align:center;padding:8px 14px;border-radius:10px;margin:0 0 14px;border:1px solid #F6D9A8;}
+@media(max-width:600px){ body.admin-mode #adminViewToggle .avt-lab{display:none;} body.client-preview #page::before{font-size:11px;} }
+
+/* ===== Ads — uitgebreide gegevens: filterregels + visual-knop + subtiele PDF ===== */
+.ads-filters{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 12px;padding:11px 14px;background:var(--paper-2);border:1px solid var(--line);border-radius:var(--r-md,14px);}
+.ads-frules{display:flex;flex-wrap:wrap;gap:8px;flex:1;min-width:200px;}
+.ads-frule{display:inline-flex;align-items:center;gap:4px;background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:4px 6px 4px 11px;box-shadow:var(--sh-sm);}
+.ads-frule select,.ads-frule input{font-family:var(--font-display);font-weight:600;font-size:12.5px;color:var(--ink);border:none;background:none;outline:none;padding:3px 2px;}
+.ads-frule select{cursor:pointer;}
+.ads-frule input{width:62px;border-bottom:1px solid var(--line);}
+.ads-frm{border:none;background:none;color:var(--ink-4);cursor:pointer;font-size:13px;padding:2px 5px;border-radius:50%;line-height:1;}
+.ads-frm:hover{color:#B42318;background:rgba(220,38,38,.1);}
+.ads-factions{display:inline-flex;gap:8px;align-items:center;}
+.ads-faddbtn{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-display);font-weight:700;font-size:12.5px;color:var(--s27-blue-ink);background:var(--s27-blue-soft);border:none;border-radius:999px;padding:7px 14px;cursor:pointer;transition:background .15s,color .15s;}
+.ads-faddbtn:hover{background:var(--s27-blue);color:#fff;}
+.ads-fclear{font-family:var(--font-display);font-weight:700;font-size:12.5px;color:var(--ink-3);background:none;border:none;cursor:pointer;}
+.ads-fclear:hover{color:var(--ink);text-decoration:underline;}
+.ads-vbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;border:1px solid var(--line);background:var(--paper);color:var(--s27-blue-ink);cursor:pointer;transition:background .14s,color .14s,transform .14s,border-color .14s;}
+.ads-vbtn:hover{background:var(--s27-blue);color:#fff;border-color:transparent;transform:translateY(-1px);}
+.ads-pdffoot{margin-top:26px;padding-top:16px;border-top:1px dashed var(--line);text-align:center;}
+.ads-pdflink{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-display);font-weight:700;font-size:12.5px;color:var(--ink-3);background:none;border:none;cursor:pointer;padding:6px 12px;border-radius:8px;transition:color .15s,background .15s;}
+.ads-pdflink:hover{color:var(--s27-blue-ink);background:var(--s27-blue-soft);}
