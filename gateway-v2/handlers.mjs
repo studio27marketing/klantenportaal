@@ -2708,20 +2708,24 @@ function mcStamp(ms) { return new Date(ms).toISOString().slice(0, 19); }
 // (2) anders /api/admin/simpleProfiles -> match op id==blogId -> userId/ownerUserId.
 // Gecachet per isolate zodat we het niet elke call opnieuw doen.
 let _mcUserCache = { byBlog: new Map(), all: null, allExp: 0 };
+// Laad (en cache 10 min) de /admin/simpleProfiles-lijst. Eén bron voor userId, brandnaam én netwerk-handles.
+async function mcLoadProfiles(env) {
+  const now = Date.now();
+  if (!_mcUserCache.all || now > _mcUserCache.allExp) {
+    try {
+      const r = await fetch(`${METRICOOL_ADMIN}/admin/simpleProfiles`, { headers: mcHeaders(env) });
+      const data = await r.json().catch(() => null);
+      _mcUserCache.all = Array.isArray(data) ? data : (data && Array.isArray(data.data) ? data.data : []);
+      _mcUserCache.allExp = now + 10 * 60 * 1000;
+    } catch (e) { if (!_mcUserCache.all) _mcUserCache.all = []; }
+  }
+  return _mcUserCache.all || [];
+}
 async function metricoolUserId(env, blogId) {
   const fromEnv = str(env && env.METRICOOL_USER_ID).trim();
   if (fromEnv) return fromEnv;
   if (_mcUserCache.byBlog.has(String(blogId))) return _mcUserCache.byBlog.get(String(blogId));
-  let list = _mcUserCache.all;
-  const now = Date.now();
-  if (!list || now > _mcUserCache.allExp) {
-    try {
-      const r = await fetch(`${METRICOOL_ADMIN}/admin/simpleProfiles`, { headers: mcHeaders(env) });
-      const data = await r.json().catch(() => null);
-      list = Array.isArray(data) ? data : (data && Array.isArray(data.data) ? data.data : []);
-      _mcUserCache.all = list; _mcUserCache.allExp = now + 10 * 60 * 1000;
-    } catch (e) { list = []; }
-  }
+  const list = await mcLoadProfiles(env);
   let uid = '';
   for (const b of list || []) {
     if (String(b && (b.id != null ? b.id : '')) === String(blogId)) {
@@ -2733,6 +2737,28 @@ async function metricoolUserId(env, blogId) {
   if (!uid && list && list.length === 1) uid = str(list[0].userId || list[0].ownerUserId || '');
   _mcUserCache.byBlog.set(String(blogId), uid);
   return uid;
+}
+// Brandnaam (label) + per-netwerk handles uit simpleProfiles, voor de accountnaam bovenaan de mockup-preview.
+function mcBrandLabel(b) { return str((b && (b.label || b.title || b.name || b.brandName || b.brand)) || '').trim(); }
+async function metricoolBrandMeta(env, blogId) {
+  let brandName = '', accounts = {};
+  try {
+    const list = await mcLoadProfiles(env);
+    let brand = (list || []).find((b) => String(b && (b.id != null ? b.id : '')) === String(blogId));
+    if (!brand && list && list.length === 1) brand = list[0];
+    if (brand) {
+      brandName = mcBrandLabel(brand);
+      const nd = brand.networksData || {};
+      for (const k of Object.keys(MC_NET_KEYS)) {
+        const v = nd[k];
+        if (v && typeof v === 'object') {
+          const nm = str(v.name || v.label || v.username || v.screenName || v.pageName || v.handle || '').trim();
+          if (nm) accounts[MC_NET_KEYS[k]] = { name: nm };
+        }
+      }
+    }
+  } catch (e) { /* fail-soft: zonder naam valt de FE terug op de bedrijfsnaam */ }
+  return { brandName, accounts };
 }
 
 // Eén Metricool-post -> de platte FE-shape (data.js parseert verder).
@@ -2785,8 +2811,9 @@ export async function metricool(bedrijfId, body, env) {
     return { status: 200, body: { ok: true, linked: false, posts: [] } };
   }
 
-  // (2) userId (optioneel) + venster -31d .. +90d.
+  // (2) userId (optioneel) + brand-meta (naam + per-netwerk handles, voor de mockup-header) + venster.
   const userId = await metricoolUserId(env, blogId).catch(() => '');
+  const brandMeta = await metricoolBrandMeta(env, blogId);   // { brandName, accounts } — fail-soft
   const start = mcStamp(Date.now() - 122 * 86400000);   // ~4 maanden terug
   const end = mcStamp(Date.now() + 122 * 86400000);     // ~4 maanden vooruit
   const qs = new URLSearchParams({ blogId: String(blogId), start, end, timezone: METRICOOL_TZ });
@@ -2797,10 +2824,10 @@ export async function metricool(bedrijfId, body, env) {
     r = await fetch(`${METRICOOL_BASE}/scheduler/posts?${qs.toString()}`, { headers: mcHeaders(env) });
   } catch (e) {
     // upstream onbereikbaar -> read fail-open: gekoppeld maar (tijdelijk) geen posts.
-    return { status: 200, body: { ok: true, linked: true, brandId: blogId, posts: [] } };
+    return { status: 200, body: { ok: true, linked: true, brandId: blogId, brandName: brandMeta.brandName, accounts: brandMeta.accounts, posts: [] } };
   }
   if (!r.ok) {
-    return { status: 200, body: { ok: true, linked: true, brandId: blogId, posts: [] } };
+    return { status: 200, body: { ok: true, linked: true, brandId: blogId, brandName: brandMeta.brandName, accounts: brandMeta.accounts, posts: [] } };
   }
   const data = await r.json().catch(() => null);
   const arr = data && Array.isArray(data.data) ? data.data
@@ -2816,7 +2843,7 @@ export async function metricool(bedrijfId, body, env) {
       if (approved.size) posts.forEach((p) => { if (approved.has(String(p.id))) p.approved = true; });
     } catch (e) {}
   }
-  return { status: 200, body: { ok: true, linked: true, brandId: blogId, posts } };
+  return { status: 200, body: { ok: true, linked: true, brandId: blogId, brandName: brandMeta.brandName, accounts: brandMeta.accounts, posts } };
 }
 
 /* ---- metricoolStats (READ) - KPI-dashboard + trend (fase 1) ----------------

@@ -410,7 +410,7 @@
           netwerken: _mcNetwerken(p) };
       });
       posts.sort(function(a,b){ return (a.dt?a.dt.getTime():9e15)-(b.dt?b.dt.getTime():9e15); });
-      state.data.metricool={ linked:true, brandId:j.brandId||'', posts:posts };
+      state.data.metricool={ linked:true, brandId:j.brandId||'', brandName:j.brandName||'', accounts:j.accounts||{}, posts:posts };
       return true;
     }catch(e){ state.data.metricool={linked:false,posts:[]}; return false; }
   };

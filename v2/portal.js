@@ -1426,12 +1426,12 @@ async function socialFeedback(id, btn){
   if(box) box.innerHTML='<div class="soc-fbok">'+ic('check',16)+' Je opmerking is doorgestuurd naar je Studio 27-contact. We passen het aan en je ziet de update hier verschijnen.</div>';
 }
 /* --- In-portal post-editor: kanalen toggelen, hashtag toevoegen, en DIRECT opslaan in Metricool --- */
-function socialToggleChan(btn){ if(btn) btn.classList.toggle('on'); }
+function socialToggleChan(btn){ if(!btn) return; btn.classList.toggle('on'); var net=String(btn.getAttribute('data-net')||'').toLowerCase(); if(btn.classList.contains('on')) state._socPreviewNet=net; if(typeof socialSyncMock==='function') socialSyncMock(); }
 function _fileToBase64(f){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){ res(String(r.result||'')); }; r.onerror=function(){ rej(new Error('read')); }; r.readAsDataURL(f); }); }
 // klant uploadt een foto/video -> worker host ze -> publieke URL invullen + preview verversen
 async function socialUploadMedia(input){
   var msg=$id('socUpMsg'); var f=input&&input.files&&input.files[0]; if(!f) return;
-  if(f.size>22*1024*1024){ if(msg) msg.innerHTML='<span class="soc-saveerr">Bestand te groot (max 22 MB). Plak voor grote video\'s een URL.</span>'; input.value=''; return; }
+  if(f.size>22*1024*1024){ if(msg) msg.innerHTML='<span class="soc-saveerr">Dit bestand is te groot voor directe upload (max 22 MB). Plak hieronder een link (bv. WeTransfer of Google Drive), of gebruik een kleinere/gecomprimeerde versie.</span>'; input.value=''; return; }
   if(msg) msg.innerHTML='<span style="color:var(--ink-4);display:inline-flex;align-items:center;gap:6px">'+ic('upload',13)+' Uploaden…</span>';
   try{
     var b64=await _fileToBase64(f);
