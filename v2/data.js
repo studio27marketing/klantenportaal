@@ -163,6 +163,7 @@
     if(!live()) return [];
     var res = await api(ENDPOINTS.chatList, base({ task_id:taskId }));
     var raw = (res && res.ok && res.data && res.data.ok && res.data.comments) ? res.data.comments : [];
+    raw.sort(function(a,b){ return (parseInt(a.datum||a.date||0,10))-(parseInt(b.datum||b.date||0,10)); });  // oudste boven, nieuwste onderaan
     state.data.chats[taskId] = raw.map(mapChatComment);
     return state.data.chats[taskId];
   };
@@ -177,7 +178,7 @@
     var d = (res && res.ok && res.data) ? res.data : {};
     state.data.commsTaskId = d.task_id || null;
     state.data.commsTeam = d.team || [];
-    if(d.task_id) state.data.chats[d.task_id] = (d.comments||[]).map(mapChatComment);
+    if(d.task_id){ var cc=(d.comments||[]).slice().sort(function(a,b){ return (parseInt(a.datum||a.date||0,10))-(parseInt(b.datum||b.date||0,10)); }); state.data.chats[d.task_id] = cc.map(mapChatComment); }
     return d;
   };
   DATA.commsTaskId = function(){ return state.data.commsTaskId || null; };

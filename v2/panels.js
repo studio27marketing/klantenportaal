@@ -220,8 +220,7 @@ function panelBerichten(){
           <span class="pr-main"><span class="ber-disc" style="color:var(--c-ink)">${esc(p.disc)}</span><span class="pr-name" style="font-size:14px">${esc(p.name)}</span></span>
           ${p.deliv?`<span class="badge" style="position:static;background:var(--c);color:#fff;border:none;min-width:20px;height:20px;font-size:11px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:800">!</span>`:''}
         </button>`).join('');
-  return `<p class="sdesc" style="margin:2px 0 14px;max-width:60ch">Klik links een project aan en chat er meteen over, je blijft op deze pagina, enkel het gesprek wisselt. Je kan ook bestanden meesturen.</p>
-  <div style="display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start" class="berichten-wrap">
+  return `<div style="display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start" class="berichten-wrap">
     <div class="card" style="overflow:hidden">${rows||'<div class="empty" style="padding:30px"><p>Nog geen gesprekken.</p></div>'}</div>
     <div class="card br-${first?first.br:'blue'}" id="berichtChat" style="padding:0;overflow:hidden">
       ${first?berichtChatInner(first):'<div class="empty" style="padding:60px 20px"><div class="em-ic">'+ic('msg',64)+'</div><p>Selecteer links een project om het gesprek te openen.</p></div>'}
@@ -244,10 +243,10 @@ const PROJ_CLUSTERS = [
   {key:'plannen',  statuses:['todo'],        title:'Nog in te plannen of op te starten', sub:'Klaar om samen te beginnen — prik een moment of laat iets weten.', br:'blue'},
   {key:'bezig',    statuses:['prog'],        title:'Wij werken eraan', sub:'Loopt bij ons, je hoeft nu even niets te doen.', br:'green'}
 ];
-function projCluster(cl, grp){
+function projCluster(cl, grp, num){
   if(!grp.length) return '';
   return `<section class="projcluster" data-cluster="${cl.key}">
-    <div class="projcluster-head br-${cl.br}"><span class="pc-dot"></span>
+    <div class="projcluster-head br-${cl.br}"><span class="pc-num">${num||''}</span>
       <div class="pc-htx"><h3>${esc(cl.title)}</h3><p>${esc(cl.sub)}</p></div>
       <span class="pc-count">${grp.length}</span></div>
     <div class="projflat-grid">${grp.map(projCardFlat).join('')}</div>
@@ -257,11 +256,11 @@ function projDienst(){
   const all=_nonAdProjects().filter(p=>p.status!=='done');
   if(!all.length) return `<div class="empty"><div class="em-ic">${ic('st_approved',64)}</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Geen actieve projecten</b><p style="margin:6px 0 0">Zodra we samen aan iets nieuws starten, verschijnt het hier.</p></div>`;
   const sortFn=(a,b)=>{ const ia=DISC_ORDER.indexOf(a.disc),ib=DISC_ORDER.indexOf(b.disc); return ((ia<0?99:ia)-(ib<0?99:ib))||String(a.name).localeCompare(String(b.name)); };
-  let html='';
-  PROJ_CLUSTERS.forEach(cl=>{ html+=projCluster(cl, all.filter(p=>cl.statuses.indexOf(p.status)>=0).sort(sortFn)); });
+  let html='', _n=0;
+  PROJ_CLUSTERS.forEach(cl=>{ var grp=all.filter(p=>cl.statuses.indexOf(p.status)>=0).sort(sortFn); if(grp.length){ _n++; html+=projCluster(cl, grp, _n); } });
   // statussen die in geen enkel cluster vallen: verzamelcluster zodat nooit een project verdwijnt
   const rest=all.filter(p=>!PROJ_CLUSTERS.some(cl=>cl.statuses.indexOf(p.status)>=0)).sort(sortFn);
-  if(rest.length) html+=projCluster({key:'overig', statuses:[], title:'Overige projecten', sub:'Lopende trajecten bij Studio 27.', br:'blue'}, rest);
+  if(rest.length){ _n++; html+=projCluster({key:'overig', statuses:[], title:'Overige projecten', sub:'Lopende trajecten bij Studio 27.', br:'blue'}, rest, _n); }
   return `<div class="projclusters">${html}</div>`;
 }
 // platte hoofdtaak-kaart: naam + discipline-chip(s), status, deliverable-badge, SA&E-namen.
@@ -282,16 +281,7 @@ function panelProjecten(){
   // je ook op 'Webdesign' kan filteren als dat enkel een tweede label van een hoofdtaak is.
   const order=[]; _nonAdProjects().filter(p=>p.status!=='done').forEach(p=>{ ((p.labels&&p.labels.length)?p.labels:[{label:p.disc}]).forEach(l=>{ if(l.label && order.indexOf(l.label)<0) order.push(l.label); }); });
   order.sort((a,b)=>{ const ia=DISC_ORDER.indexOf(a),ib=DISC_ORDER.indexOf(b); return (ia<0?99:ia)-(ib<0?99:ib); });
-  return `<div class="proj-filter">
-      <label class="pf-select">${ic('strategie',16)}
-        <select onchange="filterDienst(this.value)">
-          <option value="all">Alle takken</option>
-          ${order.map(disc=>`<option value="${disc}">${disc}</option>`).join('')}
-        </select>
-        <svg class="pf-chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-      </label>
-    </div>
-    <div id="projViewBody">${projDienst()}</div>`;
+  return `<div id="projViewBody">${projDienst()}</div>`;
 }
 
 /* ---- Socials (Metricool), netwerk/status-helpers + render ---- */
