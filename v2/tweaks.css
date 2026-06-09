@@ -668,14 +668,16 @@ body.admin-mode .sb-client .nm::after{content:'TEAM';margin-left:8px;font-family
 
 /* ===== Klant/Team-weergave-toggle (topbar, enkel staff) =================== */
 #adminViewToggle{display:none;}
-body.admin-mode #adminViewToggle{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-display);font-weight:700;font-size:12.5px;color:var(--s27-blue-ink);background:var(--s27-blue-soft);border:1px solid transparent;border-radius:999px;padding:7px 14px;cursor:pointer;transition:background .15s var(--ease-out,ease),color .15s,filter .15s;white-space:nowrap;}
-body.admin-mode #adminViewToggle:hover{background:var(--s27-blue);color:#fff;}
-body.admin-mode #adminViewToggle svg{flex:none;}
-body.client-preview #adminViewToggle{color:#fff;background:linear-gradient(120deg,#E08A1E,#DC7A14);}
-body.client-preview #adminViewToggle:hover{filter:brightness(1.06);}
+body.admin-mode #adminViewToggle{display:inline-flex;align-items:center;gap:9px;font-family:var(--font-display);font-weight:800;font-size:12px;letter-spacing:.01em;color:var(--ink,#230F23);background:rgba(255,255,255,.62);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid var(--glass-border,#E7DFD3);border-radius:999px;padding:5px 13px 5px 6px;cursor:pointer;transition:filter .15s,box-shadow .15s;white-space:nowrap;box-shadow:var(--glass-sh,0 8px 24px rgba(60,40,80,.09));}
+body.admin-mode #adminViewToggle:hover{filter:brightness(1.03);box-shadow:var(--glass-sh-lg,0 14px 34px rgba(60,40,80,.16));}
+.vmode-track{position:relative;width:38px;height:22px;border-radius:999px;background:linear-gradient(180deg,#3A6FD8,#2B53AE);box-shadow:inset 0 1px 3px rgba(0,0,0,.28);transition:background .22s var(--ease-out,ease);flex:none;}
+.vmode-knob{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.32);transition:left .22s var(--ease-out,ease);}
+.vmode-lab{min-width:60px;text-align:left;}
+body.client-preview #adminViewToggle .vmode-track{background:linear-gradient(180deg,#E89A33,#DC7A14);}
+body.client-preview #adminViewToggle .vmode-knob{left:18px;}
 /* persistente banner zodat een teamlid weet dat het in klantweergave kijkt */
-body.client-preview #page::before{content:'Klantweergave — je bekijkt dit portaal zoals de klant het ziet. Klik rechtsboven op “Teamweergave” om terug te keren.';display:block;background:#FEF3E2;color:#B4540B;font-family:var(--font-display);font-weight:700;font-size:12px;line-height:1.4;text-align:center;padding:8px 14px;border-radius:10px;margin:0 0 14px;border:1px solid #F6D9A8;}
-@media(max-width:600px){ body.admin-mode #adminViewToggle .avt-lab{display:none;} body.client-preview #page::before{font-size:11px;} }
+body.client-preview #page::before{content:'ClientView — je bekijkt dit portaal zoals de klant het ziet. Klik rechtsboven op de schakelaar om terug naar TeamView te gaan.';display:block;background:#FEF3E2;color:#B4540B;font-family:var(--font-display);font-weight:700;font-size:12px;line-height:1.4;text-align:center;padding:8px 14px;border-radius:10px;margin:0 0 14px;border:1px solid #F6D9A8;}
+@media(max-width:600px){ body.admin-mode #adminViewToggle .vmode-lab{display:none;} body.client-preview #page::before{font-size:11px;} }
 
 /* ===== Ads — uitgebreide gegevens: filterregels + visual-knop + subtiele PDF ===== */
 .ads-filters{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 12px;padding:11px 14px;background:var(--paper-2);border:1px solid var(--line);border-radius:var(--r-md,14px);}

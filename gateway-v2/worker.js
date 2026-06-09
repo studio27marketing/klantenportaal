@@ -37,11 +37,12 @@ import {
   publicShootAvailability,
   adminCompanies,
   metaAdsRich,
+  googleAdsRich,
   metricoolStatsRich,
 } from './handlers.mjs';
 
 // Staff-only (is_staff) rijke-rapportage-handlers: gescoped op het acting-as-bedrijf, (bedrijfId, body, env).
-const STAFF_DATA_HANDLERS = { metaAdsRich, metricoolStatsRich };
+const STAFF_DATA_HANDLERS = { metaAdsRich, googleAdsRich, metricoolStatsRich };
 
 // Pad → Make-webhook. Deze URLs zijn niet geheim (staan al in dashboard.js).
 // Geporte paden gebruiken deze NIET meer (router-shim vangt ze af); de rest valt door.

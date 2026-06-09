@@ -1017,6 +1017,11 @@ function adsReload(){
   var box=document.getElementById('adsBody'); if(box) box.innerHTML='<div class="empty" style="padding:50px"><div class="brand-spinner" style="margin:0 auto 10px"></div><p>'+(isRichView()?'De uitgebreide rapportage wordt opgehaald…':'Advertentiedata wordt opgehaald…')+'</p></div>';
   var pp=adsPeriod();
   if(isRichView()){
+    if(adsActivePlatform()==='google'){
+      if(state.demoMode || !(window.S27DATA&&S27DATA.loadGoogleAdsRich)){ if(box) box.innerHTML=googleRichTabBody(); return; }
+      S27DATA.loadGoogleAdsRich({from:pp.from,to:pp.to,compare:pp.compare}).then(function(){ var b=document.getElementById('adsBody'); if(b){ b.innerHTML=googleRichTabBody(); googleRichMountTabCharts(); } }).catch(function(){ var b=document.getElementById('adsBody'); if(b) b.innerHTML=googleRichTabBody(); });
+      return;
+    }
     if(state.demoMode || !(window.S27DATA&&S27DATA.loadMetaAdsRich)){ if(box) box.innerHTML=adsRichTabBody(); return; }
     S27DATA.loadMetaAdsRich({from:pp.from,to:pp.to,compare:pp.compare}).then(function(){ var b=document.getElementById('adsBody'); if(b){ b.innerHTML=adsRichTabBody(); adsRichMountTabCharts(); } }).catch(function(){ var b=document.getElementById('adsBody'); if(b) b.innerHTML=adsRichTabBody(); });
     return;
@@ -1071,7 +1076,7 @@ function adsTrendBlock(){
   var m=(window.S27DATA&&S27DATA.metaAds&&S27DATA.metaAds())||{}; var tr=m.trend||[]; var cur=m.currency||'EUR'; var on=adsTrendOn();
   var chips=['spend','clicks','impressions'].map(function(x){ var mm=ADS_TREND_META[x]; var tot=tr.reduce(function(a,d){return a+(Number(d[x])||0);},0); var tl=x==='spend'?metaEur(tot,cur):adsNum(tot); return '<button class="ads-tchip'+(on[x]?' on':'')+'" onclick="adsToggleTrend(\''+x+'\')" style="--tc:'+mm[1]+'"><span class="ads-tdot"></span>'+esc(mm[0])+' <b>'+tl+'</b></button>'; }).join('');
   var svg=(tr.length<2)?'<div class="ads-tempty">Nog te weinig data voor een trend in deze periode.</div>':adsTrendSVG(tr,on);
-  return '<div class="card ads-trend" id="adsTrendBox" style="padding:15px 18px 12px;margin-bottom:14px"><div class="ads-thead"><h3>Evolutie per dag</h3><div class="ads-tchips">'+chips+'</div></div>'+svg+'</div>';
+  return '<div class="card ads-trend" id="adsTrendBox" style="padding:15px 18px 12px"><div class="ads-thead"><h3>Evolutie per dag</h3><div class="ads-tchips">'+chips+'</div></div>'+svg+'</div>';
 }
 function metaAdsBody(){
   if(isRichView()) return metaAdsBodyRich();   // team-weergave: uitgebreide Meta-rapportage
@@ -1115,7 +1120,9 @@ function renderAds(){ renderPanel('advertenties'); if(typeof adsChatMount==='fun
    ============================================================================= */
 function metaAdsBodyRich(){
   metaEnsureStyles();
-  return adsPeriodBar()+adsRichSubnav()+'<div id="adsBody">'+adsRichTabBody()+'</div>'+adsRichPdfFooter();
+  var sw=adsPlatformSwitch();
+  if(adsActivePlatform()==='google') return sw+googleAdsBodyRich();
+  return sw+adsPeriodBar()+adsRichSubnav()+'<div id="adsBody">'+adsRichTabBody()+'</div>'+adsRichPdfFooter();
 }
 /* ---- ads-menubalk (team-weergave): Samengevat / Campagnes / Uitgebreide gegevens / Aanbevelingen ---- */
 function adsRichTab(){ return state._adsTab||'samengevat'; }
@@ -1126,10 +1133,11 @@ function adsRichSubnav(){
 }
 function adsRichSetTab(name){
   state._adsTab=name;
+  var goog=isRichView()&&adsActivePlatform()==='google';
   var box=document.getElementById('adsBody');
-  if(box){ box.innerHTML=adsRichTabBody();
+  if(box){ box.innerHTML=goog?googleRichTabBody():adsRichTabBody();
     var nav=document.getElementById('adsSubnav'); if(nav){ [].slice.call(nav.children).forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-atab')===name); }); }
-    adsRichMountTabCharts();
+    if(goog) googleRichMountTabCharts(); else adsRichMountTabCharts();
     if(window.scrollTo) window.scrollTo({top:0,behavior:'smooth'});
   } else { renderPanel('advertenties'); }
 }
@@ -1233,6 +1241,7 @@ function adsRichPdfFooter(){ return '<div class="ads-pdffoot"><button class="ads
 /* per-tab charts: Samengevat = account-overzicht; Campagnes = per-campagne dag-evolutie */
 function adsRichMountTabCharts(){
   if(!isRichView()) return;
+  if(adsActivePlatform()==='google') return googleRichMountTabCharts();
   var t=adsRichTab();
   if(t==='samengevat'){ adsRichLoadChart().then(function(ok){ if(ok&&window.Chart){ var m=(window.S27DATA&&S27DATA.metaAdsRich)?S27DATA.metaAdsRich():null; if(m&&m.linked) adsRichBuildAccountChart(m, m.currency||'EUR'); } }); }
   else if(t==='campagnes'){ adsRichMountCharts(); }
@@ -1395,7 +1404,7 @@ function adsRichKpiGrid(k,p,cur,cmpLabel){
 }
 /* ---- per campagne ---- */
 function _titleCase(s){ return String(s).toLowerCase().replace(/_/g,' ').replace(/^\w/,function(c){return c.toUpperCase();}); }
-function adsRichStatus(st){ st=String(st||'').toUpperCase(); var map={ACTIVE:['Actief','green'],PAUSED:['Gepauzeerd','orange'],CAMPAIGN_PAUSED:['Gepauzeerd','orange'],ADSET_PAUSED:['Gepauzeerd','orange'],ARCHIVED:['Gearchiveerd','grey'],DELETED:['Verwijderd','grey'],DISAPPROVED:['Afgekeurd','red'],PENDING_REVIEW:['In review','blue'],IN_PROCESS:['Bezig','blue'],WITH_ISSUES:['Aandacht','orange']}; var m=map[st]||[st?_titleCase(st):'–','grey']; return '<span class="ar-pill ar-'+m[1]+'">'+esc(m[0])+'</span>'; }
+function adsRichStatus(st){ st=String(st||'').toUpperCase(); var map={ACTIVE:['Actief','green'],PAUSED:['Gepauzeerd','orange'],CAMPAIGN_PAUSED:['Gepauzeerd','orange'],ADSET_PAUSED:['Gepauzeerd','orange'],ARCHIVED:['Gearchiveerd','grey'],DELETED:['Verwijderd','grey'],DISAPPROVED:['Afgekeurd','red'],PENDING_REVIEW:['In review','blue'],IN_PROCESS:['Bezig','blue'],WITH_ISSUES:['Aandacht','orange'],ENABLED:['Actief','green'],REMOVED:['Verwijderd','grey']}; var m=map[st]||[st?_titleCase(st):'–','grey']; return '<span class="ar-pill ar-'+m[1]+'">'+esc(m[0])+'</span>'; }
 function adsRichObjLabel(o){ o=String(o||'').toUpperCase(); var map={OUTCOME_LEADS:'Leads',LEAD_GENERATION:'Leadgeneratie',OUTCOME_SALES:'Verkoop',CONVERSIONS:'Conversies',OUTCOME_TRAFFIC:'Verkeer',LINK_CLICKS:'Verkeer',OUTCOME_ENGAGEMENT:'Betrokkenheid',POST_ENGAGEMENT:'Betrokkenheid',OUTCOME_AWARENESS:'Naamsbekendheid',BRAND_AWARENESS:'Naamsbekendheid',REACH:'Bereik',VIDEO_VIEWS:'Videoweergaven',OUTCOME_APP_PROMOTION:'App-promotie'}; return o?(map[o]||_titleCase(o)):''; }
 function adsRichCampaign(c,cur){
   var obj=c.objective?'<span class="ar-obj">'+esc(adsRichObjLabel(c.objective))+'</span>':'';
@@ -1445,6 +1454,11 @@ function _arCell(key,r,cur){
     case 'leads': return arNum(r.leads);
     case 'cpl': return r.leads?arEur(r.cpl,cur):'–';
     case 'frequency': return arDec(r.frequency,2);
+    case 'conversions': return arDec(r.conversions,2);
+    case 'convValue': return arEur(r.convValue,cur);
+    case 'text': return '<span class="ar-nm">'+esc(r.text||'–')+'</span>';
+    case 'matchType': return esc(_gMatch(r.matchType));
+    case 'campaign': return esc(r.campaign||'');
     default: return '';
   }
 }
@@ -1520,10 +1534,9 @@ function adsOverviewInner(){
     +adsKpiCard('indigo','CPC',metaEur(k.cpc,cur), pv?adsKpiDelta(k.cpc,pv.cpc):'')
     +adsKpiCard('purple','CTR',(Number(k.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%', pv?adsKpiDelta(k.ctr,pv.ctr):'')
     +'</div>';
-  var note='<p class="sdesc" style="margin:-2px 0 12px;max-width:64ch">Rechtstreeks en real-time uit je Meta-account. Klik op een campagne voor de advertenties en visuals.</p>';
   var camps=(m.campaigns||[]).slice().sort(function(a,b){return (b.spend||0)-(a.spend||0);});
-  var campSec='<div class="section-head" style="margin-top:18px"><h2>Actieve campagnes</h2><span class="count">'+camps.length+'</span></div>'+(camps.length?camps.map(function(c){return metaCampaignCard(c,cur);}).join(''):'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">Geen campagnes met besteding in deze periode.</div>');
-  return resChip+strip+adsTrendBlock()+note+campSec;
+  var campSec='<div class="section-head"><h2>Actieve campagnes</h2><span class="count">'+camps.length+'</span></div>'+(camps.length?camps.map(function(c){return metaCampaignCard(c,cur);}).join(''):'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">Geen campagnes met besteding in deze periode.</div>');
+  return '<div class="ads-ovw">'+resChip+strip+adsTrendBlock()+'<div class="ads-camps">'+campSec+'</div></div>';
 }
 
 /* =============================================================================
@@ -1533,7 +1546,7 @@ function adsOverviewInner(){
    Meta. Geen creatives (Google Ads kent geen vergelijkbaar visueel postmodel).
    ============================================================================= */
 function adsActivePlatform(){ return state._adsPlatform==='google'?'google':'meta'; }
-function adsPlatStyles(){ if(document.getElementById('adsPlatStyles'))return; var s=document.createElement('style'); s.id='adsPlatStyles'; s.textContent='.ads-platsw{display:inline-flex;gap:4px;background:var(--wash,#F3EEE6);border:1px solid var(--line,#E7DFD3);border-radius:999px;padding:4px;margin:2px 0 14px}.ads-plat{display:inline-flex;align-items:center;gap:7px;border:0;background:transparent;font:inherit;font-weight:700;font-size:13px;color:var(--ink-3);padding:7px 15px;border-radius:999px;cursor:pointer;transition:all .15s}.ads-plat:hover{color:var(--ink)}.ads-plat.active{background:var(--paper,#fff);color:var(--ink);box-shadow:0 2px 7px rgba(35,15,35,.10)}.ads-platdot{width:8px;height:8px;border-radius:50%;flex:none}'; document.head.appendChild(s); }
+function adsPlatStyles(){ if(document.getElementById('adsPlatStyles'))return; var s=document.createElement('style'); s.id='adsPlatStyles'; s.textContent='.ads-platsw{display:inline-flex;gap:5px;background:linear-gradient(180deg,rgba(255,255,255,.72),rgba(255,255,255,.42));-webkit-backdrop-filter:blur(12px) saturate(1.3);backdrop-filter:blur(12px) saturate(1.3);border:1px solid var(--glass-border,rgba(255,255,255,.6));border-radius:999px;padding:5px;margin:2px 0 16px;box-shadow:var(--glass-sh,0 8px 24px rgba(60,40,80,.09)),inset 0 1px 0 rgba(255,255,255,.7)}.ads-plat{display:inline-flex;align-items:center;gap:7px;border:0;background:transparent;font:inherit;font-weight:700;font-size:13px;color:var(--ink-3);padding:8px 16px;border-radius:999px;cursor:pointer;transition:all .18s var(--ease-out,ease)}.ads-plat:hover{color:var(--ink)}.ads-plat.active{background:linear-gradient(180deg,#fff,#f7f3ec);color:var(--ink);box-shadow:0 2px 8px rgba(35,15,35,.13),inset 0 1px 0 #fff}.ads-platdot{width:8px;height:8px;border-radius:50%;flex:none;box-shadow:0 0 0 2px rgba(255,255,255,.5)}.ads-ovw{display:flex;flex-direction:column;gap:16px}.ads-ovw>.ads-reschip{margin:0}.ads-camps .section-head{margin-top:0}'; document.head.appendChild(s); }
 function adsPlatformSwitch(){
   adsPlatStyles(); var p=adsActivePlatform();
   function b(id,lab,col){ return '<button class="ads-plat'+(p===id?' active':'')+'" onclick="setAdsPlatform(\''+id+'\')"><span class="ads-platdot" style="background:'+col+'"></span>'+esc(lab)+'</button>'; }
@@ -1564,10 +1577,9 @@ function googleOverviewInner(){
     +adsKpiCard('indigo','CPC',metaEur(k.cpc,cur), pv?adsKpiDelta(k.cpc,pv.cpc):'')
     +adsKpiCard('purple','CTR',(Number(k.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%', pv?adsKpiDelta(k.ctr,pv.ctr):'')
     +'</div>';
-  var note='<p class="sdesc" style="margin:-2px 0 12px;max-width:64ch">Rechtstreeks en real-time uit je Google Ads-account.</p>';
   var camps=(g.campaigns||[]).slice().sort(function(a,b){return (b.spend||0)-(a.spend||0);});
-  var campSec='<div class="section-head" style="margin-top:18px"><h2>Actieve campagnes</h2><span class="count">'+camps.length+'</span></div>'+(camps.length?camps.map(function(c){return googleCampaignCard(c,cur);}).join(''):'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">Geen campagnes met besteding in deze periode.</div>');
-  return resChip+strip+googleTrendBlock()+note+campSec;
+  var campSec='<div class="section-head"><h2>Actieve campagnes</h2><span class="count">'+camps.length+'</span></div>'+(camps.length?camps.map(function(c){return googleCampaignCard(c,cur);}).join(''):'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">Geen campagnes met besteding in deze periode.</div>');
+  return '<div class="ads-ovw">'+resChip+strip+googleTrendBlock()+'<div class="ads-camps">'+campSec+'</div></div>';
 }
 function googleCampaignCard(c,cur){
   var ms=[['Besteed',metaEur(c.spend,cur)],['Vertoningen',adsNum(c.impressions)],['Klikken',adsNum(c.clicks)],['CPC',metaEur(c.cpc,cur)],['CTR',(Number(c.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%'],['Conversies',adsNum(c.results)]];
@@ -1580,7 +1592,159 @@ function googleTrendBlock(){
   var g=(window.S27DATA&&S27DATA.googleAds&&S27DATA.googleAds())||{}; var tr=g.trend||[]; var cur=g.currency||'EUR'; var on=gadsTrendOn();
   var chips=['spend','clicks','impressions'].map(function(x){ var mm=ADS_TREND_META[x]; var tot=tr.reduce(function(a,d){return a+(Number(d[x])||0);},0); var tl=x==='spend'?metaEur(tot,cur):adsNum(tot); return '<button class="ads-tchip'+(on[x]?' on':'')+'" onclick="gadsToggleTrend(\''+x+'\')" style="--tc:'+mm[1]+'"><span class="ads-tdot"></span>'+esc(mm[0])+' <b>'+tl+'</b></button>'; }).join('');
   var svg=(tr.length<2)?'<div class="ads-tempty">Nog te weinig data voor een trend in deze periode.</div>':adsTrendSVG(tr,on);
-  return '<div class="card ads-trend" id="gadsTrendBox" style="padding:15px 18px 12px;margin-bottom:14px"><div class="ads-thead"><h3>Evolutie per dag</h3><div class="ads-tchips">'+chips+'</div></div>'+svg+'</div>';
+  return '<div class="card ads-trend" id="gadsTrendBox" style="padding:15px 18px 12px"><div class="ads-thead"><h3>Evolutie per dag</h3><div class="ads-tchips">'+chips+'</div></div>'+svg+'</div>';
+}
+/* =============================================================================
+   GOOGLE ADS — TEAM-WEERGAVE (uitgebreide rapportage, staff). Spiegelt de Meta-rich-
+   view (zelfde ar- en arkpi-CSS + Chart.js + subnav-tabs), maar met Google-metrics:
+   conversies/waarde/CPA/conv.ratio + vertonings-aandeel + adgroep-breakdown + zoekwoorden.
+   Data via S27DATA.googleAdsRich() (worker googleAdsRich, is_staff-gated, acting-as).
+   ============================================================================= */
+function googleRichNotLinked(){ return '<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen Google Ads-account gekoppeld</div><div style="color:var(--ink-3);max-width:470px;margin:0 auto;line-height:1.55">Koppel het Google Ads-klant-id van deze klant (veld &ldquo;Google Ads ID&rdquo; op de bedrijf-taak) om hier de uitgebreide rapportage te zien.</div></div>'; }
+function _gCur(){ var g=(window.S27DATA&&S27DATA.googleAdsRich&&S27DATA.googleAdsRich()); return (g&&g.currency)||'EUR'; }
+function _gFindCamp(cid){ var g=(window.S27DATA&&S27DATA.googleAdsRich&&S27DATA.googleAdsRich()); if(!g||!g.campaigns) return null; for(var i=0;i<g.campaigns.length;i++){ if(String(g.campaigns[i].id)===String(cid)) return g.campaigns[i]; } return null; }
+function _gMatch(mt){ return ({EXACT:'Exact',PHRASE:'Zinsdeel',BROAD:'Breed',BROAD_MATCH_MODIFIER:'Breed+'})[String(mt||'').toUpperCase()]||(mt?_titleCase(mt):'–'); }
+function googleAdsBodyRich(){ return adsPeriodBar()+googleRichSubnav()+'<div id="adsBody">'+googleRichTabBody()+'</div>'; }
+function googleRichSubnav(){
+  var t=adsRichTab();
+  var tabs=[['samengevat','Samengevat','st_progress'],['campagnes','Campagnes','cal'],['gegevens','Zoekwoorden','st_approved'],['aanbevelingen','Aanbevelingen','msg']];
+  return '<div class="soc-subnav" id="adsSubnav">'+tabs.map(function(x){ return '<button class="soc-subtab'+(t===x[0]?' active':'')+'" data-atab="'+x[0]+'" onclick="adsRichSetTab(\''+x[0]+'\')">'+ic(x[2],17)+'<span>'+esc(x[1])+'</span></button>'; }).join('')+'</div>';
+}
+function googleRichTabBody(){
+  var g=(window.S27DATA&&S27DATA.googleAdsRich&&S27DATA.googleAdsRich());
+  if(g===undefined||g===null){
+    if(!state._gadsRichLoading && !state.demoMode && window.S27DATA && S27DATA.loadGoogleAdsRich){
+      state._gadsRichLoading=true; var pp=adsPeriod();
+      S27DATA.loadGoogleAdsRich({from:pp.from,to:pp.to,compare:pp.compare}).then(function(){ state._gadsRichLoading=false; if(isRichView()&&adsActivePlatform()==='google'&&document.querySelector('.panel[data-screen-label="advertenties"]')){ var b=document.getElementById('adsBody'); if(b){ b.innerHTML=googleRichTabBody(); googleRichMountTabCharts(); } } }).catch(function(){ state._gadsRichLoading=false; });
+    }
+    return '<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>De uitgebreide Google-rapportage wordt opgehaald…</p></div>';
+  }
+  if(!g.linked) return googleRichNotLinked();
+  if(g.error && !(g.campaigns&&g.campaigns.length) && !(g.kpis&&g.kpis.spend)) return '<div class="card" style="padding:26px;text-align:center;color:var(--ink-3)">De Google-data kon even niet opgehaald worden. Klik op verversen om opnieuw te proberen.</div>';
+  var cur=g.currency||'EUR', t=adsRichTab();
+  if(t==='campagnes') return googleRichCampagnes(g,cur);
+  if(t==='gegevens') return googleRichKeywords(g,cur);
+  if(t==='aanbevelingen') return googleRichOptim(g,cur);
+  return googleRichSamengevat(g,cur);
+}
+function googleRichKpiGrid(k,p,cur,cmpLabel){
+  function card(lab,val,key,invert){ var d=p?arCmp(k[key],p[key],invert):''; return '<div class="arkpi"><div class="arkpi-l">'+lab+'</div><div class="arkpi-v">'+val+'</div>'+(d?'<div class="arkpi-d">'+d+'</div>':'')+'</div>'; }
+  var cards=[
+    card('Besteed',arEur(k.spend,cur),'spend',true),
+    card('Conversies',arDec(k.conversions,2),'conversions',false),
+    card('Conv.waarde',arEur(k.convValue,cur),'convValue',false),
+    card('Kost/conv.',k.conversions?arEur(k.costPerConv,cur):'–','costPerConv',true),
+    card('Conv.ratio',arPct(k.convRate),'convRate',false),
+    card('Klikken',arNum(k.clicks),'clicks',false),
+    card('Vertoningen',arNum(k.impressions),'impressions',false),
+    card('CTR',arPct(k.ctr),'ctr',false),
+    card('CPC',arEur(k.cpc,cur),'cpc',true),
+    card('CPM',arEur(k.cpm,cur),'cpm',true)
+  ].join('');
+  var note=(p&&cmpLabel)?'<div class="arkpi-note">Vergeleken met '+esc(cmpLabel)+'</div>':'';
+  return '<div class="ar-summary"><div class="ar-kpigrid">'+cards+'</div>'+note+'</div>';
+}
+function googleRichSamengevat(g,cur){
+  var camps=(g.campaigns||[]);
+  var hasDaily=camps.some(function(c){return (c.daily||[]).length>1;});
+  return googleRichKpiGrid(g.kpis||{},g.prevKpis||null,cur,g.compareLabel)
+    +'<div class="ar-camp" style="margin-top:14px"><div class="ar-camp-head"><span class="ar-camp-nm">Account-overzicht per dag</span></div>'
+    +(hasDaily?'<div class="ar-chartwrap"><canvas id="garch_account"></canvas></div>':'<div class="sr-chempty">Nog te weinig dagen met data om een grafiek te tonen in deze periode.</div>')+'</div>';
+}
+function googleRichCampKpis(c,cur){
+  var items=[['Besteed',arEur(c.spend,cur)],['Conversies',arDec(c.conversions,2)],['Conv.waarde',arEur(c.convValue,cur)],['Kost/conv.',c.conversions?arEur(c.costPerConv,cur):'–'],['Conv.ratio',arPct(c.convRate)],['Klikken',arNum(c.clicks)],['Vertoningen',arNum(c.impressions)],['CTR',arPct(c.ctr)],['CPC',arEur(c.cpc,cur)]];
+  return '<div class="ar-campkpis">'+items.map(function(it){return '<div class="ar-ck"><i>'+it[0]+'</i><b>'+it[1]+'</b></div>';}).join('')+'</div>';
+}
+function googleRichCampaign(c,cur){
+  var chan=c.channel?'<span class="ar-obj">'+esc(c.channel)+'</span>':'';
+  var bud=c.budget?'<span class="ar-bud">'+arEur(c.budget,cur)+' /dag</span>':'';
+  var is=(c.imprShare>0)?'<span class="ar-bud" title="Vertonings-aandeel zoeknetwerk">Vert.aandeel '+arPct(c.imprShare)+'</span>':'';
+  return '<div class="ar-camp" data-cid="'+esc(c.id)+'">'
+    +'<div class="ar-camp-head"><span class="ar-camp-nm">'+esc(c.name||'Campagne')+'</span><div class="ar-camp-meta">'+adsRichStatus(c.status)+chan+bud+is+'</div></div>'
+    +googleRichCampKpis(c,cur)
+    +(c.daily&&c.daily.length?'<div class="ar-chartwrap"><canvas id="garch_'+esc(c.id)+'"></canvas></div>':'')
+    +googleRichAdGroupTable(c,cur)
+    +'</div>';
+}
+function googleRichCampagnes(g,cur){
+  var camps=(g.campaigns||[]);
+  if(!camps.length) return '<div class="card" style="padding:24px;text-align:center;color:var(--ink-3)">Geen campagnes met activiteit in deze periode.</div>';
+  return '<div class="section-head" style="margin-top:2px"><h2>Campagnes</h2><span class="count">'+camps.length+'</span></div>'+camps.map(function(c){ return googleRichCampaign(c,cur); }).join('');
+}
+var G_AG_COLS=[['name','Advertentiegroep',0],['status','Status',0],['spend','Besteed',1],['impressions','Vert.',1],['clicks','Klikken',1],['ctr','CTR',1],['cpc','CPC',1],['conversions','Conv.',1],['convValue','Waarde',1]];
+var G_KW_COLS=[['text','Zoekwoord',0],['matchType','Type',0],['campaign','Campagne',0],['spend','Besteed',1],['impressions','Vert.',1],['clicks','Klikken',1],['ctr','CTR',1],['cpc','CPC',1],['conversions','Conv.',1]];
+function _gTable(which,cid,cols,s,rows,cur,emptyMsg,title){
+  var tpl=_arGridCols(cols);
+  var head=cols.map(function(col){ var on=s.key===col[0]; var arr=on?(s.dir<0?' ▼':' ▲'):''; return '<button class="ar-th'+(col[2]?' num':'')+(on?' on':'')+'" onclick="googleRichSort(\''+esc(cid)+'\',\''+which+'\',\''+col[0]+'\')">'+esc(col[1])+arr+'</button>'; }).join('');
+  var body=rows.length? rows.map(function(r){ return '<div class="ar-trow" style="grid-template-columns:'+tpl+'">'+cols.map(function(col){ return '<span class="ar-td'+(col[2]?' num':'')+'">'+_arCell(col[0],r,cur)+'</span>'; }).join('')+'</div>'; }).join('') : '<div class="ar-empty">'+esc(emptyMsg)+'</div>';
+  return '<div class="ar-table" id="gart_'+which+'_'+esc(cid)+'"><div class="ar-tabtitle">'+esc(title)+' <span class="count">'+rows.length+'</span></div><div class="ar-tscroll"><div class="ar-thead" style="grid-template-columns:'+tpl+'">'+head+'</div>'+body+'</div></div>';
+}
+function googleRichAdGroupTable(c,cur){ var ags=(c.adGroups||[]); if(!ags.length) return ''; var s=arSortState('g_'+c.id,'ag'); var rows=ags.slice().sort(function(a,b){return _arCmpVal(a,b,s);}); return _gTable('ag',c.id,G_AG_COLS,s,rows,cur,'Geen advertentiegroepen met data.','Advertentiegroepen'); }
+function _gKwSort(){ if(!state._gKwSort) state._gKwSort={key:'spend',dir:-1}; return state._gKwSort; }
+function googleRichKwInner(){ var rows=(state._gKw||[]).slice(); var s=_gKwSort(); rows.sort(function(a,b){return _arCmpVal(a,b,s);}); return _gTable('kw','all',G_KW_COLS,s,rows,_gCur(),'Geen zoekwoorden met vertoningen in deze periode.','Zoekwoorden'); }
+function googleRichKeywords(g,cur){
+  state._gKw=(g.keywords||[]);
+  if(!state._gKw.length) return '<div class="section-head" style="margin-top:2px"><h2>Zoekwoorden</h2></div><div class="card" style="padding:24px;text-align:center;color:var(--ink-3)">Geen zoekwoord-data in deze periode (enkel zoekcampagnes leveren zoekwoorden).</div>';
+  return '<div class="section-head" style="margin-top:2px"><h2>Zoekwoorden</h2><span class="count">'+state._gKw.length+'</span></div>'
+    +'<p class="sdesc" style="margin:-2px 0 10px;max-width:66ch">De zoekwoorden die je advertenties triggerden in deze periode (top 250 op besteding). Klik op een kolomtitel om te sorteren.</p>'
+    +'<div id="gKwWrap">'+googleRichKwInner()+'</div>';
+}
+function googleRichSort(cid,which,key){
+  if(which==='kw'){ var sk=_gKwSort(); if(sk.key===key){ sk.dir=-sk.dir; } else { sk.key=key; sk.dir=(key==='text'||key==='matchType'||key==='campaign')?1:-1; } var w=document.getElementById('gart_kw_all'); if(w) w.outerHTML=googleRichKwInner(); return; }
+  var ss=arSortState('g_'+cid,which); if(ss.key===key){ ss.dir=-ss.dir; } else { ss.key=key; ss.dir=(key==='name'||key==='status')?1:-1; }
+  var c=_gFindCamp(cid); var host=document.getElementById('gart_'+which+'_'+cid); if(c&&host) host.outerHTML=googleRichAdGroupTable(c,_gCur());
+}
+function googleRichOptimList(g){
+  var recs=[]; var camps=(g.campaigns||[]);
+  camps.forEach(function(c){
+    if((c.conversions||0)===0 && (c.clicks||0)>300) recs.push(['red','Klikken zonder conversies bij &ldquo;'+esc(c.name||'campagne')+'&rdquo;',arNum(c.clicks)+' klikken maar 0 conversies. Controleer de landingspagina, het formulier of de conversie-tracking.']);
+    if(c.imprShare>0 && c.imprShare<40 && (c.spend||0)>0) recs.push(['orange','Laag vertonings-aandeel bij &ldquo;'+esc(c.name||'campagne')+'&rdquo;','Vertonings-aandeel '+arPct(c.imprShare)+' — je mist vertoningen. Een hoger budget of een betere kwaliteitsscore kan helpen.']);
+    if(c.ctr>0 && c.ctr<2 && (c.impressions||0)>1000) recs.push(['blue','Lage CTR bij &ldquo;'+esc(c.name||'campagne')+'&rdquo;','CTR '+arPct(c.ctr)+' — test scherpere advertentieteksten of relevantere zoekwoorden.']);
+  });
+  var noConvKw=(g.keywords||[]).filter(function(k){return (k.conversions||0)===0 && (k.spend||0)>0;}).sort(function(a,b){return b.spend-a.spend;})[0];
+  if(noConvKw && noConvKw.spend>0) recs.push(['orange','Besteding op niet-converterend zoekwoord','&ldquo;'+esc(noConvKw.text||'')+'&rdquo; gaf '+arEur(noConvKw.spend,_gCur())+' uit zonder conversie. Overweeg het te pauzeren of als uitsluitings-zoekwoord toe te voegen.']);
+  if(!recs.length) recs.push(['green','Geen knelpunten gevonden','De Google-campagnes draaien gezond binnen de gangbare richtlijnen voor deze periode.']);
+  return recs;
+}
+function googleRichOptim(g,cur){
+  var recs=googleRichOptimList(g);
+  return '<div class="section-head" style="margin-top:22px"><h2>Optimalisatie-aanbevelingen</h2><span class="count">'+recs.length+'</span></div>'
+    +'<div class="ar-recs">'+recs.map(function(r){ return '<div class="ar-rec ar-rec-'+r[0]+'"><div class="ar-rec-t">'+r[1]+'</div><div class="ar-rec-b">'+r[2]+'</div></div>'; }).join('')+'</div>';
+}
+function googleRichMountTabCharts(){
+  if(!isRichView()||adsActivePlatform()!=='google') return;
+  var t=adsRichTab(); var g=(window.S27DATA&&S27DATA.googleAdsRich)?S27DATA.googleAdsRich():null; if(!g||!g.linked) return;
+  adsRichLoadChart().then(function(ok){ if(!ok||!window.Chart) return;
+    if(t==='samengevat') googleRichBuildAccountChart(g,g.currency||'EUR');
+    else if(t==='campagnes') (g.campaigns||[]).forEach(function(c){ googleRichBuildCampChart(c,g.currency||'EUR'); });
+  });
+}
+function _gChartDs(spend,clicks,conv){
+  var ds=[{type:'bar',label:'Besteed',data:spend,backgroundColor:'rgba(26,115,232,.5)',borderColor:'rgba(26,115,232,.9)',borderWidth:1,borderRadius:4,yAxisID:'y',order:3},
+          {type:'line',label:'Klikken',data:clicks,borderColor:'#230F23',backgroundColor:'#230F23',borderWidth:2,tension:.32,pointRadius:0,yAxisID:'y1',order:2}];
+  if(conv.some(function(v){return v>0;})) ds.push({type:'line',label:'Conversies',data:conv,borderColor:'#12AC4E',backgroundColor:'#12AC4E',borderWidth:2,tension:.32,pointRadius:0,yAxisID:'y1',order:1});
+  return ds;
+}
+function _gChartOpts(cur){
+  return {responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    plugins:{legend:{labels:{font:{family:'Montserrat',size:11,weight:'600'},color:'#6B5B6B',boxWidth:12,padding:14,usePointStyle:true}},tooltip:{callbacks:{label:function(x){ if(x.dataset.label==='Besteed') return ' Besteed: '+metaEur(x.parsed.y,cur); return ' '+x.dataset.label+': '+(Number(x.parsed.y)||0).toLocaleString('nl-BE'); }}}},
+    scales:{ y:{position:'left',beginAtZero:true,ticks:{font:{family:'Montserrat',size:10},color:'#9E919E',callback:function(v){return '€'+v;}},grid:{color:'rgba(231,223,211,.55)'}}, y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false},ticks:{font:{family:'Montserrat',size:10},color:'#9E919E',precision:0}}, x:{ticks:{font:{family:'Montserrat',size:10},color:'#9E919E',maxRotation:0,autoSkip:true,maxTicksLimit:12},grid:{display:false}} } };
+}
+function googleRichBuildAccountChart(g,cur){
+  var cv=document.getElementById('garch_account'); if(!cv||!window.Chart) return;
+  state._arCharts=state._arCharts||{}; try{ if(state._arCharts.gaccount){ state._arCharts.gaccount.destroy(); delete state._arCharts.gaccount; } }catch(e){}
+  var sMap={},cMap={},vMap={},dates={};
+  (g.campaigns||[]).forEach(function(c){ (c.daily||[]).forEach(function(d){ sMap[d.date]=(sMap[d.date]||0)+(d.spend||0); cMap[d.date]=(cMap[d.date]||0)+(d.clicks||0); vMap[d.date]=(vMap[d.date]||0)+(d.conversions||0); dates[d.date]=1; }); });
+  var labels=Object.keys(dates).sort(); if(labels.length<2) return;
+  var spend=labels.map(function(d){return Math.round((sMap[d]||0)*100)/100;}), clicks=labels.map(function(d){return cMap[d]||0;}), conv=labels.map(function(d){return Math.round((vMap[d]||0)*100)/100;});
+  try{ state._arCharts.gaccount=new window.Chart(cv.getContext('2d'),{ data:{labels:labels.map(_arDayLabel),datasets:_gChartDs(spend,clicks,conv)}, options:_gChartOpts(cur) }); }catch(e){}
+}
+function googleRichBuildCampChart(c,cur){
+  var cv=document.getElementById('garch_'+c.id); if(!cv||!window.Chart) return;
+  state._arCharts=state._arCharts||{}; try{ if(state._arCharts['g'+c.id]){ state._arCharts['g'+c.id].destroy(); delete state._arCharts['g'+c.id]; } }catch(e){}
+  var d=(c.daily||[]); if(!d.length) return;
+  var labels=d.map(function(x){return _arDayLabel(x.date);}), spend=d.map(function(x){return Math.round((x.spend||0)*100)/100;}), clicks=d.map(function(x){return x.clicks||0;}), conv=d.map(function(x){return Math.round((x.conversions||0)*100)/100;});
+  try{ state._arCharts['g'+c.id]=new window.Chart(cv.getContext('2d'),{ data:{labels:labels,datasets:_gChartDs(spend,clicks,conv)}, options:_gChartOpts(cur) }); }catch(e){}
 }
 function openMetaCampaign(id){
   state._metaCampaign=String(id); renderPanel('advertenties'); if(window.scrollTo)window.scrollTo({top:0,behavior:'auto'});

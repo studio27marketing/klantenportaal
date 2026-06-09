@@ -3547,6 +3547,92 @@ export async function googleAds(bedrijfId, body, env) {
   return { status: 200, body: { ok: true, linked: true, account: acct, currency: 'EUR', period, kpis, prevKpis, compareLabel, campaigns, trend, error } };
 }
 
+/* ---- googleAdsRich (READ, ADMIN-only/staff) — uitgebreide Google-rapportage --------------
+ * Voor @studio27.be-teamleden (worker gate't op is_staff, acting-as scope). Spiegelt metaAdsRich:
+ * account-KPI's (10 metrics incl. conversies/waarde/CPA/conv.ratio), per-campagne dag-evolutie +
+ * adgroep-breakdown + vertonings-aandeel, en de top-zoekwoorden over het account. Alles in ~5
+ * PARALLELLE GAQL-queries (account / campagnes / dag / adgroepen / zoekwoorden) + 1 vergelijking.
+ * Account UITSLUITEND uit de bedrijf-taak (FIELD.googleAdsId, tenant-safe); token server-side. */
+export async function googleAdsRich(bedrijfId, body, env) {
+  const br = await cu.get(env, `/task/${bedrijfId}`);
+  const acct = (br.ok && br.data ? str(getCF(br.data, FIELD.googleAdsId)) : '').replace(/[^0-9]/g, '');
+  if (!/^\d{8,12}$/.test(acct)) return { status: 200, body: { ok: true, linked: false } };
+  if (!str(env && env.GOOGLE_ADS_DEVELOPER_TOKEN) || !str(env && env.GOOGLE_ADS_REFRESH_TOKEN)) return { status: 200, body: { ok: true, linked: false, reason: 'no_token' } };
+  const token = await googleAdsToken(env, Date.now());
+  if (!token) return { status: 200, body: { ok: true, linked: false, reason: 'no_token' } };
+
+  const from = str(body && body.from).trim(), to = str(body && body.to).trim();
+  const useRange = META_YMD.test(from) && META_YMD.test(to);
+  const preset = GADS_PRESETS[str(body && body.period).trim()] || 'LAST_30_DAYS';
+  const compare = ['previous', 'month', 'year'].indexOf(str(body && body.compare)) >= 0 ? str(body.compare) : 'none';
+  const dateFilter = useRange ? `segments.date BETWEEN '${from}' AND '${to}'` : `segments.date DURING ${preset}`;
+  const METR = 'metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.ctr, metrics.average_cpc, metrics.average_cpm, metrics.conversions, metrics.conversions_value';
+  const richKpi = (m) => {
+    m = m || {};
+    const spend = Number(m.costMicros || 0) / 1e6, impressions = Number(m.impressions || 0), clicks = Number(m.clicks || 0), conv = Number(m.conversions || 0);
+    return {
+      spend, impressions, clicks, conversions: conv,
+      ctr: impressions > 0 ? (clicks / impressions * 100) : 0,
+      cpc: Number(m.averageCpc || 0) / 1e6, cpm: Number(m.averageCpm || 0) / 1e6,
+      convValue: Number(m.conversionsValue || 0),
+      costPerConv: conv > 0 ? spend / conv : 0,
+      convRate: clicks > 0 ? (conv / clicks * 100) : 0,
+    };
+  };
+  const KPIQ = (where) => `SELECT ${METR} FROM customer WHERE ${where}`;
+
+  const [accRes, campRes, dailyRes, agRes, kwRes] = await Promise.all([
+    gadsQuery(env, token, acct, KPIQ(dateFilter)),
+    gadsQuery(env, token, acct, `SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, campaign_budget.amount_micros, ${METR}, metrics.search_impression_share FROM campaign WHERE ${dateFilter} AND metrics.impressions > 0 ORDER BY metrics.cost_micros DESC`),
+    gadsQuery(env, token, acct, `SELECT campaign.id, segments.date, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions FROM campaign WHERE ${dateFilter} ORDER BY segments.date`),
+    gadsQuery(env, token, acct, `SELECT campaign.id, ad_group.id, ad_group.name, ad_group.status, ${METR} FROM ad_group WHERE ${dateFilter} AND metrics.impressions > 0`),
+    gadsQuery(env, token, acct, `SELECT campaign.id, campaign.name, ad_group.name, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.ctr, metrics.average_cpc, metrics.conversions FROM keyword_view WHERE ${dateFilter} AND metrics.impressions > 0 ORDER BY metrics.cost_micros DESC LIMIT 250`),
+  ]);
+
+  const kpis = richKpi((accRes.rows && accRes.rows[0] ? accRes.rows[0].metrics : {}));
+
+  let prevKpis = null, compareLabel = '';
+  if (useRange && compare !== 'none') {
+    const cw = metaCompareWindow(from, to, compare);
+    const prev = await gadsQuery(env, token, acct, KPIQ(`segments.date BETWEEN '${cw[0]}' AND '${cw[1]}'`));
+    if (prev.ok) prevKpis = richKpi((prev.rows && prev.rows[0] ? prev.rows[0].metrics : {}));
+    compareLabel = compare === 'previous' ? 'vorige periode' : (compare === 'month' ? 'vorige maand' : 'vorig jaar');
+  }
+
+  const dailyByCamp = {};
+  for (const r of (dailyRes.rows || [])) {
+    const cid = String((r.campaign || {}).id || ''), m = r.metrics || {}, s = r.segments || {};
+    (dailyByCamp[cid] = dailyByCamp[cid] || []).push({ date: s.date || '', spend: Number(m.costMicros || 0) / 1e6, impressions: Number(m.impressions || 0), clicks: Number(m.clicks || 0), conversions: Number(m.conversions || 0) });
+  }
+  const agByCamp = {};
+  for (const r of (agRes.rows || [])) {
+    const cid = String((r.campaign || {}).id || ''), ag = r.adGroup || {};
+    (agByCamp[cid] = agByCamp[cid] || []).push(Object.assign({ id: String(ag.id || ''), name: ag.name || '', status: ag.status || '' }, richKpi(r.metrics)));
+  }
+  Object.keys(agByCamp).forEach((cid) => agByCamp[cid].sort((a, b) => b.spend - a.spend));
+
+  const campaigns = (campRes.rows || []).map((r) => {
+    const c = r.campaign || {}, m = r.metrics || {}, cid = String(c.id || '');
+    return Object.assign({
+      id: cid, name: c.name || '', status: c.status || '',
+      channel: GADS_CHANNEL[c.advertisingChannelType] || str(c.advertisingChannelType),
+      budget: Number((r.campaignBudget || {}).amountMicros || 0) / 1e6,
+      imprShare: Number(m.searchImpressionShare || 0) * 100,
+      daily: dailyByCamp[cid] || [], adGroups: agByCamp[cid] || [],
+    }, richKpi(m));
+  });
+
+  const keywords = (kwRes.rows || []).map((r) => {
+    const c = r.campaign || {}, ag = r.adGroup || {}, m = r.metrics || {}, kw = ((r.adGroupCriterion || {}).keyword) || {};
+    const spend = Number(m.costMicros || 0) / 1e6, impressions = Number(m.impressions || 0), clicks = Number(m.clicks || 0);
+    return { campaign: c.name || '', campaignId: String(c.id || ''), adGroup: ag.name || '', text: kw.text || '', matchType: kw.matchType || '', spend, impressions, clicks, ctr: impressions > 0 ? (clicks / impressions * 100) : 0, cpc: Number(m.averageCpc || 0) / 1e6, conversions: Number(m.conversions || 0) };
+  });
+
+  const error = (!accRes.ok && !campRes.ok) ? (accRes.err || campRes.err || 'fetch_failed') : null;
+  const period = useRange ? { from, to, compare } : { preset, compare: 'none' };
+  return { status: 200, body: { ok: true, linked: true, account: acct, currency: 'EUR', period, kpis, prevKpis, compareLabel, campaigns, keywords, error } };
+}
+
 // SEC-4: bevestig dat een post-id ECHT tot de blogId van DEZE klant hoort (anti-IDOR).
 // Zonder deze check kon klant A met het post-id van klant B een misleidende interne
 // goedkeuring/feedback-melding triggeren. Hergebruikt het blogId-gescopete scheduler-venster.

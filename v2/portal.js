@@ -238,15 +238,16 @@ function toggleClientView(){
   // metaAdsRich, metricoolStats vs metricoolStatsRich) en kunnen op een ander periode-venster staan.
   // Wis de periode-afhankelijke ads/social-cache zodat de doelweergave opnieuw ophaalt bij de
   // ACTUELE periode (anders zie je foutieve bestedingen/cijfers van een vorig venster).
-  if(state.data){ state.data.metaAds=null; state.data.metaAdsRich=null; state.data.metricoolStats=null; state.data.metricoolStatsRich=null; state.data.metricoolPostStats=null; }
+  if(state.data){ state.data.metaAds=null; state.data.metaAdsRich=null; state.data.googleAds=null; state.data.googleAdsRich=null; state.data.metricoolStats=null; state.data.metricoolStatsRich=null; state.data.metricoolPostStats=null; }
   if(typeof currentTab==='string' && currentTab) goTab(currentTab);   // huidige tab in de juiste weergave herladen
 }
 function updateAdminViewToggle(){
   var b=$id('adminViewToggle'); if(!b) return;
   var client=!!(state.adminMode && state._adminClientView);
   document.body.classList.toggle('client-preview', client);
-  var lab=b.querySelector('.avt-lab'); if(lab) lab.textContent=client?'Teamweergave':'Klantweergave';
-  b.setAttribute('title', client?'Je bekijkt nu de klantweergave — klik om terug te keren naar de teamweergave':'Bekijk dit portaal zoals de klant het ziet');
+  var lab=b.querySelector('.vmode-lab'); if(lab) lab.textContent=client?'ClientView':'TeamView';
+  b.setAttribute('aria-pressed', client?'true':'false');
+  b.setAttribute('title', client?'Je bekijkt het portaal als klant (ClientView) — klik om terug naar TeamView':'Je bekijkt de teamweergave (TeamView) — klik om als klant mee te kijken (ClientView)');
 }
 
 /* =============================================================================

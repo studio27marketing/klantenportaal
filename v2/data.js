@@ -535,6 +535,23 @@
   };
   DATA.googleAds = function(){ return state.data.googleAds; };
 
+  // ADMIN (staff): uitgebreide Google-rapportage (team-weergave). Acting-as-scoping via de gateway.
+  DATA.loadGoogleAdsRich = async function(opts){
+    var o = (typeof opts === 'string') ? { period:opts } : (opts || {});
+    if(!live()){ state.data.googleAdsRich={linked:false}; return false; }
+    var bid = state.activeBedrijf || '';
+    if(!bid){ state.data.googleAdsRich={linked:false}; return false; }
+    try{
+      var payload = (o.from && o.to) ? base({ from:o.from, to:o.to, compare:o.compare||'none' }) : base({ period:(o.period||'last_30d') });
+      var res = await api(ENDPOINTS.googleAdsRich, payload);
+      var j = (res && res.ok && res.data) ? res.data : null;
+      if(!j || !j.ok){ state.data.googleAdsRich={linked:false}; return false; }
+      state.data.googleAdsRich = j;   // { linked, account, currency, kpis, prevKpis, campaigns, keywords, error }
+      return true;
+    }catch(e){ state.data.googleAdsRich={linked:false}; return false; }
+  };
+  DATA.googleAdsRich = function(){ return state.data.googleAdsRich; };
+
   // Campagne-creatives ON-DEMAND (rijke media via page-tokens), gecachet per campagne-id.
   DATA.loadCampaignAds = async function(campaignId){
     var id = String(campaignId||'');
