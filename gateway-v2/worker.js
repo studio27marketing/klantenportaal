@@ -45,6 +45,7 @@ import {
   adsWorkspaceSave,
   adsUploadAdd,
 } from './handlers.mjs';
+import { handlePush, handlePushNotify } from './push.mjs';
 
 // Staff-only (is_staff) rijke-rapportage-handlers: gescoped op het acting-as-bedrijf, (bedrijfId, body, env).
 // webTraffic/webSearch = Webprestaties (GA4 + GSC); v1 team-only, later evt. naar READ_HANDLERS voor klanten.
@@ -516,17 +517,21 @@ export default {
     const path = new URL(request.url).pathname.replace(/^\/+|\/+$/g, '');
     if (path === 'admin/link') return handleAdminLink(request, env, ch);
     if (path === 'provision') return handleProvision(request, env, ch);
+    // Web-push: secret-gated notify (Make/automation roept dit aan met X-Push-Secret, GEEN Firebase-token).
+    if (path === 'push/notify') return handlePushNotify(request, env, ctx, ch);
 
     const isAdminApi = (path === 'adminCompanies');   // admin-only ClickUp-read (enkel staff)
     const isStaffData = !!STAFF_DATA_HANDLERS[path];   // admin-only rijke rapportage (enkel staff, acting-as)
     const isPorted = !!(READ_HANDLERS[path] || WRITE_HANDLERS[path] || path === 'bedrijfBeheer');
+    // Web-push token-authed routes (subscribe/unsubscribe/test): vereisen het Firebase-token, geen ClickUp/Make.
+    const isPushAuthed = (path === 'push/subscribe' || path === 'push/unsubscribe' || path === 'push/test');
     const target = MAKE_ENDPOINTS[path];
-    if (!isAdminApi && !isStaffData && !isPorted && !target) return json({ ok: false, error: 'unknown_endpoint' }, 404, ch);
+    if (!isAdminApi && !isStaffData && !isPorted && !isPushAuthed && !target) return json({ ok: false, error: 'unknown_endpoint' }, 404, ch);
 
     if (!env.PROJECT_ID) return json({ ok: false, error: 'gateway_misconfigured' }, 500, ch);
     // Geporte ClickUp-paden (en admin-API's) vereisen CLICKUP_TOKEN; Make-forward vereist GATEWAY_SECRET.
     if ((isPorted || isAdminApi || isStaffData) && !env.CLICKUP_TOKEN) return json({ ok: false, error: 'gateway_misconfigured' }, 500, ch);
-    if (!isPorted && !isAdminApi && !isStaffData && !env.GATEWAY_SECRET) return json({ ok: false, error: 'gateway_misconfigured' }, 500, ch);
+    if (!isPorted && !isAdminApi && !isStaffData && !isPushAuthed && !env.GATEWAY_SECRET) return json({ ok: false, error: 'gateway_misconfigured' }, 500, ch);
 
     // 1. Firebase ID-token
     const authz = request.headers.get('Authorization') || '';
@@ -553,6 +558,14 @@ export default {
         if (!/^[A-Za-z0-9_-]{1,64}$/.test(actAs)) return json({ ok: false, error: 'bad_act_as' }, 400, ch);
         bedrijfId = actAs;
       }
+    }
+
+    // Web-push: token-authed routes (subscribe/unsubscribe/test). Vóór de bedrijfId-gate, want staff
+    // (Vincent) heeft zelf geen bedrijfskoppeling. De PILOT-gate (enkel vincent@studio27.be) zit in push.mjs.
+    if (isPushAuthed) {
+      let pbody = {};
+      try { pbody = await request.json(); } catch (e) { pbody = {}; }
+      return handlePush(path, claims, pbody || {}, env, ctx, ch);
     }
 
     // Admin-only: lijst ALLE bedrijven (bedrijvenkiezer/zoek). Vóór de bedrijfId-gate, want admins

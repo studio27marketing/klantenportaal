@@ -58,3 +58,39 @@ self.addEventListener('fetch', function (e) {
     })
   );
 });
+
+/* ---- Web Push (pilot) ---------------------------------------------------------
+   De worker stuurt een aes128gcm-payload {title, body, url, tag, icon}. We tonen
+   de melding en openen/focussen bij klik het portaal op de meegegeven url. */
+self.addEventListener('push', function (e) {
+  var data = {};
+  try { data = e.data ? e.data.json() : {}; }
+  catch (err) { try { data = { body: e.data && e.data.text ? e.data.text() : '' }; } catch (e2) { data = {}; } }
+  var title = data.title || 'Studio 27 portaal';
+  var options = {
+    body: data.body || 'Er is een update in je portaal.',
+    icon: data.icon || '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    tag: data.tag || 's27-portaal',
+    renotify: true,
+    data: { url: data.url || '/' }
+  };
+  e.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', function (e) {
+  e.notification.close();
+  var url = (e.notification.data && e.notification.data.url) || '/';
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
+      for (var i = 0; i < list.length; i++) {
+        var c = list[i];
+        if (('focus' in c)) {
+          try { if ('navigate' in c && url) c.navigate(url); } catch (err) {}
+          return c.focus();
+        }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(url);
+    })
+  );
+});
