@@ -1211,6 +1211,7 @@ function adsRichTab(){ return state._adsTab||'samengevat'; }
 function adsRichSubnav(){
   var t=adsRichTab();
   var tabs=[['samengevat','Samengevat','st_progress'],['campagnes','Campagnes','cal'],['gegevens','Uitgebreide gegevens','st_approved'],['aanbevelingen','Aanbevelingen','msg']];
+  if(isRichView()) tabs.push(['meeting','Meeting','img']);
   return '<div class="soc-subnav" id="adsSubnav">'+tabs.map(function(x){ return '<button class="soc-subtab'+(t===x[0]?' active':'')+'" data-atab="'+x[0]+'" onclick="adsRichSetTab(\''+x[0]+'\')">'+ic(x[2],17)+'<span>'+esc(x[1])+'</span></button>'; }).join('')+'</div>';
 }
 function adsRichSetTab(name){
@@ -1229,6 +1230,7 @@ function adsRichTabBody(){
   if(!m.linked) return adsRichNotLinked();
   if(m.error && !(m.campaigns&&m.campaigns.length) && !(m.kpis&&m.kpis.spend)) return '<div class="card" style="padding:26px;text-align:center;color:var(--ink-3)">De Meta-data kon even niet opgehaald worden. Klik op verversen om opnieuw te proberen.</div>';
   var cur=m.currency||'EUR', t=adsRichTab();
+  if(t==='meeting') return adsWsMeetingTab();
   if(t==='campagnes') return adsRichCampagnesTab(m,cur);
   if(t==='gegevens') return adsRichGegevensTab(m,cur);
   if(t==='aanbevelingen') return adsRichOptim(m.campaigns||[],cur);
@@ -1621,9 +1623,7 @@ function adsRichOptimList(camps){
   return recs;
 }
 function adsRichOptim(camps,cur){
-  var recs=adsRichOptimList(camps);
-  return '<div class="section-head" style="margin-top:22px"><h2>Optimalisatie-aanbevelingen</h2><span class="count">'+recs.length+'</span></div>'
-    +'<div class="ar-recs">'+recs.map(function(r){ return '<div class="ar-rec ar-rec-'+r[0]+'"><div class="ar-rec-t">'+esc(r[1])+'</div><div class="ar-rec-b">'+esc(r[2])+'</div></div>'; }).join('')+'</div>';
+  return adsWsRecsRender(adsRichOptimList(camps));
 }
 /* ---- Chart.js (lazy via CDN) — per-campagne dag-evolutie ---- */
 function adsRichLoadChart(){ return new Promise(function(res){ if(window.Chart) return res(true); var ex=document.getElementById('s27-chartjs'); if(ex){ ex.addEventListener('load',function(){res(!!window.Chart);}); ex.addEventListener('error',function(){res(false);}); return; } var el=document.createElement('script'); el.id='s27-chartjs'; el.src='https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js'; el.onload=function(){res(!!window.Chart);}; el.onerror=function(){res(false);}; document.head.appendChild(el); }); }
@@ -1743,9 +1743,11 @@ function googleAdsBodyRich(){ return adsPeriodBar()+googleRichSubnav()+'<div id=
 function googleRichSubnav(){
   var t=adsRichTab();
   var tabs=[['samengevat','Samengevat','st_progress'],['campagnes','Campagnes','cal'],['gegevens','Zoekwoorden','st_approved'],['aanbevelingen','Aanbevelingen','msg']];
+  if(isRichView()) tabs.push(['meeting','Meeting','img']);
   return '<div class="soc-subnav" id="adsSubnav">'+tabs.map(function(x){ return '<button class="soc-subtab'+(t===x[0]?' active':'')+'" data-atab="'+x[0]+'" onclick="adsRichSetTab(\''+x[0]+'\')">'+ic(x[2],17)+'<span>'+esc(x[1])+'</span></button>'; }).join('')+'</div>';
 }
 function googleRichTabBody(){
+  if(adsRichTab()==='meeting') return adsWsMeetingTab();
   var g=(window.S27DATA&&S27DATA.googleAdsRich&&S27DATA.googleAdsRich());
   if(g===undefined||g===null){
     if(!state._gadsRichLoading && !state.demoMode && window.S27DATA && S27DATA.loadGoogleAdsRich){
@@ -1843,9 +1845,244 @@ function googleRichOptimList(g){
   return recs;
 }
 function googleRichOptim(g,cur){
-  var recs=googleRichOptimList(g);
-  return '<div class="section-head" style="margin-top:22px"><h2>Optimalisatie-aanbevelingen</h2><span class="count">'+recs.length+'</span></div>'
-    +'<div class="ar-recs">'+recs.map(function(r){ return '<div class="ar-rec ar-rec-'+r[0]+'"><div class="ar-rec-t">'+r[1]+'</div><div class="ar-rec-b">'+r[2]+'</div></div>'; }).join('')+'</div>';
+  return adsWsRecsRender(googleRichOptimList(g));
+}
+
+/* =============================================================================
+   MEETING-WERKBLAD UI (#19 bewerkbare gegroepeerde aanbevelingen + #20 uploads).
+   Staff-only (isRichView). Persistentie per bedrijf via adsWorkspace (KV-gateway):
+   recs = [{id,cat,title,body}], uploads = [{type,name,url}].
+   ============================================================================= */
+function adsWsStyles(){ if(document.getElementById('adsWsStyles'))return; var s=document.createElement('style'); s.id='adsWsStyles'; s.textContent=''
+  +'.ws-recs{display:flex;flex-direction:column;gap:16px}'
+  +'.ws-grp{background:var(--paper,#fff);border:1px solid var(--line,#E7DFD3);border-radius:var(--r-md,14px);box-shadow:var(--sh-sm,0 1px 2px rgba(35,15,35,.05));padding:14px 16px}'
+  +'.ws-grp-head{display:flex;align-items:center;gap:9px;margin-bottom:10px}'
+  +'.ws-grp-ic{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;background:linear-gradient(180deg,#fff,#f6f2ec);border:1px solid var(--line,#E7DFD3);color:var(--s27-blue-ink,#1F5FA8);flex:none}'
+  +'.ws-grp-ttl{font-family:var(--font-display);font-weight:800;font-size:14.5px;color:var(--ink);flex:1}'
+  +'.ws-grp-n{font-size:11px;font-weight:700;color:var(--ink-4);background:rgba(35,15,35,.05);border-radius:999px;padding:2px 9px}'
+  +'.ws-rec{position:relative;border:1px solid var(--line,#E7DFD3);border-left:4px solid var(--ink-4,#9E919E);border-radius:11px;padding:11px 40px 11px 13px;margin-top:9px;background:rgba(255,255,255,.55)}'
+  +'.ws-rec:first-of-type{margin-top:0}'
+  +'.ws-rec-t{font-family:var(--font-display);font-weight:800;font-size:13.5px;color:var(--ink);line-height:1.35;outline:0;border-radius:5px;min-height:18px}'
+  +'.ws-rec-b{font-size:13px;line-height:1.55;color:var(--ink-3);margin-top:3px;outline:0;border-radius:5px;min-height:17px;white-space:pre-wrap;word-break:break-word}'
+  +'.ws-rec-t:empty:before,.ws-rec-b:empty:before{content:attr(data-ph);color:var(--ink-4,#9E919E);font-weight:500}'
+  +'.ws-rec-t[contenteditable]:focus,.ws-rec-b[contenteditable]:focus{box-shadow:0 0 0 2px rgba(48,131,220,.18);background:#fff}'
+  +'.ws-rec-x{position:absolute;top:8px;right:8px;width:26px;height:26px;border:0;border-radius:7px;background:transparent;color:var(--ink-4,#9E919E);cursor:pointer;display:flex;align-items:center;justify-content:center}'
+  +'.ws-rec-x:hover{background:rgba(220,38,38,.1);color:#DC2626}'
+  +'.ws-grp-add{margin-top:10px;display:inline-flex;align-items:center;gap:6px;border:1px dashed var(--line,#E7DFD3);background:transparent;color:var(--ink-3);font:inherit;font-weight:700;font-size:12.5px;padding:7px 13px;border-radius:9px;cursor:pointer}'
+  +'.ws-grp-add:hover{border-color:var(--s27-blue,#3083DC);color:var(--s27-blue-ink,#1F5FA8)}'
+  +'.ws-save{font-size:11.5px;font-weight:700;color:#12AC4E;min-height:16px;display:inline-flex;align-items:center;gap:5px;opacity:0;transition:opacity .2s}'
+  +'.ws-save.on{opacity:1}'
+  +'.ws-mt{display:flex;flex-direction:column;gap:18px}'
+  +'.ws-add{background:var(--paper,#fff);border:1px solid var(--line,#E7DFD3);border-radius:var(--r-md,14px);box-shadow:var(--sh-sm,0 1px 2px rgba(35,15,35,.05));padding:14px 16px}'
+  +'.ws-add-h{font-family:var(--font-display);font-weight:800;font-size:13.5px;color:var(--ink);display:flex;align-items:center;gap:7px;margin-bottom:9px}'
+  +'.ws-addrow{display:flex;gap:8px;flex-wrap:wrap}'
+  +'.ws-addrow input[type=text]{flex:1;min-width:180px;border:1px solid var(--line,#E7DFD3);border-radius:9px;padding:9px 12px;font:inherit;font-size:13px;color:var(--ink);background:#fff;outline:0}'
+  +'.ws-addrow input[type=text]:focus{box-shadow:0 0 0 2px rgba(48,131,220,.18)}'
+  +'.ws-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line,#E7DFD3);background:linear-gradient(180deg,#fff,#f7f3ec);color:var(--ink);font:inherit;font-weight:700;font-size:12.5px;padding:9px 14px;border-radius:9px;cursor:pointer;white-space:nowrap}'
+  +'.ws-btn:hover{filter:brightness(1.04)}'
+  +'.ws-btn[disabled]{opacity:.55;cursor:default}'
+  +'.ws-file{position:relative;overflow:hidden;display:inline-flex}'
+  +'.ws-file input{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0}'
+  +'.ws-upmsg{font-size:12px;color:var(--ink-4);margin-top:8px;min-height:15px}'
+  +'.ws-upmsg .ok{color:#12AC4E}.ws-upmsg .err{color:#DC2626}'
+  +'.ws-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:4px}'
+  +'.ws-tile{position:relative;border:1px solid var(--line,#E7DFD3);border-radius:12px;overflow:hidden;background:var(--paper,#fff);box-shadow:var(--sh-sm,0 1px 2px rgba(35,15,35,.05))}'
+  +'.ws-tile-img{display:block;width:100%;height:120px;object-fit:cover;cursor:pointer;background:#f6f2ec}'
+  +'.ws-tile-cap{font-size:11px;color:var(--ink-3);padding:7px 9px;line-height:1.3;word-break:break-word}'
+  +'.ws-chip{display:flex;align-items:center;gap:8px;padding:11px 12px;cursor:pointer;text-decoration:none;color:var(--ink)}'
+  +'.ws-chip:hover{background:rgba(48,131,220,.06)}'
+  +'.ws-chip-ic{flex:none;color:var(--s27-blue-ink,#1F5FA8)}'
+  +'.ws-chip-tx{font-size:12.5px;font-weight:600;line-height:1.3;word-break:break-all;flex:1}'
+  +'.ws-tile-x{position:absolute;top:6px;right:6px;width:24px;height:24px;border:0;border-radius:7px;background:rgba(255,255,255,.86);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);color:var(--ink-3);cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(35,15,35,.16)}'
+  +'.ws-tile-x:hover{color:#DC2626}'
+  +'.ws-empty{border:1px dashed var(--line,#E7DFD3);border-radius:12px;padding:22px;text-align:center;color:var(--ink-4);font-size:13px}';
+  document.head.appendChild(s);
+}
+var ADS_WS_CATS=[['content','Content & creatives','img'],['landingspagina','Landingspagina','doc'],['budget','Budget & bieden','st_progress'],['doelgroep','Doelgroep','msg'],['overig','Overig','st_approved']];
+function adsWsGuessCat(title,body){
+  var s=((title||'')+' '+(body||'')).toLowerCase();
+  if(/landingspag|formulier|landing|website|pagina|tracking|conversie-track|conversie track/.test(s)) return 'landingspagina';
+  if(/budget|besteding|biedt|bieden|kost|cpc|cpm|uitgegeven|uitgaven|geld|gaf .* uit/.test(s)) return 'budget';
+  if(/frequen|publiek|doelgroep|audience|breder publiek|targeting|vertonings-aandeel|vertonings aandeel|bereik/.test(s)) return 'doelgroep';
+  if(/visual|advertentie|ad |ads|creatief|creative|tekst|ctr|varianten|pauzeer|nieuwe ad/.test(s)) return 'content';
+  return 'overig';
+}
+/* HTML-entiteiten uit de Google-seed naar leesbare tekst (recs worden als platte tekst bewerkt). */
+function adsWsDecode(h){ if(h==null) return ''; var s=String(h); if(s.indexOf('&')<0) return s; var d=document.createElement('textarea'); d.innerHTML=s; return d.value; }
+function adsWsRid(){ return 'r'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+/* Werk-state is per bedrijf: bij een bedrijf-switch (state.activeBedrijf wijzigt) starten we schoon,
+   zodat we nooit de recs/uploads van het vorige bedrijf tonen. */
+function adsWsState(){ var bid=state.activeBedrijf||''; if(!state._adsWs || state._adsWs.bid!==bid) state._adsWs={bid:bid,loaded:false,seeded:false,recs:null}; return state._adsWs; }
+/* Seed de bewerkbare recs uit de auto-lijst ([kleur,titel,body]) -> objecten met geraden categorie. */
+function adsWsSeedFrom(autoList){
+  return (autoList||[]).filter(function(r){ return r&&r[0]!=='green'; }).map(function(r){
+    var ttl=adsWsDecode(r[1]), bdy=adsWsDecode(r[2]);
+    return { id:adsWsRid(), cat:adsWsGuessCat(ttl,bdy), title:ttl, body:bdy };
+  });
+}
+/* Gedeelde renderer voor Meta + Google. seedList = auto-gegenereerde [kleur,titel,body]-lijst. */
+function adsWsRecsRender(seedList){
+  adsWsStyles();
+  var ws=adsWsState();
+  // Eénmalig laden + her-renderen wanneer de KV-data binnen is (zoals het kladblok). Als we (nog) geen
+  // bewaarde recs hadden bij de eerste render maar ze komen later binnen, her-seeden we zolang de gebruiker
+  // nog niets bewerkte (ws.dirty), zodat opgeslagen aanbevelingen niet door de auto-seed overschreven worden.
+  if(!ws.loaded && !state.demoMode && window.S27DATA && S27DATA.loadAdsWorkspace){
+    ws.loaded=true;
+    S27DATA.loadAdsWorkspace().then(function(w){
+      if(adsRichTab()!=='aanbevelingen') return;
+      if(!ws.seededFromSaved && !ws.dirty && w && Array.isArray(w.recs) && w.recs.length){ ws.seeded=false; }
+      var box=document.getElementById('adsBody'); if(!box) return;
+      box.innerHTML=(isRichView()&&adsActivePlatform()==='google')?googleRichTabBody():adsRichTabBody();
+    });
+  }
+  if(!ws.seeded){
+    var saved=(window.S27DATA&&S27DATA.adsWorkspace&&S27DATA.adsWorkspace())||state.data.adsWorkspace||null;
+    if(saved && Array.isArray(saved.recs) && saved.recs.length){
+      ws.recs=saved.recs.map(function(r){ return { id:r.id||adsWsRid(), cat:r.cat||'overig', title:r.title||'', body:r.body||'' }; });
+      ws.seededFromSaved=true;
+    } else {
+      ws.recs=adsWsSeedFrom(seedList);
+      ws.seededFromSaved=false;
+    }
+    ws.seeded=true;
+  }
+  var recs=ws.recs||[];
+  var groups=ADS_WS_CATS.map(function(c){
+    var items=recs.filter(function(r){ return (r.cat||'overig')===c[0]; });
+    if(!items.length) return '';
+    var cards=items.map(function(r){
+      return '<div class="ws-rec" data-rid="'+esc(r.id)+'">'
+        +'<button class="ws-rec-x" onclick="adsWsRecDel(\''+esc(r.id)+'\')" title="Verwijderen" aria-label="Verwijderen">'+ic('trash',15)+'</button>'
+        +'<div class="ws-rec-t" contenteditable="true" data-ph="Titel…" oninput="adsWsRecEdit(\''+esc(r.id)+'\',\'title\',this)">'+esc(r.title||'')+'</div>'
+        +'<div class="ws-rec-b" contenteditable="true" data-ph="Beschrijving…" oninput="adsWsRecEdit(\''+esc(r.id)+'\',\'body\',this)">'+esc(r.body||'')+'</div>'
+        +'</div>';
+    }).join('');
+    return '<div class="ws-grp">'
+      +'<div class="ws-grp-head"><span class="ws-grp-ic">'+ic(c[2],17)+'</span><span class="ws-grp-ttl">'+esc(c[1])+'</span><span class="ws-grp-n">'+items.length+'</span></div>'
+      +cards
+      +'<button class="ws-grp-add" onclick="adsWsRecAdd(\''+c[0]+'\')">'+ic('plus',14)+' Toevoegen</button>'
+      +'</div>';
+  }).filter(Boolean);
+  // Lege categorieën blijven beschikbaar via een toevoegrij onderaan, zodat elke categorie bruikbaar blijft.
+  var emptyCats=ADS_WS_CATS.filter(function(c){ return !recs.some(function(r){ return (r.cat||'overig')===c[0]; }); });
+  var emptyAdd=emptyCats.length?('<div class="ws-grp"><div class="ws-grp-head"><span class="ws-grp-ic">'+ic('plus',16)+'</span><span class="ws-grp-ttl">Nog een aanbeveling toevoegen</span></div><div class="ws-addrow">'+emptyCats.map(function(c){ return '<button class="ws-btn" onclick="adsWsRecAdd(\''+c[0]+'\')">'+ic(c[2],14)+' '+esc(c[1])+'</button>'; }).join('')+'</div></div>'):'';
+  return '<div class="section-head" style="margin-top:22px"><h2>Aanbevelingen</h2><span class="count" id="adsWsCount">'+recs.length+'</span><span class="ws-save" id="adsWsSave" style="margin-left:auto"></span></div>'
+    +'<p class="sdesc" style="margin:-2px 0 12px;max-width:70ch">Bewerk de aanbevelingen rechtstreeks — klik op een titel of tekst om aan te passen. Ze worden per bedrijf bewaard en verschijnen zo terug bij de volgende meeting.</p>'
+    +'<div class="ws-recs" id="adsWsRecs">'+groups.join('')+emptyAdd+'</div>';
+}
+function adsWsRerenderRecs(){
+  var box=document.getElementById('adsBody'); if(!box) return;
+  // Volledige tab opnieuw opbouwen via de gedeelde optim-renderer (kiest zelf platform).
+  if(adsRichTab()!=='aanbevelingen'){ return; }
+  if(isRichView()&&adsActivePlatform()==='google'){ var g=(window.S27DATA&&S27DATA.googleAdsRich)?S27DATA.googleAdsRich():null; box.innerHTML=googleRichOptim(g||{},''); }
+  else { var m=(window.S27DATA&&S27DATA.metaAdsRich)?S27DATA.metaAdsRich():null; box.innerHTML=adsRichOptim((m&&m.campaigns)||[],''); }
+}
+function adsWsRecEdit(id,field,el){
+  var ws=adsWsState(); var r=(ws.recs||[]).filter(function(x){return x.id===id;})[0]; if(!r) return;
+  ws.dirty=true; r[field]=(el&&el.textContent)||''; adsWsSaveRecsDebounced();
+}
+function adsWsRecAdd(cat){
+  var ws=adsWsState(); if(!ws.recs) ws.recs=[]; ws.dirty=true;
+  ws.recs.push({ id:adsWsRid(), cat:cat||'overig', title:'', body:'' });
+  var cnt=document.getElementById('adsWsCount'); if(cnt) cnt.textContent=ws.recs.length;
+  adsWsRerenderRecs(); adsWsSaveRecsDebounced();
+  // Focus de nieuwe (laatste) titel binnen de gekozen categorie.
+  setTimeout(function(){ var nodes=document.querySelectorAll('.ws-rec[data-rid] .ws-rec-t'); if(nodes.length){ var last=nodes[nodes.length-1]; try{ last.focus(); }catch(e){} } },30);
+}
+function adsWsRecDel(id){
+  var ws=adsWsState(); ws.dirty=true; ws.recs=(ws.recs||[]).filter(function(x){return x.id!==id;});
+  var cnt=document.getElementById('adsWsCount'); if(cnt) cnt.textContent=ws.recs.length;
+  adsWsRerenderRecs(); adsWsSaveRecsDebounced();
+}
+function adsWsSaveRecsDebounced(){ clearTimeout(state._adsWsTmr); state._adsWsTmr=setTimeout(adsWsSaveRecs,700); }
+function adsWsSaveRecs(){
+  if(!(window.S27DATA&&S27DATA.saveAdsWorkspace)) return;
+  var recs=adsWsState().recs||[];
+  S27DATA.saveAdsWorkspace({recs:recs}).then(function(ok){ adsWsFlashSave(ok); });
+}
+function adsWsFlashSave(ok){
+  var el=document.getElementById('adsWsSave'); if(!el) return;
+  el.innerHTML=ok?(ic('check',13)+' opgeslagen'):'opslaan mislukt';
+  el.style.color=ok?'#12AC4E':'#DC2626'; el.classList.add('on');
+  clearTimeout(state._adsWsSaveHide); state._adsWsSaveHide=setTimeout(function(){ var e2=document.getElementById('adsWsSave'); if(e2) e2.classList.remove('on'); },1600);
+}
+
+/* ---- #20 Meeting-uploads: links + afbeeldingen/bestanden per bedrijf ---- */
+function adsWsLinkIcon(){ return '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>'; }
+function adsWsUploads(){ var ws=(window.S27DATA&&S27DATA.adsWorkspace&&S27DATA.adsWorkspace())||state.data.adsWorkspace||null; return (ws&&Array.isArray(ws.uploads))?ws.uploads:[]; }
+function adsWsMeetingTab(){
+  adsWsStyles();
+  var ws=adsWsState();
+  if(!ws.loaded && !state.demoMode && window.S27DATA && S27DATA.loadAdsWorkspace){
+    ws.loaded=true;
+    S27DATA.loadAdsWorkspace().then(function(){ if(adsRichTab()!=='meeting') return; var box=document.getElementById('adsBody'); if(box) box.innerHTML=adsWsMeetingTab(); });
+  }
+  var plus=ic('plus',14);
+  return '<div class="section-head" style="margin-top:2px"><h2>Meeting-materiaal</h2><span class="count" id="adsWsUpCount">'+adsWsUploads().length+'</span></div>'
+    +'<p class="sdesc" style="margin:-2px 0 12px;max-width:70ch">Verzamel hier alles voor de meeting met deze klant: schermafbeeldingen, visuals, bestanden en handige links. Alles wordt per bedrijf bewaard.</p>'
+    +'<div class="ws-mt">'
+      +'<div class="ws-add"><div class="ws-add-h">'+adsWsLinkIcon()+' Link toevoegen</div>'
+        +'<div class="ws-addrow"><input type="text" id="adsWsLinkUrl" placeholder="https://… (bv. een rapport, ad-preview of Drive-map)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();adsWsLinkAdd();}">'
+        +'<button class="ws-btn" onclick="adsWsLinkAdd()">'+plus+' Link toevoegen</button></div></div>'
+      +'<div class="ws-add"><div class="ws-add-h">'+ic('upload',16)+' Afbeelding of bestand uploaden</div>'
+        +'<div class="ws-addrow"><span class="ws-btn ws-file">'+ic('img',14)+' Bestand kiezen<input type="file" id="adsWsFile" onchange="adsWsFileUpload(this)" accept="image/*,application/pdf,video/*"></span></div>'
+        +'<div class="ws-upmsg" id="adsWsUpMsg"></div></div>'
+      +'<div id="adsWsGridWrap">'+adsWsUploadsGrid()+'</div>'
+    +'</div>';
+}
+function adsWsUploadsGrid(){
+  var ups=adsWsUploads();
+  if(!ups.length) return '<div class="ws-empty">Nog geen materiaal toegevoegd. Voeg een link toe of upload een visual.</div>';
+  var tiles=ups.map(function(u,i){
+    if(u.type==='image'){
+      return '<div class="ws-tile"><button class="ws-tile-x" onclick="adsWsUploadDel('+i+')" title="Verwijderen" aria-label="Verwijderen">'+ic('trash',13)+'</button>'
+        +'<a href="'+esc(u.url||'#')+'" target="_blank" rel="noopener"><img class="ws-tile-img" src="'+esc(u.url||'')+'" alt="'+esc(u.name||'')+'" loading="lazy"></a>'
+        +(u.name?'<div class="ws-tile-cap">'+esc(u.name)+'</div>':'')+'</div>';
+    }
+    var icn=(u.type==='link')?adsWsLinkIcon():ic('doc',16);
+    return '<div class="ws-tile"><button class="ws-tile-x" onclick="adsWsUploadDel('+i+')" title="Verwijderen" aria-label="Verwijderen">'+ic('trash',13)+'</button>'
+      +'<a class="ws-chip" href="'+esc(u.url||'#')+'" target="_blank" rel="noopener"><span class="ws-chip-ic">'+icn+'</span><span class="ws-chip-tx">'+esc(u.name||u.url||'Link')+'</span></a></div>';
+  }).join('');
+  return '<div class="ws-grid">'+tiles+'</div>';
+}
+function adsWsRefreshGrid(){ var w=document.getElementById('adsWsGridWrap'); if(w) w.innerHTML=adsWsUploadsGrid(); var c=document.getElementById('adsWsUpCount'); if(c) c.textContent=adsWsUploads().length; }
+function adsWsLinkAdd(){
+  var inp=document.getElementById('adsWsLinkUrl'); if(!inp) return;
+  var v=String(inp.value||'').trim(); if(!v) return;
+  var url=/^https?:\/\//i.test(v)?v:('https://'+v);
+  if(!(window.S27DATA&&S27DATA.adsUploadAdd)){ inp.value=''; return; }
+  inp.value='';
+  S27DATA.adsUploadAdd({type:'link',name:v,url:url}).then(function(list){ if(list) adsWsRefreshGrid(); });
+}
+function adsWsFileUpload(input){
+  var msg=document.getElementById('adsWsUpMsg');
+  var f=input&&input.files&&input.files[0]; if(!f) return;
+  if(f.size>22*1024*1024){ if(msg) msg.innerHTML='<span class="err">Dit bestand is te groot (max 22 MB). Plak liever een link (bv. WeTransfer of Drive).</span>'; input.value=''; return; }
+  if(msg) msg.innerHTML='<span style="display:inline-flex;align-items:center;gap:6px">'+ic('upload',13)+' Uploaden…</span>';
+  var isImg=/^image\//i.test(f.type||'');
+  var rdr=new FileReader();
+  rdr.onerror=function(){ if(msg) msg.innerHTML='<span class="err">Lezen mislukt. Probeer opnieuw.</span>'; input.value=''; };
+  rdr.onload=function(){
+    var dataUrl=String(rdr.result||'');
+    var b64=dataUrl.indexOf(',')>=0?dataUrl.slice(dataUrl.indexOf(',')+1):dataUrl; // strip 'data:...;base64,'
+    if(state.demoMode || typeof api!=='function' || !ENDPOINTS.metricoolMediaUpload){ if(msg) msg.innerHTML='<span class="err">Upload is enkel beschikbaar in de live-omgeving.</span>'; input.value=''; return; }
+    api(ENDPOINTS.metricoolMediaUpload, { filename:f.name, content_type:f.type, file_data:b64 }).then(function(r){
+      var d=(r&&r.ok&&r.data)?r.data:(r&&r.ok!==undefined?r:null);
+      if(d&&d.ok&&d.url){
+        if(window.S27DATA&&S27DATA.adsUploadAdd){ S27DATA.adsUploadAdd({type:isImg?'image':'file',name:f.name,url:d.url}).then(function(list){ if(list){ adsWsRefreshGrid(); if(msg) msg.innerHTML='<span class="ok">'+ic('check',13)+' Toegevoegd.</span>'; } else if(msg){ msg.innerHTML='<span class="err">Opslaan mislukte.</span>'; } }); }
+      } else { var det=(d&&d.message)?(' '+esc(String(d.message))):''; if(msg) msg.innerHTML='<span class="err">Upload lukte niet.'+det+'</span>'; }
+    }).catch(function(){ if(msg) msg.innerHTML='<span class="err">Upload lukte niet. Probeer opnieuw.</span>'; });
+    input.value='';
+  };
+  rdr.readAsDataURL(f);
+}
+function adsWsUploadDel(idx){
+  var ups=adsWsUploads().slice();
+  if(idx<0||idx>=ups.length) return;
+  ups.splice(idx,1);
+  if(window.S27DATA&&S27DATA.saveAdsWorkspace){ S27DATA.saveAdsWorkspace({uploads:ups}).then(function(){ adsWsRefreshGrid(); }); }
+  else { adsWsRefreshGrid(); }
 }
 function googleRichMountTabCharts(){
   if(!isRichView()||adsActivePlatform()!=='google') return;
