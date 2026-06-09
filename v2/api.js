@@ -110,6 +110,10 @@ const ENDPOINTS = {
   // Google Ads real-time (direct via Google Ads API, geen Make): { from,to,compare } -> zelfde vorm als
   // metaAds { ok, linked, account, currency, kpis, prevKpis, compareLabel, campaigns:[], trend:[] }.
   googleAds:         GATEWAY_BASE + '/googleAds',
+  // ADMIN-only (staff): per-bedrijf KV-meeting-werkblad (notities + recs + uploads).
+  adsWorkspace:      GATEWAY_BASE + '/adsWorkspace',
+  adsWorkspaceSave:  GATEWAY_BASE + '/adsWorkspaceSave',
+  adsUploadAdd:      GATEWAY_BASE + '/adsUploadAdd',
   // ADMIN-only (staff): uitgebreide Google-rapportage (team-weergave). { from,to,compare } ->
   // { ok, linked, kpis(10), prevKpis, campaigns:[{...,daily,adGroups,imprShare}], keywords:[] }. Acting-as scope.
   googleAdsRich:     GATEWAY_BASE + '/googleAdsRich',

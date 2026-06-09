@@ -564,6 +564,12 @@
   };
   DATA.googleAds = function(){ return state.data.googleAds; };
 
+  // Meeting-werkblad (staff): notities + recs + uploads per bedrijf (KV via gateway).
+  DATA.loadAdsWorkspace = async function(){ if(!live()) return null; var bid=state.activeBedrijf||''; if(!bid) return null; try{ var res=await api(ENDPOINTS.adsWorkspace, base({})); var j=(res&&res.ok&&res.data)?res.data:null; if(j&&j.ok){ state.data.adsWorkspace=j; return j; } }catch(e){} return null; };
+  DATA.adsWorkspace = function(){ return state.data.adsWorkspace; };
+  DATA.saveAdsWorkspace = async function(patch){ if(!live()) return false; try{ var res=await api(ENDPOINTS.adsWorkspaceSave, base(patch||{})); var j=(res&&res.ok&&res.data)?res.data:null; if(j&&j.ok){ if(state.data.adsWorkspace){ Object.assign(state.data.adsWorkspace, patch||{}); } return true; } }catch(e){} return false; };
+  DATA.adsUploadAdd = async function(item){ if(!live()) return null; try{ var res=await api(ENDPOINTS.adsUploadAdd, base({item:item||{}})); var j=(res&&res.ok&&res.data)?res.data:null; if(j&&j.ok){ if(state.data.adsWorkspace) state.data.adsWorkspace.uploads=j.uploads||[]; return j.uploads||[]; } }catch(e){} return null; };
+
   // ADMIN (staff): uitgebreide Google-rapportage (team-weergave). Acting-as-scoping via de gateway.
   DATA.loadGoogleAdsRich = async function(opts){
     var o = (typeof opts === 'string') ? { period:opts } : (opts || {});
