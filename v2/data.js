@@ -245,7 +245,11 @@
     var raw = projList(); if(!raw) return null;
     var out=[];
     raw.forEach(function(p){
-      if(p.discipline==='ads') return;   // advertentie-taken leven enkel op de Ads-pagina, niet in 'Voor jou te doen'
+      var isAds=(p.discipline==='ads');
+      // Ads: enkel een actiepunt tonen als er écht iets van de klant gevraagd wordt (rapport/meeting inplannen
+      // of feedback); anders blijft de ads-taak op de Ads-pagina en spamt ze 'Voor jou te doen' niet. (Cluster F)
+      var adsHeeftActie = isAds && (norm(p.status)==='doorgestuurd' || p.feedback_link || (p.plan_items&&p.plan_items.length));
+      if(isAds && !adsHeeftActie) return;
       var br = DATA.disc(p.discipline);
       if(norm(p.status)==='doorgestuurd' || p.feedback_link){
         out.push({ br:br.br, cat:br.label, title:'Review nodig', ctx:'Er staat iets klaar voor jou bij <b>'+esc(p.naam)+'</b>. Geef je akkoord of je feedback.',
@@ -258,6 +262,13 @@
           ctx:'Er staat een nieuwe taak voor je klaar bij <b>'+esc(p.naam)+'</b>'+(it.label?' ('+esc(it.label)+')':'')+'. Je kunt nu '+(isShoot?'je shoot':'een meeting')+' inplannen.',
           cta:(isShoot?'Plan shoot':'Plan moment'), action:"openProject('"+esc(p.task_id)+"','projecten')", urgent:true, icon:'st_plan' });
       });
+      // Project-chat wacht op de klant: worker-veld chat_wacht_op_klant (Cluster F). Inert zolang de worker
+      // dit veld nog niet levert (undefined -> geen kaart), dus veilig vóór de worker-deploy.
+      if(p.chat_wacht_op_klant===true || p.chat_wacht_op_klant==='true'){
+        out.push({ br:br.br, cat:br.label, title:'Bericht wacht op jou',
+          ctx:'Je team stelde je een vraag in de chat van <b>'+esc(p.naam)+'</b>. Laat iets weten zodat we verder kunnen.',
+          cta:'Open chat', action:"openProject('"+esc(p.task_id)+"','berichten')", urgent:false, icon:'msg' });
+      }
     });
     return out;
   };

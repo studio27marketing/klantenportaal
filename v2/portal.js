@@ -1462,11 +1462,14 @@ async function metricoolFeedback(id, btn){
 }
 /* ---- Social-kalender: goedkeuren + aanpassing doorgeven (nieuwe detail-UI) ---- */
 async function socialApprove(id, btn){
-  if(btn){ btn.disabled=true; btn.textContent='Bezig…'; }
   state._mcApproved=state._mcApproved||{}; state._mcApproved[id]=true;
   if(window.S27DATA&&S27DATA.markMetricoolApproved) S27DATA.markMetricoolApproved(id);
-  if(!state.demoMode){ try{ await api(ENDPOINTS.metricoolApprove, { post_id:id }); }catch(e){} }
-  if(typeof renderPanel==='function') renderPanel('socials');
+  // Optimistisch: het actie-blok meteen herrenderen (knop -> 'Goedgekeurd') i.p.v. wachten op de worker.
+  // Vroeger bleef de knop op 'Bezig…' hangen bij een trage/falende call — dat is hiermee weg.
+  var box=document.getElementById('socEditActsForm');
+  if(box){ box.innerHTML=socialEditorActions(id); }
+  else if(btn){ btn.disabled=true; btn.innerHTML=ic('check',15)+' Goedgekeurd'; }
+  if(!state.demoMode){ api(ENDPOINTS.metricoolApprove, { post_id:id }).catch(function(){}); }  // fire-and-forget
 }
 async function socialFeedback(id, btn){
   const t=$id('socFbTx'); const tx=((t&&t.value)||'').trim();

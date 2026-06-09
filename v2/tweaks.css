@@ -421,6 +421,12 @@
 .soc-editor{max-width:1040px;}
 .soc-etopbar{position:sticky;top:60px;z-index:8;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 0;margin-bottom:8px;background:rgba(251,248,243,.86);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-radius:0 0 12px 12px;}
 .soc-etop-act{margin-left:auto;display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+/* Cluster E: ronde ×-sluitknop i.p.v. de "Terug naar de kalender"-tekstlink */
+.soc-close{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;border:1px solid var(--line,#E7DFD3);background:#fff;color:var(--ink-3,#6B5B6B);cursor:pointer;transition:.16s ease;flex:none;box-shadow:0 1px 3px rgba(60,40,80,.06);}
+.soc-close:hover{background:var(--s27-orange,#F66131);border-color:var(--s27-orange,#F66131);color:#fff;transform:rotate(90deg);}
+/* Cluster E: actieknoppen (Wacht op feedback / Opslaan / Goedkeuren) rechtsonder in het editor-formulier */
+.soc-eactions{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap;margin-top:18px;padding-top:14px;border-top:1px solid var(--line,#E7DFD3);}
+@media(max-width:760px){.soc-eactions{justify-content:stretch;}.soc-eactions .btn{flex:1;}}
 .soc-egrid{display:grid;grid-template-columns:330px 1fr;gap:28px;align-items:start;}
 .soc-ecol-pv{position:sticky;top:124px;}
 .soc-ecol-form{min-width:0;}

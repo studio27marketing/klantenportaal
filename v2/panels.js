@@ -44,6 +44,7 @@ const I = {
   plus:'<path d="M12 5v14M5 12h14"/>',
   minus:'<path d="M5 12h14"/>',
   cart:'<circle cx="9" cy="21" r="1.6"/><circle cx="18" cy="21" r="1.6"/><path d="M2 3h3l2.6 13.4a1.6 1.6 0 0 0 1.6 1.3h8.7a1.6 1.6 0 0 0 1.6-1.3L23 7H6"/>',
+  close:'<path d="M6 6l12 12M18 6 6 18"/>',
 };
 const ic = (n,w=20)=>`<svg viewBox="0 0 24 24" width="${w}" height="${w}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${I[n]}</svg>`;
 const logo27 = (w=28)=>`<svg class="logo27" viewBox="782 34 210 130" width="${w}" height="${Math.round(w*0.62)}" fill="currentColor" aria-hidden="true"><path d="M788.07,158.63v-24.58l42.88-39.66c2.71-2.6,4.71-4.86,6.02-6.78,1.3-1.92,2.17-3.64,2.63-5.17,.45-1.52,.68-2.97,.68-4.32,0-2.94-.96-5.22-2.88-6.86-1.92-1.64-4.8-2.46-8.64-2.46-3.5,0-6.84,.93-10,2.8-3.16,1.86-5.65,4.61-7.46,8.22l-30.17-15.08c4.29-8.13,10.73-14.74,19.32-19.83,8.59-5.09,19.26-7.63,32.03-7.63,9.38,0,17.68,1.53,24.91,4.58,7.23,3.05,12.88,7.35,16.95,12.88,4.07,5.54,6.1,12.09,6.1,19.66,0,3.84-.48,7.68-1.44,11.52-.96,3.84-2.91,7.88-5.85,12.12-2.94,4.24-7.29,8.96-13.05,14.15l-32.2,29.32-6.27-13.9h61.52v31.01h-95.08Z"/><path d="M908.23,158.63l44.74-104.4,10.68,16.78h-56.27l15.59-18.13v35.42h-33.05V40h101.52v24.58l-39.49,94.06h-43.72Z"/></svg>`;
@@ -105,8 +106,14 @@ function _live(){ return !!(window.S27DATA && typeof state!=='undefined' && !sta
 function _projects(){ const p = window.S27DATA && S27DATA.projects(); return (p && p.length!==undefined) ? p : PROJECTS; }
 // advertentie-taak = primaire discipline 'ads' OF uitsluitend ads-labels. Die leven ENKEL op de Ads-pagina.
 function _isAdProject(p){ if(!p) return false; if(p.discId==='ads') return true; var ls=p.labels||[]; return ls.length>0 && ls.every(function(l){return l.discId==='ads';}); }
-function _nonAdProjects(){ return _projects().filter(function(p){ return !_isAdProject(p); }); }
 function _adProject(){ return _projects().filter(_isAdProject)[0] || null; }   // huidige-maand ads-taak (worker filtert al op due deze maand)
+// De Projecten-pagina toont ENKEL de echte 'deliverable'-trajecten: video/fotografie, webdesign en branding.
+// Doorlopende diensten (social, ads, seo) + losse disciplines (strategie, opleiding, automation) hebben hun
+// eigen pagina/flow en horen niet in het projectenoverzicht. (Cluster F — Vincent: "enkel video/branding/webdesign".)
+var PROJ_DISC_WHITELIST = ['video_fotografie','webdesign','branding'];
+function _isProjectDisc(p){ if(!p) return false; var ls=(p.labels&&p.labels.length)?p.labels:[{discId:p.discId}]; return ls.some(function(l){ return PROJ_DISC_WHITELIST.indexOf(l.discId)>=0; }); }
+function _nonAdProjects(){ return _projects().filter(function(p){ return !_isAdProject(p); }); }   // alle niet-ads-projecten (meeting-planner e.d.) — blacklist
+function _overviewProjects(){ return _projects().filter(_isProjectDisc); }   // ENKEL voor de Projecten-PAGINA: video/webdesign/branding (whitelist)
 function _isSocialProject(p){ if(!p) return false; if(p.discId==='social') return true; var ls=p.labels||[]; return ls.length>0 && ls.every(function(l){return l.discId==='social';}); }
 function _socProject(){ return _projects().filter(_isSocialProject)[0] || null; }   // sociale-media-taak (zelfde maand-logica als de ads-taak)
 function _greetNaam(){ var n=(window.S27DATA && S27DATA.klantNaam && S27DATA.klantNaam())||''; if(n && n!=='daar') return n; return _live()?'daar':'Sarah'; }
@@ -161,7 +168,10 @@ function buildSvcCards(){ return SERVICES.map(svcCard).join(''); }
 const _COCKPIT_MOCK = [
   {br:'purple',cat:'Video- en fotografie',title:'Review nodig',ctx:'De eerste montage van je bedrijfsfilm <b>"Onder één dak"</b> staat klaar. Geef je akkoord of je feedback.',cta:'Bekijk montage',action:"openProject('p1')",tag:'vandaag',urgent:true,icon:'st_feedback'},
   {br:'blue',cat:'Strategie',title:'Feedback gevraagd',ctx:'We willen je input op de <b>positionering</b> voor 2026 voor we verder bouwen.',cta:'Geef feedback',action:"openProject('p4')",tag:'deze week',urgent:false,icon:'st_feedback'},
-  {br:'orange',cat:'Online adverteren',title:'Rapport inplannen',ctx:'Tijd om de <b>resultaten van je campagnes</b> samen te bekijken. Prik een moment dat jou past.',cta:'Plan in',action:"goTab('meetings')",tag:'mei',urgent:false,icon:'st_plan'}
+  {br:'orange',cat:'Online adverteren',title:'Rapport inplannen',ctx:'Tijd om de <b>resultaten van je campagnes</b> samen te bekijken. Prik een moment dat jou past.',cta:'Plan in',action:"goTab('meetings')",tag:'mei',urgent:false,icon:'st_plan'},
+  {br:'yellow',cat:'Social media',title:'Feedback gevraagd',ctx:'Je <b>contentkalender</b> staat klaar ter goedkeuring. Bekijk de geplande posts en geef je akkoord.',cta:'Bekijk posts',action:"goTab('socials')",tag:'deze week',urgent:false,icon:'st_feedback'},
+  {br:'purple',cat:'Video- en fotografie',title:'Klaar om in te plannen',ctx:'Je <b>productshoot</b> is klaar om ingepland te worden. Prik een datum die jou past.',cta:'Plan shoot',action:"openProject('p3')",tag:'binnenkort',urgent:true,icon:'st_plan'},
+  {br:'green',cat:'Webdesign',title:'Bericht wacht op jou',ctx:'We hebben een vraag in de chat van je <b>nieuwe website</b>. Laat iets weten zodat we verder kunnen.',cta:'Open chat',action:"openProject('p2','berichten')",urgent:false,icon:'msg'}
 ];
 const _RUN_MOCK = [{br:'green',disc:'Website en SEO',name:'Nieuwe website & webshop',pct:62,status:'prog',label:'In productie'},{br:'blue',disc:'Strategie',name:'Merkstrategie 2026',pct:40,status:'wait',label:'Klaar voor feedback'},{br:'orange',disc:'Online adverteren',name:'Leadcampagne Q2',pct:78,status:'prog',label:'Live'}];
 const _DONE_MOCK = [{br:'yellow',name:'Contentkalender mei',disc:'Social media',when:'2 dagen geleden'},{br:'orange',name:'TikTok lentepromo',disc:'Online adverteren',when:'5 dagen geleden'},{br:'purple',name:'Sfeerreportage event',disc:'Video- en fotografie',when:'vorige week'}];
@@ -215,7 +225,9 @@ function berichtChatInner(p){
   </div><div style="padding:18px 22px">${chatHTML(p.id)}</div>`;
 }
 function panelBerichten(){
-  const projs=_nonAdProjects(); const first=projs[0];
+  // Berichten houdt ÁLLE projecten (ook social/ads) zodat elke projectchat bereikbaar blijft —
+  // de whitelist van _overviewProjects geldt enkel voor de Projecten-pagina, niet voor de chat.
+  const projs=_projects(); const first=projs[0];
   const rows = projs.map((p,idx)=>`
         <button class="proj-row br-${p.br} bericht-row" data-bid="${esc(p.id)}" style="border:none;border-radius:0;box-shadow:none;border-bottom:1px solid var(--line);${idx===0?'background:var(--paper-2)':''}" onclick="openBerichtChat('${esc(p.id)}',this)">
           <span class="ber-dot" style="background:var(--c)"></span>
@@ -255,7 +267,7 @@ function projCluster(cl, grp, num){
   </section>`;
 }
 function projDienst(){
-  const all=_nonAdProjects().filter(p=>p.status!=='done');
+  const all=_overviewProjects().filter(p=>p.status!=='done');
   if(!all.length) return `<div class="empty"><div class="em-ic">${ic('st_approved',64)}</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Geen actieve projecten</b><p style="margin:6px 0 0">Zodra we samen aan iets nieuws starten, verschijnt het hier.</p></div>`;
   const sortFn=(a,b)=>{ const ia=DISC_ORDER.indexOf(a.disc),ib=DISC_ORDER.indexOf(b.disc); return ((ia<0?99:ia)-(ib<0?99:ib))||String(a.name).localeCompare(String(b.name)); };
   let html='', _n=0;
@@ -281,7 +293,7 @@ function projCardFlat(p){
 function panelProjecten(){
   // filter-opties = ALLE disciplines die ergens als label voorkomen (ook secundaire), zodat
   // je ook op 'Webdesign' kan filteren als dat enkel een tweede label van een hoofdtaak is.
-  const order=[]; _nonAdProjects().filter(p=>p.status!=='done').forEach(p=>{ ((p.labels&&p.labels.length)?p.labels:[{label:p.disc}]).forEach(l=>{ if(l.label && order.indexOf(l.label)<0) order.push(l.label); }); });
+  const order=[]; _overviewProjects().filter(p=>p.status!=='done').forEach(p=>{ ((p.labels&&p.labels.length)?p.labels:[{label:p.disc}]).forEach(l=>{ if(l.label && order.indexOf(l.label)<0) order.push(l.label); }); });
   order.sort((a,b)=>{ const ia=DISC_ORDER.indexOf(a),ib=DISC_ORDER.indexOf(b); return (ia<0?99:ia)-(ib<0?99:ib); });
   return `<div id="projViewBody">${projDienst()}</div>`;
 }
@@ -384,10 +396,7 @@ function socialSubnav(){
   var nav='<div class="soc-subnav" id="socialSubnav">'+tabs.map(function(t){
     return '<button class="soc-subtab'+(active===t[0]?' active':'')+'" data-stab="'+t[0]+'" onclick="socialSetTab(\''+t[0]+'\')">'+ic(t[2],17)+'<span>'+esc(t[1])+'</span></button>';
   }).join('')+'</div>';
-  // In de post-editor: actieknoppen rechts op DEZELFDE balk (cleaner; geen aparte knoppenrij eronder).
-  if(state._socialDetail){
-    return '<div class="soc-subnav-row">'+nav+'<div class="soc-subnav-act" id="socEditActs">'+socialEditorActions(state._socialDetail)+'</div></div>';
-  }
+  // In de post-editor staan de actieknoppen nu RECHTSONDER in het formulier (#socEditActsForm), niet meer op de sub-nav-balk.
   return nav;
 }
 function socialSetTab(name){
@@ -930,7 +939,7 @@ function socialDetailPage(id){
   state._socPreviewNet=activeNet;
   var initVid=(mediaArr.length===1)?_isVidUrl(mediaArr[0]):false;
   var fmt=socialInferFormat(p,activeNet,initVid,mediaArr.length);
-  var back='<button class="soc-back" onclick="socialCloseDetail()">'+ic('arrow',15)+' Terug naar de kalender</button>';
+  var back='<button class="soc-close" type="button" aria-label="Sluiten" title="Terug naar de kalender" onclick="socialCloseDetail()">'+ic('close',18)+'</button>';
   var phone=socialPhoneMock({brand:_socAccountName(activeNet),caption:p.tekst||'',net:activeNet,format:fmt,mediaArr:mediaArr});
   var datebadge=(dd?'<span class="soc-emeta-date">'+ic('cal',13)+' '+esc(dd)+(tt?' · '+tt:'')+'</span>':'');
   if(published){
@@ -960,9 +969,10 @@ function socialDetailPage(id){
       +'<p class="fs" style="color:var(--ink-4);margin:6px 0 0">Laat leeg om de huidige visual te behouden. Een geüploade foto/video gebruiken we automatisch.</p>'
       +'<div id="socFbWrap" class="soc-fbwrap" style="display:none;margin-top:14px"><label class="soc-elab">Wat wil je aangepast zien?</label><textarea id="socFbTx" class="soc-cap" rows="3" placeholder="Beschrijf kort je feedback voor dit bericht…"></textarea><button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="socialFeedback(\''+esc(p.id)+'\',this)">'+ic('check',15)+' Verstuur feedback</button></div>'
       +'<div id="socSaveMsg" style="margin-top:12px"></div>'
+      +'<div class="soc-eactions" id="socEditActsForm">'+socialEditorActions(p.id)+'</div>'
     +'</div></div></div>';
 }
-// Actieknoppen van de post-editor (renderen rechts op de sub-nav-balk). Hergebruikt de bestaande save/approve/feedback-flows.
+// Actieknoppen van de post-editor (renderen nu RECHTSONDER in het formulier, niet meer op de sub-nav-balk). Hergebruikt de bestaande save/approve/feedback-flows.
 function socialEditorActions(id){
   var p=socialPostsAll().filter(function(x){return String(x.id)===String(id);})[0];
   if(!p) return '';
