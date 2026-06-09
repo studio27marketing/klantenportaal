@@ -3247,7 +3247,7 @@ export async function metaAds(bedrijfId, body, env) {
   });
   const cins = await metaGet(env, `${act}/insights`, Object.assign({
     level: 'campaign', limit: '200',
-    fields: 'campaign_id,spend,impressions,clicks,ctr,cpc,cpm,reach,frequency,actions',
+    fields: 'campaign_id,spend,impressions,clicks,inline_link_clicks,ctr,cpc,cpm,reach,frequency,actions',
   }, tp));
   const cmap = {};
   if (cins.ok && Array.isArray(cins.data.data)) for (const row of cins.data.data) cmap[row.campaign_id] = row;
@@ -3256,17 +3256,17 @@ export async function metaAds(bedrijfId, body, env) {
     return {
       id: c.id, name: c.name || '', objective: c.objective || '', status: c.effective_status || '',
       budget: Number(c.daily_budget || c.lifetime_budget || 0) / 100,
-      spend: Number(m.spend) || 0, impressions: Number(m.impressions) || 0, clicks: Number(m.clicks) || 0,
+      spend: Number(m.spend) || 0, impressions: Number(m.impressions) || 0, clicks: Number(m.clicks) || 0, linkClicks: Number(m.inline_link_clicks) || 0,
       reach: Number(m.reach) || 0, cpm: Number(m.cpm) || 0, frequency: Number(m.frequency) || 0,
       ctr: Number(m.ctr) || 0, cpc: Number(m.cpc) || 0, results: metaActionVal(m.actions, META_RESULT_ACTIONS),
     };
   }).filter((c) => c.spend > 0);
 
   // dagelijkse trend over het GEKOZEN venster (per dag spend/impressions/clicks)
-  const tins = await metaGet(env, `${act}/insights`, Object.assign({ level: 'account', time_increment: '1', fields: 'spend,impressions,clicks', limit: '200' }, tp));
+  const tins = await metaGet(env, `${act}/insights`, Object.assign({ level: 'account', time_increment: '1', fields: 'spend,impressions,clicks,inline_link_clicks', limit: '200' }, tp));
   const trend = (tins.ok && Array.isArray(tins.data.data) ? tins.data.data : []).map((d) => ({
     date: d.date_start || '', spend: Number(d.spend) || 0,
-    impressions: Number(d.impressions) || 0, clicks: Number(d.clicks) || 0,
+    impressions: Number(d.impressions) || 0, clicks: Number(d.clicks) || 0, linkClicks: Number(d.inline_link_clicks) || 0,
   }));
 
   // Alleen een 'error' als beide primaire calls faalden (bv. token/permissie) → UI toont nette melding i.p.v. nullen.
@@ -3324,7 +3324,7 @@ export async function metaAdsRich(bedrijfId, body, env) {
     metaGet(env, `${act}/insights`, Object.assign({ level: 'account', fields: INS }, tp)),
     metaGet(env, `${act}/campaigns`, { fields: 'name,objective,effective_status,daily_budget,lifetime_budget', effective_status: '["ACTIVE","PAUSED"]', limit: '300' }),
     metaGet(env, `${act}/insights`, Object.assign({ level: 'campaign', limit: '400', fields: 'campaign_id,campaign_name,' + INS }, tp)),
-    metaGet(env, `${act}/insights`, Object.assign({ level: 'campaign', time_increment: '1', limit: '800', fields: 'campaign_id,spend,impressions,clicks,actions' }, tp)),
+    metaGet(env, `${act}/insights`, Object.assign({ level: 'campaign', time_increment: '1', limit: '800', fields: 'campaign_id,spend,impressions,clicks,inline_link_clicks,actions' }, tp)),
     metaGet(env, `${act}/insights`, Object.assign({ level: 'adset', limit: '500', fields: 'adset_id,adset_name,campaign_id,' + INS }, tp)),
     metaGet(env, `${act}/insights`, Object.assign({ level: 'ad', limit: '800', fields: 'ad_id,ad_name,adset_id,campaign_id,' + INS }, tp)),
     metaGet(env, `${act}/adsets`, { fields: 'name,effective_status,campaign_id', effective_status: '["ACTIVE","PAUSED"]', limit: '500' }),
@@ -3360,7 +3360,7 @@ export async function metaAdsRich(bedrijfId, body, env) {
     const k = metaRichKpi(ins);
     const daily = (dailyByCamp[cid] || []).map((d) => {
       const lds = metaLeads(d.actions), sp = Number(d.spend) || 0;
-      return { date: d.date_start || '', spend: sp, impressions: Number(d.impressions) || 0, clicks: Number(d.clicks) || 0, leads: lds, cpl: lds > 0 ? Math.round((sp / lds) * 100) / 100 : 0 };
+      return { date: d.date_start || '', spend: sp, impressions: Number(d.impressions) || 0, clicks: Number(d.clicks) || 0, linkClicks: Number(d.inline_link_clicks) || 0, leads: lds, cpl: lds > 0 ? Math.round((sp / lds) * 100) / 100 : 0 };
     }).sort((a, b) => (a.date < b.date ? -1 : 1));
     const adsets = (adsetsByCamp[cid] || []).map((r) => {
       const m = adsetMetaMap[r.adset_id] || {};
@@ -3399,7 +3399,7 @@ export async function metaCampaignAds(bedrijfId, body, env) {
   const act = `act_${acct}`;
 
   const adRes = await metaGet(env, `${act}/ads`, {
-    fields: 'name,effective_status,campaign_id,creative{thumbnail_url,image_url,object_type,video_id,effective_object_story_id,object_story_spec,asset_feed_spec},insights{spend,impressions,clicks,ctr,cpc}',
+    fields: 'name,effective_status,campaign_id,creative{thumbnail_url,image_url,object_type,video_id,effective_object_story_id,object_story_spec,asset_feed_spec},insights{spend,impressions,clicks,inline_link_clicks,ctr,cpc}',
     filtering: JSON.stringify([{ field: 'campaign.id', operator: 'EQUAL', value: campId }]),
     effective_status: '["ACTIVE"]', limit: '50',
   });
@@ -3420,7 +3420,7 @@ export async function metaCampaignAds(bedrijfId, body, env) {
       id: a.id, name: a.name || '', campaignId: a.campaign_id || '', format: fmt,
       thumb: cr.thumbnail_url || cr.image_url || '', image: cr.image_url || '',
       spend: Number(ins.spend) || 0, impressions: Number(ins.impressions) || 0,
-      clicks: Number(ins.clicks) || 0, ctr: Number(ins.ctr) || 0, cpc: Number(ins.cpc) || 0,
+      clicks: Number(ins.clicks) || 0, linkClicks: Number(ins.inline_link_clicks) || 0, ctr: Number(ins.ctr) || 0, cpc: Number(ins.cpc) || 0,
     };
     const vid = metaAdVideoId(cr);
     if (fmt === 'video' && vid && ptok) {

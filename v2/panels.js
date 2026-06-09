@@ -925,7 +925,7 @@ function socialDemoPosts(){
 }
 
 /* ---- Advertenties (echte Meta/Google-data) ---- */
-const ADS_PLAT={meta:['Meta','#1877f2'],facebook:['Facebook','#1877f2'],instagram:['Instagram','#d6336c'],google:['Google Ads','#1a73e8'],'google-ads':['Google Ads','#1a73e8'],tiktok:['TikTok','#111827'],linkedin:['LinkedIn','#0a66c2'],snapchat:['Snapchat','#f7b500']};
+const ADS_PLAT={meta:['Meta','#1877f2'],facebook:['Facebook','#1877f2'],instagram:['Instagram','#d6336c'],google:['Google Ads','#C28E0E'],'google-ads':['Google Ads','#C28E0E'],tiktok:['TikTok','#111827'],linkedin:['LinkedIn','#0a66c2'],snapchat:['Snapchat','#f7b500']};
 function adsPlat(p){ p=String(p||'').toLowerCase(); return ADS_PLAT[p]||[(p?p.charAt(0).toUpperCase()+p.slice(1):'Ads'),'#667684']; }
 function adsObjective(o){ o=String(o||'').toUpperCase(); var m={OUTCOME_LEADS:'Leads',OUTCOME_SALES:'Verkoop',OUTCOME_TRAFFIC:'Verkeer',OUTCOME_AWARENESS:'Naamsbekendheid',OUTCOME_ENGAGEMENT:'Betrokkenheid',OUTCOME_APP_PROMOTION:'App-promotie',LINK_CLICKS:'Klikken',LEAD_GENERATION:'Leads',CONVERSIONS:'Conversies'}; return m[o]||(o?o.replace(/^OUTCOME_/,'').replace(/_/g,' ').toLowerCase():''); }
 function adsNum(n){ return (Number(n)||0).toLocaleString('nl-BE'); }
@@ -987,19 +987,22 @@ function metaEnsureStyles(){
 function metaPeriodLabel(p){ return ({today:'Vandaag',last_7d:'7 dagen',last_30d:'30 dagen'})[p]||p; }
 function metaEur(n,cur){ var s=(Number(n)||0).toLocaleString('nl-BE',{minimumFractionDigits:2,maximumFractionDigits:2}); cur=cur||'EUR'; return cur==='EUR'?('€ '+s):(s+' '+cur); }
 function metaKpiCard(br,lab,val){ return '<div class="kpi br-'+br+'"><div class="kbar"></div><div class="klab">'+lab+'</div><div class="knum">'+val+'</div></div>'; }
-function adsKpiDelta(cur,prev){ if(prev==null) return ''; cur=Number(cur)||0; prev=Number(prev)||0; if(!prev){ return cur>0?'<span class="kdelta up">nieuw</span>':''; } var pct=Math.round(((cur-prev)/prev)*1000)/10; var cls=pct>0?'up':(pct<0?'down':'flat'); return '<span class="kdelta '+cls+'">'+(pct>0?'+':'')+pct+'%</span>'; }
+function adsKpiDelta(cur,prev,invert){ if(prev==null) return ''; cur=Number(cur)||0; prev=Number(prev)||0; if(!prev){ return cur>0?'<span class="kdelta up">nieuw</span>':''; } var pct=Math.round(((cur-prev)/prev)*1000)/10; var better=invert?pct<0:pct>0; var cls=pct===0?'flat':(better?'up':'down'); return '<span class="kdelta '+cls+'">'+(pct>0?'+':'')+pct+'%</span>'; }
 function adsKpiCard(br,lab,val,d){ return '<div class="kpi br-'+br+'"><div class="kbar"></div><div class="klab">'+lab+'</div><div class="knum">'+val+'</div>'+(d?'<div class="kdrow">'+d+'</div>':'')+'</div>'; }
 function metaFmt(f){ return ({video:['Video','purple'],carousel:['Carrousel','blue'],image:['Foto','green']})[f]||['Foto','green']; }
 /* ---- Ads periode-selector (custom range) + rolling vergelijking (spiegelt socials) ---- */
 function _adsYmd(d){ var p=function(n){return (n<10?'0':'')+n;}; return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); }
 function adsPeriodWindow(preset){
-  var now=new Date(), from;
-  if(preset==='today') from=now;
-  else if(preset==='7d') from=new Date(now.getTime()-6*86400000);
-  else if(preset==='30d') from=new Date(now.getTime()-29*86400000);
-  else if(preset==='90d') from=new Date(now.getTime()-89*86400000);
+  var now=new Date();
+  // Client-view: nooit de lopende dag tonen (die keldert het beeld) -> venster eindigt op GISTEREN.
+  var endMs=(typeof isRichView==='function'&&isRichView())?now.getTime():(now.getTime()-86400000);
+  var end=new Date(endMs), from;
+  if(preset==='today') from=end;
+  else if(preset==='7d') from=new Date(endMs-6*86400000);
+  else if(preset==='30d') from=new Date(endMs-29*86400000);
+  else if(preset==='90d') from=new Date(endMs-89*86400000);
   else return null;
-  return { from:_adsYmd(from), to:_adsYmd(now) };
+  return { from:_adsYmd(from), to:_adsYmd(end) };
 }
 function adsPeriod(){ if(!state._adsPeriod){ var def=isRichView()?'30d':'7d'; var w=adsPeriodWindow(def); state._adsPeriod={preset:def,compare:'none',from:w.from,to:w.to}; } return state._adsPeriod; }
 function _adsRefreshIc(){ return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>'; }
@@ -1049,7 +1052,7 @@ function metaCreativeCard(a,i,cur){
 }
 function metaCampaignCard(c,cur){
   var obj=adsObjective(c.objective);
-  var ms=[['Besteed',metaEur(c.spend,cur)],['Vertoningen',adsNum(c.impressions)],['Klikken',adsNum(c.clicks)],['CPC',metaEur(c.cpc,cur)],['CTR',(Number(c.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%'],['Resultaten',adsNum(c.results)]];
+  var ms=[['Besteed',metaEur(c.spend,cur)],['Vertoningen',adsNum(c.impressions)],['Klikken',adsNum(c.linkClicks||c.clicks)],['CPC',metaEur(c.cpc,cur)],['CTR',(Number(c.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%'],['Resultaten',adsNum(c.results)]];
   var chev='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="color:var(--ink-4);flex:none"><path d="M9 6l6 6-6 6"/></svg>';
   return '<div class="card" onclick="openMetaCampaign(\''+esc(c.id)+'\')" style="padding:14px 16px;margin-bottom:10px;cursor:pointer"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:11px"><span class="pill pill-prog"><span class="pdot"></span>Live</span><b style="font-family:var(--font-display);font-size:15px;flex:1;min-width:130px">'+esc(c.name||'Campagne')+'</b>'+(obj?'<span class="fs" style="color:var(--ink-4)">'+esc(obj)+'</span>':'')+chev+'</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:10px">'+ms.map(function(m){return '<div><div style="color:var(--ink-4);font-size:11px;font-weight:600">'+m[0]+'</div><div style="font-family:var(--font-display);font-weight:800;font-size:16px;color:var(--ink)">'+m[1]+'</div></div>';}).join('')+'</div></div>';
 }
@@ -1250,7 +1253,7 @@ function adsRichBuildAccountChart(m,cur){
   var cv=document.getElementById('arch_account'); if(!cv||!window.Chart) return;
   state._arCharts=state._arCharts||{}; try{ if(state._arCharts.account){ state._arCharts.account.destroy(); delete state._arCharts.account; } }catch(e){}
   var sMap={}, cMap={}, lMap={}, dates={};
-  (m.campaigns||[]).forEach(function(c){ (c.daily||[]).forEach(function(d){ sMap[d.date]=(sMap[d.date]||0)+(d.spend||0); cMap[d.date]=(cMap[d.date]||0)+(d.clicks||0); lMap[d.date]=(lMap[d.date]||0)+(d.leads||0); dates[d.date]=1; }); });
+  (m.campaigns||[]).forEach(function(c){ (c.daily||[]).forEach(function(d){ sMap[d.date]=(sMap[d.date]||0)+(d.spend||0); cMap[d.date]=(cMap[d.date]||0)+(d.linkClicks||d.clicks||0); lMap[d.date]=(lMap[d.date]||0)+(d.leads||0); dates[d.date]=1; }); });
   var labels=Object.keys(dates).sort(); if(labels.length<2) return;
   var spend=labels.map(function(d){return Math.round((sMap[d]||0)*100)/100;}), clicks=labels.map(function(d){return cMap[d]||0;}), leads=labels.map(function(d){return lMap[d]||0;});
   var hasLeads=leads.some(function(v){return v>0;});
@@ -1505,7 +1508,7 @@ function adsRichBuildChart(c,cur){
   var d=(c.daily||[]); if(!d.length) return;
   var labels=d.map(function(x){return _arDayLabel(x.date);});
   var spend=d.map(function(x){return Math.round((x.spend||0)*100)/100;});
-  var clicks=d.map(function(x){return x.clicks||0;});
+  var clicks=d.map(function(x){return x.linkClicks||x.clicks||0;});
   var leads=d.map(function(x){return x.leads||0;});
   var hasLeads=leads.some(function(v){return v>0;});
   var ds=[{type:'bar',label:'Besteed',data:spend,backgroundColor:'rgba(48,131,220,.5)',borderColor:'rgba(48,131,220,.9)',borderWidth:1,borderRadius:4,yAxisID:'y',order:3},
@@ -1528,11 +1531,11 @@ function adsOverviewInner(){
   var resd = pv?('<div class="ads-reschip-d">'+adsKpiDelta(k.results,pv.results)+'<span>vs '+esc(clab)+'</span></div>'):'';
   var resChip='<div class="ads-reschip"><div class="ads-reschip-ic">'+ic('st_approved',20)+'</div><div class="ads-reschip-tx"><div class="ads-reschip-lab">Resultaten in deze periode</div><div class="ads-reschip-num">'+adsNum(k.results)+'</div></div>'+resd+'</div>';
   var strip='<div class="kpi-grid kpi-grid-5">'
-    +adsKpiCard('orange','Besteding',metaEur(k.spend,cur), pv?adsKpiDelta(k.spend,pv.spend):'')
-    +adsKpiCard('blue','Vertoningen',adsNum(k.impressions), pv?adsKpiDelta(k.impressions,pv.impressions):'')
-    +adsKpiCard('green','Klikken',adsNum(k.clicks), pv?adsKpiDelta(k.clicks,pv.clicks):'')
-    +adsKpiCard('indigo','CPC',metaEur(k.cpc,cur), pv?adsKpiDelta(k.cpc,pv.cpc):'')
-    +adsKpiCard('purple','CTR',(Number(k.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%', pv?adsKpiDelta(k.ctr,pv.ctr):'')
+    +adsKpiCard('orange','Besteding',metaEur(k.spend,cur), pv?adsKpiDelta(k.spend,pv.spend,true):'')
+    +adsKpiCard('blue','Vertoningen',adsNum(k.impressions), pv?adsKpiDelta(k.impressions,pv.impressions,false):'')
+    +adsKpiCard('green','Klikken',adsNum(k.linkClicks||k.clicks), pv?adsKpiDelta(k.linkClicks||k.clicks,pv.linkClicks||pv.clicks,false):'')
+    +adsKpiCard('indigo','CPC',metaEur(k.cpc,cur), pv?adsKpiDelta(k.cpc,pv.cpc,true):'')
+    +adsKpiCard('purple','CTR',(Number(k.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%', pv?adsKpiDelta(k.ctr,pv.ctr,false):'')
     +'</div>';
   var camps=(m.campaigns||[]).slice().sort(function(a,b){return (b.spend||0)-(a.spend||0);});
   var campSec='<div class="section-head"><h2>Actieve campagnes</h2><span class="count">'+camps.length+'</span></div>'+(camps.length?camps.map(function(c){return metaCampaignCard(c,cur);}).join(''):'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">Geen campagnes met besteding in deze periode.</div>');
@@ -1571,11 +1574,11 @@ function googleOverviewInner(){
   var resd = pv?('<div class="ads-reschip-d">'+adsKpiDelta(k.results,pv.results)+'<span>vs '+esc(clab)+'</span></div>'):'';
   var resChip='<div class="ads-reschip"><div class="ads-reschip-ic">'+ic('st_approved',20)+'</div><div class="ads-reschip-tx"><div class="ads-reschip-lab">Conversies in deze periode</div><div class="ads-reschip-num">'+adsNum(k.results)+'</div></div>'+resd+'</div>';
   var strip='<div class="kpi-grid kpi-grid-5">'
-    +adsKpiCard('orange','Besteding',metaEur(k.spend,cur), pv?adsKpiDelta(k.spend,pv.spend):'')
-    +adsKpiCard('blue','Vertoningen',adsNum(k.impressions), pv?adsKpiDelta(k.impressions,pv.impressions):'')
-    +adsKpiCard('green','Klikken',adsNum(k.clicks), pv?adsKpiDelta(k.clicks,pv.clicks):'')
-    +adsKpiCard('indigo','CPC',metaEur(k.cpc,cur), pv?adsKpiDelta(k.cpc,pv.cpc):'')
-    +adsKpiCard('purple','CTR',(Number(k.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%', pv?adsKpiDelta(k.ctr,pv.ctr):'')
+    +adsKpiCard('orange','Besteding',metaEur(k.spend,cur), pv?adsKpiDelta(k.spend,pv.spend,true):'')
+    +adsKpiCard('blue','Vertoningen',adsNum(k.impressions), pv?adsKpiDelta(k.impressions,pv.impressions,false):'')
+    +adsKpiCard('green','Klikken',adsNum(k.clicks), pv?adsKpiDelta(k.clicks,pv.clicks,false):'')
+    +adsKpiCard('indigo','CPC',metaEur(k.cpc,cur), pv?adsKpiDelta(k.cpc,pv.cpc,true):'')
+    +adsKpiCard('purple','CTR',(Number(k.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%', pv?adsKpiDelta(k.ctr,pv.ctr,false):'')
     +'</div>';
   var camps=(g.campaigns||[]).slice().sort(function(a,b){return (b.spend||0)-(a.spend||0);});
   var campSec='<div class="section-head"><h2>Actieve campagnes</h2><span class="count">'+camps.length+'</span></div>'+(camps.length?camps.map(function(c){return googleCampaignCard(c,cur);}).join(''):'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">Geen campagnes met besteding in deze periode.</div>');
@@ -1720,7 +1723,7 @@ function googleRichMountTabCharts(){
   });
 }
 function _gChartDs(spend,clicks,conv){
-  var ds=[{type:'bar',label:'Besteed',data:spend,backgroundColor:'rgba(26,115,232,.5)',borderColor:'rgba(26,115,232,.9)',borderWidth:1,borderRadius:4,yAxisID:'y',order:3},
+  var ds=[{type:'bar',label:'Besteed',data:spend,backgroundColor:'rgba(194,142,14,.55)',borderColor:'rgba(194,142,14,.95)',borderWidth:1,borderRadius:4,yAxisID:'y',order:3},
           {type:'line',label:'Klikken',data:clicks,borderColor:'#230F23',backgroundColor:'#230F23',borderWidth:2,tension:.32,pointRadius:0,yAxisID:'y1',order:2}];
   if(conv.some(function(v){return v>0;})) ds.push({type:'line',label:'Conversies',data:conv,borderColor:'#12AC4E',backgroundColor:'#12AC4E',borderWidth:2,tension:.32,pointRadius:0,yAxisID:'y1',order:1});
   return ds;
@@ -1807,7 +1810,7 @@ function metaAdRow(a,i,cur){
   return '<div class="ads-adrow" onclick="adsToggleAdRow('+i+')">'
     +'<div class="ads-adcell ads-adname">'+th+'<div class="ads-adnm"><b>'+esc(a.name||'Advertentie')+'</b><span class="ads-adfmt br-'+fm[1]+'">'+(a.format==='video'?ic('play',10):'')+esc(fm[0])+'</span></div></div>'
     +'<div class="ads-adcell"><span class="ads-adm-lab">Besteed</span><b>'+metaEur(a.spend,cur)+'</b></div>'
-    +'<div class="ads-adcell"><span class="ads-adm-lab">Klikken</span><b>'+adsNum(a.clicks)+'</b></div>'
+    +'<div class="ads-adcell"><span class="ads-adm-lab">Klikken</span><b>'+adsNum(a.linkClicks||a.clicks)+'</b></div>'
     +'<div class="ads-adcell"><span class="ads-adm-lab">CTR</span><b>'+(Number(a.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%</b></div>'
     +'<div class="ads-adcell"><span class="ads-adm-lab">CPC</span><b>'+metaEur(a.cpc,cur)+'</b></div>'
     +'<span class="ads-adchev">'+_adsChev()+'</span></div>'
@@ -1821,7 +1824,7 @@ function adsToggleAdRow(i){
   var media;
   if(a.format==='video' && a.videoSrc){ media='<video class="ads-adexp-el" src="'+esc(a.videoSrc)+'" controls preload="metadata" poster="'+esc(a.poster||'')+'"></video>'; }
   else { var vis=(a.format==='video'?(a.poster||a.image||a.thumb):(a.image||a.thumb)); media=vis?'<img class="ads-adexp-el" src="'+esc(vis)+'" alt="" referrerpolicy="no-referrer" onclick="openMetaCreative('+i+')">':'<div class="ads-adexp-el ads-adexp-none">geen voorbeeld</div>'; }
-  var stats=[['Besteed',metaEur(a.spend,cur)],['Vertoningen',adsNum(a.impressions)],['Klikken',adsNum(a.clicks)],['CTR',(Number(a.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%'],['CPC',metaEur(a.cpc,cur)]];
+  var stats=[['Besteed',metaEur(a.spend,cur)],['Vertoningen',adsNum(a.impressions)],['Klikken',adsNum(a.linkClicks||a.clicks)],['CTR',(Number(a.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%'],['CPC',metaEur(a.cpc,cur)]];
   exp.innerHTML='<div class="ads-adexp-in"><div class="ads-adexp-media">'+media+'<button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openMetaCreative('+i+')">'+ic('arrow',13)+' Vergroot visual</button></div><div class="ads-adexp-stats">'+stats.map(function(s){return '<div><div class="ads-adexp-lab">'+esc(s[0])+'</div><div class="ads-adexp-num">'+s[1]+'</div></div>';}).join('')+'</div></div>';
   exp.style.display='block'; if(row) row.classList.add('open');
 }
@@ -1832,7 +1835,7 @@ function metaCampaignDetail(m,cur){
   if(!c){ return back+'<div class="card" style="padding:24px;text-align:center;color:var(--ink-3)">Deze campagne heeft geen activiteit in de gekozen periode.</div>'; }
   var obj=adsObjective(c.objective);
   var head='<div class="section-head" style="margin-bottom:8px"><h2 style="display:flex;align-items:center;gap:9px;min-width:0"><span class="pill pill-prog"><span class="pdot"></span>Live</span><span style="overflow:hidden;text-overflow:ellipsis">'+esc(c.name||'Campagne')+'</span></h2>'+(obj?'<span class="count">'+esc(obj)+'</span>':'')+'</div>';
-  var kpis='<div class="kpi-grid">'+metaKpiCard('orange','Besteding',metaEur(c.spend,cur))+metaKpiCard('blue','Vertoningen',adsNum(c.impressions))+metaKpiCard('green','Klikken',adsNum(c.clicks))+metaKpiCard('purple','CTR',(Number(c.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%')+'</div>';
+  var kpis='<div class="kpi-grid">'+metaKpiCard('orange','Besteding',metaEur(c.spend,cur))+metaKpiCard('blue','Vertoningen',adsNum(c.impressions))+metaKpiCard('green','Klikken',adsNum(c.linkClicks||c.clicks))+metaKpiCard('purple','CTR',(Number(c.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%')+'</div>';
   var sub=[['Bereik',adsNum(c.reach)],['CPC',metaEur(c.cpc,cur)],['CPM',metaEur(c.cpm,cur)],['Frequentie',(Number(c.frequency)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})],['Resultaten',adsNum(c.results)]];
   var subGrid='<div class="card" style="padding:14px 16px;margin-top:2px"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:12px">'+sub.map(function(s){return '<div><div style="color:var(--ink-4);font-size:11px;font-weight:600">'+s[0]+'</div><div style="font-family:var(--font-display);font-weight:800;font-size:16px;color:var(--ink)">'+s[1]+'</div></div>';}).join('')+'</div></div>';
   var loaded=(window.S27DATA&&S27DATA.campaignAds)?S27DATA.campaignAds(id):undefined;

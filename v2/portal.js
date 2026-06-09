@@ -239,6 +239,8 @@ function toggleClientView(){
   // Wis de periode-afhankelijke ads/social-cache zodat de doelweergave opnieuw ophaalt bij de
   // ACTUELE periode (anders zie je foutieve bestedingen/cijfers van een vorig venster).
   if(state.data){ state.data.metaAds=null; state.data.metaAdsRich=null; state.data.googleAds=null; state.data.googleAdsRich=null; state.data.metricoolStats=null; state.data.metricoolStatsRich=null; state.data.metricoolPostStats=null; }
+  // team<->client wisselt het periodevenster (team = t/m vandaag, client = t/m gisteren) -> herbereken
+  if(state._adsPeriod && typeof adsPeriodWindow==='function'){ var _w=adsPeriodWindow(state._adsPeriod.preset); if(_w){ state._adsPeriod.from=_w.from; state._adsPeriod.to=_w.to; } }
   if(typeof currentTab==='string' && currentTab) goTab(currentTab);   // huidige tab in de juiste weergave herladen
 }
 function updateAdminViewToggle(){
