@@ -3016,8 +3016,38 @@ function chatHTML(taskId, readOnly){
     </div>`).join(''):`<div class="empty" style="padding:30px 10px"><p>${readOnly?'Geen chatgeschiedenis voor dit project.':'Nog geen berichten, stuur ons gerust iets!'}</p></div>`}
   </div>`;
   if(readOnly) return listHTML+`<div class="chat-readonly">${ic('check',14)} Dit project is afgerond. De chatgeschiedenis blijft hier zichtbaar.</div>`;
-  return listHTML+`<div class="chat-input"><button type="button" class="chat-attach" title="Bestand toevoegen" onclick="document.getElementById('chatFile').click()" style="border:none;background:none;cursor:pointer;color:var(--ink-4);padding:0 4px 0 8px;display:flex;align-items:center;flex:none">${ic('upload',18)}</button><input type="file" id="chatFile" style="display:none" onchange="chatUpload(this,'${taskId||''}')"><input placeholder="Schrijf een bericht…" onkeydown="if(event.key==='Enter')sendChat(this)"><button class="chat-send" onclick="sendChat(this.previousElementSibling)">${ic('send',18)}</button></div>`;
+  return listHTML+`<div class="chat-compose">`
+    +`<div class="chat-tray" id="chatTray">${_chatChipsHTML()}</div>`
+    +`<div class="chat-stagemsg" id="chatStageMsg"></div>`
+    +`<div class="chat-input"><button type="button" class="chat-attach" title="Bestand(en) toevoegen" onclick="document.getElementById('chatFile').click()" style="border:none;background:none;cursor:pointer;color:var(--ink-4);padding:0 4px 0 8px;display:flex;align-items:center;flex:none">${ic('upload',18)}</button><input type="file" id="chatFile" multiple accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" style="display:none" onchange="chatStage(this)"><input class="chat-textin" placeholder="Schrijf een bericht…" onkeydown="if(event.key==='Enter')sendChat(this)"><button class="chat-send" onclick="sendChat(this.closest('.chat-input').querySelector('.chat-textin'))">${ic('send',18)}</button></div>`
+    +`</div>`;
 }
+/* Chat-composer (portaal-breed): meerdere bestanden stagen + tekst typen, en pas bij 'Versturen' gaat
+   het geheel samen weg. Staging leeft in state._chatStaged en overleeft poll-herrenders (chatHTML rendert
+   de tray opnieuw). sendChat (portal.js) verzendt tekst + alle staged bestanden in één klik. */
+var _chatStageSeq=0;
+function _chatChipsHTML(){
+  var st=(state._chatStaged||[]); if(!st.length) return '';
+  return st.map(function(f){
+    var th = /^image\//.test(f.type) ? '<img src="'+f.dataUrl+'" alt="">' : ic('doc',15);
+    return '<span class="chat-chip" data-fid="'+f.id+'"><span class="chat-chip-th">'+th+'</span><span class="chat-chip-nm">'+esc(f.name)+'</span><button type="button" class="chat-chip-x" title="Verwijderen" onclick="chatUnstage(\''+f.id+'\')">'+ic('close',12)+'</button></span>';
+  }).join('');
+}
+function _renderChatTray(){ var t=document.getElementById('chatTray'); if(t) t.innerHTML=_chatChipsHTML(); }
+function chatStage(input){
+  var files=(input&&input.files)?[].slice.call(input.files):[]; if(input) input.value='';
+  if(!files.length) return;
+  state._chatStaged=state._chatStaged||[];
+  var msg=document.getElementById('chatStageMsg'); var over=0;
+  files.forEach(function(f){
+    if(f.size>22*1024*1024){ over++; return; }
+    var rd=new FileReader();
+    rd.onload=function(){ state._chatStaged.push({ id:'st'+(++_chatStageSeq), name:f.name, type:f.type||'', size:f.size, dataUrl:String(rd.result||'') }); _renderChatTray(); };
+    rd.readAsDataURL(f);
+  });
+  if(msg) msg.textContent = over ? (over+' bestand(en) overgeslagen: te groot (max 22 MB). Plak liever een link in je bericht.') : '';
+}
+function chatUnstage(id){ state._chatStaged=(state._chatStaged||[]).filter(function(f){return f.id!==id;}); _renderChatTray(); var m=document.getElementById('chatStageMsg'); if(m) m.textContent=''; }
 
 /* =========================================================
    PROJECT DETAIL MODAL

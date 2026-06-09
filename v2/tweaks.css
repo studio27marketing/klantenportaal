@@ -923,3 +923,19 @@ body.mp-lock{overflow:hidden;}
 .mp-done-sub{font-size:13.5px;color:var(--ink-3);margin:6px auto 14px;max-width:40ch;line-height:1.5;}
 .mp-done .btn{margin-top:2px;}
 .mp-done .btn+.btn{margin-top:10px;}
+
+/* === Cluster M: chat-composer (multi-file staging + tekst, samen versturen) === */
+.chat-compose{display:flex;flex-direction:column;}
+.chat-tray{display:flex;flex-wrap:wrap;gap:7px;}
+.chat-tray:not(:empty){padding:9px 4px 3px;}
+.chat-chip{display:inline-flex;align-items:center;gap:6px;max-width:190px;background:var(--paper-2,#F4EFE7);border:1px solid var(--line,#E7DFD3);border-radius:11px;padding:4px 7px 4px 4px;font-size:12px;}
+.chat-chip-th{display:inline-flex;width:28px;height:28px;border-radius:7px;overflow:hidden;align-items:center;justify-content:center;background:#fff;color:var(--ink-4);flex:none;}
+.chat-chip-th img{width:100%;height:100%;object-fit:cover;display:block;}
+.chat-chip-nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-2);font-weight:600;}
+.chat-chip-x{border:none;background:none;cursor:pointer;color:var(--ink-4);display:inline-flex;align-items:center;padding:0;flex:none;}
+.chat-chip-x:hover{color:var(--s27-orange,#F66131);}
+.chat-stagemsg:not(:empty){font-size:12px;color:var(--s27-orange-ink,#C2410C);padding:4px 4px 0;}
+.bub-atts{display:flex;flex-wrap:wrap;gap:7px;margin-top:7px;}
+.bub-att{width:130px;max-width:48vw;border-radius:10px;display:block;}
+.bub-doc{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;background:rgba(255,255,255,.55);border-radius:9px;padding:5px 9px;}
+.msg.me .bub-doc{background:rgba(255,255,255,.22);color:#fff;}

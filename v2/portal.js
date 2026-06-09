@@ -388,7 +388,7 @@ function renderLoading(name){
 async function goTab(name){
   if(!PANELS[name]) return;
   stopChatPoll();   // tab-wissel/modal-sluiten -> chat-poller stoppen (berichten herstart 'm hieronder)
-  currentTab=name; state.viewMode='tab'; state.activeProject=null; state._metaCampaign=null;
+  currentTab=name; state.viewMode='tab'; state.activeProject=null; state._metaCampaign=null; state._chatStaged=[];
   setActiveNav(name);
   if(!state.demoMode && needsLoad(name)) renderLoading(name);
   await ensureTabData(name);
@@ -455,7 +455,7 @@ function applyTakVisibility(){
 async function openProject(id, from){
   const f=(from==='berichten')?'berichten':'projecten';
   stopChatPoll();
-  state.viewMode='project'; state.activeProject=id; state._mtab='overzicht';
+  state.viewMode='project'; state.activeProject=id; state._mtab='overzicht'; state._chatStaged=[];
   document.querySelectorAll('.sb-item').forEach(t=>t.classList.remove('active'));
   const item=document.querySelector('.sb-item[data-tab="'+f+'"]'); if(item) item.classList.add('active');
   if(!state.demoMode){ renderLoading(f); await Promise.all([ S27DATA.loadDetail(id), S27DATA.loadChat(id) ]); }
@@ -473,22 +473,43 @@ function closeModal(){ goTab('projecten'); }
    ECHTE HANDLERS
    ============================================================================= */
 async function sendChat(input){
-  const tx=(input.value||'').trim(); if(!tx) return;
+  if(!input) input=document.querySelector('.chat-input .chat-textin');
+  const tx=((input&&input.value)||'').trim();
+  const staged=(state._chatStaged||[]).slice();   // tekst + alle gestagede bestanden samen versturen (Cluster M)
+  if(!tx && !staged.length) return;
   const list=_chatListEl(); if(!list) return;
+  // optimistische bubble: tekst + thumbnails/documenten samen in één bericht
   const me=document.createElement('div'); me.className='msg me';
-  me.innerHTML='<div class="bubble"><div class="who">Jij</div><div class="tx">'+escapeHtml(tx)+'</div><div class="tm">nu</div></div>';
-  list.appendChild(me); input.value=''; list.scrollTop=list.scrollHeight;
+  let inner='<div class="bubble"><div class="who">Jij</div>';
+  if(tx) inner+='<div class="tx">'+escapeHtml(tx)+'</div>';
+  if(staged.length) inner+='<div class="bub-atts">'+staged.map(function(f){ return /^image\//.test(f.type)?'<img class="bub-att" src="'+f.dataUrl+'" alt="">':'<span class="bub-doc">'+ic('doc',13)+' '+escapeHtml(f.name)+'</span>'; }).join('')+'</div>';
+  inner+='<div class="tm">nu</div></div>';
+  me.innerHTML=inner; list.appendChild(me);
+  // composer leegmaken (tekst + staging-tray + melding)
+  if(input) input.value=''; state._chatStaged=[]; if(typeof _renderChatTray==='function') _renderChatTray();
+  var _sm=document.getElementById('chatStageMsg'); if(_sm) _sm.textContent='';
+  list.scrollTop=list.scrollHeight;
   if(state.demoMode || !state.activeProject){
-    setTimeout(()=>{ const r=document.createElement('div'); r.className='msg flash'; r.innerHTML='<span class="av" style="background:var(--s27-blue)">IM</span><div class="bubble"><div class="who">Ilke Meeusen</div><div class="tx">Top, ik neem het mee!</div><div class="tm">nu</div></div>'; list.appendChild(r); list.scrollTop=list.scrollHeight; setTimeout(()=>r.classList.remove('flash'),700); },1100);
+    setTimeout(()=>{ const r=document.createElement('div'); r.className='msg flash'; r.innerHTML='<span class="av" style="background:var(--s27-blue)">IM</span><div class="bubble"><div class="who">Ilke Meeusen</div><div class="tx">Top, ik neem het mee!</div><div class="tm">nu</div></div>'; const l2=_chatListEl(); if(l2){ l2.appendChild(r); l2.scrollTop=l2.scrollHeight; setTimeout(()=>r.classList.remove('flash'),700); } },1100);
     return;
   }
   const tid=state.activeProject;
+  const S=state.session||{};
   try {
-    if(state._commsMode){ await api(ENDPOINTS.commsChatPost, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), comment_text:tx }); }
-    else { await api(ENDPOINTS.chatPost, { task_id:tid, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), comment_text:tx }); }
+    // 1) tekst eerst (zodat het bericht leesbaar boven de bijlagen staat)
+    if(tx){
+      if(state._commsMode){ await api(ENDPOINTS.commsChatPost, { bedrijf_id:S.bedrijf_id, session_token:S.session_token, klant_naam:S27DATA.bedrijfsnaam(), comment_text:tx }); }
+      else { await api(ENDPOINTS.chatPost, { task_id:tid, bedrijf_id:S.bedrijf_id, session_token:S.session_token, klant_naam:S27DATA.bedrijfsnaam(), comment_text:tx }); }
+    }
+    // 2) daarna elk gestaged bestand
+    for(let i=0;i<staged.length;i++){
+      const f=staged[i]; const b64=String(f.dataUrl||'').split(',')[1]||''; if(!b64) continue;
+      if(state._commsMode){ await api(ENDPOINTS.commsChatAttachment, { bedrijf_id:S.bedrijf_id, session_token:S.session_token, klant_naam:S27DATA.bedrijfsnaam(), filename:f.name, file_data:b64 }); }
+      else { await api(ENDPOINTS.chatAttachment, { task_id:tid, bedrijf_id:S.bedrijf_id, session_token:S.session_token, klant_naam:S27DATA.bedrijfsnaam(), filename:f.name, file_data:b64 }); }
+    }
   }
   catch(e){}
-  // cache verversen + chat herrenderen zodat het ECHTE ClickUp-bericht in de cache zit
+  // cache verversen + chat herrenderen zodat de ECHTE ClickUp-berichten in de cache zitten
   // (geen duplicaat met de optimistische bubble bij terug-schakelen tussen chats)
   await refreshChatCache(tid);
 }
@@ -507,7 +528,7 @@ function rerenderActiveChat(stickBottom){
   const atBottom = oldList ? (oldList.scrollHeight-oldList.scrollTop-oldList.clientHeight < 60) : true;
   const prevTop = oldList ? oldList.scrollTop : 0;
   // een lopend concept in het tekstvak niet wegklikken bij een poll-herrender
-  const oldInp=document.querySelector('.chat-input input'); const draft=oldInp?oldInp.value:'';
+  const oldInp=document.querySelector('.chat-input .chat-textin'); const draft=oldInp?oldInp.value:'';
   const p=(window.S27DATA&&(S27DATA.projects()||[]).find(function(x){return x.id===id;}))||null;
   const berHost=$id('berichtChat');
   const dcBody=$id('dcBody');
@@ -529,7 +550,7 @@ function rerenderActiveChat(stickBottom){
   } else if(socBody){
     socBody.innerHTML=chatHTML(id);          // social-chat: idem, enkel de chat-body verversen
   } else { return; }
-  if(draft){ const newInp=document.querySelector('.chat-input input'); if(newInp) newInp.value=draft; }
+  if(draft){ const newInp=document.querySelector('.chat-input .chat-textin'); if(newInp) newInp.value=draft; }
   const newList=_chatListEl(); if(!newList) return;
   if(stickBottom || atBottom) newList.scrollTop=newList.scrollHeight;
   else newList.scrollTop=prevTop;
@@ -574,7 +595,7 @@ async function openBerichtChat(id, el){
   var row = el || document.querySelector('.bericht-row[data-bid="'+id+'"]'); if(row)row.style.background='var(--paper-2)';
   const p=(window.S27DATA&&(S27DATA.projects()||[]).find(function(x){return x.id===id;}))||null; if(!p)return;
   stopChatPoll();              // chat-wissel -> oude poller stoppen
-  state.activeProject=id;
+  state.activeProject=id; state._chatStaged=[];   // staging leegmaken bij wissel van gesprek
   const host=$id('berichtChat'); if(!host)return;
   host.className='card br-'+(p.br||'blue');
   // ALTIJD verse data ophalen bij openen (niet blind de cache vertrouwen) -> verzonden berichten
