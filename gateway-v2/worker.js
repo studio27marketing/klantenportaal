@@ -45,13 +45,17 @@ import {
   adsWorkspace,
   adsWorkspaceSave,
   adsUploadAdd,
+  adsSnapshotGet,
+  adsSnapshotWrite,
 } from './handlers.mjs';
 import { handlePush, handlePushNotify } from './push.mjs';
 
 // Staff-only (is_staff) rijke-rapportage-handlers: gescoped op het acting-as-bedrijf, (bedrijfId, body, env).
 // webTraffic/webSearch = Webprestaties (GA4 + GSC); v1 team-only, later evt. naar READ_HANDLERS voor klanten.
 // adsWorkspace*/adsUploadAdd = per-bedrijf KV-werkblad voor de ads-meeting (notities + recs + uploads), staff-only.
-const STAFF_DATA_HANDLERS = { metaAdsRich, googleAdsRich, googleMonthly, metricoolStatsRich, webTraffic, webSearch, adsWorkspace, adsWorkspaceSave, adsUploadAdd };
+// adsSnapshotGet = bewaarde maandtotalen (#22) uit KV; staff-only, acting-as scope. De maandelijkse
+// CRON (zie scheduled() onderaan) schrijft die snapshots weg via adsSnapshotWrite() per bedrijf.
+const STAFF_DATA_HANDLERS = { metaAdsRich, googleAdsRich, googleMonthly, metricoolStatsRich, webTraffic, webSearch, adsWorkspace, adsWorkspaceSave, adsUploadAdd, adsSnapshotGet };
 
 // Pad → Make-webhook. Deze URLs zijn niet geheim (staan al in dashboard.js).
 // Geporte paden gebruiken deze NIET meer (router-shim vangt ze af); de rest valt door.
@@ -683,5 +687,36 @@ export default {
       status: makeRes.status,
       headers: { 'Content-Type': makeRes.headers.get('Content-Type') || 'application/json', ...ch },
     });
+  },
+
+  /* ---- CRON (#22): maandelijkse ads-snapshot ------------------------------
+   * Trigger: wrangler.toml [triggers] crons = ["0 3 1 * *"] (03:00 op de 1e).
+   * Enumereert ALLE bedrijven exact zoals adminCompanies (ClickUp Bedrijven-lijst)
+   * en schrijft per bedrijf de maandtotalen weg via adsSnapshotWrite(). Die helper
+   * leest zelf de account-ids uit de bedrijf-taak en slaat een platform stilletjes
+   * over als het niet gekoppeld is (Meta of Google) — dus enkel gekoppelde bedrijven
+   * leveren een snapshot op. Verwerkt in batches van 5 (concurrency-cap) en wrapt
+   * alles in try/catch zodat één fout de hele run niet breekt. */
+  async scheduled(event, env, ctx) {
+    const run = async () => {
+      if (!env || !env.KV || !env.CLICKUP_TOKEN) return;
+      let companies = [];
+      try {
+        const r = await adminCompanies(env);
+        companies = (r && r.body && Array.isArray(r.body.companies)) ? r.body.companies : [];
+      } catch (e) { companies = []; }
+
+      const BATCH = 5;   // concurrency-cap
+      for (let i = 0; i < companies.length; i += BATCH) {
+        const slice = companies.slice(i, i + BATCH);
+        await Promise.all(slice.map(async (c) => {
+          try { await adsSnapshotWrite(c && c.id, env); }
+          catch (e) { /* één bedrijf mag de run niet breken */ }
+        }));
+      }
+    };
+    // Houd de worker in leven tot alle snapshots weggeschreven zijn.
+    if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(run());
+    else await run();
   },
 };

@@ -3774,6 +3774,132 @@ export async function googleMonthly(bedrijfId, body, env) {
   return { status: 200, body: { ok: true, linked: true, account: acct, currency: 'EUR', campaigns, months } };
 }
 
+/* ============================================================================
+ * Ads-snapshot persistence (#22) — maandelijkse conversie/lead-totalen bewaren
+ * ----------------------------------------------------------------------------
+ * Doel: per bedrijf de maandtotalen (Meta + Google) wegschrijven naar KV, zodat
+ * ze het API-retentievenster van Meta/Google OVERLEVEN. De cron (zie worker.js
+ * scheduled) draait maandelijks en roept adsSnapshotWrite() per bedrijf aan.
+ *
+ * KV-key   : adssnap:${bedrijfId}   (bedrijfId tot 64 tekens)
+ * KV-value : { months: { 'YYYY-MM': {
+ *               meta:   { spend, leads, results, clicks, linkClicks, impressions },
+ *               google: { spend, conversions, convValue, clicks, impressions },
+ *               at: <epoch ms> } } }
+ *
+ * ACCUMULEREND: de bestaande blob wordt ingelezen en de huidige maand wordt
+ * ge-merged; oude maanden worden NOOIT weggegooid.
+ * ========================================================================== */
+const ADSSNAP_PREFIX = 'adssnap:';
+function adsSnapKey(bedrijfId) { return ADSSNAP_PREFIX + str(bedrijfId).slice(0, 64); }
+// Huidige maand 'YYYY-MM'. Dit is RUNTIME worker-code (geen workflow-script), dus
+// new Date() is hier toegestaan en correct.
+function currentYM() {
+  const d = new Date();
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
+}
+
+// Defensieve INTERNE helper (GEEN geëxporteerde handler). Leest de bedrijf-taak,
+// haalt — indien gekoppeld — DEZE MAAND's Meta- en/of Google-totalen op en merget
+// ze onder de huidige maand-key in KV. Wrapt elke externe call in try/catch en
+// gooit NOOIT. Slaat een platform stilletjes over als het niet gekoppeld is.
+export async function adsSnapshotWrite(bedrijfId, env) {
+  const id = cleanId(bedrijfId);
+  if (!id || !env || !env.KV) return { ok: false, reason: 'no_kv_or_id' };
+
+  // 1) Bedrijf-taak (account-ids server-side, tenant-safe).
+  let task = null;
+  try {
+    const br = await cu.get(env, `/task/${id}`);
+    task = br && br.ok ? br.data : null;
+  } catch (e) { task = null; }
+  if (!task) return { ok: false, reason: 'no_task' };
+
+  const metaAcct = str(getCF(task, FIELD.metaAdsId)).trim();
+  const googleAcct = str(getCF(task, FIELD.googleAdsId)).replace(/[^0-9]/g, '');
+
+  const ym = currentYM();
+  let meta = null;
+  let google = null;
+
+  // 2) Meta — DEZE MAAND (date_preset 'this_month'), account-niveau insights.
+  //    Hergebruikt het metaAds-patroon: metaGet + metaActionVal + META_RESULT_ACTIONS.
+  if (/^\d{6,20}$/.test(metaAcct) && str(env && env.META_SYSTEM_TOKEN)) {
+    try {
+      const ins = await metaGet(env, `act_${metaAcct}/insights`, {
+        level: 'account', date_preset: 'this_month',
+        fields: 'spend,impressions,clicks,inline_link_clicks,actions',
+      });
+      if (ins && ins.ok && ins.data && Array.isArray(ins.data.data) && ins.data.data[0]) {
+        const k = ins.data.data[0];
+        meta = {
+          spend: Number(k.spend) || 0,
+          leads: metaLeads(k.actions),
+          results: metaActionVal(k.actions, META_RESULT_ACTIONS),
+          clicks: Number(k.clicks) || 0,
+          linkClicks: Number(k.inline_link_clicks) || 0,
+          impressions: Number(k.impressions) || 0,
+        };
+      }
+    } catch (e) { meta = null; }
+  }
+
+  // 3) Google — DEZE MAAND (THIS_MONTH), account-niveau via gadsQuery.
+  if (/^\d{8,12}$/.test(googleAcct) && str(env && env.GOOGLE_ADS_DEVELOPER_TOKEN) && str(env && env.GOOGLE_ADS_REFRESH_TOKEN)) {
+    try {
+      const token = await googleAdsToken(env, Date.now());
+      if (token) {
+        const res = await gadsQuery(env, token, googleAcct,
+          `SELECT metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions, metrics.conversions_value FROM customer WHERE segments.date DURING THIS_MONTH`);
+        if (res && res.ok) {
+          const m = (res.rows && res.rows[0] && res.rows[0].metrics) || {};
+          google = {
+            spend: Number(m.costMicros || 0) / 1e6,
+            conversions: Number(m.conversions || 0),
+            convValue: Number(m.conversionsValue || 0),
+            clicks: Number(m.clicks || 0),
+            impressions: Number(m.impressions || 0),
+          };
+        }
+      }
+    } catch (e) { google = null; }
+  }
+
+  // Niets gekoppeld of beide calls faalden → niets te bewaren.
+  if (!meta && !google) return { ok: true, written: false, reason: 'nothing_linked' };
+
+  // 4) Merge in KV — accumulerend (oude maanden blijven staan).
+  try {
+    const key = adsSnapKey(id);
+    let blob = {};
+    try { blob = JSON.parse((await env.KV.get(key)) || '{}') || {}; } catch (e) { blob = {}; }
+    if (!blob || typeof blob !== 'object') blob = {};
+    if (!blob.months || typeof blob.months !== 'object') blob.months = {};
+    const prev = (blob.months[ym] && typeof blob.months[ym] === 'object') ? blob.months[ym] : {};
+    blob.months[ym] = {
+      meta: meta || prev.meta || null,
+      google: google || prev.google || null,
+      at: Date.now(),
+    };
+    await env.KV.put(key, JSON.stringify(blob));
+  } catch (e) { return { ok: false, reason: 'kv_write_failed' }; }
+
+  return { ok: true, written: true, month: ym, meta: !!meta, google: !!google };
+}
+
+/* ---- adsSnapshotGet (READ, staff) — bewaarde maandtotalen uit KV ophalen ----
+ * Geeft de geaccumuleerde maand-blob terug. Geen externe API-calls: zuiver een KV-read.
+ * Zonder KV-binding → lege maanden (fail-soft). */
+export async function adsSnapshotGet(bedrijfId, body, env) {
+  if (!env || !env.KV) return { status: 200, body: { ok: true, months: {} } };
+  let stored = {};
+  try { stored = JSON.parse((await env.KV.get(adsSnapKey(bedrijfId))) || '{}') || {}; } catch (e) { stored = {}; }
+  const months = (stored && typeof stored === 'object' && stored.months && typeof stored.months === 'object') ? stored.months : {};
+  return { status: 200, body: { ok: true, months } };
+}
+
 // SEC-4: bevestig dat een post-id ECHT tot de blogId van DEZE klant hoort (anti-IDOR).
 // Zonder deze check kon klant A met het post-id van klant B een misleidende interne
 // goedkeuring/feedback-melding triggeren. Hergebruikt het blogId-gescopete scheduler-venster.
