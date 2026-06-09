@@ -110,7 +110,7 @@ const SENSITIVE = new Set([
   'chatAttachment', 'chatPost', 'directMessage', 'feedbackV2', 'newProjectIntake',
   'facturatieSave', 'projectFacturatieSave', 'bedrijfVoorkeuren', 'bedrijfContact',
   'bedrijfBeheer', 'inplannen', 'offerteGenereren', 'metricoolApprove', 'metricoolUpdate',
-  'metricoolMediaUpload', 'shootSubmit',
+  'metricoolMediaUpload', 'shootSubmit', 'meetingBook',
 ]);
 const LIMIT_SENSITIVE = 15; // per minuut, per gebruiker
 const LIMIT_DEFAULT   = 80;

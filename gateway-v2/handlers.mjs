@@ -2197,6 +2197,110 @@ export async function inplannen(bedrijfId, body, env) {
   };
 }
 
+/* ---- meetingBook (algemene/taskloze meeting-boeking; Google-event + invite) ---
+ * Aparte, taskloze booker voor de meeting-tunnel in het portaal (Algemene meeting met
+ * Ilke, Projectmeeting met Ilke/lead, Nieuw project met Arne). Anders dan `inplannen`:
+ *   - werkt ZONDER task (nieuw project / algemeen overleg);
+ *   - muteert NOOIT de due_date van een bestaande projecttaak;
+ *   - host MOET een @studio27.be-adres zijn (klant kan geen externe "host" injecteren).
+ * Maakt een Google-Calendar-event op de GCAL_SUBJECT-agenda met de klant + host als
+ * attendees (sendUpdates=all → beiden krijgen een uitnodiging; verschijnt in de
+ * host-agenda), met conferenceData (Meet) als body.online. Bij een meegegeven
+ * project_task_id: scope-guard fail-CLOSED (klant mag enkel een EIGEN project refereren)
+ * + een best-effort context-comment op die taak (geen andere mutatie). De client-email
+ * komt — net als bij `inplannen` — uit de body (frontend leest het uit de bedrijf-taak).
+ * Output: { ok, event_id, meet_link, html_link }.
+ */
+export async function meetingBook(bedrijfId, body, env) {
+  const hostEmail = str(body && body.host_email).toLowerCase();
+  const hostNaam = str(body && body.host_naam) || 'Studio 27';
+  // host moet een Studio 27-adres zijn (geen externe injectie via host/attendees).
+  if (!/@studio27\.be$/.test(hostEmail)) {
+    return { status: 400, body: { ok: false, error: 'invalid_host', message: 'Ongeldige host.' } };
+  }
+
+  // optionele projectcontext: scope-guard fail-CLOSED (klant mag enkel een eigen project refereren).
+  const taskId = cleanId(body && body.project_task_id);
+  if (taskId) {
+    const tr = await cu.get(env, `/task/${taskId}`);
+    const task = tr.ok && tr.data ? tr.data : { custom_fields: [] };
+    const sc = scopeCheckTask(task, bedrijfId, SCOPE_FAIL_CLOSED.write);
+    if (!sc.ok) {
+      return { status: 403, body: { ok: false, error: 'scope_mismatch', message: 'Geen toegang tot dit project.' } };
+    }
+  }
+
+  if (!env || !env.SA_CLIENT_EMAIL || !env.SA_PRIVATE_KEY) {
+    return { status: 500, body: { ok: false, error: 'sa_not_configured', message: 'Inplannen tijdelijk niet beschikbaar.' } };
+  }
+  const subject = str(env.GCAL_SUBJECT);
+  let token;
+  try {
+    token = await mintGoogleToken(env, subject, GCAL_SCOPE_EVENTS);
+  } catch (e) {
+    return { status: 500, body: { ok: false, error: 'token_mint_failed', message: 'Inplannen tijdelijk niet beschikbaar.' } };
+  }
+
+  const start = str(body && body.start); // ISO
+  const eind = str(body && body.eind);   // ISO
+  const online = !!(body && body.online);
+  const clientEmail = str(body && body.client_email);
+  const clientNaam = str(body && body.client_naam);
+
+  // attendees = klant (indien bekend) + host. sendUpdates=all stuurt beiden een invite.
+  const attendees = [];
+  if (clientEmail) attendees.push(clientNaam ? { email: clientEmail, displayName: clientNaam } : { email: clientEmail });
+  attendees.push({ email: hostEmail, displayName: hostNaam });
+
+  const event = {
+    summary: str(body && body.titel) || ('Meeting met ' + hostNaam),
+    description: str(body && body.beschrijving),
+    location: str(body && body.locatie),
+    start: { dateTime: start },
+    end: { dateTime: eind },
+    attendees,
+  };
+  if (online) {
+    event.conferenceData = {
+      createRequest: {
+        requestId: 's27-mb-' + (taskId || 'evt') + '-' + Date.now(),
+        conferenceSolutionKey: { type: 'hangoutsMeet' },
+      },
+    };
+  }
+
+  let eventId = '', meetLink = '', htmlLink = '';
+  try {
+    const calId = encodeURIComponent(subject || 'primary');
+    const r = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${calId}/events?conferenceDataVersion=1&sendUpdates=all`,
+      { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(event) }
+    );
+    const data = await r.json().catch(() => ({}));
+    if (r.ok && data && data.id) {
+      eventId = str(data.id); htmlLink = str(data.htmlLink); meetLink = str(data.hangoutLink);
+    } else {
+      // anders dan `inplannen` (dat fail-open ClickUp blijft updaten) heeft dit endpoint
+      // ENKEL het event als resultaat → een mislukt event is een echte fout (geen stille ok).
+      return { status: 502, body: { ok: false, error: 'event_failed', message: 'De afspraak kon niet in de agenda gezet worden.' } };
+    }
+  } catch (e) {
+    return { status: 502, body: { ok: false, error: 'event_failed', message: 'De afspraak kon niet in de agenda gezet worden.' } };
+  }
+
+  // best-effort context-comment op de projecttaak (GEEN due_date-mutatie).
+  if (taskId) {
+    const wanneer = str(body && body.when_label) || start;
+    const c = '📅 [MEETING GEPLAND VIA PORTAAL]\n\n' +
+      `Klant plande een overleg met ${hostNaam}` + (wanneer ? ` op ${wanneer}` : '') + '.\n' +
+      (online ? (meetLink ? `Online (Google Meet): ${meetLink}\n` : 'Online (Google Meet).\n') : 'Locatie: Studio 27.\n') +
+      'Het overleg staat in de agenda (uitnodiging verstuurd). De projectdeadline is NIET gewijzigd.';
+    try { await cu.comment(env, taskId, c, true); } catch (e) { /* best-effort */ }
+  }
+
+  return { status: 200, body: { ok: true, event_id: eventId, meet_link: meetLink, html_link: htmlLink } };
+}
+
 /* ---- bedrijfBeheer:contacts (4 routes; IDOR-fix; contact-email apart) ---- */
 // LET OP: contactEmail komt apart binnen (NIET de gateway-geïnjecteerde account-email).
 export async function bedrijfBeheerContacts(bedrijfId, body, env, contactEmail) {
@@ -4070,6 +4174,9 @@ export const WRITE_HANDLERS = {
   huisstijlDelete,
   // Shoot-inplannen: boeking wegschrijven (description + custom fields, geen Make).
   shootSubmit,
+  // Meeting-tunnel: taskloze Google-Calendar-boeking (Algemene/Project/Nieuw-project) +
+  // invite. Muteert geen due_date; scope-guard enkel als er een project_task_id bij zit.
+  meetingBook,
 };
 // bedrijfBeheer sub-acties (read vs write split voor cache/rate-decisions in de shell)
 export const BEDRIJFBEHEER_READ_ACTIONS = { get_team: getTeam, get_offertes: getOffertes };

@@ -120,7 +120,11 @@ const ENDPOINTS = {
   // shootContext: { task_id } -> { status:'ok'|'wrong_type'|'incomplete_metadata'|'already_scheduled'|'not_found'|'forbidden', timeHours, aantalCreators, availability:{shoots,shoots_27m,vakantie,hosts} }.
   shootContext:      GATEWAY_BASE + '/shootContext',
   // shootSubmit: { task_id, datum, startuur, timeHours, aantalPersonen, klant*, locatie*, contact*, extraInfo, lat?, lng? } -> { ok, taskId, assignedTo, assignedName }.
-  shootSubmit:       GATEWAY_BASE + '/shootSubmit'
+  shootSubmit:       GATEWAY_BASE + '/shootSubmit',
+  // Meeting-tunnel: taskloze Google-Calendar-boeking + invite (Algemene meeting/Projectmeeting/Nieuw project).
+  // { host_email, host_naam, start, eind, start_ms, online, titel, beschrijving, locatie, client_email, client_naam, project_task_id?, project_naam?, intake?, when_label? }
+  //   -> { ok, event_id, meet_link, html_link }. Muteert GEEN project-due_date; host moet @studio27.be zijn.
+  meetingBook:       GATEWAY_BASE + '/meetingBook'
 };
 
 /* AUTH v2 (Firebase + Cloudflare-gateway) is de DEFAULT. ?auth=v1 = legacy-vangnet. */

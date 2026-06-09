@@ -1029,7 +1029,11 @@ const MP_DAYS_FULL = ['zondag','maandag','dinsdag','woensdag','donderdag','vrijd
 function mpEl(){
   var el=$id('meetPlanner');
   if(!el){ el=document.createElement('div'); el.id='meetPlanner'; el.className='mp-overlay';
-    el.addEventListener('click',function(e){ if(e.target===el) closeMeetingPlanner(); });
+    // Sluit enkel als de pointer ZOWEL begon ALS eindigde op de scrim zelf (niet op de
+    // modal-inhoud). Een klik op een knop die de overlay opnieuw rendert detacht zijn node
+    // mid-event; deze mousedown-guard voorkomt dat zo'n klik per ongeluk de overlay sluit.
+    el.addEventListener('mousedown',function(e){ el._downScrim=(e.target===el); });
+    el.addEventListener('click',function(e){ if(e.target===el && el._downScrim) closeMeetingPlanner(); });
     document.body.appendChild(el); }
   return el;
 }
