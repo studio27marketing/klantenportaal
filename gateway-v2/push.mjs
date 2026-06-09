@@ -12,8 +12,7 @@
  * Endpoints (geregeld in worker.js):
  *   POST /push/subscribe    (Firebase-token)  body {subscription:{endpoint,keys:{p256dh,auth}}, ua?}
  *   POST /push/unsubscribe  (Firebase-token)  body {endpoint}
- *   POST /push/test         (Firebase-token)  -> stuurt een testmelding naar je eigen toestellen
- *   POST /push/notify       (X-Push-Secret)   body {email,title,body,url?,tag?,icon?}  <- Make/automation
+ *   POST /push/notify       (X-Push-Secret)   body {email,title,body,url?,tag?,icon?}  <- generiek intern endpoint
  *
  * Worker-secrets:
  *   VAPID_PRIVATE_JWK = '{"kty":"EC","crv":"P-256","d":"...","x":"...","y":"..."}'  (SECRET!)
@@ -186,7 +185,7 @@ export async function pushToEmailPilot(env, email, payload) {
 /* ---- DISPATCH: token-authed routes (subscribe/unsubscribe/test) ----------- */
 // Aangeroepen vanuit worker.js NA tokenverificatie; `claims` = geverifieerd token.
 export async function handlePush(path, claims, body, env, ctx, ch) {
-  const sub = path.slice('push/'.length); // subscribe | unsubscribe | test
+  const sub = path.slice('push/'.length); // subscribe | unsubscribe
   const email = String(claims.email || '').trim().toLowerCase();
 
   if (!env.VAPID_PRIVATE_JWK) return jsonRes({ ok: false, error: 'push_not_configured', message: 'VAPID_PRIVATE_JWK ontbreekt.' }, 501, ch);
@@ -210,22 +209,6 @@ export async function handlePush(path, claims, body, env, ctx, ch) {
     const list = (await loadSubs(env, email)).filter((x) => x.endpoint !== ep);
     await saveSubs(env, email, list);
     return jsonRes({ ok: true, count: list.length }, 200, ch);
-  }
-
-  if (sub === 'test') {
-    const list = await loadSubs(env, email);
-    if (!list.length) return jsonRes({ ok: false, error: 'no_subscriptions', message: 'Nog geen toestel ingeschreven op dit account.' }, 200, ch);
-    const payload = { title: 'Studio 27 - testmelding', body: 'Top! Pushmeldingen werken op dit toestel. 🎉', url: '/', tag: 's27-test', icon: '/icons/icon-192.png' };
-    const results = [], dead = [];
-    for (const sd of list) {
-      let status = 0;
-      try { status = await sendOne(sd, payload, env); } catch (e) { status = -1; }
-      results.push({ endpoint: sd.endpoint.slice(0, 40) + '…', status });
-      if (status === 404 || status === 410) dead.push(sd.endpoint);
-    }
-    if (dead.length) await saveSubs(env, email, list.filter((x) => !dead.includes(x.endpoint)));
-    const sent = results.filter((r) => r.status >= 200 && r.status < 300).length;
-    return jsonRes({ ok: sent > 0, sent, total: list.length, removed: dead.length, results }, 200, ch);
   }
 
   return jsonRes({ ok: false, error: 'unknown_push_route' }, 404, ch);

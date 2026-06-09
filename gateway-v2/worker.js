@@ -532,7 +532,7 @@ export default {
     const isStaffData = !!STAFF_DATA_HANDLERS[path];   // admin-only rijke rapportage (enkel staff, acting-as)
     const isPorted = !!(READ_HANDLERS[path] || WRITE_HANDLERS[path] || path === 'bedrijfBeheer');
     // Web-push token-authed routes (subscribe/unsubscribe/test): vereisen het Firebase-token, geen ClickUp/Make.
-    const isPushAuthed = (path === 'push/subscribe' || path === 'push/unsubscribe' || path === 'push/test');
+    const isPushAuthed = (path === 'push/subscribe' || path === 'push/unsubscribe');
     const target = MAKE_ENDPOINTS[path];
     if (!isAdminApi && !isStaffData && !isPorted && !isPushAuthed && !target) return json({ ok: false, error: 'unknown_endpoint' }, 404, ch);
 

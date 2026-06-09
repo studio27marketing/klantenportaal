@@ -114,7 +114,6 @@
       setStatus('Meldingen staan AAN op dit toestel.');
       setHint('Je krijgt voortaan een melding bij wijzigingen — ook als de app dicht is.');
       setButtons([
-        btn('Stuur test', true, doTest),
         btn('Uitzetten', false, doDisable)
       ]);
     } else if (state === 'denied') {
@@ -182,15 +181,6 @@
       }
       renderState('off');
     } catch (e) { setHint('Uitzetten mislukte: ' + (e && e.message ? e.message : e)); }
-  }
-  async function doTest() {
-    setHint('Test versturen…');
-    try {
-      var r = await pushApi('push/test', {});
-      if (r.data && r.data.sent > 0) setHint('Testmelding verstuurd ✓ — check je toestel.');
-      else if (r.data && r.data.error === 'no_subscriptions') { setHint('Geen toestel ingeschreven — zet meldingen opnieuw aan.'); renderState('off'); }
-      else setHint('Geen melding verstuurd (' + JSON.stringify(r.data) + ').');
-    } catch (e) { setHint('Test mislukte: ' + (e && e.message ? e.message : e)); }
   }
 
   /* ---- init ---- */

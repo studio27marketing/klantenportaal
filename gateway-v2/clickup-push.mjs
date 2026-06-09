@@ -28,6 +28,17 @@ const FIELD = {
 const jsonRes = (obj, status, headers) =>
   new Response(JSON.stringify(obj), { status, headers: { 'Content-Type': 'application/json', ...(headers || {}) } });
 const str = (v) => String(v == null ? '' : v).trim();
+const normStatus = (s) => String(s == null ? '' : s).trim().toLowerCase();
+
+// Statussen die een klantmelding triggeren (genormaliseerd lowercase). Geldt voor
+// gewone taken én social-media-taken; matcht de NIEUWE status na een taskStatusUpdated.
+const NOTIFY_STATUSES = ['doorgestuurd', 'input gevraagd', 'feedback verwerkt', 'on hold'];
+const STATUS_COPY = {
+  'doorgestuurd':      { title: 'Klaar voor jou', body: (n) => '“' + n + '” staat klaar in je portaal.' },
+  'input gevraagd':    { title: 'We hebben je input nodig', body: (n) => 'Voor “' + n + '” hebben we iets van jou nodig.' },
+  'feedback verwerkt': { title: 'Feedback verwerkt', body: (n) => 'Je feedback op “' + n + '” is verwerkt.' },
+  'on hold':           { title: 'Even on hold', body: (n) => '“' + n + '” staat tijdelijk on hold.' },
+};
 
 /* ---- ClickUp-leeshelper (kale token, geen Bearer) ------------------------ */
 async function cuGet(env, path) {
@@ -90,8 +101,9 @@ function buildPayload(event, task) {
   const name = str(task && task.name) || 'je project';
   const tag = 's27-cu-' + str(task && task.id);
   if (event === 'taskStatusUpdated') {
-    const stt = task && task.status && task.status.status ? str(task.status.status) : '';
-    return { title: 'Update in ' + name, body: stt ? ('Nieuwe status: ' + stt) : 'De status is bijgewerkt.', url: '/', tag, icon: '/icons/icon-192.png' };
+    const st = normStatus(task && task.status && task.status.status);
+    const c = STATUS_COPY[st];
+    return { title: c ? c.title : 'Update', body: c ? c.body(name) : ('“' + name + '”: ' + (st || 'status bijgewerkt')), url: '/', tag, icon: '/icons/icon-192.png' };
   }
   // taskCommentPosted
   return { title: 'Nieuw bericht', body: name + ' — er is een reactie geplaatst.', url: '/', tag, icon: '/icons/icon-192.png' };
@@ -100,6 +112,8 @@ async function processEvent(env, event, taskId) {
   const tr = await cuGet(env, '/task/' + taskId);
   if (!tr.ok || !tr.data) return;
   const task = tr.data;
+  // Statuswijziging: enkel melden bij een notify-waardige NIEUWE status (goedkope check vóór resolutie).
+  if (event === 'taskStatusUpdated' && !NOTIFY_STATUSES.includes(normStatus(task.status && task.status.status))) return;
   const emails = await resolveEmailsForTask(env, task);
   if (!emails.length) return;
   // PILOT: enkel doorgaan als de pilot-gebruiker bij de ontvangers zit (spaart werk).
