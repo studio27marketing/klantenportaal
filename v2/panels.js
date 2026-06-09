@@ -1124,8 +1124,8 @@ function renderAds(){ renderPanel('advertenties'); if(typeof adsChatMount==='fun
 function metaAdsBodyRich(){
   metaEnsureStyles();
   var sw=adsPlatformSwitch();
-  if(adsActivePlatform()==='google') return sw+googleAdsBodyRich();
-  return sw+adsPeriodBar()+adsRichSubnav()+'<div id="adsBody">'+adsRichTabBody()+'</div>'+adsRichPdfFooter();
+  var body=(adsActivePlatform()==='google')?googleAdsBodyRich():(adsPeriodBar()+adsRichSubnav()+'<div id="adsBody">'+adsRichTabBody()+'</div>'+adsRichPdfFooter());
+  return sw+body+adsNotepadMount();
 }
 /* ---- ads-menubalk (team-weergave): Samengevat / Campagnes / Uitgebreide gegevens / Aanbevelingen ---- */
 function adsRichTab(){ return state._adsTab||'samengevat'; }
@@ -1249,6 +1249,19 @@ function adsRichAdVisual(cid,encName){
 }
 /* PDF subtiel onderaan (team kiest zelf wanneer) */
 function adsRichPdfFooter(){ return '<div class="ads-pdffoot"><button class="ads-pdflink" onclick="exportAdsPdf()"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Exporteer dit rapport als PDF</button></div>'; }
+/* === Meeting-kladblok (#21, staff): zwevend notitieblok, auto-save naar adsWorkspace.notes per bedrijf === */
+function adsNoteStyles(){ if(document.getElementById('adsNoteStyles'))return; var s=document.createElement('style'); s.id='adsNoteStyles'; s.textContent='.ads-note-fab{position:fixed;right:22px;bottom:22px;z-index:8000;width:52px;height:52px;border-radius:50%;border:1px solid var(--glass-border,#E7DFD3);background:linear-gradient(180deg,#fff,#f6f2ec);color:var(--s27-blue-ink,#1F5FA8);box-shadow:0 10px 28px rgba(60,40,80,.22);cursor:pointer;display:flex;align-items:center;justify-content:center}.ads-note-fab:hover{filter:brightness(1.05)}.ads-note{position:fixed;right:22px;bottom:84px;z-index:8001;width:340px;max-width:calc(100vw - 32px);background:rgba(255,255,255,.93);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid var(--glass-border,#E7DFD3);border-radius:16px;box-shadow:0 18px 48px rgba(60,40,80,.28);display:none;flex-direction:column;overflow:hidden}.ads-note.open{display:flex}.ads-note-head{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line,#E7DFD3);font-family:var(--font-display)}.ads-note-head b{font-size:13.5px;display:flex;align-items:center;gap:6px;flex:1}.ads-note-stat{font-size:11px;color:var(--ink-4);font-weight:600}.ads-note-x{border:0;background:transparent;font-size:15px;color:var(--ink-4);cursor:pointer;padding:2px 4px}.ads-note-ta{border:0;outline:0;resize:vertical;min-height:200px;max-height:50vh;padding:12px 14px;font:inherit;font-size:13.5px;line-height:1.5;color:var(--ink);background:transparent}'; document.head.appendChild(s); }
+function adsNoteState(){ if(!state._adsNote) state._adsNote={open:false,loaded:false,text:''}; return state._adsNote; }
+function adsNotepadMount(){
+  if(!isRichView()) return '';
+  adsNoteStyles();
+  var n=adsNoteState();
+  if(!n.loaded && !state.demoMode && window.S27DATA && S27DATA.loadAdsWorkspace){ n.loaded=true; S27DATA.loadAdsWorkspace().then(function(ws){ n.text=(ws&&ws.notes)||''; var ta=document.getElementById('adsNoteTa'); if(ta && document.activeElement!==ta) ta.value=n.text; }); }
+  return '<div class="ads-note'+(n.open?' open':'')+'" id="adsNotePanel"><div class="ads-note-head"><b>'+ic('msg',16)+' Meeting-kladblok</b><span class="ads-note-stat" id="adsNoteStat"></span><button class="ads-note-x" onclick="adsNotepadToggle()" aria-label="Sluiten">✕</button></div><textarea id="adsNoteTa" class="ads-note-ta" placeholder="Notities voor deze meeting… (slaat automatisch op)" oninput="adsNoteInput()">'+esc(n.text||'')+'</textarea></div><button class="ads-note-fab" onclick="adsNotepadToggle()" title="Meeting-kladblok">'+ic('msg',20)+'</button>';
+}
+function adsNotepadToggle(){ var n=adsNoteState(); n.open=!n.open; var p=document.getElementById('adsNotePanel'); if(p) p.classList.toggle('open',n.open); if(n.open){ var ta=document.getElementById('adsNoteTa'); if(ta){ ta.value=n.text||''; ta.focus(); } } }
+function adsNoteInput(){ var ta=document.getElementById('adsNoteTa'); if(!ta) return; adsNoteState().text=ta.value; var st=document.getElementById('adsNoteStat'); if(st) st.textContent='bewaren…'; clearTimeout(state._adsNoteTmr); state._adsNoteTmr=setTimeout(adsNoteSave,900); }
+function adsNoteSave(){ if(!(window.S27DATA&&S27DATA.saveAdsWorkspace)) return; S27DATA.saveAdsWorkspace({notes:adsNoteState().text}).then(function(ok){ var st=document.getElementById('adsNoteStat'); if(st){ st.textContent=ok?'opgeslagen ✓':'opslaan mislukt'; if(ok) setTimeout(function(){ var s2=document.getElementById('adsNoteStat'); if(s2&&s2.textContent==='opgeslagen ✓') s2.textContent=''; },1600); } }); }
 /* per-tab charts: Samengevat = account-overzicht; Campagnes = per-campagne dag-evolutie */
 function adsRichMountTabCharts(){
   if(!isRichView()) return;
