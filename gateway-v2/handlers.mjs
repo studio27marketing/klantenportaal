@@ -87,6 +87,8 @@ export const FIELD = {
   // bedrijf-velden (extra) - Metricool blogId/brandId op de bedrijf-taak
   metricoolId:    '40f6ccd2-b25e-4385-bbca-3bfdf602e542', // short_text 'Metricool ID'
   ga4PropertyId:  'e3e12841-2eee-48a0-b68e-6e35cec159ca', // short_text 'GA4 property-ID' (Webprestaties; bestaat al in ClickUp)
+  gscSiteUrl:     '199aceaa-dbd8-4a97-97d8-09607f87e847', // short_text 'GSC Site URL' (override waar GSC ≠ website-domein)
+  webflowSiteId:  'd3bebfae-6508-41dc-a078-72a375d6e246', // short_text 'Webflow Site ID' (formulier-integratie)
   // ad-account-ids op de bedrijf-taak (Bedrijven-lijst) — direct-API ads-rapportage
   metaAdsId:      '1658c472-496c-480d-81bf-0c19e82d84df', // short_text 'Meta Ads ID'
   metaBusinessId: 'c352892a-7cd9-4f17-9e81-4d3decdb0fad', // short_text 'Meta Business ID'
@@ -4269,8 +4271,8 @@ function webResolve(bedrijfId, br) {
   const ov = WEB_OVERRIDES[bedrijfId] || {};
   // GA4: override → ClickUp-veld 'GA4 property-ID' (e3e12841). Voor uitrol: vul dat veld per klant.
   const ga4 = String(ov.ga4 || (t ? str(getCF(t, FIELD.ga4PropertyId)) : '')).replace(/[^0-9]/g, '');
-  // GSC: override → afgeleid uit Website (LET OP: kan een parent-domein zijn → dan override gebruiken).
-  let gsc = str(ov.gsc || '');
+  // GSC: override → ClickUp-veld 'GSC Site URL' → afgeleid uit Website (kan parent-domein zijn → dan veld/override).
+  let gsc = str(ov.gsc || (t ? str(getCF(t, FIELD.gscSiteUrl)) : ''));
   if (!gsc && t) { const d = webDomain(getCF(t, FIELD.website)); if (d) gsc = 'sc-domain:' + d; }
   return { ga4, gsc };
 }
