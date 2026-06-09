@@ -1388,22 +1388,33 @@ function arCmp(cur,prev,invert){
   var better = invert ? pct<0 : pct>0;
   return '<span class="arcmp '+(better?'good':'bad')+'">'+(pct>0?'▲ +':'▼ ')+pct+'%</span>';
 }
+// absolute-vergelijking: kleur via richting (pct+invert), maar toont het ABSOLUTE vorige-periode-getal
+// ("vs €0,42") i.p.v. een %. Voor CPC/kliks/besteding/frequentie enz.; ratio's (CTR/conv.ratio) blijven % via arCmp.
+function arCmpAbs(cur,prev,invert,fmt){
+  if(prev==null) return '';
+  cur=Number(cur)||0; prev=Number(prev)||0;
+  if(!prev) return cur>0?'<span class="arcmp good">nieuw</span>':'';
+  var pct=(cur-prev)/Math.abs(prev);
+  var cls=pct===0?'flat':((invert?pct<0:pct>0)?'good':'bad');
+  return '<span class="arcmp '+cls+'">vs '+(fmt?fmt(prev):prev)+'</span>';
+}
 function adsRichKpiGrid(k,p,cur,cmpLabel){
-  function card(lab,val,key,invert){ var d=p?arCmp(k[key],p[key],invert):''; return '<div class="arkpi"><div class="arkpi-l">'+lab+'</div><div class="arkpi-v">'+val+'</div>'+(d?'<div class="arkpi-d">'+d+'</div>':'')+'</div>'; }
-  var cards=[
-    card('Besteed', arEur(k.spend,cur), 'spend', true),
-    card('Leads', arNum(k.leads), 'leads', false),
-    card('Cost per lead', k.leads?arEur(k.cpl,cur):'–', 'cpl', true),
-    card('Klikken', arNum(k.linkClicks||k.clicks), 'linkClicks', false),
-    card('Vertoningen', arNum(k.impressions), 'impressions', false),
-    card('Bereik', arNum(k.reach), 'reach', false),
-    card('CPM', arEur(k.cpm,cur), 'cpm', true),
+  var fE=function(v){return arEur(v,cur);}, fN=function(v){return arNum(v);}, fD=function(v){return arDec(v,2);};
+  function card(lab,val,key,invert,fmt){ var d=p?(fmt?arCmpAbs(k[key],p[key],invert,fmt):arCmp(k[key],p[key],invert)):''; return '<div class="arkpi"><div class="arkpi-l">'+lab+'</div><div class="arkpi-v">'+val+'</div>'+(d?'<div class="arkpi-d">'+d+'</div>':'')+'</div>'; }
+  var hasLeads=((Number(k.leads)||0)>0)||(p&&(Number(p.leads)||0)>0);
+  var cards=[ card('Besteed', arEur(k.spend,cur), 'spend', true, fE) ];
+  if(hasLeads){ cards.push(card('Leads', arNum(k.leads), 'leads', false, fN)); cards.push(card('Cost per lead', k.leads?arEur(k.cpl,cur):'–', 'cpl', true, fE)); }
+  cards=cards.concat([
+    card('Klikken', arNum(k.linkClicks||k.clicks), 'linkClicks', false, fN),
+    card('Vertoningen', arNum(k.impressions), 'impressions', false, fN),
+    card('Bereik', arNum(k.reach), 'reach', false, fN),
+    card('CPM', arEur(k.cpm,cur), 'cpm', true, fE),
     card('CTR', arPct(k.ctr), 'ctr', false),
-    card('CPC', arEur(k.cpc,cur), 'cpc', true),
-    card('Frequentie', arDec(k.frequency,2), 'frequency', true)
-  ].join('');
+    card('CPC', arEur(k.cpc,cur), 'cpc', true, fE),
+    card('Frequentie', arDec(k.frequency,2), 'frequency', true, fD)
+  ]);
   var note=(p && cmpLabel)?'<div class="arkpi-note">Vergeleken met '+esc(cmpLabel)+'</div>':'';
-  return '<div class="ar-summary"><div class="ar-kpigrid">'+cards+'</div>'+note+'</div>';
+  return '<div class="ar-summary"><div class="ar-kpigrid">'+cards.join('')+'</div>'+note+'</div>';
 }
 /* ---- per campagne ---- */
 function _titleCase(s){ return String(s).toLowerCase().replace(/_/g,' ').replace(/^\w/,function(c){return c.toUpperCase();}); }
@@ -1631,18 +1642,19 @@ function googleRichTabBody(){
   return googleRichSamengevat(g,cur);
 }
 function googleRichKpiGrid(k,p,cur,cmpLabel){
-  function card(lab,val,key,invert){ var d=p?arCmp(k[key],p[key],invert):''; return '<div class="arkpi"><div class="arkpi-l">'+lab+'</div><div class="arkpi-v">'+val+'</div>'+(d?'<div class="arkpi-d">'+d+'</div>':'')+'</div>'; }
+  var fE=function(v){return arEur(v,cur);}, fN=function(v){return arNum(v);}, fD=function(v){return arDec(v,2);};
+  function card(lab,val,key,invert,fmt){ var d=p?(fmt?arCmpAbs(k[key],p[key],invert,fmt):arCmp(k[key],p[key],invert)):''; return '<div class="arkpi"><div class="arkpi-l">'+lab+'</div><div class="arkpi-v">'+val+'</div>'+(d?'<div class="arkpi-d">'+d+'</div>':'')+'</div>'; }
   var cards=[
-    card('Besteed',arEur(k.spend,cur),'spend',true),
-    card('Conversies',arDec(k.conversions,2),'conversions',false),
-    card('Conv.waarde',arEur(k.convValue,cur),'convValue',false),
-    card('Kost/conv.',k.conversions?arEur(k.costPerConv,cur):'–','costPerConv',true),
+    card('Besteed',arEur(k.spend,cur),'spend',true,fE),
+    card('Conversies',arDec(k.conversions,2),'conversions',false,fD),
+    card('Conv.waarde',arEur(k.convValue,cur),'convValue',false,fE),
+    card('Kost/conv.',k.conversions?arEur(k.costPerConv,cur):'–','costPerConv',true,fE),
     card('Conv.ratio',arPct(k.convRate),'convRate',false),
-    card('Klikken',arNum(k.clicks),'clicks',false),
-    card('Vertoningen',arNum(k.impressions),'impressions',false),
+    card('Klikken',arNum(k.clicks),'clicks',false,fN),
+    card('Vertoningen',arNum(k.impressions),'impressions',false,fN),
     card('CTR',arPct(k.ctr),'ctr',false),
-    card('CPC',arEur(k.cpc,cur),'cpc',true),
-    card('CPM',arEur(k.cpm,cur),'cpm',true)
+    card('CPC',arEur(k.cpc,cur),'cpc',true,fE),
+    card('CPM',arEur(k.cpm,cur),'cpm',true,fE)
   ].join('');
   var note=(p&&cmpLabel)?'<div class="arkpi-note">Vergeleken met '+esc(cmpLabel)+'</div>':'';
   return '<div class="ar-summary"><div class="ar-kpigrid">'+cards+'</div>'+note+'</div>';
