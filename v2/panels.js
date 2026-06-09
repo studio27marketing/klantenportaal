@@ -1239,6 +1239,14 @@ function adsGegVisual(i){
   if(have){ show(); return; }
   if(window.S27DATA&&S27DATA.loadCampaignAds){ S27DATA.loadCampaignAds(a.campaignId).then(show).catch(function(){ alert('De visual kon niet geladen worden.'); }); }
 }
+// Klik op een advertentienaam in de Campagnes-tab -> open de visual/video (zelfde lightbox als de gegevenstabel, géén oog-icoon).
+function adsRichAdVisual(cid,encName){
+  var name=''; try{ name=decodeURIComponent(encName||''); }catch(e){ name=encName||''; }
+  function show(){ var ads=((window.S27DATA&&S27DATA.campaignAds)?S27DATA.campaignAds(cid):[])||[]; var idx=-1; for(var j=0;j<ads.length;j++){ if(name && ads[j].name===name){ idx=j; break; } } if(idx<0 && ads.length) idx=0; if(idx<0 || typeof openMetaCreative!=='function'){ alert('Geen visual gevonden voor deze advertentie.'); return; } state._metaAdsView=ads; openMetaCreative(idx); }
+  var have=(window.S27DATA&&S27DATA.campaignAds)?S27DATA.campaignAds(cid):null;
+  if(have){ show(); return; }
+  if(window.S27DATA&&S27DATA.loadCampaignAds){ S27DATA.loadCampaignAds(cid).then(show).catch(function(){ alert('De visual kon niet geladen worden.'); }); }
+}
 /* PDF subtiel onderaan (team kiest zelf wanneer) */
 function adsRichPdfFooter(){ return '<div class="ads-pdffoot"><button class="ads-pdflink" onclick="exportAdsPdf()"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Exporteer dit rapport als PDF</button></div>'; }
 /* per-tab charts: Samengevat = account-overzicht; Campagnes = per-campagne dag-evolutie */
@@ -1472,7 +1480,7 @@ function adsRichMergeAds(ads){
 function _arGridCols(cols){ return cols.map(function(col,i){ return i===0?'minmax(190px,2.2fr)':(col[2]?'minmax(72px,1fr)':'minmax(96px,1fr)'); }).join(' '); }
 function _arCell(key,r,cur){
   switch(key){
-    case 'name': return '<span class="ar-nm">'+esc(r.name||'–')+'</span>'+(r.merged?' <span class="ar-star" title="'+r.count+' advertenties met dezelfde naam, samengeteld">★'+r.count+'</span>':'');
+    case 'name': var _nm='<span class="ar-nm">'+esc(r.name||'–')+'</span>'+(r.merged?' <span class="ar-star" title="'+r.count+' advertenties met dezelfde naam, samengeteld">★'+r.count+'</span>':''); return r._cid?'<button class="ar-namebtn" type="button" onclick="adsRichAdVisual(\''+esc(r._cid)+'\',\''+encodeURIComponent(r.name||'')+'\')" title="Bekijk de visual van deze advertentie">'+_nm+'</button>':_nm;
     case 'status': return adsRichStatus(r.status);
     case 'text': return '<span class="ar-nm">'+esc(r.text||'–')+'</span>';
     case 'matchType': return esc(_gMatch(r.matchType));
@@ -1505,7 +1513,7 @@ function _arTable(which,cid,cols,s,rows,cur,emptyMsg){
   return '<div class="ar-table" id="art_'+which+'_'+esc(cid)+'"><div class="ar-tabtitle">'+title+' <span class="count">'+rows.length+'</span></div><div class="ar-tscroll"><div class="ar-thead" style="grid-template-columns:'+tpl+'">'+head+'</div>'+body+'</div></div>';
 }
 function adsRichAdsetTable(c,cur){ var s=arSortState(c.id,'adsets'); var rows=(c.adsets||[]).slice().sort(function(a,b){return _arCmpVal(a,b,s);}); return _arTable('adsets',c.id,AR_ADSET_COLS,s,rows,cur,'Geen adsets met data in deze periode.'); }
-function adsRichAdTable(c,cur){ var s=arSortState(c.id,'ads'); var rows=adsRichMergeAds(c.ads).sort(function(a,b){return _arCmpVal(a,b,s);}); return _arTable('ads',c.id,AR_AD_COLS,s,rows,cur,'Geen advertenties met data in deze periode.'); }
+function adsRichAdTable(c,cur){ var s=arSortState(c.id,'ads'); var rows=adsRichMergeAds(c.ads).sort(function(a,b){return _arCmpVal(a,b,s);}); rows.forEach(function(r){r._cid=c.id;}); return _arTable('ads',c.id,AR_AD_COLS,s,rows,cur,'Geen advertenties met data in deze periode.'); }
 function adsRichSort(cid,which,key){ var s=arSortState(cid,which); if(s.key===key){ s.dir=-s.dir; } else { s.key=key; s.dir=(key==='name'||key==='status')?1:-1; } var c=_arFindCamp(cid); if(!c) return; var host=document.getElementById('art_'+which+'_'+cid); if(host){ host.outerHTML=(which==='adsets'?adsRichAdsetTable(c,_arCur()):adsRichAdTable(c,_arCur())); } }
 /* ---- optimalisatie-aanbevelingen (data-gedreven heuristieken) ---- */
 // Lijst-vorm (gedeeld door de schermweergave + de PDF-export): [severity, titel, body].
@@ -1581,7 +1589,7 @@ function adsOverviewInner(){
    Meta. Geen creatives (Google Ads kent geen vergelijkbaar visueel postmodel).
    ============================================================================= */
 function adsActivePlatform(){ return state._adsPlatform==='google'?'google':'meta'; }
-function adsPlatStyles(){ if(document.getElementById('adsPlatStyles'))return; var s=document.createElement('style'); s.id='adsPlatStyles'; s.textContent='.ads-platsw{display:inline-flex;gap:5px;background:linear-gradient(180deg,rgba(255,255,255,.72),rgba(255,255,255,.42));-webkit-backdrop-filter:blur(12px) saturate(1.3);backdrop-filter:blur(12px) saturate(1.3);border:1px solid var(--glass-border,rgba(255,255,255,.6));border-radius:999px;padding:5px;margin:2px 0 16px;box-shadow:var(--glass-sh,0 8px 24px rgba(60,40,80,.09)),inset 0 1px 0 rgba(255,255,255,.7)}.ads-plat{display:inline-flex;align-items:center;gap:7px;border:0;background:transparent;font:inherit;font-weight:700;font-size:13px;color:var(--ink-3);padding:8px 16px;border-radius:999px;cursor:pointer;transition:all .18s var(--ease-out,ease)}.ads-plat:hover{color:var(--ink)}.ads-plat.active{background:linear-gradient(180deg,#fff,#f7f3ec);color:var(--ink);box-shadow:0 2px 8px rgba(35,15,35,.13),inset 0 1px 0 #fff}.ads-platdot{width:8px;height:8px;border-radius:50%;flex:none;box-shadow:0 0 0 2px rgba(255,255,255,.5)}.ads-ovw{display:flex;flex-direction:column;gap:16px}.ads-ovw>.ads-reschip{margin:0}.ads-camps .section-head{margin-top:0}.ar-ckd{display:block;font-size:10px;line-height:1.15;margin-top:1px}.ar-td.num{flex-direction:column;align-items:flex-end;gap:1px}.ar-tdd{display:block;font-size:9.5px;line-height:1.1}'; document.head.appendChild(s); }
+function adsPlatStyles(){ if(document.getElementById('adsPlatStyles'))return; var s=document.createElement('style'); s.id='adsPlatStyles'; s.textContent='.ads-platsw{display:inline-flex;gap:5px;background:linear-gradient(180deg,rgba(255,255,255,.72),rgba(255,255,255,.42));-webkit-backdrop-filter:blur(12px) saturate(1.3);backdrop-filter:blur(12px) saturate(1.3);border:1px solid var(--glass-border,rgba(255,255,255,.6));border-radius:999px;padding:5px;margin:2px 0 16px;box-shadow:var(--glass-sh,0 8px 24px rgba(60,40,80,.09)),inset 0 1px 0 rgba(255,255,255,.7)}.ads-plat{display:inline-flex;align-items:center;gap:7px;border:0;background:transparent;font:inherit;font-weight:700;font-size:13px;color:var(--ink-3);padding:8px 16px;border-radius:999px;cursor:pointer;transition:all .18s var(--ease-out,ease)}.ads-plat:hover{color:var(--ink)}.ads-plat.active{background:linear-gradient(180deg,#fff,#f7f3ec);color:var(--ink);box-shadow:0 2px 8px rgba(35,15,35,.13),inset 0 1px 0 #fff}.ads-platdot{width:8px;height:8px;border-radius:50%;flex:none;box-shadow:0 0 0 2px rgba(255,255,255,.5)}.ads-ovw{display:flex;flex-direction:column;gap:16px}.ads-ovw>.ads-reschip{margin:0}.ads-camps .section-head{margin-top:0}.ar-ckd{display:block;font-size:10px;line-height:1.15;margin-top:1px}.ar-td.num{flex-direction:column;align-items:flex-end;gap:1px}.ar-tdd{display:block;font-size:9.5px;line-height:1.1}.ar-namebtn{border:0;background:transparent;padding:0;font:inherit;color:inherit;text-align:left;cursor:pointer;border-bottom:1px dashed var(--line,#E7DFD3)}.ar-namebtn:hover{color:var(--s27-blue-ink,#1F5FA8);border-bottom-color:currentColor}'; document.head.appendChild(s); }
 function adsPlatformSwitch(){
   adsPlatStyles(); var p=adsActivePlatform();
   function b(id,lab,col){ return '<button class="ads-plat'+(p===id?' active':'')+'" onclick="setAdsPlatform(\''+id+'\')"><span class="ads-platdot" style="background:'+col+'"></span>'+esc(lab)+'</button>'; }
