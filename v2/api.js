@@ -110,6 +110,10 @@ const ENDPOINTS = {
   // Google Ads real-time (direct via Google Ads API, geen Make): { from,to,compare } -> zelfde vorm als
   // metaAds { ok, linked, account, currency, kpis, prevKpis, compareLabel, campaigns:[], trend:[] }.
   googleAds:         GATEWAY_BASE + '/googleAds',
+  // ADMIN-only (staff): Google-maandoverzicht (12 maanden) voor de dynamische maandgrafiek. {} ->
+  // { ok, linked, currency, campaigns:[{id,name}], months:[{month:'YYYY-MM',spend,clicks,conversions,
+  // convValue,campaigns:[{id,name,spend,clicks,conversions,convValue}]}] }. Acting-as scope.
+  googleMonthly:     GATEWAY_BASE + '/googleMonthly',
   // ADMIN-only (staff): per-bedrijf KV-meeting-werkblad (notities + recs + uploads).
   adsWorkspace:      GATEWAY_BASE + '/adsWorkspace',
   adsWorkspaceSave:  GATEWAY_BASE + '/adsWorkspaceSave',

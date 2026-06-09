@@ -564,6 +564,23 @@
   };
   DATA.googleAds = function(){ return state.data.googleAds; };
 
+  // ADMIN (staff): Google-maandoverzicht (12 maanden) voor de dynamische maandgrafiek. Acting-as-scoping.
+  // Contract: { ok, linked, currency, campaigns:[{id,name}], months:[{month:'YYYY-MM',spend,clicks,
+  // conversions,convValue,campaigns:[{id,name,spend,clicks,conversions,convValue}]}] }.
+  DATA.loadGoogleMonthly = async function(){
+    if(!live()){ state.data.googleMonthly={linked:false,months:[],campaigns:[]}; return false; }
+    var bid = state.activeBedrijf || '';
+    if(!bid){ state.data.googleMonthly={linked:false,months:[],campaigns:[]}; return false; }
+    try{
+      var res = await api(ENDPOINTS.googleMonthly, base({}));
+      var j = (res && res.ok && res.data) ? res.data : null;
+      if(!j || !j.ok){ state.data.googleMonthly={linked:false,months:[],campaigns:[]}; return false; }
+      state.data.googleMonthly = j;   // { linked, currency, campaigns, months }
+      return true;
+    }catch(e){ state.data.googleMonthly={linked:false,months:[],campaigns:[]}; return false; }
+  };
+  DATA.googleMonthly = function(){ return state.data.googleMonthly; };
+
   // Meeting-werkblad (staff): notities + recs + uploads per bedrijf (KV via gateway).
   DATA.loadAdsWorkspace = async function(){ if(!live()) return null; var bid=state.activeBedrijf||''; if(!bid) return null; try{ var res=await api(ENDPOINTS.adsWorkspace, base({})); var j=(res&&res.ok&&res.data)?res.data:null; if(j&&j.ok){ state.data.adsWorkspace=j; return j; } }catch(e){} return null; };
   DATA.adsWorkspace = function(){ return state.data.adsWorkspace; };
