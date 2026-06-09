@@ -3724,6 +3724,56 @@ export async function googleAdsRich(bedrijfId, body, env) {
   return { status: 200, body: { ok: true, linked: true, account: acct, currency: 'EUR', period, kpis, prevKpis, compareLabel, campaigns, keywords, error } };
 }
 
+/* ---- googleMonthly (READ, ADMIN-only/staff) — maandoverzicht Google-conversies ----------
+ * Spiegelt googleAds/googleAdsRich: account UITSLUITEND uit de bedrijf-taak (FIELD.googleAdsId,
+ * tenant-safe), token server-side. Eén searchStream over de laatste 12 maanden, geaggregeerd
+ * per maand ('YYYY-MM') met spend/clicks/conversies/conv.waarde — totaal én per campagne. */
+export async function googleMonthly(bedrijfId, body, env) {
+  const br = await cu.get(env, `/task/${bedrijfId}`);
+  const acct = (br.ok && br.data ? str(getCF(br.data, FIELD.googleAdsId)) : '').replace(/[^0-9]/g, '');
+  if (!/^\d{8,12}$/.test(acct)) return { status: 200, body: { ok: true, linked: false } };
+  if (!str(env && env.GOOGLE_ADS_DEVELOPER_TOKEN) || !str(env && env.GOOGLE_ADS_REFRESH_TOKEN)) return { status: 200, body: { ok: true, linked: false, reason: 'no_token' } };
+  const token = await googleAdsToken(env, Date.now());
+  if (!token) return { status: 200, body: { ok: true, linked: false, reason: 'no_token' } };
+
+  const res = await gadsQuery(env, token, acct,
+    `SELECT campaign.id, campaign.name, segments.month, metrics.cost_micros, metrics.clicks, metrics.conversions, metrics.conversions_value FROM campaign WHERE segments.date DURING LAST_12_MONTHS AND metrics.impressions > 0 ORDER BY segments.month`);
+
+  if (!res.ok) {
+    return { status: 200, body: { ok: true, linked: true, account: acct, currency: 'EUR', campaigns: [], months: [], error: res.err || 'fetch_failed' } };
+  }
+
+  const campaigns = [];           // unieke campagnes, op eerste-voorkomen
+  const campSeen = {};            // campaign.id -> true
+  const monthMap = {};            // 'YYYY-MM' -> aggregaat
+  for (const r of (res.rows || [])) {
+    const c = r.campaign || {}, m = r.metrics || {}, s = r.segments || {};
+    const cid = String(c.id || ''), cname = c.name || '';
+    const month = String(s.month || '').slice(0, 7);   // 'YYYY-MM-01' -> 'YYYY-MM'
+    if (!month) continue;
+    const spend = Number(m.costMicros || 0) / 1e6;
+    const clicks = Number(m.clicks || 0);
+    const conversions = Number(m.conversions || 0);
+    const convValue = Number(m.conversionsValue || 0);
+
+    if (cid && !campSeen[cid]) { campSeen[cid] = true; campaigns.push({ id: cid, name: cname }); }
+
+    let mo = monthMap[month];
+    if (!mo) { mo = monthMap[month] = { month, spend: 0, clicks: 0, conversions: 0, convValue: 0, campaigns: [], _byId: {} }; }
+    mo.spend += spend; mo.clicks += clicks; mo.conversions += conversions; mo.convValue += convValue;
+
+    let mc = mo._byId[cid];
+    if (!mc) { mc = mo._byId[cid] = { id: cid, name: cname, spend: 0, clicks: 0, conversions: 0, convValue: 0 }; mo.campaigns.push(mc); }
+    mc.spend += spend; mc.clicks += clicks; mc.conversions += conversions; mc.convValue += convValue;
+  }
+
+  const months = Object.keys(monthMap).sort().map((k) => {
+    const mo = monthMap[k]; delete mo._byId; return mo;
+  });
+
+  return { status: 200, body: { ok: true, linked: true, account: acct, currency: 'EUR', campaigns, months } };
+}
+
 // SEC-4: bevestig dat een post-id ECHT tot de blogId van DEZE klant hoort (anti-IDOR).
 // Zonder deze check kon klant A met het post-id van klant B een misleidende interne
 // goedkeuring/feedback-melding triggeren. Hergebruikt het blogId-gescopete scheduler-venster.
