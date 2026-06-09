@@ -1604,7 +1604,7 @@ function googleRichNotLinked(){ return '<div class="card" style="padding:30px 26
 function _gCur(){ var g=(window.S27DATA&&S27DATA.googleAdsRich&&S27DATA.googleAdsRich()); return (g&&g.currency)||'EUR'; }
 function _gFindCamp(cid){ var g=(window.S27DATA&&S27DATA.googleAdsRich&&S27DATA.googleAdsRich()); if(!g||!g.campaigns) return null; for(var i=0;i<g.campaigns.length;i++){ if(String(g.campaigns[i].id)===String(cid)) return g.campaigns[i]; } return null; }
 function _gMatch(mt){ return ({EXACT:'Exact',PHRASE:'Zinsdeel',BROAD:'Breed',BROAD_MATCH_MODIFIER:'Breed+'})[String(mt||'').toUpperCase()]||(mt?_titleCase(mt):'–'); }
-function googleAdsBodyRich(){ return adsPeriodBar()+googleRichSubnav()+'<div id="adsBody">'+googleRichTabBody()+'</div>'; }
+function googleAdsBodyRich(){ return adsPeriodBar()+googleRichSubnav()+'<div id="adsBody">'+googleRichTabBody()+'</div>'+googleRichPdfFooter(); }
 function googleRichSubnav(){
   var t=adsRichTab();
   var tabs=[['samengevat','Samengevat','st_progress'],['campagnes','Campagnes','cal'],['gegevens','Zoekwoorden','st_approved'],['aanbevelingen','Aanbevelingen','msg']];
@@ -1745,6 +1745,53 @@ function googleRichBuildCampChart(c,cur){
   var d=(c.daily||[]); if(!d.length) return;
   var labels=d.map(function(x){return _arDayLabel(x.date);}), spend=d.map(function(x){return Math.round((x.spend||0)*100)/100;}), clicks=d.map(function(x){return x.clicks||0;}), conv=d.map(function(x){return Math.round((x.conversions||0)*100)/100;});
   try{ state._arCharts['g'+c.id]=new window.Chart(cv.getContext('2d'),{ data:{labels:labels,datasets:_gChartDs(spend,clicks,conv)}, options:_gChartOpts(cur) }); }catch(e){}
+}
+/* ---- Google team-PDF (gebrand A4 print-venster, hergebruikt s27PdfShell) ---- */
+function googleRichPdfFooter(){ return '<div class="ads-pdffoot"><button class="ads-pdflink" onclick="googleAdsPdf()"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Exporteer dit Google-rapport als PDF</button></div>'; }
+// Grafieken offscreen renderen (animatie uit) zodat ze ALTIJD in de PDF staan, los van de actieve tab.
+function _gPdfCharts(g,cur){
+  var imgs={}; if(!window.Chart) return imgs;
+  var host; try{ host=document.createElement('div'); host.style.cssText='position:fixed;left:-99999px;top:0;width:760px;background:#fff;z-index:-1'; document.body.appendChild(host); }catch(e){ return imgs; }
+  function mk(id,datasets,labels){ try{ var wrap=document.createElement('div'); wrap.style.cssText='width:720px;height:240px;background:#fff'; var cv=document.createElement('canvas'); cv.width=720; cv.height=240; wrap.appendChild(cv); host.appendChild(wrap); var o=_gChartOpts(cur); o.animation=false; o.responsive=false; o.maintainAspectRatio=false; var ch=new window.Chart(cv.getContext('2d'),{data:{labels:labels,datasets:datasets},options:o}); imgs[id]=cv.toDataURL('image/png',1.0); ch.destroy(); }catch(e){} }
+  try{
+    var sMap={},cMap={},vMap={},dates={}; (g.campaigns||[]).forEach(function(c){ (c.daily||[]).forEach(function(d){ sMap[d.date]=(sMap[d.date]||0)+(d.spend||0); cMap[d.date]=(cMap[d.date]||0)+(d.clicks||0); vMap[d.date]=(vMap[d.date]||0)+(d.conversions||0); dates[d.date]=1; }); });
+    var lb=Object.keys(dates).sort();
+    if(lb.length>=2) mk('account',_gChartDs(lb.map(function(d){return Math.round((sMap[d]||0)*100)/100;}),lb.map(function(d){return cMap[d]||0;}),lb.map(function(d){return Math.round((vMap[d]||0)*100)/100;})),lb.map(_arDayLabel));
+    (g.campaigns||[]).forEach(function(c){ var d=(c.daily||[]); if(d.length<2) return; mk('c'+c.id,_gChartDs(d.map(function(x){return Math.round((x.spend||0)*100)/100;}),d.map(function(x){return x.clicks||0;}),d.map(function(x){return Math.round((x.conversions||0)*100)/100;})),d.map(function(x){return _arDayLabel(x.date);})); });
+  }catch(e){}
+  try{ document.body.removeChild(host); }catch(e){}
+  return imgs;
+}
+function _gPdfAgTable(c,cur){
+  var ags=(c.adGroups||[]).slice(0,8); if(!ags.length) return '';
+  var rows=ags.map(function(a){ return '<tr><td>'+esc(a.name||'–')+'</td><td class="num">'+metaEur(a.spend,cur)+'</td><td class="num">'+arNum(a.clicks)+'</td><td class="num">'+arPct(a.ctr)+'</td><td class="num">'+arDec(a.conversions,2)+'</td></tr>'; }).join('');
+  return '<table><thead><tr><th>Advertentiegroep</th><th class="num">Besteed</th><th class="num">Klikken</th><th class="num">CTR</th><th class="num">Conv.</th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
+function _gPdfKwTable(kws,cur){
+  var top=(kws||[]).slice(0,15); if(!top.length) return '';
+  var rows=top.map(function(w){ return '<tr><td>'+esc(w.text||'–')+'</td><td>'+esc(w.campaign||'')+'</td><td class="num">'+metaEur(w.spend,cur)+'</td><td class="num">'+arNum(w.clicks)+'</td><td class="num">'+arPct(w.ctr)+'</td><td class="num">'+arDec(w.conversions,2)+'</td></tr>'; }).join('');
+  return '<table><thead><tr><th>Zoekwoord</th><th>Campagne</th><th class="num">Besteed</th><th class="num">Klikken</th><th class="num">CTR</th><th class="num">Conv.</th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
+function googleAdsPdf(){
+  var g=(window.S27DATA&&S27DATA.googleAdsRich&&S27DATA.googleAdsRich()); if(!g||!g.linked){ alert('Er is nog geen Google-rapportdata om te exporteren. Open eerst de Google-rapportage in de TeamView.'); return; }
+  var cur=g.currency||'EUR', k=g.kpis||{}, p=g.prevKpis||null;
+  var company=(state._adminActiveName||(window.S27DATA&&S27DATA.bedrijfsnaam&&S27DATA.bedrijfsnaam())||'Klant');
+  var imgs=_gPdfCharts(g,cur);
+  function kc(lab,val,key,inv){ return '<div class="pdf-kpi"><div class="l">'+lab+'</div><div class="v">'+val+'</div>'+(p?_pdfDelta(k[key],p[key],inv):'')+'</div>'; }
+  var kpis='<div class="pdf-kpis">'+[kc('Besteed',metaEur(k.spend,cur),'spend',true),kc('Conversies',arDec(k.conversions,2),'conversions',false),kc('Conv.waarde',metaEur(k.convValue,cur),'convValue',false),kc('Kost/conv.',k.conversions?metaEur(k.costPerConv,cur):'–','costPerConv',true),kc('Conv.ratio',arPct(k.convRate),'convRate',false),kc('Klikken',arNum(k.clicks),'clicks',false),kc('Vertoningen',arNum(k.impressions),'impressions',false),kc('CTR',arPct(k.ctr),'ctr',false),kc('CPC',metaEur(k.cpc,cur),'cpc',true),kc('CPM',metaEur(k.cpm,cur),'cpm',true)].join('')+'</div>';
+  var accImg=imgs.account?'<div class="pdf-chart"><div style="font-weight:800;font-size:10px;margin-bottom:4px">Account-overzicht per dag (besteding · klikken · conversies)</div><img src="'+imgs.account+'"></div>':'';
+  var camps=(g.campaigns||[]).map(function(c){
+    var img=imgs['c'+c.id]?'<div class="pdf-chart"><img src="'+imgs['c'+c.id]+'"></div>':'';
+    return '<div class="pdf-camp"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:12.5px">'+esc(c.name||'Campagne')+'</b>'+(c.channel?'<span class="pdf-pill">'+esc(c.channel)+'</span>':'')+'</div>'
+      +'<div style="font-size:9.5px;color:#6B5B6B;margin:3px 0 5px">'+metaEur(c.spend,cur)+' besteed · '+arDec(c.conversions,2)+' conv.'+(c.conversions?(' · '+metaEur(c.costPerConv,cur)+' /conv.'):'')+' · '+arNum(c.clicks)+' klikken · CTR '+arPct(c.ctr)+' · CPC '+metaEur(c.cpc,cur)+(c.imprShare>0?(' · vert.aandeel '+arPct(c.imprShare)):'')+'</div>'+img+_gPdfAgTable(c,cur)+'</div>';
+  }).join('');
+  var kwTable=_gPdfKwTable(g.keywords||[],cur);
+  var recs=googleRichOptimList(g).map(function(r){ return '<div class="pdf-rec '+(r[0]==='orange'?'':r[0])+'"><b>'+r[1]+'</b><span>'+r[2]+'</span></div>'; }).join('');
+  var body='<h2 class="pdf-sec">Samenvatting'+(g.compareLabel?' · vs '+esc(g.compareLabel):'')+'</h2>'+kpis+accImg
+    +'<h2 class="pdf-sec">Campagnes ('+(g.campaigns||[]).length+')</h2>'+(camps||'<p style="font-size:10px;color:#6B5B6B">Geen campagnes met activiteit in deze periode.</p>')
+    +(kwTable?'<h2 class="pdf-sec">Top-zoekwoorden</h2>'+kwTable:'')
+    +'<h2 class="pdf-sec">Optimalisatie-aanbevelingen</h2>'+recs;
+  _pdfOpen(s27PdfShell('Google Ads-rapport — '+company,'Google Ads-rapport',company+' · '+_pdfPeriodFromUI('ads'),body));
 }
 function openMetaCampaign(id){
   state._metaCampaign=String(id); renderPanel('advertenties'); if(window.scrollTo)window.scrollTo({top:0,behavior:'auto'});
