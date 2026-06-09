@@ -49,6 +49,7 @@ import {
   adsSnapshotWrite,
 } from './handlers.mjs';
 import { handlePush, handlePushNotify } from './push.mjs';
+import { handleClickupHook } from './clickup-push.mjs';
 
 // Staff-only (is_staff) rijke-rapportage-handlers: gescoped op het acting-as-bedrijf, (bedrijfId, body, env).
 // webTraffic/webSearch = Webprestaties (GA4 + GSC); v1 team-only, later evt. naar READ_HANDLERS voor klanten.
@@ -522,8 +523,10 @@ export default {
     const path = new URL(request.url).pathname.replace(/^\/+|\/+$/g, '');
     if (path === 'admin/link') return handleAdminLink(request, env, ch);
     if (path === 'provision') return handleProvision(request, env, ch);
-    // Web-push: secret-gated notify (Make/automation roept dit aan met X-Push-Secret, GEEN Firebase-token).
+    // Web-push: secret-gated notify (automation roept dit aan met X-Push-Secret, GEEN Firebase-token).
     if (path === 'push/notify') return handlePushNotify(request, env, ctx, ch);
+    // ClickUp-webhook -> push (publiek, HMAC-SHA256 X-Signature geverifieerd, GEEN Firebase-token).
+    if (path === 'clickup/hook') return handleClickupHook(request, env, ctx, ch);
 
     const isAdminApi = (path === 'adminCompanies');   // admin-only ClickUp-read (enkel staff)
     const isStaffData = !!STAFF_DATA_HANDLERS[path];   // admin-only rijke rapportage (enkel staff, acting-as)

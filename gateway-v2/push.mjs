@@ -159,6 +159,30 @@ async function saveSubs(env, email, subs) {
   await env.KV.put(subsKey(email), JSON.stringify(subs), { expirationTtl: SUBS_TTL });
 }
 
+// Stuur één payload naar alle toestellen van een e-mailadres; ruim dode subscriptions op.
+// Pure primitive (gate je elders, bv. isPilot). Geeft {sent,total,removed} terug.
+export async function pushToEmail(env, email, payload) {
+  const list = await loadSubs(env, email);
+  if (!list.length) return { sent: 0, total: 0, removed: 0 };
+  const dead = []; let sent = 0;
+  for (const sd of list) {
+    let st = 0;
+    try { st = await sendOne(sd, payload, env); } catch (e) { st = -1; }
+    if (st >= 200 && st < 300) sent++;
+    if (st === 404 || st === 410) dead.push(sd.endpoint);
+  }
+  if (dead.length) await saveSubs(env, email, list.filter((x) => !dead.includes(x.endpoint)));
+  return { sent, total: list.length, removed: dead.length };
+}
+
+// Pilot-helper voor externe modules (bv. de ClickUp-webhook): stuurt enkel als het
+// e-mailadres de pilot-gebruiker is. Geeft {sent,total,removed,skipped?} terug.
+export async function pushToEmailPilot(env, email, payload) {
+  if (!env.VAPID_PRIVATE_JWK || !env.KV) return { sent: 0, total: 0, removed: 0, skipped: 'not_configured' };
+  if (!isPilot(email)) return { sent: 0, total: 0, removed: 0, skipped: 'pilot_only' };
+  return pushToEmail(env, String(email).trim().toLowerCase(), payload);
+}
+
 /* ---- DISPATCH: token-authed routes (subscribe/unsubscribe/test) ----------- */
 // Aangeroepen vanuit worker.js NA tokenverificatie; `claims` = geverifieerd token.
 export async function handlePush(path, claims, body, env, ctx, ch) {
@@ -231,8 +255,6 @@ export async function handlePushNotify(request, env, ctx, ch) {
   // PILOT: stille no-op voor iedereen behalve Vincent (zo kan Make al alles aanroepen).
   if (!isPilot(email)) return jsonRes({ ok: true, skipped: 'pilot_only', sent: 0 }, 200, ch);
 
-  const list = await loadSubs(env, email);
-  if (!list.length) return jsonRes({ ok: true, sent: 0, note: 'no_subscriptions' }, 200, ch);
   const payload = {
     title: String(body.title || 'Studio 27 portaal').slice(0, 120),
     body: String(body.body || 'Er is een update in je portaal.').slice(0, 300),
@@ -240,13 +262,6 @@ export async function handlePushNotify(request, env, ctx, ch) {
     tag: body.tag || 's27-portaal',
     icon: body.icon || '/icons/icon-192.png',
   };
-  const dead = []; let sent = 0;
-  for (const sd of list) {
-    let st = 0;
-    try { st = await sendOne(sd, payload, env); } catch (e) { st = -1; }
-    if (st >= 200 && st < 300) sent++;
-    if (st === 404 || st === 410) dead.push(sd.endpoint);
-  }
-  if (dead.length) await saveSubs(env, email, list.filter((x) => !dead.includes(x.endpoint)));
-  return jsonRes({ ok: sent > 0, sent, total: list.length, removed: dead.length }, 200, ch);
+  const r = await pushToEmail(env, email, payload);
+  return jsonRes({ ok: r.sent > 0, sent: r.sent, total: r.total, removed: r.removed, note: r.total ? undefined : 'no_subscriptions' }, 200, ch);
 }
