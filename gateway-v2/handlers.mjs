@@ -3233,10 +3233,25 @@ export async function metaAds(bedrijfId, body, env) {
   const cur = await metaKpiWindow(env, act, tp);
   const kpis = cur.kpis;
   let prevKpis = null, compareLabel = '';
+  // per-campagne vergelijking (vorige periode): campaign_id -> zelfde metric-shape als de campagne-objecten.
+  const prevC = {};
   if (useRange && compare !== 'none') {
     const cw = metaCompareWindow(from, to, compare);
-    const prev = await metaKpiWindow(env, act, { time_range: JSON.stringify({ since: cw[0], until: cw[1] }) });
+    const ctr2 = { time_range: JSON.stringify({ since: cw[0], until: cw[1] }) };
+    const prev = await metaKpiWindow(env, act, ctr2);
     prevKpis = prev.kpis;
+    // ÉÉN campagne-insights-call over het vergelijkingsvenster (spiegelt `cins`, met inline_link_clicks).
+    const cinsPrev = await metaGet(env, `${act}/insights`, Object.assign({
+      level: 'campaign', limit: '200',
+      fields: 'campaign_id,spend,impressions,clicks,inline_link_clicks,ctr,cpc,cpm,reach,frequency,actions',
+    }, ctr2));
+    if (cinsPrev.ok && Array.isArray(cinsPrev.data.data)) for (const m of cinsPrev.data.data) {
+      prevC[m.campaign_id] = {
+        spend: Number(m.spend) || 0, impressions: Number(m.impressions) || 0, clicks: Number(m.clicks) || 0, linkClicks: Number(m.inline_link_clicks) || 0,
+        reach: Number(m.reach) || 0, cpm: Number(m.cpm) || 0, frequency: Number(m.frequency) || 0,
+        ctr: Number(m.ctr) || 0, cpc: Number(m.cpc) || 0, results: metaActionVal(m.actions, META_RESULT_ACTIONS),
+      };
+    }
     compareLabel = compare === 'previous' ? 'vorige periode' : (compare === 'month' ? 'vorige maand' : 'vorig jaar');
   }
 
@@ -3259,6 +3274,7 @@ export async function metaAds(bedrijfId, body, env) {
       spend: Number(m.spend) || 0, impressions: Number(m.impressions) || 0, clicks: Number(m.clicks) || 0, linkClicks: Number(m.inline_link_clicks) || 0,
       reach: Number(m.reach) || 0, cpm: Number(m.cpm) || 0, frequency: Number(m.frequency) || 0,
       ctr: Number(m.ctr) || 0, cpc: Number(m.cpc) || 0, results: metaActionVal(m.actions, META_RESULT_ACTIONS),
+      prev: prevC[c.id] || null,
     };
   }).filter((c) => c.spend > 0);
 
@@ -3335,11 +3351,23 @@ export async function metaAdsRich(bedrijfId, body, env) {
   const kpis = metaRichKpi(accRow);
 
   // periode-vergelijking (account-niveau) — enkel bij een expliciet datumbereik.
+  // + per-rij vergelijking op campagne/adset/ad-niveau (zelfde metaRichKpi-shape als de rijen).
   let prevKpis = null, compareLabel = '';
+  const prevCamp = {}, prevAdset = {}, prevAd = {};
   if (useRange && compare !== 'none') {
     const cw = metaCompareWindow(from, to, compare);
-    const prev = await metaGet(env, `${act}/insights`, Object.assign({ level: 'account', fields: INS }, { time_range: JSON.stringify({ since: cw[0], until: cw[1] }) }));
+    const cmpTr = { time_range: JSON.stringify({ since: cw[0], until: cw[1] }) };
+    // account + campagne + adset + ad over het vergelijkingsvenster — parallel (enkel bij vergelijken).
+    const [prev, prevCampIns, prevAdsetIns, prevAdIns] = await Promise.all([
+      metaGet(env, `${act}/insights`, Object.assign({ level: 'account', fields: INS }, cmpTr)),
+      metaGet(env, `${act}/insights`, Object.assign({ level: 'campaign', limit: '400', fields: 'campaign_id,campaign_name,' + INS }, cmpTr)),
+      metaGet(env, `${act}/insights`, Object.assign({ level: 'adset', limit: '500', fields: 'adset_id,adset_name,campaign_id,' + INS }, cmpTr)),
+      metaGet(env, `${act}/insights`, Object.assign({ level: 'ad', limit: '800', fields: 'ad_id,ad_name,adset_id,campaign_id,' + INS }, cmpTr)),
+    ]);
     prevKpis = metaRichKpi((prev.ok && prev.data && Array.isArray(prev.data.data) && prev.data.data[0]) || {});
+    if (prevCampIns.ok && Array.isArray(prevCampIns.data.data)) for (const r of prevCampIns.data.data) prevCamp[r.campaign_id] = metaRichKpi(r);
+    if (prevAdsetIns.ok && Array.isArray(prevAdsetIns.data.data)) for (const r of prevAdsetIns.data.data) prevAdset[r.adset_id] = metaRichKpi(r);
+    if (prevAdIns.ok && Array.isArray(prevAdIns.data.data)) for (const r of prevAdIns.data.data) prevAd[r.ad_id] = metaRichKpi(r);
     compareLabel = compare === 'previous' ? 'vorige periode' : (compare === 'month' ? 'vorige maand' : 'vorig jaar');
   }
 
@@ -3364,16 +3392,16 @@ export async function metaAdsRich(bedrijfId, body, env) {
     }).sort((a, b) => (a.date < b.date ? -1 : 1));
     const adsets = (adsetsByCamp[cid] || []).map((r) => {
       const m = adsetMetaMap[r.adset_id] || {};
-      return Object.assign({ id: r.adset_id, name: r.adset_name || m.name || '', status: m.effective_status || '' }, metaRichKpi(r));
+      return Object.assign({ id: r.adset_id, name: r.adset_name || m.name || '', status: m.effective_status || '', prev: prevAdset[r.adset_id] || null }, metaRichKpi(r));
     }).sort((a, b) => b.spend - a.spend);
     const ads = (adsByCamp[cid] || []).map((r) => {
       const m = adMetaMap[r.ad_id] || {};
-      return Object.assign({ id: r.ad_id, name: r.ad_name || m.name || '', status: m.effective_status || '', adsetId: r.adset_id || '' }, metaRichKpi(r));
+      return Object.assign({ id: r.ad_id, name: r.ad_name || m.name || '', status: m.effective_status || '', adsetId: r.adset_id || '', prev: prevAd[r.ad_id] || null }, metaRichKpi(r));
     }).sort((a, b) => b.spend - a.spend);
     return Object.assign({
       id: cid, name: ins.campaign_name || meta.name || '', objective: meta.objective || '', status: meta.effective_status || '',
       budget: Number(meta.daily_budget || meta.lifetime_budget || 0) / 100, budgetType: meta.daily_budget ? 'daily' : (meta.lifetime_budget ? 'lifetime' : ''),
-      daily, adsets, ads,
+      daily, adsets, ads, prev: prevCamp[cid] || null,
     }, k);
   }).filter((c) => c.spend > 0 || c.impressions > 0).sort((a, b) => b.spend - a.spend);
 
@@ -3522,10 +3550,25 @@ export async function googleAds(bedrijfId, body, env) {
 
   // periode-vergelijking (enkel bij expliciet datumbereik) — zelfde vensterlogica als Meta.
   let prevKpis = null, compareLabel = '';
+  // per-campagne vergelijking: campaign.id -> zelfde metric-shape als de campagne-objecten.
+  const prevC = {};
   if (useRange && compare !== 'none') {
     const cw = metaCompareWindow(from, to, compare);
-    const prev = await gadsQuery(env, token, acct, KPIQ(`segments.date BETWEEN '${cw[0]}' AND '${cw[1]}'`));
+    const cmpWhere = `segments.date BETWEEN '${cw[0]}' AND '${cw[1]}'`;
+    // account-KPI + ÉÉN campagne-query over het vergelijkingsvenster — parallel (enkel bij vergelijken).
+    const [prev, prevCamp] = await Promise.all([
+      gadsQuery(env, token, acct, KPIQ(cmpWhere)),
+      gadsQuery(env, token, acct,
+        `SELECT campaign.id, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.ctr, metrics.average_cpc, metrics.conversions FROM campaign WHERE campaign.status = 'ENABLED' AND ${cmpWhere}`),
+    ]);
     if (prev.ok) prevKpis = aggKpi(prev.rows);
+    for (const r of (prevCamp.rows || [])) {
+      const c = r.campaign || {}, m = r.metrics || {};
+      prevC[String(c.id || '')] = {
+        spend: Number(m.costMicros || 0) / 1e6, impressions: Number(m.impressions || 0), clicks: Number(m.clicks || 0),
+        ctr: Number(m.ctr || 0) * 100, cpc: Number(m.averageCpc || 0) / 1e6, results: Number(m.conversions || 0),
+      };
+    }
     compareLabel = compare === 'previous' ? 'vorige periode' : (compare === 'month' ? 'vorige maand' : 'vorig jaar');
   }
 
@@ -3537,6 +3580,7 @@ export async function googleAds(bedrijfId, body, env) {
       objective: GADS_CHANNEL[c.advertisingChannelType] || str(c.advertisingChannelType),
       spend, impressions: Number(m.impressions || 0), clicks: Number(m.clicks || 0),
       ctr: Number(m.ctr || 0) * 100, cpc: Number(m.averageCpc || 0) / 1e6, results: Number(m.conversions || 0),
+      prev: prevC[String(c.id || '')] || null,
     };
   }).filter((c) => c.spend > 0);
 
@@ -3595,10 +3639,27 @@ export async function googleAdsRich(bedrijfId, body, env) {
   const kpis = richKpi((accRes.rows && accRes.rows[0] ? accRes.rows[0].metrics : {}));
 
   let prevKpis = null, compareLabel = '';
+  // per-rij vergelijking: campagne (richKpi-shape), adgroep (richKpi-shape), zoekwoord (eigen shape).
+  const prevCamp = {}, prevAg = {}, prevKw = {};
+  const kwKey = (campId, adGroup, text, matchType) => campId + '|' + adGroup + '|' + text + '|' + matchType;
   if (useRange && compare !== 'none') {
     const cw = metaCompareWindow(from, to, compare);
-    const prev = await gadsQuery(env, token, acct, KPIQ(`segments.date BETWEEN '${cw[0]}' AND '${cw[1]}'`));
+    const cmpWhere = `segments.date BETWEEN '${cw[0]}' AND '${cw[1]}'`;
+    // account + campagnes + adgroepen + zoekwoorden over het vergelijkingsvenster — parallel (enkel bij vergelijken).
+    const [prev, prevCampRes, prevAgRes, prevKwRes] = await Promise.all([
+      gadsQuery(env, token, acct, KPIQ(cmpWhere)),
+      gadsQuery(env, token, acct, `SELECT campaign.id, ${METR} FROM campaign WHERE ${cmpWhere} AND metrics.impressions > 0`),
+      gadsQuery(env, token, acct, `SELECT campaign.id, ad_group.id, ${METR} FROM ad_group WHERE ${cmpWhere} AND metrics.impressions > 0`),
+      gadsQuery(env, token, acct, `SELECT campaign.id, ad_group.name, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.ctr, metrics.average_cpc, metrics.conversions FROM keyword_view WHERE ${cmpWhere} AND metrics.impressions > 0 LIMIT 250`),
+    ]);
     if (prev.ok) prevKpis = richKpi((prev.rows && prev.rows[0] ? prev.rows[0].metrics : {}));
+    for (const r of (prevCampRes.rows || [])) prevCamp[String((r.campaign || {}).id || '')] = richKpi(r.metrics);
+    for (const r of (prevAgRes.rows || [])) prevAg[String((r.adGroup || {}).id || '')] = richKpi(r.metrics);
+    for (const r of (prevKwRes.rows || [])) {
+      const c = r.campaign || {}, ag = r.adGroup || {}, m = r.metrics || {}, kw = ((r.adGroupCriterion || {}).keyword) || {};
+      const spend = Number(m.costMicros || 0) / 1e6, impressions = Number(m.impressions || 0), clicks = Number(m.clicks || 0);
+      prevKw[kwKey(String(c.id || ''), ag.name || '', kw.text || '', kw.matchType || '')] = { spend, impressions, clicks, ctr: impressions > 0 ? (clicks / impressions * 100) : 0, cpc: Number(m.averageCpc || 0) / 1e6, conversions: Number(m.conversions || 0) };
+    }
     compareLabel = compare === 'previous' ? 'vorige periode' : (compare === 'month' ? 'vorige maand' : 'vorig jaar');
   }
 
@@ -3610,7 +3671,7 @@ export async function googleAdsRich(bedrijfId, body, env) {
   const agByCamp = {};
   for (const r of (agRes.rows || [])) {
     const cid = String((r.campaign || {}).id || ''), ag = r.adGroup || {};
-    (agByCamp[cid] = agByCamp[cid] || []).push(Object.assign({ id: String(ag.id || ''), name: ag.name || '', status: ag.status || '' }, richKpi(r.metrics)));
+    (agByCamp[cid] = agByCamp[cid] || []).push(Object.assign({ id: String(ag.id || ''), name: ag.name || '', status: ag.status || '', prev: prevAg[String(ag.id || '')] || null }, richKpi(r.metrics)));
   }
   Object.keys(agByCamp).forEach((cid) => agByCamp[cid].sort((a, b) => b.spend - a.spend));
 
@@ -3621,14 +3682,14 @@ export async function googleAdsRich(bedrijfId, body, env) {
       channel: GADS_CHANNEL[c.advertisingChannelType] || str(c.advertisingChannelType),
       budget: Number((r.campaignBudget || {}).amountMicros || 0) / 1e6,
       imprShare: Number(m.searchImpressionShare || 0) * 100,
-      daily: dailyByCamp[cid] || [], adGroups: agByCamp[cid] || [],
+      daily: dailyByCamp[cid] || [], adGroups: agByCamp[cid] || [], prev: prevCamp[cid] || null,
     }, richKpi(m));
   });
 
   const keywords = (kwRes.rows || []).map((r) => {
     const c = r.campaign || {}, ag = r.adGroup || {}, m = r.metrics || {}, kw = ((r.adGroupCriterion || {}).keyword) || {};
     const spend = Number(m.costMicros || 0) / 1e6, impressions = Number(m.impressions || 0), clicks = Number(m.clicks || 0);
-    return { campaign: c.name || '', campaignId: String(c.id || ''), adGroup: ag.name || '', text: kw.text || '', matchType: kw.matchType || '', spend, impressions, clicks, ctr: impressions > 0 ? (clicks / impressions * 100) : 0, cpc: Number(m.averageCpc || 0) / 1e6, conversions: Number(m.conversions || 0) };
+    return { campaign: c.name || '', campaignId: String(c.id || ''), adGroup: ag.name || '', text: kw.text || '', matchType: kw.matchType || '', spend, impressions, clicks, ctr: impressions > 0 ? (clicks / impressions * 100) : 0, cpc: Number(m.averageCpc || 0) / 1e6, conversions: Number(m.conversions || 0), prev: prevKw[kwKey(String(c.id || ''), ag.name || '', kw.text || '', kw.matchType || '')] || null };
   });
 
   const error = (!accRes.ok && !campRes.ok) ? (accRes.err || campRes.err || 'fetch_failed') : null;
