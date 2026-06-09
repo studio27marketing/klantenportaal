@@ -2940,16 +2940,45 @@ function offerteBodyHTML(){
   return offerteOverzichtHTML();
 }
 function panelOffertes(){ return offerteSubnav()+'<div id="offBody">'+offerteBodyHTML()+'</div>'; }
+/* ---- Notificatie-kanalen (Cluster I): multi-select pill-picker i.p.v. dropdown ---- */
+const KANAAL_OPTS=[['whatsapp','WhatsApp'],['email','E-mail'],['push','Push']];
+const KANAAL_LABEL={whatsapp:'WhatsApp',email:'E-mail',push:'Push'};
+function legacyVoorkeurNaarKanalen(v){ if(v==='WhatsApp')return['whatsapp']; if(v==='E-mail')return['email']; if(v==='Beide')return['whatsapp','email']; return []; }
+function kanaalPicker(idPrefix, kanalen, onToggleFn){
+  const set=Array.isArray(kanalen)?kanalen.slice():[];
+  return '<div class="kanaal-pick" id="'+idPrefix+'" data-kanalen="'+esc(set.join(','))+'">'+KANAAL_OPTS.map(function(o){
+    const on=set.indexOf(o[0])!==-1;
+    return '<button type="button" class="kanaal-pill'+(on?' on':'')+'" data-k="'+o[0]+'" aria-pressed="'+(on?'true':'false')+'" onclick="toggleKanaal(this'+(onToggleFn?",'"+onToggleFn+"'":'')+')">'+esc(o[1])+'</button>';
+  }).join('')+'</div>';
+}
+function toggleKanaal(btn, cb){
+  const wrap=btn.closest('.kanaal-pick'); if(!wrap) return;
+  const k=btn.getAttribute('data-k');
+  let set=(wrap.getAttribute('data-kanalen')||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
+  const i=set.indexOf(k); if(i===-1) set.push(k); else set.splice(i,1);
+  wrap.setAttribute('data-kanalen', set.join(','));
+  const on=set.indexOf(k)!==-1; btn.classList.toggle('on',on); btn.setAttribute('aria-pressed',on?'true':'false');
+  // callback-whitelist: enkel bekende, veilige saves (geen arbitraire window[...]-aanroep)
+  if(cb==='saveProfile' && typeof window.saveProfile==='function') window.saveProfile();
+}
+function readKanalen(idPrefix){ const w=document.getElementById(idPrefix); if(!w) return []; return (w.getAttribute('data-kanalen')||'').split(',').map(function(s){return s.trim();}).filter(Boolean); }
+function _kanaalSub(c){
+  const ks=(Array.isArray(c.kanalen)&&c.kanalen.length)?c.kanalen:legacyVoorkeurNaarKanalen(c.voorkeur);
+  return ks.map(function(k){return KANAAL_LABEL[k]||k;}).join(', ');
+}
 function contactRow(c, isMe){
   const nm=((c.voornaam||'')+' '+(c.achternaam||'')).trim()||'Contactpersoon';
   const init=(nm.split(/\s+/).map(x=>x[0]).join('').slice(0,2)||'?').toUpperCase();
   const hasEmail=!!String(c.email||'').trim();
-  const sub=[c.rol||c.email||'', c.gsm||'', (c.voorkeur&&c.voorkeur!=='Geen')?('meldingen: '+c.voorkeur):''].filter(Boolean).join(' · ');
+  // id whitelist-sanitizen vóór interpolatie in inline-onclick (esc() beschermt daar niet tegen quote-breakout)
+  const cid=String(c.id||'').replace(/[^A-Za-z0-9_-]/g,'');
+  const _kl=_kanaalSub(c);
+  const sub=[c.rol||c.email||'', c.gsm||'', _kl?('meldingen: '+_kl):''].filter(Boolean).join(' · ');
   const meBadge=isMe?' <span style="font-size:10.5px;font-weight:700;color:#fff;background:var(--s27-indigo,#5B6B8C);border-radius:999px;padding:1px 8px;margin-left:6px">jij</span>':'';
   // zonder e-mail geen portaaltoegang -> eerlijke indicator (de panelkop belooft "iedereen hier kan inloggen")
   const noAccessBadge=(!hasEmail&&!isMe)?' <span style="font-size:10.5px;font-weight:700;color:var(--s27-orange-ink,#C44514);background:var(--s27-orange-soft,rgba(246,97,49,.12));border-radius:999px;padding:1px 8px;margin-left:6px">geen toegang</span>':'';
-  const delBtn=isMe?'':`<button class="icon-btn" style="width:32px;height:32px;margin-left:6px" title="Ontkoppelen, toegang tot dit portaal vervalt" onclick="removeContact('${esc(c.id||'')}',this)">${ic('trash',15)}</button>`;
-  return `<div class="contact-row" data-cid="${esc(c.id||'')}"><span class="cr-av" style="background:var(--s27-indigo,#5B6B8C)">${esc(init)}</span><div class="cr-tx"><b>${esc(nm)}${meBadge}${noAccessBadge}</b><span>${esc(sub)}</span></div><button class="btn btn-ghost btn-sm" onclick="editContact('${esc(c.id||'')}')">Wijzig</button>${delBtn}</div>`;
+  const delBtn=isMe?'':`<button class="icon-btn" style="width:32px;height:32px;margin-left:6px" title="Ontkoppelen, toegang tot dit portaal vervalt" onclick="removeContact('${cid}',this)">${ic('trash',15)}</button>`;
+  return `<div class="contact-row" data-cid="${cid}"><span class="cr-av" style="background:var(--s27-indigo,#5B6B8C)">${esc(init)}</span><div class="cr-tx"><b>${esc(nm)}${meBadge}${noAccessBadge}</b><span>${esc(sub)}</span></div><button class="btn btn-ghost btn-sm" onclick="editContact('${cid}')">Wijzig</button>${delBtn}</div>`;
 }
 function contactFormHTML(c){
   c=c||{}; const fld='font-family:var(--font-body);font-size:14px;padding:11px 13px;border:1px solid var(--line);border-radius:var(--r-sm);outline:none;background:#fff';
@@ -2960,16 +2989,16 @@ function contactFormHTML(c){
       <div class="field"><label>Achternaam</label><input id="cfAchter" value="${esc(c.achternaam||'')}" style="${fld}"></div>
       <div class="field"><label>E-mail</label><input id="cfEmail" value="${esc(c.email||'')}" placeholder="naam@bedrijf.be" style="${fld}"></div>
       <div class="field"><label>GSM / WhatsApp</label><input id="cfGsm" value="${esc(c.gsm||'')}" placeholder="+32 4xx xx xx xx" style="${fld}"></div>
-      <div class="field"><label>Meldingen via</label><select id="cfVoorkeur" style="${fld}">${['Geen','WhatsApp','E-mail','Beide'].map(o=>`<option ${o===(c.voorkeur||'Geen')?'selected':''}>${o}</option>`).join('')}</select></div>
+      <div class="field" style="grid-column:1/-1"><label>Notificatie-kanalen</label>${kanaalPicker('cfKanalen', (Array.isArray(c.kanalen)&&c.kanalen.length)?c.kanalen:legacyVoorkeurNaarKanalen(c.voorkeur))}<div class="fs" style="color:var(--ink-4);margin-top:6px">Kies via welke kanalen deze persoon meldingen krijgt. Meerdere mogelijk.</div></div>
     </div>
-    <div style="display:flex;gap:10px;margin-top:14px"><button class="btn btn-branch br-indigo btn-sm" onclick="saveContact('${esc(c.id||'')}',this)">${ic('check',15)} Opslaan</button><button class="btn btn-ghost btn-sm" onclick="closeContactForm()">Annuleer</button></div>
+    <div style="display:flex;gap:10px;margin-top:14px"><button class="btn btn-branch br-indigo btn-sm" onclick="saveContact('${String(c.id||'').replace(/[^A-Za-z0-9_-]/g,'')}',this)">${ic('check',15)} Opslaan</button><button class="btn btn-ghost btn-sm" onclick="closeContactForm()">Annuleer</button></div>
   </div>`;
 }
 function panelInstellingen(){
   const demo=!_live();
   const t=(window.S27DATA && S27DATA.team())||{};
   let contacts=(t.contactpersonen||[]).slice();
-  const demoContacts=[{voornaam:'Sarah',achternaam:'Janssens',rol:'Marketing · hoofdcontact',gsm:'+32 478 12 34 56',email:'sarah@testclient.be',voorkeur:'WhatsApp',id:'demo1'},{voornaam:'Tom',achternaam:'De Cock',rol:'Zaakvoerder',email:'tom@testclient.be',id:'demo2'}];
+  const demoContacts=[{voornaam:'Sarah',achternaam:'Janssens',rol:'Marketing · hoofdcontact',gsm:'+32 478 12 34 56',email:'sarah@testclient.be',voorkeur:'WhatsApp',kanalen:['whatsapp','push'],id:'demo1'},{voornaam:'Tom',achternaam:'De Cock',rol:'Zaakvoerder',email:'tom@testclient.be',kanalen:['email'],id:'demo2'}];
   if(demo && !contacts.length) contacts=demoContacts.slice();
   // "Mij" herkennen op het ingelogde e-mailadres en bovenaan plaatsen
   const meEmail=((window.state&&state.session&&state.session.email)||'').toLowerCase().trim();
@@ -2984,7 +3013,7 @@ function panelInstellingen(){
       <div class="set-grid">
         <div class="field"><label>E-mail</label><input id="npEmail" value="${esc(prof.email||'')}" placeholder="naam@bedrijf.be" onchange="saveProfile()" ${prof.id?'':'disabled'}></div>
         <div class="field"><label>GSM / WhatsApp-nummer</label><input id="npGsm" value="${esc(prof.gsm||(demo?'+32 478 12 34 56':''))}" placeholder="+32 4xx xx xx xx" onchange="saveProfile()" ${prof.id?'':'disabled'}></div>
-        <div class="field"><label>Meldingen via</label><select id="npVoorkeur" onchange="saveProfile()" ${prof.id?'':'disabled'}>${['Geen','WhatsApp','E-mail','Beide'].map(o=>`<option ${o===vk?'selected':''}>${o}</option>`).join('')}</select></div>
+        <div class="field" style="grid-column:1/-1"><label>Notificatie-kanalen</label>${kanaalPicker('npKanalen', (Array.isArray(prof.kanalen)&&prof.kanalen.length)?prof.kanalen:legacyVoorkeurNaarKanalen(vk), prof.id?'saveProfile':null)}${prof.id?'':'<div class="fs" style="color:var(--ink-4);margin-top:6px">Koppel eerst je e-mail om kanalen te bewaren.</div>'}</div>
       </div>
       <div id="npSaved" class="fs" style="color:var(--s27-green-ink,#2e7d32);margin-top:8px;display:none">✓ Opgeslagen, gesynchroniseerd met ClickUp</div>
       ${(!demo&&!prof.id)?'<p class="fs" style="color:var(--ink-4);margin-top:8px">Je e-mail is nog niet aan een contactpersoon gekoppeld, voeg jezelf hieronder toe om je voorkeuren te bewaren.</p>':''}
@@ -3460,8 +3489,12 @@ function panelWebprestaties(){
   var head='';
   var t=(window.S27DATA&&S27DATA.webTraffic&&S27DATA.webTraffic())||null;
   var s=(window.S27DATA&&S27DATA.webSearch&&S27DATA.webSearch())||null;
-  if(t===null && s===null){ return head+'<div class="empty" style="padding:70px 20px"><div class="brand-spinner" style="margin:0 auto 14px"></div><div style="font-family:var(--font-display);font-weight:700;color:#9E919E">Webdata laden…</div></div>'; }
-  if(!(t&&t.linked) && !(s&&s.linked)){ return head+'<div class="wp-card" style="text-align:center;color:#6B5B6B">Nog geen webstatistieken gekoppeld voor dit bedrijf, of deze module staat in teambeheer.</div>'; }
+  if(t===null && s===null){
+    // demo heeft geen webdata: meteen doorvallen naar de niet-gekoppeld-staat (geen eeuwige spinner)
+    if(state.demoMode) return head+'<div class="wp-card" style="text-align:center;color:#6B5B6B">Nog geen webstatistieken gekoppeld voor dit bedrijf, of deze module staat in teambeheer.</div>'+webSupportCard();
+    return head+'<div class="empty" style="padding:70px 20px"><div class="brand-spinner" style="margin:0 auto 14px"></div><div style="font-family:var(--font-display);font-weight:700;color:#9E919E">Webdata laden…</div></div>';
+  }
+  if(!(t&&t.linked) && !(s&&s.linked)){ return head+'<div class="wp-card" style="text-align:center;color:#6B5B6B">Nog geen webstatistieken gekoppeld voor dit bedrijf, of deze module staat in teambeheer.</div>'+webSupportCard(); }
   return head+'<div id="wpBody">'+webBody(t,s)+'</div>';
 }
 function webBody(t,s){
@@ -3493,7 +3526,14 @@ function webBody(t,s){
   var qtbl='<div class="wp-card"><h3>Zoektermen (Google Search Console)</h3>'
     +(qrows?('<table class="wp-tbl"><thead><tr><th>Zoekterm</th><th class="r">Clicks</th><th class="r">Vert.</th><th class="r">CTR</th><th class="r">Positie</th></tr></thead><tbody>'+qrows+'</tbody></table>'):'<div style="color:#9E919E">Geen zoekdata in deze periode</div>')
     +'</div>';
-  return webPeriodBar()+kpis+charts+row2+qtbl;
+  return webPeriodBar()+kpis+charts+row2+qtbl+webSupportCard();
+}
+/* Website-support (Cluster K): ticket-ingang onderaan de Website-tab — ook zichtbaar zonder GA4/GSC-koppeling. */
+function webSupportCard(){
+  return '<div class="wp-card" style="margin-top:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">'
+    +'<div style="flex:1;min-width:200px"><h3 style="margin:0 0 4px">Hulp nodig met je website?</h3>'
+    +'<div style="color:#6B5B6B;font:600 13px Nunito,sans-serif;line-height:1.5">Een bug, een aanpassing of een vraag over je site? Stuur ons een ticket — we pakken het op en je krijgt een melding zodra de status verandert.</div></div>'
+    +'<button class="btn btn-branch br-green btn-sm" onclick="openWebTicket()">'+ic('msg',16)+' Ticket aanvragen</button></div>';
 }
 
 /* ---- panel registry ---- */

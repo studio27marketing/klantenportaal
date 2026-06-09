@@ -939,3 +939,9 @@ body.mp-lock{overflow:hidden;}
 .bub-att{width:130px;max-width:48vw;border-radius:10px;display:block;}
 .bub-doc{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;background:rgba(255,255,255,.55);border-radius:9px;padding:5px 9px;}
 .msg.me .bub-doc{background:rgba(255,255,255,.22);color:#fff;}
+
+/* === Cluster I: notificatie-kanalen pill-picker (multi-select) === */
+.kanaal-pick{display:flex;gap:8px;flex-wrap:wrap;}
+.kanaal-pill{font-family:var(--font-body);font-size:13px;font-weight:700;padding:9px 15px;border-radius:999px;cursor:pointer;border:1px solid var(--line,#E7DFD3);background:#fff;color:var(--ink-2,#4A3A4A);transition:all .15s ease;-webkit-tap-highlight-color:transparent;}
+.kanaal-pill:not(.on):hover{border-color:var(--s27-indigo,#5B6B8C);color:var(--s27-indigo,#5B6B8C);}
+.kanaal-pill.on{background:var(--s27-indigo,#5B6B8C);border-color:var(--s27-indigo,#5B6B8C);color:#fff;box-shadow:0 2px 8px rgba(91,107,140,.28);}

@@ -48,6 +48,8 @@ export const PLANNING_LISTS = [
 ];
 export const PAYROLL_LIST = '901520180360';
 export const SOCIAL_LIST = '901520180312'; // Social media-planning: communicatietaak + maandtaken + input-subtaken
+export const TICKET_LIST = '901523697831'; // Tickets (website-support); standaard-statussen incl. on hold/doorgestuurd (push-triggers)
+export const TICKET_ASSIGNEE = 36517215;   // Klaas — vaste assignee voor website-support-tickets (lijsttoegang geverifieerd via 86ca6qth2)
 
 export const FIELD = {
   bedrijf:        '4b1fb333-f47a-41bb-a976-dce63ed36657', // relatie 'Bedrijf' (scope-guard)
@@ -61,7 +63,8 @@ export const FIELD = {
   achternaam:     '79cbda71-626b-424c-8f78-d0785c52126a',
   gsm:            '8cee9669-26f3-4380-b592-175c1c481c7c',
   email:          'd453a72f-e08e-46bb-b82f-24c311fad13f',
-  voorkeur:       'ad6f0803-857b-451c-96cb-fdd15b70cc5b', // dropdown voorkeur
+  voorkeur:       'ad6f0803-857b-451c-96cb-fdd15b70cc5b', // dropdown 'Notificatie-voorkeur' (legacy; blijft als migratie-fallback/mirror)
+  notifKanalen:   '1f10ca20-50b2-472a-80d5-4e7ddcdfc3d2', // labels 'Notificatie-kanalen' op Contactpersonen-lijst (WhatsApp/E-mail/Push)
   // bedrijf-velden
   btw:            '034f4443-5b50-4176-8c91-0b6d60e5870e', // Ondernemingsnummer / BTW
   facturatieEmail:'9613b4aa-2285-485b-80a6-d1d34a96884c',
@@ -1099,6 +1102,46 @@ export function voorkeurWriteUUID(label) {
   return VOORKEUR_LABEL_TO_UUID[label] || VOORKEUR_LABEL_TO_UUID['Geen']; // default Geen
 }
 
+/* ---- Notificatie-kanalen (labels-veld FIELD.notifKanalen) — Cluster I ----
+ * key <-> option-UUID van het 'Notificatie-kanalen'-labelsveld op de Contactpersonen-lijst.
+ * Vervangt de legacy 'Notificatie-voorkeur'-dropdown; die blijft als mirror tijdens de migratie. */
+const KANAAL_KEY_TO_UUID = {
+  whatsapp: '0dcd023d-12cb-4a9a-87a2-8ff0d2fb4720',
+  email:    '9944bf7b-4231-4178-9b7f-ee099e8fa2e9',
+  push:     '65722278-fe09-4b78-b0ce-c808f8641b2e',
+};
+const KANAAL_UUID_TO_KEY = Object.fromEntries(Object.entries(KANAAL_KEY_TO_UUID).map(([k, v]) => [v, k]));
+// READ: labels-value = array van option-UUID's (string) of objecten {id} -> array van keys.
+export function kanalenRead(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((x) => (typeof x === 'string' ? x : str(x && (x.id || x.value))))
+    .map((u) => (Object.hasOwn(KANAAL_UUID_TO_KEY, u) ? KANAAL_UUID_TO_KEY[u] : null))   // hasOwn: geen prototype-keys
+    .filter(Boolean);
+}
+// WRITE: keys[] -> volledig add/rem-beeld (idempotent; deselecteren werkt door rem van niet-gekozen).
+export function kanalenWriteValue(keys) {
+  const want = new Set((Array.isArray(keys) ? keys : []).filter((k) => typeof k === 'string' && Object.hasOwn(KANAAL_KEY_TO_UUID, k)));
+  const add = []; const rem = [];
+  for (const [k, uuid] of Object.entries(KANAAL_KEY_TO_UUID)) { if (want.has(k)) add.push(uuid); else rem.push(uuid); }
+  return { add, rem };
+}
+// migratie-fallback: legacy voorkeur-label -> kanaal-keys (zolang contacten nog op het oude veld staan)
+export function voorkeurToKanalen(label) {
+  if (label === 'WhatsApp') return ['whatsapp'];
+  if (label === 'E-mail') return ['email'];
+  if (label === 'Beide') return ['whatsapp', 'email'];
+  return [];
+}
+// mirror-richting: kanaal-keys -> legacy voorkeur-label (houdt de oude dropdown in sync; Push valt buiten de oude opties)
+export function kanalenToVoorkeur(keys) {
+  const s = new Set(Array.isArray(keys) ? keys : []);
+  if (s.has('whatsapp') && s.has('email')) return 'Beide';
+  if (s.has('whatsapp')) return 'WhatsApp';
+  if (s.has('email')) return 'E-mail';
+  return 'Geen';
+}
+
 // base64 -> Uint8Array (1x decoden). Accepteert file_data ?? data, strip data-URL-prefix defensief.
 export function base64ToBytes(b64) {
   let s = String(b64 || '');
@@ -1495,6 +1538,8 @@ export async function getTeam(bedrijfId, body, env) {
         email: str(getCF(c, FIELD.email)),
         gsm: str(getCF(c, FIELD.gsm)),
         voorkeur: voorkeurRead(getCF(c, FIELD.voorkeur)),
+        // nieuw labels-veld; leeg/onbestaand -> afleiden uit de legacy dropdown (migratie-fallback)
+        kanalen: (() => { const k = kanalenRead(getCF(c, FIELD.notifKanalen)); return k.length ? k : voorkeurToKanalen(voorkeurRead(getCF(c, FIELD.voorkeur))); })(),
       };
     });
   return {
@@ -1551,15 +1596,15 @@ export async function dashboard(bedrijfId, body, env) {
   //    want subtasks=true is geen superset en mist soms losse top-level taken.
   const cf = `[{"field_id":"${FIELD.bedrijf}","operator":"ANY","value":["${bedrijfId}"]}]`;
   const enc = encodeURIComponent(cf);
-  const [tasks, tree] = await Promise.all([
+  const [tasks, tree, cr] = await Promise.all([
     pageAll(env, (page) =>
       `/team/${TEAM_ID}/task?subtasks=false&include_closed=true&page=${page}&custom_fields=${enc}`),
     fetchBedrijfTree(env, bedrijfId),
+    cu.get(env, `/task/${bedrijfId}`).catch(() => ({ ok: false })),   // module-labels-read mee in de batch (-1 RTT)
   ]);
   const childrenByParent = tree.childrenByParent;
 
-  // 2) module-labels op de bedrijf-taak zelf
-  const cr = await cu.get(env, `/task/${bedrijfId}`);
+  // 2) module-labels op de bedrijf-taak zelf (GET zit hierboven in de parallelle batch)
   const mods = cr.ok && cr.data ? normalizeModuleLabels(getCF(cr.data, FIELD.modules)) : [];
 
   const now = Date.now();
@@ -1617,6 +1662,30 @@ export async function dashboard(bedrijfId, body, env) {
       sae: buildSae(t),                                        // assignees [{naam, initialen}]
     });
   }
+
+  // Chat-wacht-signaal (Cluster F): true als het NIEUWSTE zichtbare comment niet van de klant kwam
+  // (klant-posts dragen de '💬 ['-prefix — zelfde heuristiek als chatList). Parallel + gecapt zodat
+  // de dashboard-latency vlak blijft (1 extra RTT, niet N seriële calls); read-cache (60s) dempt verder.
+  // Budget-race: stragglers (bv. een 429-retry van 5s) mogen de dashboard-respons nooit ophouden —
+  // na ~1,2s serveren we wat er is; late resolves blijven false (cosmetisch signaal, fail-soft).
+  const CHAT_WAIT_MAX = 10;
+  const CHAT_WAIT_BUDGET_MS = 1200;
+  await Promise.race([
+    Promise.all(actieve.slice(0, CHAT_WAIT_MAX).map(async (p) => {
+      p.chat_wacht_op_klant = false;
+      try {
+        const cwr = await cu.get(env, `/task/${p.task_id}/comment`);
+        const raw = cwr.ok && cwr.data && Array.isArray(cwr.data.comments) ? cwr.data.comments : [];
+        let last = null; // nieuwste op datum (API-volgorde niet vertrouwen)
+        for (const c of raw) {
+          if (str(c.comment_text).slice(0, 8) === '[INTERN]') continue;
+          if (!last || Number(c.date || 0) > Number(last.date || 0)) last = c;
+        }
+        if (last) p.chat_wacht_op_klant = !str(last.comment_text).startsWith('💬 [');
+      } catch (e) { /* fail-soft: geen kaart */ }
+    })),
+    new Promise((resolve) => setTimeout(resolve, CHAT_WAIT_BUDGET_MS)),
+  ]);
 
   const out = {
     klant: { bedrijfsnaam: 'Klant', klantcode: '', account_manager: 'Ilke Meeusen' },
@@ -2422,15 +2491,23 @@ export async function bedrijfBeheerContacts(bedrijfId, body, env, contactEmail) 
 }
 
 function contactCustomFields(body, contactEmail) {
+  // legacy-dropdown blijft gevuld tijdens de migratie: stuurt de frontend enkel kanalen[],
+  // dan spiegelen we die naar het oude voorkeur-label (anders zou 'Geen' de oude waarde wissen).
+  const voorkeurLabel = str(body && body.voorkeur) || kanalenToVoorkeur(body && body.kanalen);
   const cfs = [
     { id: FIELD.voornaam, value: str(body && body.voornaam) },
     { id: FIELD.achternaam, value: str(body && body.achternaam) },
     { id: FIELD.gsm, value: str(body && body.gsm) },
-    { id: FIELD.voorkeur, value: voorkeurWriteUUID(str((body && body.voorkeur) || 'Geen')) },
+    { id: FIELD.voorkeur, value: voorkeurWriteUUID(voorkeurLabel || 'Geen') },
   ];
   // contact-email = APART veld (niet account-email); enkel zetten als meegegeven
   if (contactEmail) cfs.push({ id: FIELD.email, value: contactEmail });
   return cfs;
+}
+// Kanalen voor de labels-write: expliciete kanalen[] van de frontend, of afgeleid uit de legacy voorkeur.
+function kanalenFromBody(body) {
+  if (body && Array.isArray(body.kanalen)) return body.kanalen;
+  return voorkeurToKanalen(str(body && body.voorkeur));
 }
 
 async function updateBedrijf(bedrijfId, body, env) {
@@ -2459,6 +2536,8 @@ async function saveContact(bedrijfId, body, env, contactEmail) {
   });
   const contactId = create.ok && create.data && create.data.id ? str(create.data.id) : '';
   if (contactId) {
+    // 1b) notificatie-kanalen (labels) — MOET ná de create (add/rem werkt enkel op een bestaande taak)
+    await cu.field(env, contactId, FIELD.notifKanalen, kanalenWriteValue(kanalenFromBody(body))).catch(() => {});
     // 2) koppel additief op de bedrijf-taak (omgekeerde relatie 1bce8db8)
     await cu.relation(env, bedrijfId, FIELD.contact, { add: [contactId], rem: [] });
     // 3) read-modify-write Portaal-toegang CSV (enkel als contact-email bekend)
@@ -2498,6 +2577,8 @@ async function updateContact(bedrijfId, body, env, contactEmail) {
   // veld via POST /task/{id}/field/{fieldId}, dat WEL persisteert.
   const cfs = contactCustomFields(body, contactEmail);
   await Promise.allSettled(cfs.map((f) => cu.field(env, contactId, f.id, f.value)));
+  // notificatie-kanalen (labels) apart zetten — add/rem-shape, niet mengbaar met de scalaire velden
+  await cu.field(env, contactId, FIELD.notifKanalen, kanalenWriteValue(kanalenFromBody(body))).catch(() => {});
   // read-modify-write op de toegang-CSV: vervang OUD door NIEUW (idempotent, ontdubbelt).
   // Enkel als er een nieuwe email meekomt en die afwijkt van de oude (anders niets te doen).
   const nieuwEmail = str(contactEmail).trim();
@@ -4684,6 +4765,87 @@ export async function adsUploadAdd(bedrijfId, body, env) {
    Handler-registry voor de router-shim + node-harness.
    READ_HANDLERS: testbaar zonder Firebase met (bedrijfId, body, env).
    ============================================================================= */
+/* ---- ticketCreate (WRITE) — website-supportticket in de Tickets-lijst (Cluster K) ----
+ * Body: { onderwerp, omschrijving?, klant_naam?, filename?, file_data? }.
+ * Maakt een taak in TICKET_LIST met assignee Klaas, zet de Bedrijf-relatie op bedrijfId
+ * (zodat de push-pipeline taak->bedrijf->contact-email kan resolven bij on hold/doorgestuurd)
+ * + optionele bijlage. Geen IDOR-risico: we CREËREN een taak en koppelen ze aan het
+ * token-bedrijf (bedrijfId komt uit de sessie, nooit uit de body). */
+export async function ticketCreate(bedrijfId, body, env) {
+  const bid = cleanId(bedrijfId);
+  if (!bid) return { status: 403, body: { ok: false, error: 'no_company_link' } };
+  // sanitize: control-chars (newlines/nul-bytes) horen niet in taaknaam/filename (UI-vervorming)
+  const clean = (s, n) => str(s).replace(/[\u0000-\u001f\u007f]+/g, ' ').slice(0, n).trim();
+  const onderwerp = clean(body && body.onderwerp, 200);
+  if (!onderwerp) return { status: 400, body: { ok: false, error: 'no_subject', message: 'Geef een onderwerp mee.' } };
+  const omschrijving = str(body && body.omschrijving).slice(0, 6000);
+
+  // anti-spam: dagcap per bedrijf (rate-limit 15/min remt requests, niet volume richting Klaas)
+  const dag = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const capKey = `ticketcap:${bid}:${dag}`;
+  try {
+    const n = parseInt((await env.KV.get(capKey)) || '0', 10) || 0;
+    if (n >= 10) return { status: 429, body: { ok: false, error: 'too_many_tickets', message: 'Je hebt vandaag het maximum aantal tickets bereikt. Bel of mail ons gerust voor dringende zaken.' } };
+    await env.KV.put(capKey, String(n + 1), { expirationTtl: 90000 }); // ~25u, rolt vanzelf weg
+  } catch (e) { /* fail-open bij KV-storing — taak-create blijft mogelijk */ }
+
+  // bedrijfsnaam UITSLUITEND uit de eigen bedrijf-taak (body.klant_naam wordt bewust genegeerd:
+  // client-spoofbaar -> impersonatie-vector richting het webteam)
+  let naam = '';
+  try { const br = await cu.get(env, `/task/${bid}`); if (br.ok && br.data && br.data.name) naam = clean(br.data.name, 120); } catch (e) {}
+
+  const desc = [
+    'WEBSITE-SUPPORTTICKET (via klantenportaal)',
+    '',
+    naam ? `Klant: ${naam}` : '',
+    `Onderwerp: ${onderwerp}`,
+    '',
+    omschrijving || '(geen omschrijving meegegeven)',
+  ].filter((x) => x !== '').join('\n');
+
+  // (1) taak aanmaken; Bedrijf-relatie meteen in de create + (2) nogmaals via POST /field
+  //     (gordel-en-bretels tegen de custom-field-persist-gotcha).
+  let created;
+  try {
+    created = await cu.post(env, `/list/${TICKET_LIST}/task`, {
+      name: `🛠️ ${onderwerp}${naam ? ` — ${naam}` : ''}`,
+      description: desc,
+      assignees: [TICKET_ASSIGNEE],
+      notify_all: false,
+      custom_fields: [{ id: FIELD.bedrijf, value: { add: [bid], rem: [] } }],
+    });
+  } catch (e) { created = null; }
+  if (!created || !created.ok || !created.data || !created.data.id) {
+    return { status: 502, body: { ok: false, error: 'create_failed', message: 'Ticket kon niet aangemaakt worden. Probeer het zo opnieuw.' } };
+  }
+  const taskId = str(created.data.id);
+  await cu.relation(env, taskId, FIELD.bedrijf, { add: [bid], rem: [] }).catch(() => {});
+
+  // (3) optionele bijlage — server-side caps (frontend bewaakt ook, maar is omzeilbaar):
+  //     base64-cap VÓÓR atob (31 MB b64 ≈ 22 MB binair; voorkomt OOM op de isolate) +
+  //     extensie-allowlist (spiegel van de frontend-accept; Klaas opent ticketbijlagen standaard).
+  let attached = false;
+  if (body && body.file_data && str(body.filename)) {
+    const fname = clean(body.filename, 140);
+    const ext = (fname.lastIndexOf('.') >= 0 ? fname.slice(fname.lastIndexOf('.') + 1) : '').toLowerCase();
+    const ALLOWED_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'heic', 'mp4', 'mov', 'm4v', 'webm', 'pdf', 'doc', 'docx']);
+    const b64 = str(body.file_data);
+    if (ALLOWED_EXT.has(ext) && b64.length <= 31 * 1024 * 1024) {
+      let bytes; try { bytes = base64ToBytes(b64); } catch (e) { bytes = new Uint8Array(0); }
+      if (bytes.length && bytes.length <= 22 * 1024 * 1024) {
+        try { const up = await cu.uploadAttachment(env, taskId, bytes, fname); attached = !!(up && up.ok); } catch (e) {}
+      }
+    }
+  }
+
+  // (4) melding voor Klaas (gerichte assignee-notificatie -> Inbox + mobiele push)
+  try {
+    await cu.comment(env, taskId, `🛠️ Nieuw website-supportticket via het klantenportaal.\nKlant: ${naam || '-'}\nOnderwerp: ${onderwerp}${omschrijving ? `\n\n${omschrijving}` : ''}`, false, TICKET_ASSIGNEE);
+  } catch (e) {}
+
+  return { status: 200, body: { ok: true, ticket_id: taskId, attached } };
+}
+
 /* ---- Webprestaties (READ, staff/team) — GA4 + Search Console rechtstreeks via de Google-API's ----
  * Geen Make. Auth = de portal-SA (portal-admin@studio27-cloud) die marketing@studio27.be impersoneert
  * via domain-wide delegation: dat dekt in één keer ALLE GA4-properties + GSC-sites die marketing@
@@ -4884,6 +5046,8 @@ export const WRITE_HANDLERS = {
   // Meeting-tunnel: taskloze Google-Calendar-boeking (Algemene/Project/Nieuw-project) +
   // invite. Muteert geen due_date; scope-guard enkel als er een project_task_id bij zit.
   meetingBook,
+  // Website-supportticket: taak in TICKET_LIST (Klaas) + Bedrijf-relatie + optionele bijlage.
+  ticketCreate,
 };
 // bedrijfBeheer sub-acties (read vs write split voor cache/rate-decisions in de shell)
 export const BEDRIJFBEHEER_READ_ACTIONS = { get_team: getTeam, get_offertes: getOffertes };

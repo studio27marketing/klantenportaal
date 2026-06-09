@@ -943,7 +943,7 @@ async function saveProfile(){
   const g=(x)=>(($id(x)||{}).value||'').trim();
   try {
     await api(ENDPOINTS.bedrijfBeheer, { action:'update_contact', contact_id:id, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token,
-      voornaam:base.voornaam||'', achternaam:base.achternaam||'', email:(g('npEmail')||base.email||''), gsm:(g('npGsm')||base.gsm||''), voorkeur:g('npVoorkeur')||base.voorkeur||'Geen' });
+      voornaam:base.voornaam||'', achternaam:base.achternaam||'', email:(g('npEmail')||base.email||''), gsm:(g('npGsm')||base.gsm||''), kanalen:readKanalen('npKanalen') });
     const s=$id('npSaved'); if(s){ s.style.display=''; setTimeout(function(){ var x=$id('npSaved'); if(x)x.style.display='none'; }, 2200); }
     state.data.team=null; try{ await S27DATA.loadTeam(); }catch(e){}
   } catch(e){}
@@ -964,7 +964,7 @@ async function saveContact(id, btn){
     achternaam: g('cfAchter') || ref.achternaam || '',
     email: g('cfEmail') || ref.email || '',
     gsm: g('cfGsm') || ref.gsm || '',
-    voorkeur: g('cfVoorkeur') || ref.voorkeur || 'Geen'
+    kanalen: readKanalen('cfKanalen')
   };
   if(!payload.voornaam && !payload.email){ const e=$id('cfVoor'); if(e){ e.style.borderColor='var(--s27-orange)'; e.focus(); } return; }
   if(btn){ btn.disabled=true; btn.textContent='Opslaan…'; }
@@ -982,6 +982,54 @@ async function removeContact(id, btn){
   const row=btn&&btn.closest&&btn.closest('.contact-row'); if(row){ row.style.opacity='.5'; row.style.pointerEvents='none'; }
   if(state.demoMode){ if(row)row.remove(); return; }
   try { await api(ENDPOINTS.bedrijfBeheer, { action:'delete_contact', contact_id:id, email:(c&&c.email)||'', bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token }); state.data.team=null; try{ await S27DATA.loadTeam(); }catch(e){} renderPanel('instellingen'); } catch(e){ if(row){ row.style.opacity=''; row.style.pointerEvents=''; } }
+}
+/* ---- Website-supportticket (Cluster K): overlay-formulier -> worker ticketCreate ----
+   Hergebruikt de meeting-planner-overlay-CSS (mp-overlay/mp-modal/mp-scroll). */
+function wtEl(){ var el=$id('webTicket'); if(!el){ el=document.createElement('div'); el.id='webTicket'; el.className='mp-overlay'; el.addEventListener('mousedown',function(e){ el._downScrim=(e.target===el); }); el.addEventListener('click',function(e){ if(e.target===el && el._downScrim) closeWebTicket(); }); document.body.appendChild(el); } return el; }
+function wtEsc(e){ if(e.key==='Escape') closeWebTicket(); }
+function closeWebTicket(){ var el=$id('webTicket'); if(el){ el.classList.remove('show'); el.innerHTML=''; } document.removeEventListener('keydown',wtEsc); document.body.classList.remove('mp-lock'); state._wtFile=null; }
+function openWebTicket(){ state._wtFile=null; var el=wtEl(); el.classList.add('show'); document.body.classList.add('mp-lock'); document.addEventListener('keydown',wtEsc); wtRender(); var s=$id('wtSubj'); if(s)s.focus(); }
+function wtRender(){
+  var el=$id('webTicket'); if(!el) return;
+  var fileLbl = state._wtFile ? ('📎 '+escapeHtml(state._wtFile.name)) : 'Bestand toevoegen (optioneel)';
+  el.innerHTML='<div class="mp-modal" onclick="event.stopPropagation()">'
+    +'<div class="mp-head"><span class="mp-back-sp"></span><div class="mp-head-c"><span class="mp-head-eyebrow">Website-support</span><b>Ticket aanvragen</b></div><button class="mp-close" onclick="closeWebTicket()" aria-label="Sluiten">'+ic('plus',22)+'</button></div>'
+    +'<div class="mp-scroll">'
+      +'<p class="mp-intro">Beschrijf kort wat er aan de hand is. Ons webteam pakt je vraag op en je krijgt een melding zodra de status verandert.</p>'
+      +'<label style="display:block;font:700 12px var(--font-display);color:var(--ink-3);margin:0 0 6px">Onderwerp</label>'
+      +'<input id="wtSubj" type="text" maxlength="120" placeholder="Bv. Contactformulier werkt niet" style="width:100%;box-sizing:border-box;padding:11px 13px;border:1px solid var(--line);border-radius:12px;font:600 14px Nunito,sans-serif;margin-bottom:14px">'
+      +'<label style="display:block;font:700 12px var(--font-display);color:var(--ink-3);margin:0 0 6px">Omschrijving</label>'
+      +'<textarea id="wtBody" rows="6" placeholder="Wat zie je, op welke pagina, en wat verwacht je?" style="width:100%;box-sizing:border-box;padding:11px 13px;border:1px solid var(--line);border-radius:12px;font:600 14px Nunito,sans-serif;resize:vertical;margin-bottom:12px"></textarea>'
+      +'<label class="btn btn-outline btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">'+ic('upload',14)+' <span id="wtFileLbl">'+fileLbl+'</span><input type="file" accept="image/*,video/*,.pdf,.doc,.docx" style="display:none" onchange="wtPickFile(this)"></label>'
+      +'<div id="wtMsg" style="min-height:18px;margin:10px 0 0;font:600 13px Nunito,sans-serif"></div>'
+      +'<div style="padding:16px 0 22px"><button class="btn btn-branch br-green" id="wtSend" onclick="submitWebTicket(this)">'+ic('send',16)+' Ticket versturen</button></div>'
+    +'</div></div>';
+}
+function wtPickFile(input){
+  var f=input.files&&input.files[0]; var l=$id('wtFileLbl'); var m=$id('wtMsg');
+  if(!f){ state._wtFile=null; if(l) l.textContent='Bestand toevoegen (optioneel)'; return; }
+  if(f.size>22*1024*1024){ if(m) m.innerHTML='<span style="color:var(--s27-orange-ink,#C44514)">Bestand te groot (max 22 MB). Plak liever een link in de omschrijving.</span>'; input.value=''; return; }
+  state._wtFile=f; if(l) l.textContent='📎 '+f.name; if(m) m.textContent='';
+}
+async function submitWebTicket(btn){
+  var subj=((($id('wtSubj')||{}).value)||'').trim();
+  var bodyTx=((($id('wtBody')||{}).value)||'').trim();
+  var m=$id('wtMsg');
+  if(!subj){ var si=$id('wtSubj'); if(si){ si.style.borderColor='var(--s27-orange)'; si.focus(); } if(m) m.innerHTML='<span style="color:var(--ink-3)">Geef even een onderwerp mee.</span>'; return; }
+  if(btn){ btn.disabled=true; btn.innerHTML='Versturen…'; }
+  if(state.demoMode || !state.session){ if(btn) btn.innerHTML=ic('check',15)+' Verstuurd (demo)'; if(m) m.innerHTML='<span style="color:var(--s27-green-ink,#147A50)">Je ticket staat genoteerd (voorbeeldweergave).</span>'; setTimeout(closeWebTicket,1500); return; }
+  var payload={ onderwerp:subj, omschrijving:bodyTx };   // bedrijfsnaam leidt de worker zelf af (anti-spoof)
+  var fail=function(){ if(btn){ btn.disabled=false; btn.innerHTML=ic('send',16)+' Ticket versturen'; } if(m) m.innerHTML='<span style="color:var(--s27-orange-ink,#C44514)">Versturen lukte niet. Probeer opnieuw of stuur ons een bericht via de chat.</span>'; };
+  var send=function(){
+    api(ENDPOINTS.ticketCreate, payload).then(function(r){
+      var d=(r&&r.data)?r.data:(r&&r.ok!==undefined?r:null);
+      if(d&&d.ok){ if(m) m.innerHTML='<span style="color:var(--s27-green-ink,#147A50)">'+ic('check',14)+' Je ticket staat genoteerd. We houden je op de hoogte met een melding.</span>'; if(btn) btn.innerHTML=ic('check',15)+' Verstuurd ✓'; setTimeout(closeWebTicket,1800); }
+      else fail();
+    }).catch(fail);
+  };
+  var f=state._wtFile;
+  if(f){ var rd=new FileReader(); rd.onload=function(){ var du=String(rd.result||''); payload.file_data=du.indexOf(',')>=0?du.slice(du.indexOf(',')+1):du; payload.filename=f.name; send(); }; rd.onerror=function(){ send(); }; rd.readAsDataURL(f); }
+  else send();
 }
 const MEET_HOSTS={ 'Arne':{email:'arne@studio27.be'}, 'Ilke':{email:'ilke@studio27.be'} };
 /* ---- Offerte: vraag stellen -> komt als comment op de offerte-taak (naar de assignee) ---- */

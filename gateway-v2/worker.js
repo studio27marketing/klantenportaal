@@ -125,7 +125,7 @@ const SENSITIVE = new Set([
   'chatAttachment', 'chatPost', 'commsChatPost', 'commsChatAttachment', 'directMessage', 'feedbackV2', 'newProjectIntake',
   'facturatieSave', 'projectFacturatieSave', 'bedrijfVoorkeuren', 'bedrijfContact',
   'bedrijfBeheer', 'inplannen', 'offerteGenereren', 'metricoolApprove', 'metricoolUpdate',
-  'metricoolMediaUpload', 'shootSubmit', 'meetingBook',
+  'metricoolMediaUpload', 'shootSubmit', 'meetingBook', 'ticketCreate',
 ]);
 const LIMIT_SENSITIVE = 15; // per minuut, per gebruiker
 const LIMIT_DEFAULT   = 80;
@@ -647,7 +647,16 @@ export default {
     //     We injecteren GEEN account-email in body (de contacts-handler heeft het
     //     ruwe contact-email uit body.email nodig; account-email zou dat clobberen).
     if (isPorted) {
-      const noCache = (request.headers.get('X-No-Cache') || '') !== '';
+      let noCache = (request.headers.get('X-No-Cache') || '') !== '';
+      // Anti-abuse: client-geforceerde cache-bypass max 1x/min per (path, bedrijf). De frontend
+      // stuurt deze header nooit; dit dempt enkel een DoS-vector (cache-miss = volle ClickUp-fanout).
+      if (noCache) {
+        try {
+          const nk = `nocache:${path}:${bedrijfId}`;
+          if (await env.KV.get(nk)) { noCache = false; }
+          else { ctx.waitUntil(env.KV.put(nk, '1', { expirationTtl: 60 })); }
+        } catch (e) { /* fail-open bij KV-storing */ }
+      }
       try {
         const handled = await tryHandle(path, bedrijfId, body, claims, env, ctx, ch, noCache);
         if (handled) return handled;
