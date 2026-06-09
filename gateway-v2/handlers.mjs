@@ -4269,6 +4269,110 @@ export async function metricoolMediaUpload(bedrijfId, body, env) {
 }
 
 /* =============================================================================
+   ADS-MEETING-WORKSPACE (STAFF/team) — per-bedrijf KV-werkblad voor de ads-meeting.
+   -----------------------------------------------------------------------------
+   Een klein, staff-only werkblad per bedrijf: meeting-notities (vrije tekst),
+   bewerkbare aanbevelingen (recs-object) en geüploade meeting-items (visuals/
+   screenshots/links). Opslag = env.KV onder de key `adsws:${bedrijfId}` als JSON.
+   De frontend GET't het werkblad en SAVE't partiële updates. De file-HOSTING is
+   NIET de taak van deze handlers — de frontend host bestanden via de bestaande
+   metricoolMediaUpload-handler en geeft de resulterende publieke URL hier door
+   als 'file'/'image'-item. Alle handlers zijn defensief en gooien nooit.
+   Signatuur (zoals STAFF_DATA_HANDLERS in worker.js): (bedrijfId, body, env).
+   ============================================================================= */
+const ADSWS_KEY = (bedrijfId) => `adsws:${str(bedrijfId).slice(0, 64)}`;
+const ADSWS_MAX_UPLOADS = 200;
+const ADSWS_MAX_NOTES = 20000;
+const ADSWS_MAX_RECS_BYTES = 200 * 1024; // ~200KB JSON-budget voor het recs-object
+
+// Lees de ruwe blob (object) of {} uit KV. Faalt nooit; null/parse-fouten → {}.
+async function adsWsRead(bedrijfId, env) {
+  if (!env || !env.KV) return {};
+  try {
+    const stored = await env.KV.get(ADSWS_KEY(bedrijfId), 'json');
+    return (stored && typeof stored === 'object' && !Array.isArray(stored)) ? stored : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+/* ---- adsWorkspace (READ, staff) — geef het volledige werkblad terug -------- */
+export async function adsWorkspace(bedrijfId, body, env) {
+  const stored = await adsWsRead(bedrijfId, env);
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      notes: str(stored.notes || ''),
+      recs: (stored.recs != null ? stored.recs : null),
+      uploads: (Array.isArray(stored.uploads) ? stored.uploads : []),
+    },
+  };
+}
+
+/* ---- adsWorkspaceSave (WRITE/merge, staff) — partiële update van het werkblad --
+   Alleen de in body aanwezige velden (notes/recs/uploads) worden overschreven;
+   de rest blijft staan. Type-validatie defensief, never-throw. */
+export async function adsWorkspaceSave(bedrijfId, body, env) {
+  if (!env || !env.KV) return { status: 200, body: { ok: false, error: 'no_storage' } };
+  const b = (body && typeof body === 'object') ? body : {};
+  const blob = await adsWsRead(bedrijfId, env);
+
+  if ('notes' in b) {
+    blob.notes = str(b.notes).slice(0, ADSWS_MAX_NOTES);
+  }
+  if ('recs' in b) {
+    // recs = vrij object (bewerkbare aanbevelingen). null wist het; te grote blobs negeren we.
+    if (b.recs == null) {
+      blob.recs = null;
+    } else if (typeof b.recs === 'object') {
+      try {
+        const enc = JSON.stringify(b.recs);
+        if (enc && enc.length <= ADSWS_MAX_RECS_BYTES) blob.recs = b.recs;
+      } catch (e) { /* niet-serialiseerbaar → laat recs ongewijzigd */ }
+    }
+  }
+  if ('uploads' in b) {
+    blob.uploads = (Array.isArray(b.uploads) ? b.uploads : []).slice(0, ADSWS_MAX_UPLOADS);
+  }
+
+  try { await env.KV.put(ADSWS_KEY(bedrijfId), JSON.stringify(blob)); }
+  catch (e) { return { status: 200, body: { ok: false, error: 'store_failed' } }; }
+  return { status: 200, body: { ok: true } };
+}
+
+/* ---- adsUploadAdd (WRITE, staff) — voeg ÉÉN meeting-item toe + bewaar --------
+   body = { item: { type:'link'|'image'|'file', name, url } }. Het id wordt
+   afgeleid van het aantal bestaande items + een stempel uit body.ts (NIET
+   Date.now() — determinisme/testbaarheid); zonder ts gebruiken we items.length.
+   Cap op 200 items (oudste valt weg). Never-throw. */
+export async function adsUploadAdd(bedrijfId, body, env) {
+  if (!env || !env.KV) return { status: 200, body: { ok: false, error: 'no_storage' } };
+  const b = (body && typeof body === 'object') ? body : {};
+  const blob = await adsWsRead(bedrijfId, env);
+  const uploads = Array.isArray(blob.uploads) ? blob.uploads : [];
+
+  const rawItem = (b.item && typeof b.item === 'object') ? b.item : {};
+  let type = str(rawItem.type).toLowerCase().trim();
+  if (type !== 'link' && type !== 'image' && type !== 'file') type = 'link';
+  const stamp = (b.ts != null && b.ts !== '') ? str(b.ts) : String(uploads.length);
+  const item = {
+    id: `u${uploads.length}-${stamp}`,
+    type,
+    name: str(rawItem.name).slice(0, 500),
+    url: str(rawItem.url).slice(0, 4000),
+  };
+
+  uploads.push(item);
+  // Cap op 200: laat de OUDSTE vallen.
+  blob.uploads = uploads.length > ADSWS_MAX_UPLOADS ? uploads.slice(uploads.length - ADSWS_MAX_UPLOADS) : uploads;
+
+  try { await env.KV.put(ADSWS_KEY(bedrijfId), JSON.stringify(blob)); }
+  catch (e) { return { status: 200, body: { ok: false, error: 'store_failed' } }; }
+  return { status: 200, body: { ok: true, uploads: blob.uploads } };
+}
+
+/* =============================================================================
    Handler-registry voor de router-shim + node-harness.
    READ_HANDLERS: testbaar zonder Firebase met (bedrijfId, body, env).
    ============================================================================= */
