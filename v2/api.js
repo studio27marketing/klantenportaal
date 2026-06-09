@@ -127,7 +127,12 @@ const ENDPOINTS = {
   // Meeting-tunnel: taskloze Google-Calendar-boeking + invite (Algemene meeting/Projectmeeting/Nieuw project).
   // { host_email, host_naam, start, eind, start_ms, online, titel, beschrijving, locatie, client_email, client_naam, project_task_id?, project_naam?, intake?, when_label? }
   //   -> { ok, event_id, meet_link, html_link }. Muteert GEEN project-due_date; host moet @studio27.be zijn.
-  meetingBook:       GATEWAY_BASE + '/meetingBook'
+  meetingBook:       GATEWAY_BASE + '/meetingBook',
+  // Webprestaties (GA4 + Search Console, direct via de Google-API's, geen Make). Team-only (staff, acting-as).
+  // webTraffic: { period | from,to,compare } -> { ok, linked, totals, channels, split, trend, landingPages }.
+  webTraffic:        GATEWAY_BASE + '/webTraffic',
+  // webSearch: { period | from,to } -> { ok, linked, site, totals, queries, pages, trend }.
+  webSearch:         GATEWAY_BASE + '/webSearch'
 };
 
 /* AUTH v2 (Firebase + Cloudflare-gateway) is de DEFAULT. ?auth=v1 = legacy-vangnet. */

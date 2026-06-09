@@ -372,6 +372,7 @@ async function ensureTabData(name){
     if(isRichView()){ if(!state.data.metaAdsRich){ try{ var pp=(typeof adsPeriod==='function')?adsPeriod():null; await S27DATA.loadMetaAdsRich(pp?{from:pp.from,to:pp.to,compare:pp.compare}:undefined); }catch(e){} } }
     else if(!state.data.metaAds){ try{ var _ap=(typeof adsPeriod==='function')?adsPeriod():null; await S27DATA.loadMetaAds(_ap?{from:_ap.from,to:_ap.to,compare:_ap.compare}:undefined); }catch(e){} }
   }
+  if(name==='webprestaties'){ var _wp=[]; if(!state.data.webTraffic) _wp.push(S27DATA.loadWebTraffic({period:(state._webPeriod||'last_30d')})); if(!state.data.webSearch) _wp.push(S27DATA.loadWebSearch({period:(state._webPeriod||'last_30d')})); if(_wp.length){ try{ await Promise.all(_wp); }catch(e){} } }
 }
 function renderPanel(name){
   const page=$id('page');
@@ -392,6 +393,7 @@ async function goTab(name){
   renderPanel(name);
   if(name==='advertenties' && typeof adsChatMount==='function') adsChatMount();   // ads-chat koppelen aan de huidige-maand-advertentietaak
   if(name==='advertenties' && isRichView() && typeof adsRichMountTabCharts==='function') adsRichMountTabCharts();   // team-weergave: tab-grafieken mounten
+  if(name==='webprestaties' && typeof webMountCharts==='function') webMountCharts();   // Webprestaties-grafieken mounten
   if(name==='socials' && isRichView() && socialTab && socialTab()==='rapport' && typeof socialRichMountCharts==='function') socialRichMountCharts();   // team-weergave: social-rapport-grafieken mounten
   updateNavBadges();
   if(name==='berichten' && !state.demoMode){ var _fp=(window.S27DATA&&(S27DATA.projects()||[])[0]); if(_fp) openBerichtChat(_fp.id); }
@@ -417,6 +419,7 @@ function needsLoad(name){
   if(state.data.dashboard && ['start','projecten','berichten'].indexOf(name)>=0) return false;
   if(name==='socials') return !state.data.metricool;   // wacht op Metricool-data
   if(name==='advertenties') return isRichView() ? !state.data.metaAdsRich : !state.data.metaAds;  // wacht op Meta-ads-data
+  if(name==='webprestaties') return !state.data.webTraffic && !state.data.webSearch;  // wacht op GA4/GSC-data
   if(name==='meetings' && state.data.meetings) return false;
   if(name==='huisstijl' && state.data.huisstijl) return false;
   if(name==='facturatie' && state.data.bedrijf && state.data.team) return false;

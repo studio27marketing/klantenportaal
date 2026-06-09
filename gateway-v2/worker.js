@@ -39,10 +39,13 @@ import {
   metaAdsRich,
   googleAdsRich,
   metricoolStatsRich,
+  webTraffic,
+  webSearch,
 } from './handlers.mjs';
 
 // Staff-only (is_staff) rijke-rapportage-handlers: gescoped op het acting-as-bedrijf, (bedrijfId, body, env).
-const STAFF_DATA_HANDLERS = { metaAdsRich, googleAdsRich, metricoolStatsRich };
+// webTraffic/webSearch = Webprestaties (GA4 + GSC); v1 team-only, later evt. naar READ_HANDLERS voor klanten.
+const STAFF_DATA_HANDLERS = { metaAdsRich, googleAdsRich, metricoolStatsRich, webTraffic, webSearch };
 
 // Pad → Make-webhook. Deze URLs zijn niet geheim (staan al in dashboard.js).
 // Geporte paden gebruiken deze NIET meer (router-shim vangt ze af); de rest valt door.

@@ -518,6 +518,35 @@
   };
   DATA.metaAds = function(){ return state.data.metaAds; };
 
+  /* ---- Webprestaties (GA4 + Search Console, direct via de Google-API's, geen Make).
+     Team-only (staff acting-as); zelfde periode-contract als de ads-tabs. ---- */
+  DATA.loadWebTraffic = async function(opts){
+    var o=(typeof opts==='string')?{period:opts}:(opts||{});
+    if(!live()){ state.data.webTraffic={linked:false}; return false; }
+    var bid=state.activeBedrijf||''; if(!bid){ state.data.webTraffic={linked:false}; return false; }
+    try{
+      var payload=(o.from&&o.to)?base({from:o.from,to:o.to,compare:o.compare||'none'}):base({period:(o.period||state._webPeriod||'last_30d')});
+      var res=await api(ENDPOINTS.webTraffic, payload);
+      var j=(res&&res.ok&&res.data)?res.data:null;
+      if(!j||!j.ok){ state.data.webTraffic={linked:false}; return false; }
+      state.data.webTraffic=j; return true;
+    }catch(e){ state.data.webTraffic={linked:false}; return false; }
+  };
+  DATA.webTraffic = function(){ return state.data.webTraffic; };
+  DATA.loadWebSearch = async function(opts){
+    var o=(typeof opts==='string')?{period:opts}:(opts||{});
+    if(!live()){ state.data.webSearch={linked:false}; return false; }
+    var bid=state.activeBedrijf||''; if(!bid){ state.data.webSearch={linked:false}; return false; }
+    try{
+      var payload=(o.from&&o.to)?base({from:o.from,to:o.to}):base({period:(o.period||state._webPeriod||'last_30d')});
+      var res=await api(ENDPOINTS.webSearch, payload);
+      var j=(res&&res.ok&&res.data)?res.data:null;
+      if(!j||!j.ok){ state.data.webSearch={linked:false}; return false; }
+      state.data.webSearch=j; return true;
+    }catch(e){ state.data.webSearch={linked:false}; return false; }
+  };
+  DATA.webSearch = function(){ return state.data.webSearch; };
+
   // Google Ads real-time (direct via Google Ads API, geen Make) — zelfde periode-contract als Meta.
   DATA.loadGoogleAds = async function(opts){
     var o = (typeof opts === 'string') ? { period:opts } : (opts || {});

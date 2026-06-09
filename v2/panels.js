@@ -2718,12 +2718,128 @@ function buildOverlays(){
   </div>`;
 }
 
+/* =============================================================================
+   WEBPRESTATIES (GA4 + Search Console) — team-weergave v1, data via de gateway.
+   ============================================================================= */
+function webEnsureStyles(){
+  if(document.getElementById('wp-styles')) return;
+  var ink='#230F23', mut='#9E919E';
+  var css=''
+    +'.wp-grid{display:grid;gap:14px}'
+    +'.wp-kpis{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}'
+    +'.wp-kpi{background:#fff;border:1px solid rgba(231,223,211,.7);border-radius:16px;padding:16px 18px}'
+    +'.wp-kpi .l{font:600 11px Montserrat,sans-serif;letter-spacing:.04em;text-transform:uppercase;color:'+mut+'}'
+    +'.wp-kpi .v{font:800 26px Montserrat,sans-serif;color:'+ink+';margin-top:4px;line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    +'.wp-kpi .s{font:600 12px Nunito,sans-serif;color:'+mut+';margin-top:3px}'
+    +'.wp-row{display:grid;grid-template-columns:1fr 1.4fr;gap:14px}'
+    +'@media(max-width:820px){.wp-row{grid-template-columns:1fr}}'
+    +'.wp-card{background:#fff;border:1px solid rgba(231,223,211,.7);border-radius:16px;padding:18px}'
+    +'.wp-card h3{font:700 14px Montserrat,sans-serif;color:'+ink+';margin:0 0 12px}'
+    +'.wp-ch{display:flex;align-items:center;gap:9px;margin:8px 0;font:600 12.5px Nunito,sans-serif}'
+    +'.wp-ch .bar{height:9px;border-radius:6px;background:#3083DC;flex:0 0 auto;min-width:6px}'
+    +'.wp-ch .nm{flex:1;color:#4a3f4a}'
+    +'.wp-ch .n{font-weight:800;color:'+ink+'}'
+    +'.wp-tbl{width:100%;border-collapse:collapse;font:600 12.5px Nunito,sans-serif}'
+    +'.wp-tbl th{text-align:left;font:700 10.5px Montserrat,sans-serif;letter-spacing:.04em;text-transform:uppercase;color:'+mut+';padding:6px 8px;border-bottom:1px solid rgba(231,223,211,.8)}'
+    +'.wp-tbl td{padding:7px 8px;border-bottom:1px solid rgba(231,223,211,.5);color:'+ink+'}'
+    +'.wp-tbl td.r,.wp-tbl th.r{text-align:right;white-space:nowrap}'
+    +'.wp-per{display:flex;gap:6px;margin:0 0 14px}'
+    +'.wp-per button{font:700 12px Montserrat,sans-serif;border:1px solid rgba(231,223,211,.9);background:#fff;color:#6B5B6B;border-radius:999px;padding:6px 14px;cursor:pointer}'
+    +'.wp-per button.on{background:'+ink+';color:#fff;border-color:'+ink+'}'
+    +'.wp-canwrap{position:relative;height:240px}'
+    +'.wp-li{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid rgba(231,223,211,.5);font:600 12.5px Nunito,sans-serif;color:'+ink+'}'
+    +'.wp-li .u{color:#4a3f4a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    +'.wp-li .n{font-weight:800;flex:0 0 auto}';
+  var st=document.createElement('style'); st.id='wp-styles'; st.textContent=css; document.head.appendChild(st);
+}
+function _wpDay(ymd){ var m=String(ymd||'').match(/(\d{4})-?(\d{2})-?(\d{2})/); return m?(m[3]+'/'+m[2]):String(ymd||''); }
+function _wpNum(n){ return (Number(n)||0).toLocaleString('nl-BE'); }
+function webPeriod(){ return state._webPeriod || 'last_30d'; }
+function webPeriodBar(){
+  var p=webPeriod();
+  var b=function(k,l){ return '<button class="'+(p===k?'on':'')+'" onclick="webSetPeriod(\''+k+'\')">'+l+'</button>'; };
+  return '<div class="wp-per">'+b('last_7d','7 dagen')+b('last_30d','30 dagen')+b('last_90d','90 dagen')+'</div>';
+}
+async function webSetPeriod(p){
+  state._webPeriod=p;
+  var host=document.getElementById('wpBody'); if(host) host.innerHTML='<div class="empty" style="padding:50px"><div class="brand-spinner" style="margin:0 auto"></div></div>';
+  try{ if(window.S27DATA){ await Promise.all([S27DATA.loadWebTraffic({period:p}), S27DATA.loadWebSearch({period:p})]); } }catch(e){}
+  if(typeof renderPanel==='function') renderPanel('webprestaties');
+  webMountCharts();
+}
+function webMountCharts(){
+  var t=(window.S27DATA&&S27DATA.webTraffic&&S27DATA.webTraffic())||null;
+  if(!t||!t.linked) return;
+  adsRichLoadChart().then(function(ok){ if(!ok||!window.Chart) return; webBuildSplitChart(t.split||{}); webBuildTrendChart(t.trend||[]); });
+}
+function webBuildSplitChart(split){
+  var cv=document.getElementById('wp_split'); if(!cv||!window.Chart) return;
+  state._wpCharts=state._wpCharts||{};
+  try{ if(state._wpCharts.split){ state._wpCharts.split.destroy(); } }catch(e){}
+  var data=[split.paid||0, split.organic||0, split.direct||0, split.overig||0];
+  state._wpCharts.split=new window.Chart(cv.getContext('2d'),{ type:'doughnut',
+    data:{ labels:['Betaald','Organisch','Direct','Overig'], datasets:[{ data:data, backgroundColor:['#9441DB','#2ecd6f','#3083DC','#E7DFD3'], borderWidth:0 }] },
+    options:{ responsive:true, maintainAspectRatio:false, cutout:'62%',
+      plugins:{ legend:{ position:'bottom', labels:{ font:{family:'Montserrat',size:11,weight:'600'}, color:'#6B5B6B', boxWidth:12, padding:12, usePointStyle:true } } } } });
+}
+function webBuildTrendChart(trend){
+  var cv=document.getElementById('wp_trend'); if(!cv||!window.Chart) return;
+  state._wpCharts=state._wpCharts||{};
+  try{ if(state._wpCharts.trend){ state._wpCharts.trend.destroy(); } }catch(e){}
+  var d=trend||[]; var labels=d.map(function(x){return _wpDay(x.date);}); var ses=d.map(function(x){return x.sessions||0;});
+  state._wpCharts.trend=new window.Chart(cv.getContext('2d'),{ type:'line',
+    data:{ labels:labels, datasets:[{ label:'Sessies', data:ses, borderColor:'#3083DC', backgroundColor:'rgba(48,131,220,.12)', borderWidth:2, fill:true, tension:.32, pointRadius:0 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } },
+      scales:{ y:{ beginAtZero:true, ticks:{ font:{family:'Montserrat',size:10}, color:'#9E919E', precision:0 }, grid:{ color:'rgba(231,223,211,.55)' } },
+        x:{ ticks:{ font:{family:'Montserrat',size:10}, color:'#9E919E', maxRotation:0, autoSkip:true, maxTicksLimit:10 }, grid:{ display:false } } } } });
+}
+function panelWebprestaties(){
+  webEnsureStyles();
+  var head='<div class="section-head" style="margin-bottom:6px"><h2 style="display:flex;align-items:center;gap:8px"><span class="live-dot"></span>Webprestaties</h2></div>';
+  var t=(window.S27DATA&&S27DATA.webTraffic&&S27DATA.webTraffic())||null;
+  var s=(window.S27DATA&&S27DATA.webSearch&&S27DATA.webSearch())||null;
+  if(t===null && s===null){ return head+'<div class="empty" style="padding:70px 20px"><div class="brand-spinner" style="margin:0 auto 14px"></div><div style="font-family:var(--font-display);font-weight:700;color:#9E919E">Webdata laden…</div></div>'; }
+  if(!(t&&t.linked) && !(s&&s.linked)){ return head+'<div class="wp-card" style="text-align:center;color:#6B5B6B">Nog geen webstatistieken gekoppeld voor dit bedrijf, of deze module staat in teambeheer.</div>'; }
+  return head+'<div id="wpBody">'+webBody(t,s)+'</div>';
+}
+function webBody(t,s){
+  t=t||{}; s=s||{};
+  var tot=t.totals||{}, split=t.split||{};
+  var totalSes=((split.paid||0)+(split.organic||0)+(split.direct||0)+(split.overig||0))||tot.sessions||0;
+  var paidPct=totalSes>0?Math.round((split.paid||0)/totalSes*100):0;
+  var st=s.totals||{}; var topQ=(s.queries&&s.queries[0])?s.queries[0].query:'—';
+  var kpis='<div class="wp-grid wp-kpis" style="margin-bottom:14px">'
+    +'<div class="wp-kpi"><div class="l">Sessies</div><div class="v">'+_wpNum(tot.sessions||totalSes)+'</div><div class="s">'+_wpNum(tot.users||0)+' gebruikers</div></div>'
+    +'<div class="wp-kpi"><div class="l">Betaald verkeer</div><div class="v">'+paidPct+'%</div><div class="s">'+_wpNum(split.paid||0)+' sessies via ads</div></div>'
+    +'<div class="wp-kpi"><div class="l">Organische clicks</div><div class="v">'+_wpNum(st.clicks||0)+'</div><div class="s">'+_wpNum(st.impressions||0)+' vertoningen in Google</div></div>'
+    +'<div class="wp-kpi"><div class="l">Top zoekterm</div><div class="v" style="font-size:17px">'+esc(topQ)+'</div><div class="s">gem. positie '+((st.position||0).toFixed(1))+'</div></div>'
+    +'</div>';
+  var charts='<div class="wp-row" style="margin-bottom:14px">'
+    +'<div class="wp-card"><h3>Verkeer per bron</h3><div class="wp-canwrap"><canvas id="wp_split"></canvas></div></div>'
+    +'<div class="wp-card"><h3>Sessies per dag</h3><div class="wp-canwrap"><canvas id="wp_trend"></canvas></div></div>'
+    +'</div>';
+  var chans=(t.channels||[]).slice(0,8);
+  var maxc=chans.reduce(function(a,c){return Math.max(a,c.sessions||0);},1);
+  var chList=chans.map(function(c){ var w=Math.round((c.sessions||0)/maxc*120); return '<div class="wp-ch"><span class="bar" style="width:'+Math.max(w,6)+'px"></span><span class="nm">'+esc(c.channel)+'</span><span class="n">'+_wpNum(c.sessions)+'</span></div>'; }).join('');
+  var lps=(t.landingPages||[]).slice(0,6).map(function(p){ return '<div class="wp-li"><span class="u">'+esc(p.page)+'</span><span class="n">'+_wpNum(p.sessions)+'</span></div>'; }).join('');
+  var row2='<div class="wp-row" style="margin-bottom:14px">'
+    +'<div class="wp-card"><h3>Kanalen</h3>'+(chList||'<div style="color:#9E919E">Geen data</div>')+'</div>'
+    +'<div class="wp-card"><h3>Top landingspagina\'s</h3>'+(lps||'<div style="color:#9E919E">Geen data</div>')+'</div>'
+    +'</div>';
+  var qs=(s.queries||[]).slice(0,12);
+  var qrows=qs.map(function(q){ return '<tr><td>'+esc(q.query)+'</td><td class="r">'+_wpNum(q.clicks)+'</td><td class="r">'+_wpNum(q.impressions)+'</td><td class="r">'+((q.ctr||0)*100).toFixed(1)+'%</td><td class="r">'+(q.position||0).toFixed(1)+'</td></tr>'; }).join('');
+  var qtbl='<div class="wp-card"><h3>Zoektermen (Google Search Console)</h3>'
+    +(qrows?('<table class="wp-tbl"><thead><tr><th>Zoekterm</th><th class="r">Clicks</th><th class="r">Vert.</th><th class="r">CTR</th><th class="r">Positie</th></tr></thead><tbody>'+qrows+'</tbody></table>'):'<div style="color:#9E919E">Geen zoekdata in deze periode</div>')
+    +'</div>';
+  return webPeriodBar()+kpis+charts+row2+qtbl;
+}
+
 /* ---- panel registry ---- */
 const PANELS={
   start:panelStart, berichten:panelBerichten, projecten:panelProjecten,
-  socials:panelSocials, advertenties:panelAdvertenties,
+  socials:panelSocials, advertenties:panelAdvertenties, webprestaties:panelWebprestaties,
   meetings:panelMeetings, nieuwproject:panelOffertes, offertes:panelOffertes,
   huisstijl:panelHuisstijl, facturatie:panelFacturatie, instellingen:panelInstellingen,
 };
-const TAB_BRANCH={start:'blue',berichten:'blue',projecten:'blue',socials:'yellow',advertenties:'orange',meetings:'blue',nieuwproject:'blue',offertes:'purple',huisstijl:'pink',facturatie:'green',instellingen:'indigo'};
-const TAB_GROUP={projecten:'werk',socials:'werk',advertenties:'werk',meetings:'plannen',nieuwproject:'plannen',offertes:'plannen',huisstijl:'bedrijf',facturatie:'bedrijf',instellingen:'bedrijf'};
+const TAB_BRANCH={start:'blue',berichten:'blue',projecten:'blue',socials:'yellow',advertenties:'orange',webprestaties:'green',meetings:'blue',nieuwproject:'blue',offertes:'purple',huisstijl:'pink',facturatie:'green',instellingen:'indigo'};
+const TAB_GROUP={projecten:'werk',socials:'werk',advertenties:'werk',webprestaties:'werk',meetings:'plannen',nieuwproject:'plannen',offertes:'plannen',huisstijl:'bedrijf',facturatie:'bedrijf',instellingen:'bedrijf'};

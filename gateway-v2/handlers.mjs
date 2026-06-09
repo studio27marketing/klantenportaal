@@ -86,6 +86,7 @@ export const FIELD = {
   offerteBedrijfsnaam:'8da934b5-7747-4ad3-ac2f-cc53cf2985e8', // short_text 'Bedrijfsnaam' (offertes-lijst)
   // bedrijf-velden (extra) - Metricool blogId/brandId op de bedrijf-taak
   metricoolId:    '40f6ccd2-b25e-4385-bbca-3bfdf602e542', // short_text 'Metricool ID'
+  ga4PropertyId:  'e3e12841-2eee-48a0-b68e-6e35cec159ca', // short_text 'GA4 property-ID' (Webprestaties; bestaat al in ClickUp)
   // ad-account-ids op de bedrijf-taak (Bedrijven-lijst) — direct-API ads-rapportage
   metaAdsId:      '1658c472-496c-480d-81bf-0c19e82d84df', // short_text 'Meta Ads ID'
   metaBusinessId: 'c352892a-7cd9-4f17-9e81-4d3decdb0fad', // short_text 'Meta Business ID'
@@ -4208,6 +4209,148 @@ export async function metricoolMediaUpload(bedrijfId, body, env) {
    Handler-registry voor de router-shim + node-harness.
    READ_HANDLERS: testbaar zonder Firebase met (bedrijfId, body, env).
    ============================================================================= */
+/* ---- Webprestaties (READ, staff/team) — GA4 + Search Console rechtstreeks via de Google-API's ----
+ * Geen Make. Auth = de portal-SA (portal-admin@studio27-cloud) die marketing@studio27.be impersoneert
+ * via domain-wide delegation: dat dekt in één keer ALLE GA4-properties + GSC-sites die marketing@
+ * beheert (geverifieerd 245 GA4 + 120 GSC). mintGoogleToken met subject='marketing@studio27.be' +
+ * read-only scope. Per klant resolven we GA4-property + GSC-site uit de bedrijf-taak (website-veld);
+ * WEB_OVERRIDES is de pilot-bootstrap (later vervangen door een ClickUp-veld 'GA4 Property ID').
+ * Output spiegelt de ads-handlers (period/trend) zodat de frontend dezelfde rendering hergebruikt. */
+const GA_SCOPE = 'https://www.googleapis.com/auth/analytics.readonly';
+const GSC_SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
+const WEB_SUBJECT = 'marketing@studio27.be';
+const GA4_PRESETS = { today: ['today', 'today'], yesterday: ['yesterday', 'yesterday'], last_7d: ['7daysAgo', 'yesterday'], last_14d: ['14daysAgo', 'yesterday'], last_30d: ['30daysAgo', 'yesterday'], last_90d: ['90daysAgo', 'yesterday'] };
+const GSC_LAG_DAYS = 3;
+// Pilot-bootstrap: sleutel = bedrijfId OF domein -> { ga4 property-id, gsc siteUrl }.
+// Vervangt later een ClickUp-veld; vorsselmans-solar live geverifieerd (GA4 263327222 / GSC sc-domain).
+const WEB_OVERRIDES = {
+  // pilot Vorsselmans Solar — sleutel = bedrijfId (Website-veld wijst naar het parent-domein vorsselmans.be, dus expliciet)
+  '86c8cz2y7': { ga4: '263327222', gsc: 'sc-domain:vorsselmans-solar.be' },
+};
+function webDomain(u) { let d = str(u).trim().toLowerCase(); d = d.replace(/^https?:\/\//, ''); d = d.split('/')[0].split('?')[0]; d = d.replace(/^www\./, ''); return d; }
+function _ymd(d) { return d.toISOString().slice(0, 10); }
+function gscDateRange(preset, from, to) {
+  if (META_YMD.test(from) && META_YMD.test(to)) return [from, to];
+  const end = new Date(Date.now() - GSC_LAG_DAYS * 86400000);
+  const days = { last_7d: 7, last_14d: 14, last_30d: 30, last_90d: 90 }[preset] || 30;
+  const start = new Date(end.getTime() - (days - 1) * 86400000);
+  return [_ymd(start), _ymd(end)];
+}
+async function ga4Report(token, property, reqBody) {
+  try {
+    const r = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${property}:runReport`, {
+      method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(reqBody),
+    });
+    const d = await r.json().catch(() => null);
+    if (!r.ok) return { ok: false, rows: [], err: (d && d.error && d.error.message) || ('http_' + r.status) };
+    return { ok: true, rows: (d && d.rows) || [], totals: (d && d.totals) || [] };
+  } catch (e) { return { ok: false, rows: [], err: 'unreachable' }; }
+}
+async function gscQuery(token, siteUrl, reqBody) {
+  try {
+    const r = await fetch(`https://searchconsole.googleapis.com/webmasters/v3/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`, {
+      method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(reqBody),
+    });
+    const d = await r.json().catch(() => null);
+    if (!r.ok) return { ok: false, rows: [], err: (d && d.error && d.error.message) || ('http_' + r.status) };
+    return { ok: true, rows: (d && d.rows) || [] };
+  } catch (e) { return { ok: false, rows: [], err: 'unreachable' }; }
+}
+// kanaal -> bucket voor de 'betaald vs organisch'-split
+function webChannelBucket(ch) {
+  const c = String(ch || '').toLowerCase();
+  if (c.indexOf('paid') >= 0 || c === 'cross-network' || c === 'display') return 'paid';
+  if (c.indexOf('organic') >= 0) return 'organic';
+  if (c === 'direct') return 'direct';
+  return 'overig';
+}
+function webResolve(bedrijfId, br) {
+  const t = br && br.ok && br.data ? br.data : null;
+  const ov = WEB_OVERRIDES[bedrijfId] || {};
+  // GA4: override → ClickUp-veld 'GA4 property-ID' (e3e12841). Voor uitrol: vul dat veld per klant.
+  const ga4 = String(ov.ga4 || (t ? str(getCF(t, FIELD.ga4PropertyId)) : '')).replace(/[^0-9]/g, '');
+  // GSC: override → afgeleid uit Website (LET OP: kan een parent-domein zijn → dan override gebruiken).
+  let gsc = str(ov.gsc || '');
+  if (!gsc && t) { const d = webDomain(getCF(t, FIELD.website)); if (d) gsc = 'sc-domain:' + d; }
+  return { ga4, gsc };
+}
+
+export async function webTraffic(bedrijfId, body, env) {
+  const br = await cu.get(env, `/task/${bedrijfId}`);
+  const { ga4 } = webResolve(bedrijfId, br);
+  if (!/^\d{6,20}$/.test(ga4)) return { status: 200, body: { ok: true, linked: false } };
+  let token;
+  try { token = await mintGoogleToken(env, WEB_SUBJECT, GA_SCOPE); }
+  catch (e) { return { status: 200, body: { ok: true, linked: false, reason: 'no_token' } }; }
+
+  const from = str(body && body.from).trim(), to = str(body && body.to).trim();
+  const useRange = META_YMD.test(from) && META_YMD.test(to);
+  const presetKey = str(body && body.period).trim();
+  const p = GA4_PRESETS[presetKey] || GA4_PRESETS.last_30d;
+  const dr = useRange ? { startDate: from, endDate: to } : { startDate: p[0], endDate: p[1] };
+  const compare = ['previous', 'month', 'year'].indexOf(str(body && body.compare)) >= 0 ? str(body.compare) : 'none';
+
+  const M = (n) => ({ name: n });
+  const [chan, trend, pages, tot] = await Promise.all([
+    ga4Report(token, ga4, { dateRanges: [dr], dimensions: [M('sessionDefaultChannelGroup')], metrics: [M('sessions'), M('totalUsers'), M('newUsers'), M('engagedSessions')], orderBys: [{ metric: { metricName: 'sessions' }, desc: true }], limit: 25 }),
+    ga4Report(token, ga4, { dateRanges: [dr], dimensions: [M('date')], metrics: [M('sessions')], orderBys: [{ dimension: { dimensionName: 'date' } }], limit: 400 }),
+    ga4Report(token, ga4, { dateRanges: [dr], dimensions: [M('landingPagePlusQueryString')], metrics: [M('sessions')], orderBys: [{ metric: { metricName: 'sessions' }, desc: true }], limit: 10 }),
+    ga4Report(token, ga4, { dateRanges: [dr], metrics: [M('sessions'), M('totalUsers'), M('newUsers'), M('engagedSessions'), M('averageSessionDuration'), M('bounceRate')] }),
+  ]);
+
+  const channels = (chan.rows || []).map((r) => ({ channel: r.dimensionValues[0].value, sessions: +r.metricValues[0].value, users: +r.metricValues[1].value, newUsers: +r.metricValues[2].value, engaged: +r.metricValues[3].value }));
+  const split = { paid: 0, organic: 0, direct: 0, overig: 0 };
+  for (const c of channels) split[webChannelBucket(c.channel)] += c.sessions;
+  const trendRows = (trend.rows || []).map((r) => ({ date: r.dimensionValues[0].value, sessions: +r.metricValues[0].value }));
+  const landingPages = (pages.rows || []).map((r) => ({ page: r.dimensionValues[0].value, sessions: +r.metricValues[0].value }));
+  const tm = (tot.rows && tot.rows[0] && tot.rows[0].metricValues) || [];
+  const totals = tm.length
+    ? { sessions: +tm[0].value, users: +tm[1].value, newUsers: +tm[2].value, engaged: +tm[3].value, avgDuration: +tm[4].value, bounceRate: +tm[5].value }
+    : { sessions: channels.reduce((a, c) => a + c.sessions, 0), users: 0, newUsers: 0, engaged: 0, avgDuration: 0, bounceRate: 0 };
+
+  let prevTotals = null, compareLabel = '';
+  if (useRange && compare !== 'none') {
+    const cw = metaCompareWindow(from, to, compare);
+    const pv = await ga4Report(token, ga4, { dateRanges: [{ startDate: cw[0], endDate: cw[1] }], metrics: [M('sessions'), M('totalUsers')] });
+    const pm = (pv.rows && pv.rows[0] && pv.rows[0].metricValues) || [];
+    if (pm.length) prevTotals = { sessions: +pm[0].value, users: +pm[1].value };
+    compareLabel = compare === 'previous' ? 'vorige periode' : (compare === 'month' ? 'vorige maand' : 'vorig jaar');
+  }
+
+  const error = (!chan.ok && !tot.ok) ? (chan.err || tot.err || 'fetch_failed') : null;
+  const period = useRange ? { from, to, compare } : { preset: presetKey || 'last_30d', compare: 'none' };
+  return { status: 200, body: { ok: true, linked: true, property: ga4, period, totals, prevTotals, compareLabel, channels, split, trend: trendRows, landingPages, error } };
+}
+
+export async function webSearch(bedrijfId, body, env) {
+  const br = await cu.get(env, `/task/${bedrijfId}`);
+  const { gsc } = webResolve(bedrijfId, br);
+  if (!gsc) return { status: 200, body: { ok: true, linked: false } };
+  let token;
+  try { token = await mintGoogleToken(env, WEB_SUBJECT, GSC_SCOPE); }
+  catch (e) { return { status: 200, body: { ok: true, linked: false, reason: 'no_token' } }; }
+
+  const from = str(body && body.from).trim(), to = str(body && body.to).trim();
+  const presetKey = str(body && body.period).trim();
+  const [startDate, endDate] = gscDateRange(presetKey, from, to);
+
+  const [queries, pages, totals, trend] = await Promise.all([
+    gscQuery(token, gsc, { startDate, endDate, dimensions: ['query'], rowLimit: 25 }),
+    gscQuery(token, gsc, { startDate, endDate, dimensions: ['page'], rowLimit: 10 }),
+    gscQuery(token, gsc, { startDate, endDate }),
+    gscQuery(token, gsc, { startDate, endDate, dimensions: ['date'] }),
+  ]);
+  const q = (queries.rows || []).map((r) => ({ query: (r.keys && r.keys[0]) || '', clicks: r.clicks || 0, impressions: r.impressions || 0, ctr: r.ctr || 0, position: r.position || 0 }));
+  const pg = (pages.rows || []).map((r) => ({ page: (r.keys && r.keys[0]) || '', clicks: r.clicks || 0, impressions: r.impressions || 0, ctr: r.ctr || 0, position: r.position || 0 }));
+  const t = (totals.rows && totals.rows[0]) || null;
+  const tot = t ? { clicks: t.clicks || 0, impressions: t.impressions || 0, ctr: t.ctr || 0, position: t.position || 0 } : { clicks: 0, impressions: 0, ctr: 0, position: 0 };
+  const tr = (trend.rows || []).map((r) => ({ date: (r.keys && r.keys[0]) || '', clicks: r.clicks || 0, impressions: r.impressions || 0 }));
+
+  const error = (!queries.ok && !totals.ok) ? (queries.err || totals.err || 'fetch_failed') : null;
+  const period = { from: startDate, to: endDate };
+  return { status: 200, body: { ok: true, linked: true, site: gsc, period, totals: tot, queries: q, pages: pg, trend: tr, error } };
+}
+
 export const READ_HANDLERS = {
   projectDetailV2,
   chatList,
