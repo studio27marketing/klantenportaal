@@ -74,14 +74,14 @@ const SERVICES = [
 
 /* ---- project data ---- */
 const PROJECTS = [
-  {id:'p1',name:'Bedrijfsfilm "Onder één dak"',br:'purple',disc:'Video- en fotografie',status:'wait',deliv:true},
-  {id:'p2',name:'Nieuwe website & webshop',br:'green',disc:'Website en SEO',status:'prog',deliv:false},
-  {id:'p3',name:'Productfotografie najaarscollectie',br:'purple',disc:'Video- en fotografie',status:'sent',deliv:true},
-  {id:'p4',name:'Merkstrategie & positionering 2026',br:'blue',disc:'Strategie',status:'prog',deliv:false},
-  {id:'p5',name:'Google Ads, leadcampagne Q2',br:'orange',disc:'Online adverteren',status:'prog',deliv:false},
-  {id:'p6',name:'Social contentkalender mei',br:'yellow',disc:'Social media',status:'done',deliv:false},
-  {id:'p7',name:'Recruitmentvideo "Kom bij ons team"',br:'purple',disc:'Video- en fotografie',status:'todo',deliv:false},
-  {id:'p8',name:'TikTok-campagne lentepromo',br:'orange',disc:'Online adverteren',status:'done',deliv:false},
+  {id:'p1',name:'Bedrijfsfilm "Onder één dak"',br:'purple',disc:'Video- en fotografie',discId:'video_fotografie',status:'wait',deliv:true},
+  {id:'p2',name:'Nieuwe website & webshop',br:'green',disc:'Website en SEO',discId:'webdesign',status:'prog',deliv:false},
+  {id:'p3',name:'Productfotografie najaarscollectie',br:'purple',disc:'Video- en fotografie',discId:'video_fotografie',status:'sent',deliv:true},
+  {id:'p4',name:'Merkstrategie & positionering 2026',br:'blue',disc:'Strategie',discId:'strategie',status:'prog',deliv:false},
+  {id:'p5',name:'Google Ads, leadcampagne Q2',br:'orange',disc:'Online adverteren',discId:'ads',status:'prog',deliv:false},
+  {id:'p6',name:'Social contentkalender mei',br:'yellow',disc:'Social media',discId:'social',status:'done',deliv:false},
+  {id:'p7',name:'Recruitmentvideo "Kom bij ons team"',br:'purple',disc:'Video- en fotografie',discId:'video_fotografie',status:'todo',deliv:false},
+  {id:'p8',name:'TikTok-campagne lentepromo',br:'orange',disc:'Online adverteren',discId:'ads',status:'done',deliv:false},
 ];
 const STATUS_LABEL = {todo:['Nog in te plannen','pill-todo'],prog:['In productie','pill-prog'],wait:['Klaar voor feedback','pill-wait'],sent:['Klaar voor feedback','pill-wait'],done:['Goedgekeurd','pill-done']};
 const DISC = {
@@ -107,6 +107,8 @@ function _projects(){ const p = window.S27DATA && S27DATA.projects(); return (p 
 function _isAdProject(p){ if(!p) return false; if(p.discId==='ads') return true; var ls=p.labels||[]; return ls.length>0 && ls.every(function(l){return l.discId==='ads';}); }
 function _nonAdProjects(){ return _projects().filter(function(p){ return !_isAdProject(p); }); }
 function _adProject(){ return _projects().filter(_isAdProject)[0] || null; }   // huidige-maand ads-taak (worker filtert al op due deze maand)
+function _isSocialProject(p){ if(!p) return false; if(p.discId==='social') return true; var ls=p.labels||[]; return ls.length>0 && ls.every(function(l){return l.discId==='social';}); }
+function _socProject(){ return _projects().filter(_isSocialProject)[0] || null; }   // sociale-media-taak (zelfde maand-logica als de ads-taak)
 function _greetNaam(){ var n=(window.S27DATA && S27DATA.klantNaam && S27DATA.klantNaam())||''; if(n && n!=='daar') return n; return _live()?'daar':'Sarah'; }
 function _bedrijf(){ return (window.S27DATA && S27DATA.bedrijfsnaam && S27DATA.bedrijfsnaam()) || 'TEST CLIENT BV'; }
 /* SA&E-namen kort tonen (geen foto-iconen). Geeft "" terug als er geen toegewezen teamleden zijn. */
@@ -629,7 +631,7 @@ function socialHashtagsHTML(){
 function socialMonthNav(d){ var mo=socialMonth(); var dt=new Date(mo.y,mo.m+d,1); state._socialMonth={y:dt.getFullYear(),m:dt.getMonth()}; var box=document.getElementById('socialCalContainer'); if(box){ box.innerHTML=socialCalendar(socialShownPosts()); } else { renderPanel('socials'); } }
 function socialSetFilter(f){ state._socialFilter=f; var box=document.getElementById('socialBody'); if(box){ box.innerHTML=socialBodyHTML(); } else { renderPanel('socials'); } }
 function socialOpenDetail(id){ state._socTab='planner'; state._socialDetail=String(id); renderPanel('socials'); if(window.scrollTo)window.scrollTo({top:0,behavior:'smooth'}); }
-function socialCloseDetail(){ state._socialDetail=null; state._socTab='planner'; renderPanel('socials'); }
+function socialCloseDetail(){ state._socialDetail=null; state._socTab='planner'; renderPanel('socials'); if(typeof socialChatMount==='function') socialChatMount(); }
 /* ---- KPI-dashboard + trend (fase 1 metriek-look-and-feel), data via metricoolStats ---- */
 function socialFmt(n){ return (Number(n)||0).toLocaleString('nl-BE'); }
 function socialStatsHTML(){
@@ -979,8 +981,27 @@ function panelSocials(){
   var mc = state.demoMode ? {linked:true,posts:socialDemoPosts()} : ((window.S27DATA&&S27DATA.metricool())||null);
   if(!mc) return head+'<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je socials worden geladen…</p></div>';
   if(!mc.linked) return head+'<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen Metricool-koppeling</div><div style="color:var(--ink-3);max-width:460px;margin:0 auto;line-height:1.55">Zodra je social-kanalen gekoppeld zijn, zie je hier je analyse, planner en inzichten. Vraag gerust je contactpersoon bij Studio&nbsp;27.</div></div>';
-  // Sub-nav (Analyse/Planner/Inzichten) + het actieve tabblad (of de post-editor) in #socialBody.
-  return mcStyleOnce()+head+socialSubnav()+'<div id="socialBody">'+socialBodyHTML()+'</div>';
+  // Sub-nav (Analyse/Planner/Inzichten) + het actieve tabblad (of de post-editor) in #socialBody,
+  // met onderaan de contextuele social-chat (buiten #socialBody zodat sub-tab-wissels 'm niet herrenderen).
+  return mcStyleOnce()+head+socialSubnav()+'<div id="socialBody">'+socialBodyHTML()+'</div>'+socialChatSection();
+}
+/* Social-chat: contextuele chat over de sociale-media-taak — spiegelt de ads-chat ("Chat over je advertenties").
+   Niet zichtbaar in de post-editor (net zoals de ads-campagnedetail geen chat toont). */
+function socialChatSection(){
+  if(state._socialDetail) return '';
+  var so=_socProject(); if(!so) return '';
+  return '<div class="ads-chat"><div class="section-head" style="margin-top:24px"><h2 style="display:flex;align-items:center;gap:8px">'+ic('msg',18)+' Chat over je socials</h2></div>'
+    +'<p class="sdesc" style="margin:-2px 0 12px;max-width:64ch">Stel je vraag over <b>'+esc(so.name||'je socialmediaproject')+'</b> of stuur ons foto’s, video’s of ideeën voor je posts. Je bericht komt rechtstreeks bij je Studio 27-team terecht.</p>'
+    +'<div class="card ads-chatcard"><div id="socChatBody">'+chatHTML(so.id)+'</div></div></div>';
+}
+function socialChatMount(){
+  var so=_socProject();
+  if(!so || state._socialDetail || !document.getElementById('chatList')) return;   // geen social-taak of geen chat in beeld (bv. post-editor)
+  state.activeProject=so.id;
+  if(window.S27DATA && S27DATA.loadChat && !((state.data.chats||{})[so.id])){
+    S27DATA.loadChat(so.id).then(function(){ var h=document.getElementById('socChatBody'); if(h && state.activeProject===so.id) h.innerHTML=chatHTML(so.id); }).catch(function(){});
+  }
+  if(typeof startChatPoll==='function') startChatPoll(so.id);
 }
 // Voorbeeldposts (alleen demo): in de huidige maand verspreid, met verschillende statussen.
 function socialDemoPosts(){
@@ -1023,7 +1044,7 @@ function panelAdvertenties(){
     <div class="proj-list">
       ${[['Google Search · Leadgen Q2','blue','€ 1.450 besteed · 12.300 vertoningen · 890 klikken'],['Meta · Retargeting','blue','€ 820 besteed · 64.000 vertoningen · 410 klikken'],['TikTok · Lentepromo','purple','€ 570 besteed · 120.000 vertoningen · 1.300 klikken']].map(c=>`
         <div class="proj-row br-${c[1]}" style="cursor:default"><span class="pr-main"><span class="pr-name" style="font-size:15px">${c[0]}</span><span style="font-size:13px;color:var(--ink-3)">${c[2]}</span></span><span class="pill pill-prog"><span class="pdot"></span>Live</span></div>`).join('')}
-    </div>`;
+    </div>`+adsChatSection();   // demo: ook de contextuele ads-chat tonen (consistent met de social-chat)
   }
   return head+metaAdsBody();
 }

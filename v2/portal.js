@@ -394,6 +394,7 @@ async function goTab(name){
   await ensureTabData(name);
   renderPanel(name);
   if(name==='advertenties' && typeof adsChatMount==='function') adsChatMount();   // ads-chat koppelen aan de huidige-maand-advertentietaak
+  if(name==='socials' && typeof socialChatMount==='function') socialChatMount();   // social-chat koppelen aan de sociale-media-taak
   if(name==='advertenties' && isRichView() && typeof adsRichMountTabCharts==='function') adsRichMountTabCharts();   // team-weergave: tab-grafieken mounten
   if(name==='webprestaties' && typeof webMountCharts==='function') webMountCharts();   // Webprestaties-grafieken mounten
   if(name==='socials' && isRichView() && socialTab && socialTab()==='rapport' && typeof socialRichMountCharts==='function') socialRichMountCharts();   // team-weergave: social-rapport-grafieken mounten
@@ -511,6 +512,7 @@ function rerenderActiveChat(stickBottom){
   const berHost=$id('berichtChat');
   const dcBody=$id('dcBody');
   const adsBody=$id('adsChatBody');
+  const socBody=$id('socChatBody');
   if(state._commsMode){
     // comms-drawer EERST (anders zou de achtergrond-chat-host gekaapt worden door een dubbele #chatList)
     const ccBody=$id('clientChatBody');
@@ -524,6 +526,8 @@ function rerenderActiveChat(stickBottom){
     dcBody.innerHTML=chatHTML(id, closed);   // afgerond -> read-only historie (blijft zichtbaar + ververst mee)
   } else if(adsBody){
     adsBody.innerHTML=chatHTML(id);          // ads-chat: enkel de chat-body verversen bij een poll-update
+  } else if(socBody){
+    socBody.innerHTML=chatHTML(id);          // social-chat: idem, enkel de chat-body verversen
   } else { return; }
   if(draft){ const newInp=document.querySelector('.chat-input input'); if(newInp) newInp.value=draft; }
   const newList=_chatListEl(); if(!newList) return;
