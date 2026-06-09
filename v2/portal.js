@@ -351,7 +351,7 @@ function onSessionExpired(msg){
 }
 function logout(){ stopChatPoll(); try{ if(window.S27Auth) window.S27Auth.logout(); }catch(e){} state.session=null; state.data={dashboard:null,details:{},chats:{},meetings:null,bedrijf:null,team:null,huisstijl:null};
   // ADMIN-staat volledig opruimen zodat een volgende (klant-)login niet in adminMode blijft hangen.
-  state.adminMode=false; state._adminClientView=false; state.activeBedrijf=''; state.adminCompanies=null; state._adminActiveName=''; hideAdminPicker(); document.body.classList.remove('admin-mode'); document.body.classList.remove('client-preview');
+  state.adminMode=false; state._adminClientView=false; state.activeBedrijf=''; state.adminCompanies=null; state._adminActiveName=''; state._commsMode=false; try{ if(typeof closeClientChat==='function') closeClientChat(); }catch(e){} hideAdminPicker(); document.body.classList.remove('admin-mode'); document.body.classList.remove('client-preview');
   showLogin(); if(AUTH_V2 && !state.demoMode) initRealAuth(); else renderLogin(state.demoMode?'demo':'v1'); }
 
 /* =============================================================================
@@ -473,7 +473,7 @@ function closeModal(){ goTab('projecten'); }
    ============================================================================= */
 async function sendChat(input){
   const tx=(input.value||'').trim(); if(!tx) return;
-  const list=$id('chatList'); if(!list) return;
+  const list=_chatListEl(); if(!list) return;
   const me=document.createElement('div'); me.className='msg me';
   me.innerHTML='<div class="bubble"><div class="who">Jij</div><div class="tx">'+escapeHtml(tx)+'</div><div class="tm">nu</div></div>';
   list.appendChild(me); input.value=''; list.scrollTop=list.scrollHeight;
@@ -482,7 +482,10 @@ async function sendChat(input){
     return;
   }
   const tid=state.activeProject;
-  try { await api(ENDPOINTS.chatPost, { task_id:tid, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), comment_text:tx }); }
+  try {
+    if(state._commsMode){ await api(ENDPOINTS.commsChatPost, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), comment_text:tx }); }
+    else { await api(ENDPOINTS.chatPost, { task_id:tid, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), comment_text:tx }); }
+  }
   catch(e){}
   // cache verversen + chat herrenderen zodat het ECHTE ClickUp-bericht in de cache zit
   // (geen duplicaat met de optimistische bubble bij terug-schakelen tussen chats)
@@ -499,7 +502,7 @@ async function refreshChatCache(taskId){
        behouden tenzij de gebruiker al (bijna) onderaan stond. ---- */
 function rerenderActiveChat(stickBottom){
   const id=state.activeProject; if(!id) return;
-  const oldList=$id('chatList');
+  const oldList=_chatListEl();
   const atBottom = oldList ? (oldList.scrollHeight-oldList.scrollTop-oldList.clientHeight < 60) : true;
   const prevTop = oldList ? oldList.scrollTop : 0;
   // een lopend concept in het tekstvak niet wegklikken bij een poll-herrender
@@ -508,7 +511,12 @@ function rerenderActiveChat(stickBottom){
   const berHost=$id('berichtChat');
   const dcBody=$id('dcBody');
   const adsBody=$id('adsChatBody');
-  if(berHost && p && !dcBody){
+  if(state._commsMode){
+    // comms-drawer EERST (anders zou de achtergrond-chat-host gekaapt worden door een dubbele #chatList)
+    const ccBody=$id('clientChatBody');
+    if(ccBody) ccBody.innerHTML='<div class="cc-with">'+saeChatWho(S27DATA.commsTeam())+'</div>'+chatHTML(id);
+    else return;
+  } else if(berHost && p && !dcBody){
     berHost.innerHTML=berichtChatInner(p);
   } else if(dcBody){
     // projectdetail-chat: enkel de chat-body verversen (laat de tabs/overzicht ongemoeid)
@@ -518,7 +526,7 @@ function rerenderActiveChat(stickBottom){
     adsBody.innerHTML=chatHTML(id);          // ads-chat: enkel de chat-body verversen bij een poll-update
   } else { return; }
   if(draft){ const newInp=document.querySelector('.chat-input input'); if(newInp) newInp.value=draft; }
-  const newList=$id('chatList'); if(!newList) return;
+  const newList=_chatListEl(); if(!newList) return;
   if(stickBottom || atBottom) newList.scrollTop=newList.scrollHeight;
   else newList.scrollTop=prevTop;
 }
@@ -548,7 +556,7 @@ async function pollChatOnce(taskId){
   const pc=state._chatPoll;
   if(!pc || pc.id!==taskId || pc.busy) return;
   // chat niet meer open (andere tab/project) -> poller opruimen
-  if(state.activeProject!==taskId || (!$id('chatList'))){ stopChatPoll(); return; }
+  if(state.activeProject!==taskId || (!_chatListEl())){ stopChatPoll(); return; }
   pc.busy=true;
   try { await S27DATA.loadChat(taskId); } catch(e){ pc.busy=false; return; }
   pc.busy=false;
@@ -579,13 +587,13 @@ async function openBerichtChat(id, el){
 /* ---- Bestandsupload in de chat (overal waar chatHTML staat) ---- */
 async function chatUpload(input, taskId){
   const f=input.files&&input.files[0]; if(!f) return; input.value='';
-  const tid=taskId||state.activeProject; const list=$id('chatList'); let bubble=null;
+  const tid=taskId||state.activeProject; const list=_chatListEl(); let bubble=null;
   if(list){ bubble=document.createElement('div'); bubble.className='msg me'; bubble.innerHTML='<div class="bubble"><div class="who">Jij</div><div class="tx">'+ic('doc',14)+' '+escapeHtml(f.name)+' <span style="opacity:.6">- uploaden…</span></div><div class="tm">nu</div></div>'; list.appendChild(bubble); list.scrollTop=list.scrollHeight; }
   const done=(txt)=>{ if(bubble){ var t=bubble.querySelector('.tx'); if(t)t.innerHTML=ic('doc',14)+' '+escapeHtml(f.name)+txt; } };
   if(state.demoMode){ done(' ✓'); return; }
   const rd=new FileReader();
   rd.onload=async function(){ const b64=String(rd.result).split(',')[1]||'';
-    try{ await api(ENDPOINTS.chatAttachment, { task_id:tid, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), filename:f.name, file_data:b64 }); done(' ✓');
+    try{ if(state._commsMode){ await api(ENDPOINTS.commsChatAttachment, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), filename:f.name, file_data:b64 }); } else { await api(ENDPOINTS.chatAttachment, { task_id:tid, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), filename:f.name, file_data:b64 }); } done(' ✓');
       await refreshChatCache(tid);   // echte attachment-comment uit ClickUp in de cache (geen duplicaat met de optimistische bubble)
     }
     catch(e){ done(' <span style="color:var(--s27-orange-ink)">- mislukt</span>'); }
@@ -593,6 +601,45 @@ async function chatUpload(input, taskId){
   rd.readAsDataURL(f);
 }
 function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+/* ---- Altijd-open klantchat (topbar-drawer; server resolvet de communicatietaak, geen task_id van de client) ---- */
+// Chat-lijst-lookup gescoped op de drawer wanneer de comms-chat open is (vermijdt de dubbele #chatList-collisie met een achtergrond-chat).
+function _chatListEl(){ return state._commsMode ? document.querySelector('#clientChatBody #chatList') : document.getElementById('chatList'); }
+function clientChatEl(){
+  var el=$id('clientChat');
+  if(!el){ el=document.createElement('div'); el.id='clientChat'; el.className='cc-overlay';
+    el.addEventListener('mousedown',function(e){ el._downScrim=(e.target===el); });
+    el.addEventListener('click',function(e){ if(e.target===el && el._downScrim) closeClientChat(); });
+    document.body.appendChild(el); }
+  return el;
+}
+function ccEsc(e){ if(e.key==='Escape') closeClientChat(); }
+async function openClientChat(){
+  stopChatPoll();
+  state._prevActiveProject = state.activeProject;   // bewaren -> bij sluiten herstellen (comms kaapt activeProject niet permanent)
+  var el=clientChatEl(); el.classList.add('show'); document.body.classList.add('mp-lock');
+  document.addEventListener('keydown',ccEsc);
+  var closeX='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+  el.innerHTML='<div class="cc-modal" onclick="event.stopPropagation()"><div class="cc-head"><div class="cc-htitle">Chat met je team</div><button class="cc-close" onclick="closeClientChat()" aria-label="Sluiten">'+closeX+'</button></div><div class="cc-body" id="clientChatBody"><div class="empty" style="padding:50px"><div class="brand-spinner" style="margin:0 auto"></div></div></div></div>';
+  state._commsMode=true;
+  var d=null; try{ d=await S27DATA.loadCommsChat(); }catch(e){}
+  var tid=(d&&d.task_id)||S27DATA.commsTaskId();
+  var body=$id('clientChatBody'); if(!body) return;
+  if(!tid){ body.innerHTML='<div class="empty" style="padding:40px 16px"><p>Chat is even niet beschikbaar. Probeer het zo opnieuw.</p></div>'; return; }
+  state.activeProject=tid;
+  body.innerHTML='<div class="cc-with">'+saeChatWho(S27DATA.commsTeam())+'</div>'+chatHTML(tid);
+  var l=_chatListEl(); if(l) l.scrollTop=l.scrollHeight;
+  startChatPoll(tid);
+}
+function closeClientChat(){
+  stopChatPoll();
+  var el=$id('clientChat'); if(el){ el.classList.remove('show'); el.innerHTML=''; }
+  document.removeEventListener('keydown',ccEsc);
+  document.body.classList.remove('mp-lock');
+  state._commsMode=false;
+  state.activeProject = state._prevActiveProject || null;   // achtergrond-chat-context herstellen (geen verdwaalde berichten)
+  state._prevActiveProject = null;
+  if(state.activeProject && document.getElementById('chatList')) startChatPoll(state.activeProject);  // achtergrond-chat terug laten pollen indien nog zichtbaar
+}
 /* ---- Dringende vraag aan Ilke (accountmanagement), werkt ook als de projectchat gesloten is ---- */
 function _projNaam(id){ var p=(window.S27DATA&&(S27DATA.projects()||[]).find(function(x){return x.id===id;}))||null; return p?p.name:'dit project'; }
 function dringendeVraag(id){

@@ -122,7 +122,7 @@ const MAKE_ENDPOINTS = {
 // Strengere limiet voor schrijf-/upload-acties; ruimer voor leesacties.
 const SENSITIVE = new Set([
   'uploadProject', 'uploadAlg', 'bedrijfUpload', 'huisstijlUpload', 'huisstijlDelete',
-  'chatAttachment', 'chatPost', 'directMessage', 'feedbackV2', 'newProjectIntake',
+  'chatAttachment', 'chatPost', 'commsChatPost', 'commsChatAttachment', 'directMessage', 'feedbackV2', 'newProjectIntake',
   'facturatieSave', 'projectFacturatieSave', 'bedrijfVoorkeuren', 'bedrijfContact',
   'bedrijfBeheer', 'inplannen', 'offerteGenereren', 'metricoolApprove', 'metricoolUpdate',
   'metricoolMediaUpload', 'shootSubmit', 'meetingBook',

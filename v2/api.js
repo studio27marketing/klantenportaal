@@ -17,7 +17,7 @@ var state = window.S27State = {
   activeBedrijf: '',
   _provisionTried: false,
   _sessionExpiredHandled: false,
-  data: { dashboard:null, details:{}, chats:{}, meetings:null, bedrijf:null, team:null, huisstijl:null, offertes:null, metricool:null, ads:null },  // gecachte API-data
+  data: { dashboard:null, details:{}, chats:{}, meetings:null, bedrijf:null, team:null, huisstijl:null, offertes:null, metricool:null, ads:null, commsTaskId:null, commsTeam:null },  // gecachte API-data
 
   route: null                 // deep-link pending route (zie portal.js router)
 };
@@ -136,6 +136,10 @@ const ENDPOINTS = {
   // { host_email, host_naam, start, eind, start_ms, online, titel, beschrijving, locatie, client_email, client_naam, project_task_id?, project_naam?, intake?, when_label? }
   //   -> { ok, event_id, meet_link, html_link }. Muteert GEEN project-due_date; host moet @studio27.be zijn.
   meetingBook:       GATEWAY_BASE + '/meetingBook',
+  // Altijd-open klantchat op de vaste communicatietaak (server-side taak-resolutie; client stuurt GEEN task_id).
+  commsChatList:       GATEWAY_BASE + '/commsChatList',
+  commsChatPost:       GATEWAY_BASE + '/commsChatPost',
+  commsChatAttachment: GATEWAY_BASE + '/commsChatAttachment',
   // Webprestaties (GA4 + Search Console, direct via de Google-API's, geen Make). Team-only (staff, acting-as).
   // webTraffic: { period | from,to,compare } -> { ok, linked, totals, channels, split, trend, landingPages }.
   webTraffic:        GATEWAY_BASE + '/webTraffic',

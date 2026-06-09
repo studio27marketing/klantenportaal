@@ -473,6 +473,20 @@
 .soc-ph-dot.on{background:#fff;}
 .soc-ph-count{font-family:var(--font-body);font-size:11px;font-weight:700;color:var(--ink-3,#6B5B6B);margin-left:6px;}
 @media(max-width:760px){.soc-subnav-act{margin-left:0;width:100%;}}
+/* Altijd-open klantchat (topbar-drawer rechts) */
+.cc-overlay{position:fixed;inset:0;z-index:80;display:none;background:rgba(35,15,35,.32);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);}
+.cc-overlay.show{display:block;}
+.cc-modal{position:absolute;top:0;right:0;bottom:0;width:min(420px,100%);background:var(--paper,#fff);box-shadow:-18px 0 50px rgba(35,15,35,.22);display:flex;flex-direction:column;animation:ccIn .22s ease;}
+@keyframes ccIn{from{transform:translateX(26px);opacity:.5}to{transform:translateX(0);opacity:1}}
+.cc-head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line,#E7DFD3);flex:none;}
+.cc-htitle{font-family:var(--font-display);font-weight:800;font-size:16px;color:var(--ink,#230F23);flex:1;}
+.cc-close{border:none;background:none;cursor:pointer;color:var(--ink-3,#6B5B6B);display:flex;padding:5px;border-radius:8px;}
+.cc-close:hover{background:var(--paper-2,#FAF7F2);}
+.cc-with{padding:9px 16px 2px;flex:none;}
+.cc-with .dc-who{display:inline-flex;align-items:center;gap:7px;}
+.cc-body{flex:1;display:flex;flex-direction:column;min-height:0;}
+.cc-body .chat-list{flex:1;}
+@media(max-width:560px){.cc-modal{width:100%;}}
 @media(max-width:760px){.soc-egrid{grid-template-columns:1fr;gap:18px;}.soc-ecol-pv{position:static;max-width:330px;margin:0 auto;}.soc-etopbar{top:0;}}
 /* kalender (planner): schermvullender */
 .soc-cal .soc-grid .soc-cell{min-height:118px;}

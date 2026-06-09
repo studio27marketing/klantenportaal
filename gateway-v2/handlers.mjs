@@ -47,6 +47,7 @@ export const PLANNING_LISTS = [
   '901520180360', // Payroll = afwezigheid
 ];
 export const PAYROLL_LIST = '901520180360';
+export const SOCIAL_LIST = '901520180312'; // Social media-planning: communicatietaak + maandtaken + input-subtaken
 
 export const FIELD = {
   bedrijf:        '4b1fb333-f47a-41bb-a976-dce63ed36657', // relatie 'Bedrijf' (scope-guard)
@@ -370,8 +371,10 @@ export const cu = {
   // relatie add/rem op een task-relatieveld
   relation: (env, taskId, fieldId, { add = [], rem = [] }) =>
     cu.post(env, `/task/${taskId}/field/${fieldId}`, { value: { add, rem } }),
-  comment: (env, taskId, text, notifyAll = true) =>
-    cu.post(env, `/task/${taskId}/comment`, { comment_text: text, notify_all: !!notifyAll }),
+  comment: (env, taskId, text, notifyAll = true, assignee = null) =>
+    cu.post(env, `/task/${taskId}/comment`, assignee
+      ? { comment_text: text, notify_all: !!notifyAll, assignee: Number(assignee) }
+      : { comment_text: text, notify_all: !!notifyAll }),
   // multipart attachment-upload. Content-Type NIET zelf zetten (boundary).
   uploadAttachment: (env, taskId, bytes, filename) => {
     const fd = new FormData();
@@ -1346,6 +1349,64 @@ function detailSkeleton(taskId, err) {
 }
 
 /* ---- chatList ------------------------------------------------------------ */
+// ── Klantchat-resolvers (altijd-open chat op de vaste communicatietaak) ───────────────
+const TYPEJOB_PROJECTMGMT = '35767068-2103-46b0-940c-2547a97726b7'; // TYPE JOB-optie 'Projectmanagement' (orderindex 0)
+const SOCIAL_FALLBACK = { id: 94564122, naam: 'Danique', initialen: 'DB', avatar: '' }; // social-lead fallback
+
+// Vind (of lazy-create) de vaste communicatietaak van een bedrijf in de Social-lijst:
+// TYPE JOB = Projectmanagement (0). Draagt de altijd-open klantchat (taak-comments). taskId NOOIT uit body.
+async function resolveCommsTask(bedrijfId, env) {
+  const bid = cleanId(bedrijfId);
+  if (!bid) return '';
+  const filter = encodeURIComponent(JSON.stringify([{ field_id: FIELD.bedrijf, operator: 'ANY', value: [bid] }]));
+  let tasks = [];
+  try { tasks = await pageAll(env, (page) => `/list/${SOCIAL_LIST}/task?include_closed=true&subtasks=false&page=${page}&custom_fields=${filter}`); } catch (e) { tasks = []; }
+  const hit = (tasks || []).find((t) => getRelationIds(t, FIELD.bedrijf).includes(bid) && Number(getCF(t, FIELD.typeJob)) === 0);
+  if (hit && hit.id) return str(hit.id);
+  // lazy-create voor een bedrijf dat er nog geen heeft
+  let naam = bid;
+  try { const br = await cu.get(env, `/task/${bid}`); if (br.ok && br.data && br.data.name) naam = str(br.data.name); } catch (e) {}
+  let created;
+  try {
+    created = await cu.post(env, `/list/${SOCIAL_LIST}/task`, {
+      name: `📨 Communicatie - ${naam}`,
+      content: 'Vaste communicatietaak voor de klantchat (portaal). Niet sluiten.',
+      notify_all: false,
+      custom_fields: [{ id: FIELD.bedrijf, value: { add: [bid], rem: [] } }, { id: FIELD.typeJob, value: TYPEJOB_PROJECTMGMT }],
+    });
+  } catch (e) { return ''; }
+  if (!created || !created.ok || !created.data || !created.data.id) return '';
+  const id = str(created.data.id);
+  await cu.relation(env, id, FIELD.bedrijf, { add: [bid], rem: [] }).catch(() => {});
+  await cu.field(env, id, FIELD.typeJob, TYPEJOB_PROJECTMGMT).catch(() => {});
+  return id;
+}
+
+// Het ACTIEVE teamlid voor de chat-notificatie: de assignee van de social-maandtaak (TYPE JOB=13)
+// met due-date in de huidige maand. Geeft id + displaynaam/initialen terug; fallback = Danique.
+async function resolveActiveSocial(bedrijfId, env) {
+  const bid = cleanId(bedrijfId);
+  if (!bid) return SOCIAL_FALLBACK;
+  const filter = encodeURIComponent(JSON.stringify([{ field_id: FIELD.bedrijf, operator: 'ANY', value: [bid] }]));
+  let tasks = [];
+  try { tasks = await pageAll(env, (page) => `/list/${SOCIAL_LIST}/task?include_closed=false&subtasks=true&page=${page}&custom_fields=${filter}`); } catch (e) { tasks = []; }  // subtasks=true: de maandtaak is een SUBTAAK van de comms-taak
+  const now = Date.now();
+  const cands = (tasks || []).filter((t) =>
+    getRelationIds(t, FIELD.bedrijf).includes(bid) &&
+    Number(getCF(t, FIELD.typeJob)) === 13 &&
+    t.due_date && monthKey(Number(t.due_date)) === monthKey(now));
+  cands.sort((a, b) => (Number(b.due_date) || 0) - (Number(a.due_date) || 0));
+  for (const t of cands) {
+    const as = (Array.isArray(t.assignees) ? t.assignees : []).filter(Boolean);
+    if (as.length) {
+      const a = as[0];
+      const voornaam = str(a.username || '').split(/\s+/)[0] || 'je team';
+      return { id: Number(a.id), naam: voornaam, initialen: str(a.initials || voornaam.slice(0, 2).toUpperCase()), avatar: str(a.profilePicture || '') };
+    }
+  }
+  return SOCIAL_FALLBACK;
+}
+
 export async function chatList(bedrijfId, body, env) {
   const taskId = cleanId(body && body.task_id);
   if (!taskId) return { status: 200, body: { ok: true, comments: [] } };
@@ -1919,6 +1980,50 @@ export async function chatAttachment(bedrijfId, body, env) {
     status: 200,
     body: { ok: !!uploadOk, attachment_id: attId, attachment_url: attUrl, comment_id: commentId, filename, posted_at: nowISO() },
   };
+}
+
+/* ---- commsChat* — altijd-open klantchat op de vaste communicatietaak (taskId server-side) ----
+ * De client geeft NOOIT een task_id mee; de worker resolvet de communicatietaak uit bedrijfId.
+ * Elk klantbericht wordt een comment TOEGEWEZEN aan het actieve teamlid (notify_all:false) → gerichte push. */
+export async function commsChatList(bedrijfId, body, env) {
+  const taskId = await resolveCommsTask(bedrijfId, env);
+  if (!taskId) return { status: 200, body: { ok: true, task_id: '', team: [], comments: [] } };
+  const base = await chatList(bedrijfId, { task_id: taskId }, env);
+  const who = await resolveActiveSocial(bedrijfId, env);
+  return { status: 200, body: { ok: true, task_id: taskId, team: [{ naam: who.naam, initialen: who.initialen, avatar: who.avatar }], comments: (base.body && base.body.comments) || [] } };
+}
+export async function commsChatPost(bedrijfId, body, env) {
+  const taskId = await resolveCommsTask(bedrijfId, env);
+  if (!taskId) return { status: 500, body: { ok: false, message: 'Chat is even niet beschikbaar - probeer straks opnieuw.' } };
+  const klantNaam = str((body && body.klant_naam) || 'Onbekend');
+  const commentText = str(body && body.comment_text);
+  const who = await resolveActiveSocial(bedrijfId, env);
+  const commentBody = `💬 [Klant: ${klantNaam}]\n\n${commentText}`;
+  const r = await cu.comment(env, taskId, commentBody, false, who.id);
+  if (!r.ok) return { status: 500, body: { ok: false, message: 'Bericht kon niet geplaatst worden - probeer opnieuw.' } };
+  return { status: 200, body: { ok: true, comment_id: str((r.data && r.data.id) || 'posted'), posted_at: nowISO() } };
+}
+export async function commsChatAttachment(bedrijfId, body, env) {
+  const taskId = await resolveCommsTask(bedrijfId, env);
+  if (!taskId) return { status: 500, body: { ok: false, message: 'Chat is even niet beschikbaar.' } };
+  const filename = str(body && body.filename);
+  const klantNaam = str((body && body.klant_naam) || 'Onbekend');
+  const commentText = str(body && body.comment_text);
+  const raw = (body && (body.file_data != null ? body.file_data : body.data)) || '';
+  let bytes;
+  try { bytes = base64ToBytes(raw); } catch (e) { bytes = new Uint8Array(0); }
+  const up = await cu.uploadAttachment(env, taskId, bytes, filename);
+  const uploadOk = up.ok && up.data;
+  const attUrl = uploadOk ? str(up.data.url) : '';
+  const attId = uploadOk ? str(up.data.id) : '';
+  let commentId = '';
+  if (uploadOk) {
+    const who = await resolveActiveSocial(bedrijfId, env);
+    const commentBody = `💬 [Klant: ${klantNaam}]\n\n📎 Bestand gedeeld: ${filename}\n${attUrl}\n\n${commentText}`;
+    const cm = await cu.comment(env, taskId, commentBody, false, who.id);
+    commentId = cm.ok && cm.data ? str(cm.data.id) : '';
+  }
+  return { status: 200, body: { ok: !!uploadOk, attachment_id: attId, attachment_url: attUrl, comment_id: commentId, filename, posted_at: nowISO() } };
 }
 
 /* ---- directMessage (1 POST create in PORTAAL-inbox) ---------------------- */
@@ -4724,6 +4829,7 @@ export async function webSearch(bedrijfId, body, env) {
 export const READ_HANDLERS = {
   projectDetailV2,
   chatList,
+  commsChatList,
   bedrijfContent,
   dashboard,
   meetingsList,
@@ -4757,6 +4863,8 @@ export const WRITE_HANDLERS = {
   bedrijfUpload,
   chatPost,
   chatAttachment,
+  commsChatPost,
+  commsChatAttachment,
   directMessage,
   feedbackV2,
   inplannen,

@@ -166,6 +166,22 @@
     state.data.chats[taskId] = raw.map(mapChatComment);
     return state.data.chats[taskId];
   };
+  // Altijd-open klantchat: de server bepaalt de communicatietaak (geen task_id van de client).
+  DATA.loadCommsChat = async function(){
+    if(!live()){
+      state.data.commsTaskId='demo-comms'; state.data.commsTeam=[{naam:'Ilke',initialen:'IM'}];
+      if(!state.data.chats['demo-comms']) state.data.chats['demo-comms']=[{av:'IM',who:'Ilke',color:'blue',tx:'Hoi! Stel hier gerust je vraag, we antwoorden snel. 👋',tm:'09:00',me:false,attachments:[]}];
+      return { task_id:'demo-comms', team:state.data.commsTeam };
+    }
+    var res = await api(ENDPOINTS.commsChatList, base({}));
+    var d = (res && res.ok && res.data) ? res.data : {};
+    state.data.commsTaskId = d.task_id || null;
+    state.data.commsTeam = d.team || [];
+    if(d.task_id) state.data.chats[d.task_id] = (d.comments||[]).map(mapChatComment);
+    return d;
+  };
+  DATA.commsTaskId = function(){ return state.data.commsTaskId || null; };
+  DATA.commsTeam   = function(){ return state.data.commsTeam || []; };
   DATA.loadMeetings = async function(){
     if(!live()) return false;
     var res = await api(ENDPOINTS.meetingsList, base({ bedrijfsnaam:DATA.bedrijfsnaam() }));
