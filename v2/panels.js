@@ -220,8 +220,7 @@ function panelBerichten(){
           <span class="pr-main"><span class="ber-disc" style="color:var(--c-ink)">${esc(p.disc)}</span><span class="pr-name" style="font-size:14px">${esc(p.name)}</span></span>
           ${p.deliv?`<span class="badge" style="position:static;background:var(--c);color:#fff;border:none;min-width:20px;height:20px;font-size:11px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:800">!</span>`:''}
         </button>`).join('');
-  return hero('blue','Berichten', `Even <span class="accent">bijpraten${squig()}</span>?`)
-  +`<p class="sdesc" style="margin:-4px 0 14px;max-width:60ch">Klik links een project aan en chat er meteen over, je blijft op deze pagina, enkel het gesprek wisselt. Je kan ook bestanden meesturen.</p>
+  return `<p class="sdesc" style="margin:2px 0 14px;max-width:60ch">Klik links een project aan en chat er meteen over, je blijft op deze pagina, enkel het gesprek wisselt. Je kan ook bestanden meesturen.</p>
   <div style="display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start" class="berichten-wrap">
     <div class="card" style="overflow:hidden">${rows||'<div class="empty" style="padding:30px"><p>Nog geen gesprekken.</p></div>'}</div>
     <div class="card br-${first?first.br:'blue'}" id="berichtChat" style="padding:0;overflow:hidden">
@@ -283,9 +282,7 @@ function panelProjecten(){
   // je ook op 'Webdesign' kan filteren als dat enkel een tweede label van een hoofdtaak is.
   const order=[]; _nonAdProjects().filter(p=>p.status!=='done').forEach(p=>{ ((p.labels&&p.labels.length)?p.labels:[{label:p.disc}]).forEach(l=>{ if(l.label && order.indexOf(l.label)<0) order.push(l.label); }); });
   order.sort((a,b)=>{ const ia=DISC_ORDER.indexOf(a),ib=DISC_ORDER.indexOf(b); return (ia<0?99:ia)-(ib<0?99:ib); });
-  return hero('blue','Mijn werk · Actieve projecten',
-    `Jouw <span class="accent">actieve${squig()}</span> projecten`)
-  +`<div class="proj-filter">
+  return `<div class="proj-filter">
       <label class="pf-select">${ic('strategie',16)}
         <select onchange="filterDienst(this.value)">
           <option value="all">Alle takken</option>
@@ -473,7 +470,7 @@ function socialCustomPeriod(){
   var pp=socialPeriod(); pp.from=f.value+'T00:00:00'; pp.to=t.value+'T23:59:59'; socialReloadStats();
 }
 function socialSetCompare(mode){ var pp=socialPeriod(); pp.compare=mode; socialReloadStats(); }
-function socialPlannerHTML(){ var posts=socialPostsAll(); return socialMatrixbar(posts)+socialFilters()+'<div id="socialCalContainer">'+socialCalendar(socialShownPosts())+'</div>'; }
+function socialPlannerHTML(){ return socialFilters()+'<div id="socialCalContainer">'+socialCalendar(socialShownPosts())+'</div>'; }
 function socialInzichtenHTML(){
   var it=socialInzTab();
   var tabs=[['momenten','Beste momenten'],['topscore','Topscore'],['hashtags','Hashtags']];
@@ -802,8 +799,10 @@ function socialMatrixbar(posts){
   }).join('')+'</div>';
 }
 function socialFilters(){
-  var fs=[['alles','Alle'],['feedback','Wacht op je feedback'],['goedgekeurd','Goedgekeurd'],['gepubliceerd','Gepubliceerd']];
-  return '<div class="soc-fbar">'+fs.map(function(f){ return '<button class="soc-fchip'+(socialFilter()===f[0]?' active':'')+'" onclick="socialSetFilter(\''+f[0]+'\')">'+esc(f[1])+'</button>'; }).join('')+'</div>';
+  var posts=socialPostsAll();
+  var c={feedback:0,goedgekeurd:0,gepubliceerd:0}; posts.forEach(function(p){ var s=socialStatus(p); if(c[s]!=null) c[s]++; });
+  var fs=[['alles','Alle',posts.length],['feedback','Wacht op je feedback',c.feedback],['goedgekeurd','Goedgekeurd',c.goedgekeurd],['gepubliceerd','Gepubliceerd',c.gepubliceerd]];
+  return '<div class="soc-fbar">'+fs.map(function(f){ return '<button class="soc-fchip'+(socialFilter()===f[0]?' active':'')+'" onclick="socialSetFilter(\''+f[0]+'\')"><b style="opacity:.8">'+f[2]+'</b> '+esc(f[1])+'</button>'; }).join('')+'</div>';
 }
 function socialCalendar(posts){
   var mo=socialMonth(); var first=new Date(mo.y,mo.m,1);
@@ -850,8 +849,13 @@ function _isVidUrl(u){ return /\.(mp4|mov|webm|m4v|m3u8)(\?|$)/i.test(String(u||
 function _socAccountName(net){
   var mc=(window.S27DATA&&S27DATA.metricool&&S27DATA.metricool())||null;
   net=String(net||'').toLowerCase();
-  if(mc){ if(mc.accounts && net && mc.accounts[net] && mc.accounts[net].name) return mc.accounts[net].name; if(mc.brandName) return mc.brandName; }
-  return _bedrijf();
+  if(mc){
+    if(mc.accounts && net && mc.accounts[net] && mc.accounts[net].name) return mc.accounts[net].name;
+    if(mc.accounts){ for(var k in mc.accounts){ if(mc.accounts[k] && mc.accounts[k].name) return mc.accounts[k].name; } }
+    if(mc.brandName) return mc.brandName;
+  }
+  var b=_bedrijf();
+  return /@/.test(b) ? '' : b;   // nooit een e-mailadres in de mockup tonen
 }
 // Formaat afleiden: reel/verticaal (9:16) vs feed (1:1) — bepaalt de beeldverhouding van de mockup, zodat een reel niet wordt afgeknipt.
 function socialInferFormat(p,net,isVid,nMedia,captionOverride){
@@ -956,7 +960,7 @@ function socialDetailPage(id){
     +'<div class="soc-etopbar">'+back+'</div>'
     +'<div class="soc-egrid"><div class="soc-ecol-pv" id="socPv">'+phone+'</div><div class="soc-ecol-form">'
       +'<div class="soc-emeta">'+datebadge+'</div>'
-      +'<label class="soc-elab">Kanalen <span class="soc-elab-hint">— tik een kanaal om de preview te wisselen</span></label><div class="soc-chics">'+chans+'</div>'
+      +'<label class="soc-elab">Kanalen</label><div class="soc-chics">'+chans+'</div>'
       +'<label class="soc-elab">Tekst &amp; hashtags</label><textarea id="socCap" class="soc-cap" rows="12" oninput="socialPreviewSync()" placeholder="Schrijf je caption… hashtags typ je gewoon mee (#voorbeeld)">'+esc(p.tekst||'')+'</textarea>'
       +'<label class="soc-elab">Visual</label>'
       +'<div class="soc-visrow"><button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById(\'socFile\').click()">'+ic('upload',15)+' Upload foto/video</button><input type="file" id="socFile" accept="image/*,video/*" style="display:none" onchange="socialUploadMedia(this)"><span class="soc-upor">of</span><input id="socMedia" class="soc-hashin" style="flex:1;min-width:150px;box-sizing:border-box" placeholder="plak een URL" oninput="socialPreviewMedia()"></div>'
@@ -2637,11 +2641,7 @@ function panelHuisstijl(){
 
 function panelFacturatie(){
   // Facturatiegegevens (ondernemingsnummer, facturatie-email, opmerkingen) staan terug op DEZE tab.
-  return hero('green','Mijn bedrijf · Facturatie',
-    `Jouw <span class="accent">facturatie${squig()}</span>, helder geregeld`,
-    'Transparant en zonder kleine lettertjes.',
-    scribble('krabbel-groen.png','top:-4px;right:8px;width:120px;transform:rotate(-5deg)'))
-  + facturatieBlock()
+  return facturatieBlock()
   +`<div class="setsec">
     <h3>Facturen</h3>
     <div class="empty" style="padding:34px 20px"><div class="em-ic">${ic('doc',52)}</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Binnenkort hier</b><p style="margin:6px 0 0">Zodra je facturen automatisch gekoppeld zijn, vind je ze hier overzichtelijk terug. Een factuur nodig? Je Studio 27-contact bezorgt ze je vlot.</p></div>
@@ -2678,9 +2678,8 @@ function facturatieBlock(){
   var email=f.facturatie_email||(demo?'boekhouding@testclient.be':'');
   var opm=f.facturatie_opmerkingen||'';
   var fld='font-family:var(--font-body);font-size:14px;padding:11px 13px;border:1px solid var(--line);border-radius:var(--r-sm);outline:none;background:#fff';
-  return '<div class="section-head" style="margin-top:36px"><h2>Facturatiegegevens</h2></div>'
+  return '<div class="section-head" style="margin-top:8px"><h2>Standaard facturatiegegevens</h2></div>'
     +'<div class="setsec" style="margin-top:0">'
-    +'<p class="sdesc" style="margin-top:0">Geef bij oplevering van het project de juiste facturatiegegevens op via deze weg. Zo verwerken Ilke en Arne alles meteen correct.</p>'
     +'<div class="set-grid">'
     +'<div class="field"><label>Ondernemingsnummer / BTW</label><input id="facBtw" value="'+esc(onum)+'" placeholder="BE 0xxx.xxx.xxx" style="'+fld+'"></div>'
     +'<div class="field"><label>Facturatie-e-mail</label><input id="facEmail" value="'+esc(email)+'" placeholder="boekhouding@…" style="'+fld+'"></div>'
@@ -2958,19 +2957,16 @@ function panelInstellingen(){
   if(me){ contacts=[me].concat(contacts.filter(function(x){return x!==me;})); }
   const prof = demo ? (contacts[0]||{}) : (me||{}); const vk = prof.voorkeur||'Geen';  // enkel het ingelogde contact, geen terugval op een willekeurig contact
   const contactsHTML = contacts.length ? contacts.map(function(x){return contactRow(x, x===me);}).join('') : '<div class="fs" style="color:var(--ink-4)">Nog geen contactpersonen toegevoegd, voeg je eerste collega toe.</div>';
-  return hero('indigo','Mijn bedrijf · Instellingen',
-    `Jouw <span class="accent">voorkeuren${squig()}</span>`)
-  +`<div class="set-cols">
-    <div class="setsec">
+  return `<div class="setsec">
       <h3>Mijn profiel &amp; notificaties</h3><p class="sdesc">Je eigen gegevens, wijzigingen synchroniseren meteen met je contactfiche bij Studio&nbsp;27.</p>
       <input type="hidden" id="npProfileId" value="${esc(prof.id||'')}">
-      <div class="set-grid set-grid-1">
+      <div class="set-grid">
         <div class="field"><label>E-mail</label><input id="npEmail" value="${esc(prof.email||'')}" placeholder="naam@bedrijf.be" onchange="saveProfile()" ${prof.id?'':'disabled'}></div>
         <div class="field"><label>GSM / WhatsApp-nummer</label><input id="npGsm" value="${esc(prof.gsm||(demo?'+32 478 12 34 56':''))}" placeholder="+32 4xx xx xx xx" onchange="saveProfile()" ${prof.id?'':'disabled'}></div>
         <div class="field"><label>Meldingen via</label><select id="npVoorkeur" onchange="saveProfile()" ${prof.id?'':'disabled'}>${['Geen','WhatsApp','E-mail','Beide'].map(o=>`<option ${o===vk?'selected':''}>${o}</option>`).join('')}</select></div>
       </div>
       <div id="npSaved" class="fs" style="color:var(--s27-green-ink,#2e7d32);margin-top:8px;display:none">✓ Opgeslagen, gesynchroniseerd met ClickUp</div>
-      ${(!demo&&!prof.id)?'<p class="fs" style="color:var(--ink-4);margin-top:8px">Je e-mail is nog niet aan een contactpersoon gekoppeld, voeg jezelf hiernaast toe om je voorkeuren te bewaren.</p>':''}
+      ${(!demo&&!prof.id)?'<p class="fs" style="color:var(--ink-4);margin-top:8px">Je e-mail is nog niet aan een contactpersoon gekoppeld, voeg jezelf hieronder toe om je voorkeuren te bewaren.</p>':''}
     </div>
     <div class="setsec">
       <h3>Contactpersonen van je bedrijf</h3><p class="sdesc">Iedereen die hier staat kan inloggen én collega's beheren. Verwijder je iemand, dan vervalt meteen z'n toegang.</p>
@@ -2978,10 +2974,6 @@ function panelInstellingen(){
       <button class="btn btn-outline btn-sm" style="margin-top:12px" onclick="addContact()">${ic('upload',15)} Persoon toevoegen</button>
       <div id="contactFormHost"></div>
     </div>
-  </div>
-  <div class="set-divider"><span>${ic('img',15)} Huisstijl &amp; bestanden</span></div>
-  <p class="sdesc" style="margin:-4px 0 14px;max-width:64ch">Alles wat we nodig hebben om consistent voor je te werken, netjes bij elkaar, logo's, kleuren, fonts en je gedeelde Drive-map.</p>
-  ${huisstijlSecties()}
   <div class="setsec" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:18px">
     <div><b style="font-family:var(--font-display);font-size:15px">Uitloggen</b><div style="font-size:13px;color:var(--ink-3)">Log veilig uit op dit toestel.</div></div>
     <button class="btn btn-outline" onclick="logout()">${ic('logout',16)} Uitloggen</button>
@@ -3361,9 +3353,10 @@ function webEnsureStyles(){
     +'.wp-tbl th{text-align:left;font:700 10.5px Montserrat,sans-serif;letter-spacing:.04em;text-transform:uppercase;color:'+mut+';padding:6px 8px;border-bottom:1px solid rgba(231,223,211,.8)}'
     +'.wp-tbl td{padding:7px 8px;border-bottom:1px solid rgba(231,223,211,.5);color:'+ink+'}'
     +'.wp-tbl td.r,.wp-tbl th.r{text-align:right;white-space:nowrap}'
-    +'.wp-per{display:flex;gap:6px;margin:0 0 14px}'
-    +'.wp-per button{font:700 12px Montserrat,sans-serif;border:1px solid rgba(231,223,211,.9);background:#fff;color:#6B5B6B;border-radius:999px;padding:6px 14px;cursor:pointer}'
-    +'.wp-per button.on{background:'+ink+';color:#fff;border-color:'+ink+'}'
+    +'.wp-per{display:inline-flex;gap:5px;margin:0 0 16px;padding:5px;border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,.74),rgba(255,255,255,.40));-webkit-backdrop-filter:blur(12px) saturate(1.3);backdrop-filter:blur(12px) saturate(1.3);border:1px solid rgba(255,255,255,.6);box-shadow:0 8px 24px rgba(60,40,80,.10),inset 0 1px 0 rgba(255,255,255,.75);position:sticky;top:60px;z-index:8}'
+    +'.wp-per button{font:700 12px Montserrat,sans-serif;border:0;background:transparent;color:#6B5B6B;border-radius:999px;padding:7px 15px;cursor:pointer;transition:color .18s,background .18s}'
+    +'.wp-per button:hover{color:'+ink+'}'
+    +'.wp-per button.on{background:linear-gradient(180deg,#fff,#f7f3ec);color:'+ink+';box-shadow:0 2px 8px rgba(35,15,35,.13),inset 0 1px 0 #fff}'
     +'.wp-canwrap{position:relative;height:240px}'
     +'.wp-li{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid rgba(231,223,211,.5);font:600 12.5px Nunito,sans-serif;color:'+ink+'}'
     +'.wp-li .u{color:#4a3f4a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
@@ -3376,7 +3369,7 @@ function webPeriod(){ return state._webPeriod || 'last_30d'; }
 function webPeriodBar(){
   var p=webPeriod();
   var b=function(k,l){ return '<button class="'+(p===k?'on':'')+'" onclick="webSetPeriod(\''+k+'\')">'+l+'</button>'; };
-  return '<div class="wp-per">'+b('last_7d','7 dagen')+b('last_30d','30 dagen')+b('last_90d','90 dagen')+'</div>';
+  return '<div class="wp-per">'+b('today','Vandaag')+b('last_7d','7 dagen')+b('last_30d','30 dagen')+b('last_90d','90 dagen')+'</div>';
 }
 async function webSetPeriod(p){
   state._webPeriod=p;
@@ -3413,7 +3406,7 @@ function webBuildTrendChart(trend){
 }
 function panelWebprestaties(){
   webEnsureStyles();
-  var head='<div class="section-head" style="margin-bottom:6px"><h2 style="display:flex;align-items:center;gap:8px"><span class="live-dot"></span>Webprestaties</h2></div>';
+  var head='';
   var t=(window.S27DATA&&S27DATA.webTraffic&&S27DATA.webTraffic())||null;
   var s=(window.S27DATA&&S27DATA.webSearch&&S27DATA.webSearch())||null;
   if(t===null && s===null){ return head+'<div class="empty" style="padding:70px 20px"><div class="brand-spinner" style="margin:0 auto 14px"></div><div style="font-family:var(--font-display);font-weight:700;color:#9E919E">Webdata laden…</div></div>'; }

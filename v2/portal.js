@@ -9,7 +9,7 @@
 "use strict";
 
 let currentTab = 'start';
-const SECTION_LABEL = { start:'Home', berichten:'Berichten', projecten:'Actieve projecten', socials:'Socials', advertenties:'Advertenties', meetings:'Meetings', nieuwproject:'Offerte aanvragen', offertes:'Offertes', facturatie:'Facturatie', instellingen:'Instellingen' };
+const SECTION_LABEL = { start:'Home', berichten:'Berichten', projecten:'Actieve projecten', socials:'Socials', advertenties:'Adverteren', webprestaties:'Website', meetings:'Meetings', nieuwproject:'Nieuw project', offertes:'Offertes', facturatie:'Facturatie', instellingen:'Instellingen' };
 
 function qsp(){ return new URLSearchParams(location.search); }
 function $id(x){ return document.getElementById(x); }
@@ -157,7 +157,7 @@ async function initRealAuth(){
     } else if(s.phase==='ready'){
       const u=s.user||{};
       const staff = !!s.staff || /@studio27\.be$/.test(String(u.email||'').trim().toLowerCase());
-      state.session = { bedrijf_id:(staff?'admin':'via-gateway'), bedrijfsnaam:(u.email||'Klant'), session_token:'firebase', uid:u.uid, email:u.email, displayName:u.displayName||'' };
+      state.session = { bedrijf_id:(staff?'admin':'via-gateway'), bedrijfsnaam:'', session_token:'firebase', uid:u.uid, email:u.email, displayName:u.displayName||'' };
       state.demoMode = false; loginErr('');
       if(staff){ state.adminMode = true; await enterAdminMode(); }
       else { state.adminMode = false; await loadAndEnter(); }
