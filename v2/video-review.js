@@ -315,8 +315,8 @@
       current = null;
     }
     $('vrClose').addEventListener('click', function () {
-      if (st.annotations.length && !confirm('Je hebt nog niet-verzonden feedback. Sluiten? (Je punten blijven lokaal bewaard.)')) return;
-      saveDraft();
+      if (!st.locked && st.annotations.length && !confirm('Je hebt nog niet-verzonden feedback. Sluiten? (Je punten blijven lokaal bewaard.)')) return;
+      if (!st.locked) saveDraft();
       close();
     });
     current = { close: close };
@@ -335,10 +335,35 @@
     st.streamUrl = gwUrl(d.stream_url);
     st.downloadUrl = gwUrl(d.download_url);
     st.draftKey = 'vr_draft_' + taskId + '_' + st.video.source + st.video.externalId;
-    loadDraft();
+
+    // FEEDBACK-LOCK (slice 3): na definitief doorsturen is deze versie read-only naslag.
+    // Je punten blijven zichtbaar (pins + kaarten + bijlagen), maar niets is nog bewerkbaar.
+    st.locked = d.is_read_only === true;
+    if (st.locked) {
+      root.classList.add('vr-locked');
+      try { localStorage.removeItem(st.draftKey); } catch (e) { }
+      var lb = d.last_bundle || null;
+      st.annotations = lb && Array.isArray(lb.annotations) ? lb.annotations.map(function (a, i) {
+        return {
+          id: 'prev_' + i, sequenceNumber: a.sequenceNumber || (i + 1),
+          timestampSec: Number(a.timestampSec) || 0, hasPin: !!a.hasPin,
+          xPct: Number(a.xPct) || 0, yPct: Number(a.yPct) || 0,
+          comment: String(a.comment || ''), locked: true,
+          attachments: (a.attachments || []).map(function (x) { return { filename: String(x.filename || 'bijlage'), url: gwUrl(x.url), uploadStatus: 'stored' }; }),
+        };
+      }) : [];
+      st.lockedSummary = lb && lb.summary ? String(lb.summary) : '';
+    } else {
+      loadDraft();
+    }
 
     if (d.video.title) $('vrTitle').textContent = d.video.title;
-    if (d.last_submitted_at) {
+    if (st.locked) {
+      var prevL = $('vrPrev');
+      prevL.innerHTML = '🔒 Je feedback op deze versie is <b>definitief doorgestuurd</b>' + (d.last_submitted_at ? ' (' + new Date(d.last_submitted_at).toLocaleDateString('nl-BE') + ')' : '') + '. Hieronder zie je je punten als naslag — het team bezorgt je een nieuwe versie zodra die klaarstaat.' + (st.lockedSummary ? '<br><span class="vr-locksum">💬 Algemene opmerking: ' + st.lockedSummary.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</span>' : '');
+      prevL.classList.remove('vr-hidden');
+      prevL.classList.add('vr-lockbanner');
+    } else if (d.last_submitted_at) {
       var prev = $('vrPrev');
       prev.textContent = '✓ Je verstuurde eerder feedback op deze video (' + new Date(d.last_submitted_at).toLocaleDateString('nl-BE') + '). Nieuwe punten worden een nieuwe ronde.';
       prev.classList.remove('vr-hidden');
@@ -495,6 +520,7 @@
         .forEach(function (a, i) { a.sequenceNumber = i + 1; });
     }
     function placePin(pin) {
+      if (st.locked) { toast('Deze versie is al definitief doorgestuurd — feedback is vergrendeld als naslag.', 3800); return; }
       P.pause();
       var provisional = st.annotations.filter(function (a) { return a.timestampSec <= pin.timestampSec; }).length + 1;
       st.pendingPin = { timestampSec: pin.timestampSec, xPct: pin.xPct, yPct: pin.yPct, sequenceNumber: provisional };
@@ -715,6 +741,7 @@
 
     /* ---- verzenden ---- */
     $('vrSend').addEventListener('click', function () {
+      if (st.locked) { toast('Je feedback is al definitief doorgestuurd.', 3200); return; }
       if (!st.annotations.length) { toast('Plaats eerst minstens één feedbackpunt.'); return; }
       var n = st.annotations.length;
       $('vrSendLine').textContent = 'Je verstuurt ' + n + ' feedbackpunt' + (n === 1 ? '' : 'en') + ' naar het Studio 27-team.';

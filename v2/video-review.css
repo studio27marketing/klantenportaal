@@ -144,3 +144,12 @@ body.vr-open{overflow:hidden}
   .vr-video{max-height:44vh}
   .vr-top{padding:10px 13px}
 }
+
+/* FEEDBACK-LOCK (naslag-modus): alles zichtbaar, niets bewerkbaar */
+.vr-locked #vrSend,
+.vr-locked .vr-card .vr-edit,
+.vr-locked .vr-card .vr-del,
+.vr-locked .vr-drop { display: none !important; }
+.vr-locked #vrEmpty { display: none !important; }
+.vr-lockbanner { background: #FFF6E8 !important; border: 1px solid #F0DCBA !important; color: #6B4E1F !important; }
+.vr-lockbanner .vr-locksum { display: block; margin-top: 6px; font-style: italic; }

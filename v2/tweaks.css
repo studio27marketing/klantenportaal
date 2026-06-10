@@ -1019,3 +1019,43 @@ html, body{ touch-action:pan-x pan-y; }
 .takarch-when{font-size:12px;color:var(--ink-4,#9E919E);flex:none;}
 .takarch-files{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px;}
 .takarch-file{font-size:12.5px;}
+
+/* === Q slice 2: projectdetail-subnav (Overzicht | Chat) + schermvullende chat === */
+.detail--wide .detail-grid{display:block;}
+.detail-subnav{margin:14px 0 18px;}
+.detail-subnav .snav-btn{display:inline-flex;align-items:center;gap:7px;position:relative;}
+.snav-dot{width:9px;height:9px;border-radius:50%;background:var(--s27-orange,#ED7D31);display:inline-block;margin-left:2px;}
+.detail-chatpane{display:none;}
+.detail-chatpane.active{display:flex;flex-direction:column;min-height:calc(100vh - 320px);}
+.detail-chatpane .dc-head{display:flex;align-items:center;gap:8px;font-family:var(--font-display);font-weight:800;font-size:14px;margin-bottom:10px;}
+.detail-chatpane .dc-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;}
+.detail-chatpane .dc-body .chat-list{flex:1 1 auto;min-height:260px;max-height:calc(100vh - 430px);overflow-y:auto;margin-bottom:12px;}
+@media(max-width:760px){.detail-chatpane.active{min-height:calc(100vh - 250px);}.detail-chatpane .dc-body .chat-list{max-height:none;}}
+/* accordions als sub-blok onder het overzicht */
+.mpane.mpane-sub{display:none;}
+.mpane.mpane-sub.active{display:block;}
+
+/* === Q slice 2: Berichten = iOS-inbox === */
+.ios-inbox{padding:0;overflow:hidden;}
+.ios-row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:none;border:none;cursor:pointer;font:inherit;padding:14px 16px 14px 10px;border-bottom:1px solid var(--line,#E7DFD3);transition:background .12s;}
+.ios-row:last-child{border-bottom:none;}
+.ios-row:hover{background:var(--paper-2,#F6F1E9);}
+.ios-row:active{background:var(--paper-3,#EFE8DD);}
+.ios-dot{width:10px;height:10px;border-radius:50%;flex:none;background:transparent;}
+.ios-dot.on{background:var(--s27-blue,#3083DC);}
+.ios-av{width:46px;height:46px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+.ios-av .ios-av-ic{width:24px;height:24px;display:block;filter:brightness(0) invert(1);}
+.ios-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.ios-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;}
+.ios-top b{font-family:var(--font-display);font-weight:800;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ios-when{font-size:12px;color:var(--ink-4,#9E919E);flex:none;}
+.ios-snippet{font-size:13px;color:var(--ink-3,#6B5B6B);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ios-snippet.unread{color:var(--ink-1,#1F141F);font-weight:600;}
+.ios-chev{color:var(--ink-4,#9E919E);flex:none;}
+
+/* === Offerte-wizard: vervolg-acties als verticale keuzestapel === */
+.ow-contact--stack{display:flex;flex-direction:column;gap:9px;}
+.ow-contact--stack .ow-cact{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:13px 15px;}
+.ow-contact--stack .ow-cact b{font-family:var(--font-display);font-weight:800;font-size:14px;}
+.ow-contact--stack .ow-cact span{font-size:12.5px;color:var(--ink-3,#6B5B6B);line-height:1.45;}
+.ow-contact--stack .ow-cact.on span{color:inherit;opacity:.85;}

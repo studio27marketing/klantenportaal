@@ -235,29 +235,45 @@ function panelStart(){
 // dienst-tegels openen de offerte-wizard met de juiste tak voorgeselecteerd (stap 2)
 const SVC_TO_TAK = { strategie:'strategie', ads:'ads', video:'video', website:'website', seo:'website', branding:'branding', social:'social', opleiding:'strategie' };
 function goDienstOfferte(key){ openOfferteWizard(SVC_TO_TAK[key]||''); }
-function berichtChatInner(p){
-  return `<div style="padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:11px">
-    <span class="ber-dot" style="background:var(--c)"></span>
-    <div style="min-width:0"><b style="font-family:var(--font-display);font-size:15px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</b><span class="fs" style="color:var(--ink-4)">${esc(p.disc||'')}</span></div>
-    <button class="btn btn-ghost btn-sm br-${p.br}" style="margin-left:auto;flex:none" onclick="openProject('${esc(p.id)}','berichten')">Open project ${ic('arrow',14)}</button>
-  </div><div style="padding:18px 22px">${chatHTML(p.id)}</div>`;
+// Berichten = iOS-stijl inbox: één rij per projectchat (avatar, naam, laatste bericht, tijd,
+// ongelezen-dot) -> klik opent de schermvullende chat van dat project (detail-Chat-tab).
+const BERICHT_MOCK_LAST={
+  p1:{tekst:'De eerste montage staat klaar — kijk je even mee?', uren:2,  wacht:true},
+  p2:{tekst:'De nieuwe homepage staat op staging, link volgt straks.', uren:7, wacht:true},
+  p3:{tekst:'Top, dan plannen we de nabewerking deze week in.', uren:30, wacht:false},
+  p4:{tekst:'Bedankt voor jullie input tijdens de sessie!', uren:78, wacht:false},
+  p6:{tekst:'De contentkalender voor mei is goedgekeurd ✔', uren:120, wacht:false},
+  p9:{tekst:'We kijken vandaag nog naar het formulier.', uren:4, wacht:true},
+  p10:{tekst:'Eerste schetsen van de huisstijl-refresh komen eraan.', uren:26, wacht:false}
+};
+function _inboxWhen(ts){
+  if(!ts) return '';
+  var d=new Date(Number(ts)); if(isNaN(d.getTime())) return '';
+  var nu=new Date(); var diff=nu-d;
+  if(d.toDateString()===nu.toDateString()) return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+  if(diff<6*86400000) return ['zo','ma','di','wo','do','vr','za'][d.getDay()];
+  return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2);
+}
+function _inboxRow(p){
+  var lc=p.lastChat||null;
+  if(!lc && state.demoMode && BERICHT_MOCK_LAST[p.id]){ var m=BERICHT_MOCK_LAST[p.id]; lc={tekst:m.tekst, ts:Date.now()-m.uren*3600000, wacht:m.wacht}; }
+  var snippet=lc&&lc.tekst?lc.tekst:'Open de chat en stel je vraag over dit project.';
+  var when=lc?_inboxWhen(lc.ts):'';
+  var wacht=lc?!!lc.wacht:false;
+  return '<button class="ios-row br-'+p.br+'" onclick="openProjectChat(\''+esc(p.id)+'\')">'
+    +'<span class="ios-dot'+(wacht?' on':'')+'"></span>'
+    +'<span class="ios-av" style="background:var(--s27-'+p.br+')">'+discMark(p.disc,'ios-av-ic')+'</span>'
+    +'<span class="ios-main"><span class="ios-top"><b>'+esc(p.name)+'</b><span class="ios-when">'+esc(when)+'</span></span>'
+    +'<span class="ios-snippet'+(wacht?' unread':'')+'">'+esc(snippet)+'</span></span>'
+    +'<svg class="ios-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>';
 }
 function panelBerichten(){
-  // Berichten houdt ÁLLE projecten (ook social/ads) zodat elke projectchat bereikbaar blijft —
-  // de whitelist van _overviewProjects geldt enkel voor de Projecten-pagina, niet voor de chat.
-  const projs=_projects(); const first=projs[0];
-  const rows = projs.map((p,idx)=>`
-        <button class="proj-row br-${p.br} bericht-row" data-bid="${esc(p.id)}" style="border:none;border-radius:0;box-shadow:none;border-bottom:1px solid var(--line);${idx===0?'background:var(--paper-2)':''}" onclick="openBerichtChat('${esc(p.id)}',this)">
-          <span class="ber-dot" style="background:var(--c)"></span>
-          <span class="pr-main"><span class="ber-disc" style="color:var(--c-ink)">${esc(p.disc)}</span><span class="pr-name" style="font-size:14px">${esc(p.name)}</span></span>
-          ${p.deliv?`<span class="badge" style="position:static;background:var(--c);color:#fff;border:none;min-width:20px;height:20px;font-size:11px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:800">!</span>`:''}
-        </button>`).join('');
-  return `<div style="display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start" class="berichten-wrap">
-    <div class="card" style="overflow:hidden">${rows||'<div class="empty" style="padding:30px"><p>Nog geen gesprekken.</p></div>'}</div>
-    <div class="card br-${first?first.br:'blue'}" id="berichtChat" style="padding:0;overflow:hidden">
-      ${first?berichtChatInner(first):'<div class="empty" style="padding:60px 20px"><div class="em-ic">'+ic('msg',64)+'</div><p>Selecteer links een project om het gesprek te openen.</p></div>'}
-    </div>
-  </div>`;
+  // alle projecten (ook social/ads/support) — elke projectchat blijft hier bereikbaar
+  var projs=_projects().slice();
+  projs.forEach(function(p){ if(!p.lastChat && state.demoMode && BERICHT_MOCK_LAST[p.id]){ var m=BERICHT_MOCK_LAST[p.id]; p._sortTs=Date.now()-m.uren*3600000; } else { p._sortTs=(p.lastChat&&p.lastChat.ts)||0; } });
+  projs.sort(function(a,b){ return (b._sortTs-a._sortTs)||String(a.name).localeCompare(String(b.name)); });
+  if(!projs.length) return '<div class="empty" style="padding:50px 20px"><div class="em-ic">'+ic('msg',64)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog geen gesprekken</b><p style="margin:6px 0 0">Zodra er een project loopt, chat je hier rechtstreeks met het team.</p></div>';
+  return '<div class="card ios-inbox">'+projs.map(_inboxRow).join('')+'</div>';
 }
 
 // Discipline-chips: kleine label(s) die aangeven waar een hoofdtaak over gaat. Eén hoofdtaak
@@ -298,7 +314,10 @@ function projDienst(list, fromTab){
 // platte hoofdtaak-kaart: naam + discipline-chip(s), status, deliverable-badge, SA&E-namen.
 function projCardFlat(p, fromTab){
   const sae=saeNames(p.sae);
-  const discs=(p.labels&&p.labels.length)?p.labels:[{discId:p.discId,br:p.br,label:p.disc}];
+  let discs=(p.labels&&p.labels.length)?p.labels:[{discId:p.discId,br:p.br,label:p.disc}];
+  // binnen een tak-pagina is het tak-label dubbelop (staat al op de tab) -> enkel afwijkende labels tonen
+  const takDef=(typeof TAK_TABS!=='undefined'&&TAK_TABS[fromTab])||((fromTab==='webprestaties'&&typeof TAK_WEBSITE!=='undefined')?TAK_WEBSITE:null);
+  if(takDef) discs=discs.filter(function(l){ return takDef.discIds.indexOf(l.discId)<0; });
   const dataDiscs=discs.map(function(l){return l.label;}).join('|');
   const cid=String(p.id||'').replace(/[^A-Za-z0-9_-]/g,'');
   return `<button class="projflat-card br-${p.br}" data-discs="${esc(dataDiscs)}" data-status="${p.status}" onclick="openProject('${cid}','${esc(fromTab||'auto')}')">
@@ -323,33 +342,18 @@ function takContactCard(key, T, actief){
   var rol=hc?'Werkt aan jouw '+T.label.toLowerCase()+'-projecten':'Jouw accountmanager';
   return '<div class="takcontact card br-'+T.br+'"><span class="dc-av" style="background:var(--s27-'+T.br+')">'+esc(ini)+'</span>'
     +'<div class="takcontact-tx"><b>'+esc(naam)+'</b><span>'+esc(rol)+'</span></div>'
-    +'<button class="btn btn-branch br-'+T.br+' btn-sm" onclick="openMeetingPlannerForTak(\''+key+'\')">'+ic('cal',15)+' Plan een meeting</button></div>';
+    +((state&&state.adminMode)?'<button class="btn btn-branch br-'+T.br+' btn-sm" onclick="openMeetingPlannerForTak(\''+key+'\')">'+ic('cal',15)+' Plan een meeting</button>':'')+'</div>';
 }
 function takArchiefSectie(key, T){
   if(state.demoMode){
     return '<section class="takarch" id="takArch-'+key+'"><div class="section-head" style="margin-top:26px"><h2>Archief</h2></div>'
-      +'<p class="sdesc">In je echte portaal vind je hier álle afgeronde '+esc(T.label.toLowerCase())+'-projecten terug, met hun bestanden — ook van langer geleden.</p></section>';
+      +'<p class="sdesc">Hier vind je je recent afgeronde '+esc(T.label.toLowerCase())+'-projecten terug, tot 30 dagen na facturatie.</p></section>';
   }
   var done=(window.S27DATA&&S27DATA.done&&S27DATA.done())||[];
   var rows=done.filter(function(d){ var ls=(d.labels&&d.labels.length)?d.labels:[{discId:''}]; return ls.some(function(l){ return T.discIds.indexOf(l.discId)>=0; }); });
-  var inner=rows.length?rows.map(function(d){ return _doneRow(d); }).join(''):'<p class="sdesc">Nog geen afgeronde projecten in de laatste 60 dagen.</p>';
+  var inner=rows.length?rows.map(function(d){ return _doneRow(d); }).join(''):'<p class="sdesc">Geen recent afgeronde projecten. Afgeronde projecten blijven hier zichtbaar tot 30 dagen na facturatie.</p>';
   return '<section class="takarch" id="takArch-'+key+'"><div class="section-head" style="margin-top:26px"><h2>Archief</h2><span class="count">'+rows.length+'</span></div>'
-    +'<div style="display:flex;flex-direction:column;gap:8px">'+inner+'</div>'
-    +'<div style="margin-top:12px"><button class="btn btn-outline btn-sm" onclick="takArchiefLoad(\''+key+'\',this)">'+ic('doc',14)+' Volledig archief bekijken</button></div></section>';
-}
-// volledig archief lazy laden (alle afgeronde taken + bestanden, ook >60d/gefactureerd)
-async function takArchiefLoad(key, btn){
-  var T=TAK_TABS[key]||TAK_WEBSITE;
-  if(btn){ btn.disabled=true; btn.innerHTML='Laden…'; }
-  try{ if(!state.data.archief){ await S27DATA.loadArchief(); } }catch(e){}
-  var host=document.getElementById('takArch-'+key); if(!host) return;
-  var items=(window.S27DATA&&S27DATA.archief&&S27DATA.archief())||[];
-  var rows=items.filter(function(d){ var ls=(d.labels&&d.labels.length)?d.labels:[{discId:d.discId}]; return ls.some(function(l){ return T.discIds.indexOf(l.discId||l)>=0; }); });
-  var inner=rows.length?rows.map(function(d){
-    var files=(d.bestanden||[]).map(function(f){ return '<a class="deliv-file takarch-file" data-label="'+esc(f.label||'Bestand')+'" href="'+esc(f.url)+'" target="_blank" rel="noopener">'+ic('doc',13)+' '+esc(f.label||'Bestand')+'</a>'; }).join('');
-    return '<div class="takarch-row card br-'+(d.br||T.br)+'"><div class="takarch-top"><b>'+esc(d.name||d.naam)+'</b><span class="takarch-when">'+esc(d.when||'')+'</span></div>'+(files?'<div class="takarch-files">'+files+'</div>':'')+'</div>';
-  }).join(''):'<p class="sdesc">Geen afgeronde projecten gevonden in deze tak.</p>';
-  host.innerHTML='<div class="section-head" style="margin-top:26px"><h2>Volledig archief</h2><span class="count">'+rows.length+'</span></div><div style="display:flex;flex-direction:column;gap:8px">'+inner+'</div>';
+    +'<div style="display:flex;flex-direction:column;gap:8px">'+inner+'</div></section>';
 }
 function panelTak(key){
   const T=TAK_TABS[key]; if(!T) return '';
@@ -3215,7 +3219,7 @@ function owEl(){
 }
 function owEsc(e){ if(e.key==='Escape') closeOfferteWizard(); }
 function openOfferteWizard(takKey){
-  state.ow={ step:(takKey?2:1), takKey:(takKey||''), search:'', note:(state._offerteOpm||''), contact:'uitwerken', submitting:false, _doneHTML:'' };
+  state.ow={ step:(takKey?2:1), takKey:(takKey||''), search:'', note:(state._offerteOpm||''), contact:'verzenden', submitting:false, _doneHTML:'' };
   // off-stijlen in <head> injecteren: de overlay leeft buiten #page, waar offStyle normaal landt
   var s=offBuilderStyleOnce();
   if(s){ var t=document.createElement('template'); t.innerHTML=s; document.head.appendChild(t.content.firstChild); }
@@ -3299,7 +3303,18 @@ function owRefreshRow(sku){
 function owRefreshFoot(){ var f=$id('owFoot'); if(f) f.innerHTML=owFootInner(); }
 function owAdd(sku){ var c=offCart(); c[sku]=(c[sku]||0)+1; owRefreshRow(sku); owRefreshFoot(); }
 function owQty(sku,d){ var c=offCart(); var n=(c[sku]||0)+d; if(n<=0) delete c[sku]; else c[sku]=n; owRefreshRow(sku); owRefreshFoot(); }
-const OW_CONTACT={ uitwerken:'Werk de offerte voor me uit', bellen:'Bel me even op', meeting:'Plan eerst een meeting' };
+const OW_CONTACT={
+  verzenden:'Stuur me de offerte direct',
+  akkoord:'Zet in planning — ik ga akkoord',
+  meeting:'Plan eerst een meeting',
+  bellen:'Bel me even op'
+};
+const OW_CONTACT_SUB={
+  verzenden:'Je krijgt je offerte meteen te zien en kan ze direct ondertekenen.',
+  akkoord:'Wij bevestigen je samenstelling en zetten het project in de planning.',
+  meeting:'Je plant meteen een moment met Arne, onze projectadviseur.',
+  bellen:'Arne belt je zo snel mogelijk op om alles door te nemen.'
+};
 function owSetContact(k){ if(!state.ow) return; state.ow.contact=k; document.querySelectorAll('#offWizard .ow-contact .mp-tg').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-k')===k); }); }
 function owStep3(){
   var s=state.ow||{};
@@ -3307,8 +3322,8 @@ function owStep3(){
     +'<label class="mp-lbl">Context (optioneel)</label>'
     +'<textarea id="owNote" class="mp-note" rows="4" placeholder="Context, timing, doel…" oninput="state.ow.note=this.value">'+esc(s.note||'')+'</textarea>'
     +'<label class="mp-lbl" style="margin-top:14px">Hoe gaan we verder?</label>'
-    +'<div class="ow-contact">'+Object.keys(OW_CONTACT).map(function(k){
-      return '<button type="button" class="mp-tg'+(s.contact===k?' on':'')+'" data-k="'+k+'" onclick="owSetContact(\''+k+'\')">'+esc(OW_CONTACT[k])+'</button>';
+    +'<div class="ow-contact ow-contact--stack">'+Object.keys(OW_CONTACT).map(function(k){
+      return '<button type="button" class="mp-tg ow-cact'+(s.contact===k?' on':'')+'" data-k="'+k+'" onclick="owSetContact(\''+k+'\')"><b>'+esc(OW_CONTACT[k])+'</b><span>'+esc(OW_CONTACT_SUB[k]||'')+'</span></button>';
     }).join('')+'</div>';
 }
 function owStep4(){
@@ -3326,7 +3341,7 @@ function owStep4(){
     +'<div class="ow-sumrow ow-sumtotal"><span>Totaal (richtprijs)</span><b>'+offEur(offCartTotal())+'</b></div>'
     +(hasOpMaat?'<div class="off-cartnote">Items "op maat" prijzen we persoonlijk in je offerte.</div>':'')
     +(String(s.note||'').trim()?'<div class="ow-sumnote"><b>Jouw context:</b> '+esc(s.note)+'</div>':'')
-    +'<div class="ow-sumnote"><b>Vervolg:</b> '+esc(OW_CONTACT[s.contact]||OW_CONTACT.uitwerken)+'</div>'
+    +'<div class="ow-sumnote"><b>Vervolg:</b> '+esc(OW_CONTACT[s.contact]||OW_CONTACT.verzenden)+'</div>'
   +'</div>'
   +'<p class="off-cartdisc" style="margin-top:12px">'+ic('info',14)+' Je krijgt een richtprijs — wij kijken alles persoonlijk na voor je definitieve offerte.</p>';
 }
@@ -3338,7 +3353,10 @@ function owFootInner(){
     return '<button class="btn btn-branch br-'+br+' mp-confirm"'+(n?'':' disabled')+' onclick="owNext()">Verder · '+n+' product'+(n===1?'':'en')+' · '+offEur(offCartTotal())+'</button>';
   }
   if(s.step===3) return '<button class="btn btn-branch br-'+br+' mp-confirm" onclick="owNext()">Naar bevestiging</button>';
-  if(s.step===4) return '<button class="btn btn-branch br-'+br+' mp-confirm" id="owSubmitBtn" onclick="owSubmit(this)">'+ic('send',16)+' Verstuur aanvraag</button>';
+  if(s.step===4){
+    var lbl={verzenden:'Verstuur en toon mijn offerte', akkoord:'Bevestig en zet in planning', meeting:'Verstuur en plan een meeting', bellen:'Verstuur — bel me op'}[s.contact]||'Verstuur aanvraag';
+    return '<button class="btn btn-branch br-'+br+' mp-confirm" id="owSubmitBtn" onclick="owSubmit(this)">'+ic('send',16)+' '+lbl+'</button>';
+  }
   return '';
 }
 function owRender(){
@@ -3354,15 +3372,26 @@ function owRender(){
     +'<div class="mp-foot" id="owFoot">'+owFootInner()+'</div></div>';
   if(s.step===2){ var inp=$id('owSearch'); if(inp && s.search) inp.focus(); }
 }
-function owDone(msg){
+function owDone(msg, extra){
   var s=state.ow; if(!s) return;
   var tak=owTak(); var br=(tak&&tak.br)||'blue';
+  var link=(extra&&extra.offerte_link)||'';
   s.step='done';
+  var titels={verzenden:link?'Je offerte staat klaar!':'Aanvraag verstuurd!', akkoord:'In de planning gezet!', meeting:'Aanvraag verstuurd!', bellen:'We bellen je op!'};
+  var acts='';
+  if(s.contact==='verzenden' && link){
+    acts='<a class="btn btn-branch br-'+br+'" href="'+esc(link)+'" target="_blank" rel="noopener" onclick="setTimeout(function(){closeOfferteWizard();goOffertes();},150)">'+ic('doc',16)+' Bekijk &amp; onderteken je offerte</a>'
+      +'<button class="btn btn-outline" onclick="closeOfferteWizard();goOffertes()">Naar mijn offertes</button>';
+  } else if(s.contact==='meeting'){
+    acts='<button class="btn btn-branch br-'+br+'" onclick="closeOfferteWizard();openMeetingPlanner(\'nieuw\')">'+ic('cal',16)+' Plan je meeting met Arne</button>'
+      +'<button class="btn btn-outline" onclick="closeOfferteWizard();goOffertes()">Bekijk mijn offertes</button>';
+  } else {
+    acts='<button class="btn btn-branch br-'+br+'" onclick="closeOfferteWizard();goOffertes()">Bekijk mijn offertes</button>';
+  }
   s._doneHTML='<div class="mp-done"><div class="mp-done-ic br-'+br+'">'+ic('st_approved',60)+'</div>'
-    +'<b class="mp-done-title">Aanvraag verstuurd!</b>'
-    +'<p class="mp-done-sub">'+esc(msg||'We hebben je aanvraag goed ontvangen.')+' Je vindt je offerte hier terug zodra ze klaarstaat.</p>'
-    +'<button class="btn btn-branch br-'+br+'" onclick="closeOfferteWizard();goOffertes()">Bekijk mijn offertes</button>'
-    +((s.contact==='meeting')?'<button class="btn btn-outline" onclick="closeOfferteWizard();openMeetingPlanner(\'nieuw\')">Plan meteen een meeting</button>':'')
+    +'<b class="mp-done-title">'+esc(titels[s.contact]||'Aanvraag verstuurd!')+'</b>'
+    +'<p class="mp-done-sub">'+esc(msg||'We hebben je aanvraag goed ontvangen.')+'</p>'
+    +acts
     +'<button class="btn btn-ghost" onclick="closeOfferteWizard()">Sluiten</button></div>';
   owRender();
 }
@@ -3373,17 +3402,22 @@ async function owSubmit(btn){
   var tak=owTak();
   var items=skus.map(function(sku){ var p=offBySku(sku)||{}; return { sku:sku, naam:String(p.name||sku), groep:String(p.group||''), prijs:Number(p.price)||0, aantal:c[sku]||1 }; });
   var note=String(s.note||'').trim();
-  var opmerking=(note?note+'\n\n':'')+'— Aangevraagd via de offerte-wizard —\nTak: '+(tak?tak.label:'-')+'\nContactvoorkeur: '+(OW_CONTACT[s.contact]||OW_CONTACT.uitwerken);
+  var actie=OW_CONTACT[s.contact]?s.contact:'verzenden';
+  var opmerking=(note?note+'\n\n':'')+'— Aangevraagd via de offerte-wizard —\nTak: '+(tak?tak.label:'-')+'\nGekozen vervolg: '+(OW_CONTACT[actie]||'');
   if(state.demoMode || !state.session){ state._offerteCart={}; state._offerteOpm=''; owDone('Dit is de voorbeeldweergave — in je echte portaal versturen we deze aanvraag meteen.'); return; }
   s.submitting=true;
-  if(btn){ btn.disabled=true; btn.innerHTML='Versturen…'; }
+  if(btn){ btn.disabled=true; btn.innerHTML=(actie==='verzenden')?'Je offerte wordt klaargezet…':'Versturen…'; }
   try{
-    var r=await api(ENDPOINTS.offerteGenereren, { items:items, opmerking:opmerking });
+    var r=await api(ENDPOINTS.offerteGenereren, { items:items, opmerking:opmerking, actie:actie });
     var d=(r&&r.data)?r.data:null;
     if(r&&r.ok&&d&&d.ok!==false&&(d.offerte_task_url||d.offerte_task_id||d.pandadoc_id)){
       state._offerteCart={}; state._offerteOpm=''; state.data.offertes=null;
       s.submitting=false;
-      owDone(d.message);
+      // terugbelverzoek: gerichte ping bij Arne (ClickUp + WhatsApp indien geconfigureerd), fire-and-forget
+      if(actie==='bellen'){
+        try{ api(ENDPOINTS.directMessage, { ontvanger:'arne', type:'terugbel', onderwerp:'Offerte-aanvraag via het portaal', bericht:'De klant vraagt om even op te bellen over de zonet samengestelde offerte ('+items.length+' producten).' }); }catch(_e){}
+      }
+      owDone(d.message, d);
       return;
     }
     throw new Error('offerte_failed');
@@ -3778,7 +3812,8 @@ function buildModal(id, from){
   </div>`;
 
   const deliverables=`<div class="mpane" data-mpane="deliverables">
-    <p class="deliv-intro">Hier staan al je bestanden. Keur per stuk goed of geef feedback, we noteren er ook bij via welke weg je het doorgaf, zodat niets verloren gaat.</p>
+    <h4 style="font-family:var(--font-display);font-size:15px;margin:18px 0 4px">Bestanden per onderdeel</h4>
+    <p class="deliv-intro">Keur per stuk goed of geef feedback, we noteren er ook bij via welke weg je het doorgaf, zodat niets verloren gaat.</p>
     ${SUBTASKS.map((s,i)=>`
       <div class="accordion subtask">
         <button class="acc-head subtask-head ${i===0?'open':''}" onclick="toggleAcc(this)">
@@ -3797,32 +3832,33 @@ function buildModal(id, from){
       </div>`).join('')}
   </div>`;
 
-  // De algemene 'Feedback'-tab is verwijderd: feedback gebeurt per subtaak (in-portal in het
-  // overzicht), nooit op projectniveau/de PM-taak.
+  // De algemene 'Feedback'-tab is verwijderd: feedback gebeurt per subtaak. De chat is een
+  // eigen schermvullende sub-tab (zoals de socials-subnav) i.p.v. een smalle zijkolom.
   const d=DISC[p.disc]||{icon:'doc'};
   const fromCap=backLabel.charAt(0).toUpperCase()+backLabel.slice(1);
-  return `<div class="detail br-${p.br}">
+  // Bestanden-accordions enkel tonen als ze iets unieks toevoegen (subtaken-pad);
+  // bij directe deliverables dekt het overzicht-blok alles al.
+  const toonAccordions = !(delivList && delivList.length) && SUBTASKS.length;
+  const startTab=(state._mtab==='chat')?'chat':'overzicht';
+  const overviewPane=overview.replace('class="mpane active"', startTab==='overzicht'?'class="mpane active"':'class="mpane"');
+  const chatWacht=!chatClosed && p.lastChat && p.lastChat.wacht;
+  const chatPane=`<div class="mpane detail-chatpane${startTab==='chat'?' active':''}" data-mpane="chat">
+      <div class="dc-head">${ic('msg',16)} Projectchat ${saeChatWho(det?det.sae:p.sae, chatClosed)}</div>
+      <div class="dc-body" id="dcBody">${chatClosed?chatHTML(id,true):chatHTML(id)}</div>
+      <div style="padding:8px 0 0"><button class="btn btn-ghost btn-sm" style="color:var(--s27-orange-ink)" onclick="dringendeVraag('${esc(p.id)}')">${ic('spark',14)} ${chatClosed?'Nog een vraag over dit project?':'Dringende vraag aan Ilke'}</button></div>
+    </div>`;
+  return `<div class="detail detail--wide br-${p.br}">
     <button class="detail-back" onclick="goTab('${backTo}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg> Terug naar ${backLabel}</button>
     <div class="detail-head">
       <span class="detail-ic">${discMark(p.disc,'detail-stamp')}</span>
       <div class="detail-titles"><h1>${p.name}</h1><div class="detail-sub${saeLine?' sae-line':''}">${saeLine||esc(p.disc)}</div></div>
       ${spill(p.status)}
     </div>
-    <div class="detail-grid">
-      <div class="detail-main">
-        <div class="modal-tabs detail-tabs">
-          <button class="mtab active" onclick="switchModalTab('overzicht')">Overzicht</button>
-          <button class="mtab" onclick="switchModalTab('deliverables')">Bestanden</button>
-          <button class="mtab mtab-chat" onclick="switchModalTab('chat')">Chat</button>
-        </div>
-        <div class="detail-body">${overview}${deliverables}</div>
-      </div>
-      <aside class="detail-chat">
-        <div class="dc-head">${ic('msg',16)} Projectchat ${saeChatWho(det?det.sae:p.sae, chatClosed)}</div>
-        <div class="dc-body" id="dcBody">${chatClosed?chatHTML(id,true):chatHTML(id)}</div>
-        <div style="padding:2px 12px 12px"><button class="btn btn-ghost btn-sm" style="width:100%;color:var(--s27-orange-ink)" onclick="dringendeVraag('${esc(p.id)}')">${ic('spark',14)} ${chatClosed?'Nog een vraag over dit project?':'Dringende vraag aan Ilke'}</button></div>
-      </aside>
+    <div class="soc-subnav detail-subnav">
+      <button class="snav-btn${startTab==='overzicht'?' active':''}" data-mt="overzicht" onclick="switchModalTab('overzicht')">${ic('doc',15)} Overzicht</button>
+      <button class="snav-btn${startTab==='chat'?' active':''}" data-mt="chat" onclick="switchModalTab('chat')">${ic('msg',15)} Chat${chatWacht?'<span class="snav-dot"></span>':''}</button>
     </div>
+    <div class="detail-body">${overviewPane}${toonAccordions?deliverables.replace('class="mpane"','class="mpane mpane-sub'+(startTab==='overzicht'?' active':'')+'"'):''}${chatPane}</div>
   </div>`;
 }
 

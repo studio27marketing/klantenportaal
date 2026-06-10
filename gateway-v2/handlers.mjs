@@ -108,6 +108,22 @@ export const FIELD = {
 // S27 Make-bot user-id: attachments van deze user gelden als 'studio27'.
 const S27_BOT_USER_ID = '6022087';
 
+// WhatsApp via Twilio (fail-soft): alleen actief als alle TWILIO_*-secrets bestaan.
+// Per ontvanger een eigen nummer-secret: TWILIO_WA_ARNE, TWILIO_WA_VINCENT, ... (E.164, bv +32470...).
+async function sendWhatsAppTwilio(env, toNumber, msg) {
+  const sid = str(env && env.TWILIO_ACCOUNT_SID), tok = str(env && env.TWILIO_AUTH_TOKEN), from = str(env && env.TWILIO_WA_FROM);
+  const to = str(toNumber);
+  if (!sid || !tok || !from || !to) return { skipped: true, ok: false };
+  try {
+    const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+      method: 'POST',
+      headers: { Authorization: 'Basic ' + btoa(`${sid}:${tok}`), 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ From: `whatsapp:${from}`, To: `whatsapp:${to}`, Body: str(msg).slice(0, 1200) }).toString(),
+    });
+    return { ok: r.ok };
+  } catch (e) { return { ok: false }; }
+}
+
 // directMessage: ontvanger -> ClickUp user-id + naam + voornaamwoord.
 const DM_ONTVANGERS = {
   vincent: { id: '8714037',  naam: 'Vincent', pron: 'zijn' },
@@ -1656,39 +1672,6 @@ export async function getOffertes(bedrijfId, body, env) {
 }
 
 /* ---- dashboard ----------------------------------------------------------- */
-/* ---- archiefList (READ, lazy) — VOLLEDIG tak-archief: alle afgeronde taken, ook >60d en
- * 'gefactureerd', mét hun bestanden-links (Dakstructuur Q). Bewust een APART endpoint zodat
- * de dashboard-call even zwaar blijft; uitsluitend on-click geladen, KV-gecachet (60s/SWR-team). */
-export async function archiefList(bedrijfId, body, env) {
-  const cf = `[{"field_id":"${FIELD.bedrijf}","operator":"ANY","value":["${bedrijfId}"]}]`;
-  const enc = encodeURIComponent(cf);
-  const [tasks, tree] = await Promise.all([
-    pageAll(env, (page) =>
-      `/team/${TEAM_ID}/task?subtasks=false&include_closed=true&page=${page}&custom_fields=${enc}`),
-    fetchBedrijfTree(env, bedrijfId),
-  ]);
-  const childrenByParent = tree.childrenByParent;
-  const items = [];
-  for (const t of tasks) {
-    const rel = getRelationIds(t, FIELD.bedrijf);
-    if (!rel.includes(String(bedrijfId))) continue;            // scope-hercheck per taak
-    if (!isAfgerondStatus(t.status)) continue;                 // enkel afgerond/gefactureerd
-    const labels = labelsForProject(t, childrenByParent.get(String(t.id)) || []);
-    if (!labels.length) continue;                              // geen discipline -> geen archiefkaart
-    items.push({
-      task_id: str(t.id),
-      naam: str(t.name),
-      discipline: labels[0] || '',
-      labels,
-      opleverdatum: afgerondMs(t) || 0,                        // epoch-ms (0 = onbekend)
-      status_raw: str(t.status && t.status.status),
-      bestanden: parseDeliverables(getCF(t, FIELD.deliverablesRaw)),   // links direct mee (geen N detail-calls)
-    });
-  }
-  items.sort((a, b) => (b.opleverdatum || 0) - (a.opleverdatum || 0));
-  return { status: 200, body: { ok: true, items: items.slice(0, 200) } };
-}
-
 export async function dashboard(bedrijfId, body, env) {
   // 1) team-task-filter op 4b1fb333 (ANY), volledig gepagineerd. De projectlijst komt UIT
   //    subtasks=false (de bewezen, volledige top-level set). De subtaak-boom (voor de
@@ -1708,7 +1691,9 @@ export async function dashboard(bedrijfId, body, env) {
   const mods = cr.ok && cr.data ? normalizeModuleLabels(getCF(cr.data, FIELD.modules)) : [];
 
   const now = Date.now();
-  const cutoff60 = now - 60 * 86400000;
+  // Archief-venster (Vincent 2026-06-10): goedgekeurd + klaar-voor-facturatie blijven staan
+  // zolang ze in die fase zitten; gefactureerd/afgesloten verdwijnt 30 dagen na afronding.
+  const cutoff30 = now - 30 * 86400000;
   const actieve = [];
   const afgerond60 = [];
   for (const t of tasks) {
@@ -1722,14 +1707,14 @@ export async function dashboard(bedrijfId, body, env) {
     const labels = labelsForProject(t, directChildren);
     let discipline = labels[0] || '';
 
-    // (A) afgerond_60d: status in {done, goedgekeurd, klaar voor facturatie, gefactureerd}
-    //     EN afgerond/opgeleverd (date_done>date_closed>due_date) in de laatste 60 dagen.
-    //     Onafhankelijk van het discipline-filter - een opgeleverde taak telt mee, ook als
-    //     er (nog) geen TYPE JOB is. ENKEL echte project-/productietaken (discipline-lijst);
-    //     contact/offerte/meeting-lijsten hebben geen TYPE JOB en vallen vanzelf weg via 'isAfgerondStatus'.
+    // (A) archief: goedgekeurd/klaar-voor-facturatie = altijd zichtbaar (tijdelijke fase
+    //     richting facturatie); gefactureerd of terminale status = enkel de laatste 30 dagen.
+    //     Onafhankelijk van het discipline-filter; niet-projectlijsten vallen weg via 'isAfgerondStatus'.
     if (isAfgerondStatus(t.status)) {
+      const lbl = String((t.status && t.status.status) || '').toLowerCase();
+      const inFacturatieFase = lbl.includes('goedgekeur') || lbl.includes('facturati');
       const opMs = afgerondMs(t);
-      if (opMs && opMs >= cutoff60) {
+      if (inFacturatieFase || (opMs && opMs >= cutoff30)) {
         afgerond60.push({
           task_id: str(t.id),
           naam: str(t.name),
@@ -1781,7 +1766,14 @@ export async function dashboard(bedrijfId, body, env) {
           if (str(c.comment_text).slice(0, 8) === '[INTERN]') continue;
           if (!last || Number(c.date || 0) > Number(last.date || 0)) last = c;
         }
-        if (last) p.chat_wacht_op_klant = !str(last.comment_text).startsWith('💬 [');
+        if (last) {
+          const vanKlant = str(last.comment_text).startsWith('💬 [');
+          p.chat_wacht_op_klant = !vanKlant;
+          // inbox-snippet: klant-prefix '💬 [Naam]' eraf, whitespace plat, max 90 tekens
+          let sn = str(last.comment_text);
+          if (vanKlant) { const i = sn.indexOf(']'); if (i > 0) sn = sn.slice(i + 1); }
+          p.last_chat = { tekst: sn.replace(/\s+/g, ' ').trim().slice(0, 90), ts: Number(last.date) || 0, van_klant: vanKlant };
+        }
       } catch (e) { /* fail-soft: geen kaart */ }
     })),
     new Promise((resolve) => setTimeout(resolve, CHAT_WAIT_BUDGET_MS)),
@@ -2239,6 +2231,13 @@ export async function directMessage(bedrijfId, body, env) {
   if (!r.ok || !r.data) {
     return { status: 500, body: { ok: false, message: 'Bericht kon niet bezorgd worden - probeer opnieuw of bel ons rechtstreeks op +32 14 70 50 27.' } };
   }
+  // terugbel-verzoek: ook meteen een WhatsApp naar het teamlid (fail-soft; vereist TWILIO_*-secrets)
+  let waSent = false;
+  if (type === 'terugbel') {
+    const waKey = 'TWILIO_WA_' + (ontvangerKey || 'ilke').toUpperCase();
+    const wa = await sendWhatsAppTwilio(env, env && env[waKey], `\ud83d\udcde Portaal: ${klant_naam || 'een klant'} vraagt of je even belt. ${onderwerp ? 'Onderwerp: ' + onderwerp + '. ' : ''}Details staan in ClickUp.`);
+    waSent = !!wa.ok;
+  }
   return {
     status: 200,
     body: {
@@ -2247,6 +2246,7 @@ export async function directMessage(bedrijfId, body, env) {
       task_id: str(r.data.id),
       task_url: str(r.data.url),
       ontvanger: ont.naam,
+      wa_sent: waSent,
       sent_at: nowISO(),
     },
   };
@@ -2867,6 +2867,44 @@ export function buildPandadocCreate(env, { docName, items, klant, pm }) {
   };
 }
 
+// PandaDoc verzend-keten (alleen bij actie 'verzenden'): een vers document staat eerst op
+// 'document.uploaded' en is pas verzendbaar op 'document.draft' -> poll kort, dan silent send
+// (PandaDoc mailt NIET zelf), dan een no-login sessielink voor de klant (30 dagen geldig).
+// Geleerd uit de 27M-flow: /session vereist dat de klant-mail als recipient op het doc staat.
+async function pandadocAwaitDraft(env, docId, tries = 12) {
+  for (let i = 0; i < tries; i++) {
+    try {
+      const r = await fetch(`${PANDADOC_BASE}/documents/${docId}`, { headers: { Authorization: `API-Key ${str(env.PANDADOC_API_KEY)}` } });
+      const d = await r.json().catch(() => ({}));
+      if (str(d.status) === 'document.draft') return true;
+      if (/declined|voided|completed|paid|sent/.test(str(d.status))) return true; // al verder dan draft
+    } catch (e) { /* retry */ }
+    await new Promise((res) => setTimeout(res, 1000));
+  }
+  return false;
+}
+async function pandadocSilentSend(env, docId) {
+  try {
+    const r = await fetch(`${PANDADOC_BASE}/documents/${docId}/send`, {
+      method: 'POST',
+      headers: { Authorization: `API-Key ${str(env.PANDADOC_API_KEY)}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ silent: true, subject: 'Je offerte van Studio 27' }),
+    });
+    return r.ok;
+  } catch (e) { return false; }
+}
+async function pandadocSession(env, docId, email, lifetimeSec = 2592000) {
+  try {
+    const r = await fetch(`${PANDADOC_BASE}/documents/${docId}/session`, {
+      method: 'POST',
+      headers: { Authorization: `API-Key ${str(env.PANDADOC_API_KEY)}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recipient: email, lifetime: lifetimeSec }),
+    });
+    const d = await r.json().catch(() => ({}));
+    return r.ok && d.id ? str(d.id) : '';
+  } catch (e) { return ''; }
+}
+
 // Voer de PandaDoc-create UIT (alleen als de flag aan staat). Geeft { id } of { error }.
 async function pandadocCreate(env, call) {
   if (str(env && env.PANDADOC_CREATE_ENABLED) !== 'true') {
@@ -2891,6 +2929,10 @@ export async function offerteGenereren(bedrijfId, body, env) {
   }
   const { items, budget } = norm;
   const opmerking = str(body && body.opmerking).trim();
+  // actie bepaalt het vervolg: uitwerken (default) | akkoord | verzenden | bellen | meeting.
+  // 'verzenden' = PandaDoc direct silent-senden + no-login ondertekenlink voor de klant.
+  const ACTIES = ['uitwerken', 'akkoord', 'verzenden', 'bellen', 'meeting'];
+  const actie = ACTIES.includes(str(body && body.actie)) ? str(body.actie) : 'uitwerken';
 
   // (2) bedrijf-taak + 1e contact (voor Company/FirstName/LastName-tokens)
   const br = await cu.get(env, `/task/${bedrijfId}`);
@@ -2949,15 +2991,40 @@ export async function offerteGenereren(bedrijfId, body, env) {
     await cu.field(env, offerteTaskId, FIELD.offertePandadocId, pandadocId).catch(() => {});
   }
 
-  const message = pandadocId
+  let message = pandadocId
     ? 'Je offerte-aanvraag is ontvangen. We bezorgen je binnenkort de definitieve offerte.'
     : 'Je offerte-aanvraag is ontvangen. Studio 27 stelt je offerte op en bezorgt ze je binnenkort.';
+
+  // -- actie 'verzenden': document direct verzendklaar + ondertekenlink voor de klant --
+  let offerteLink = '';
+  if (actie === 'verzenden' && pandadocId && klant.email) {
+    const draftOk = await pandadocAwaitDraft(env, pandadocId);
+    const sendOk = draftOk && await pandadocSilentSend(env, pandadocId);
+    const sid = sendOk ? await pandadocSession(env, pandadocId, klant.email) : '';
+    if (sid) {
+      offerteLink = `https://app.pandadoc.com/s/${sid}`;
+      await cu.field(env, offerteTaskId, FIELD.offerteLink, offerteLink).catch(() => {});
+      message = 'Je offerte staat klaar! Je kan ze meteen bekijken en ondertekenen.';
+    } else {
+      message = 'Je offerte-aanvraag is ontvangen. We zetten de offerte voor je klaar en je krijgt een seintje zodra ze te ondertekenen valt.';
+    }
+  } else if (actie === 'verzenden' && !klant.email) {
+    message = 'Je offerte-aanvraag is ontvangen. We hebben geen e-mailadres voor je staan, dus we bezorgen de offerte persoonlijk.';
+  }
+  // -- actie 'akkoord' ("Zet in planning"): gerichte ping bij Arne, offerte = bevestigd --
+  if (actie === 'akkoord') {
+    const akkoordTxt = `\u26a1 KLANT GING DIRECT AKKOORD met deze samenstelling (\u20ac${budget.toFixed(2)}) \u2014 zet in planning.\nAangevraagd via het portaal door ${company}.`;
+    await cu.comment(env, offerteTaskId, akkoordTxt, false, Number(DM_ONTVANGERS.arne.id)).catch(() => {});
+    message = 'Top! We hebben je akkoord genoteerd en zetten je project in de planning. Je hoort snel van ons.';
+  }
 
   const out = {
     ok: true,
     offerte_task_id: offerteTaskId,
     offerte_task_url: offerteTaskUrl,
     pandadoc_id: pandadocId,
+    offerte_link: offerteLink,
+    actie,
     message,
   };
   // Bij uitgeschakelde create geven we de exacte payload mee voor inspectie/debug (geen secret:
@@ -5334,7 +5401,6 @@ export async function webSearch(bedrijfId, body, env) {
 
 export const READ_HANDLERS = {
   // Volledig tak-archief (lazy, on-click): alle afgeronde taken + bestanden, ook >60d/gefactureerd.
-  archiefList,
   projectDetailV2,
   chatList,
   commsChatList,

@@ -19,7 +19,7 @@
  *   /videofile?key=&exp=&tok=                   → R2-bijlage (inline beeld/pdf, anders download)
  * Secrets/bindings: GATEWAY_SECRET (HMAC), SA_* + GDRIVE_SUBJECT (Drive), R2 (bucket).
  * ============================================================================= */
-import { cu, scopeCheckTask, mintGoogleToken, DRIVE_SCOPE } from './handlers.mjs';
+import { cu, scopeCheckTask, mintGoogleToken, DRIVE_SCOPE, isAfgerondStatus } from './handlers.mjs';
 
 const str = (v) => (v == null ? '' : String(v));
 const cleanId = (v) => str(v).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
@@ -166,6 +166,31 @@ export async function videoReviewContext(bedrijfId, body, env) {
   let last = null;
   try { last = await env.KV.get(kvKey(taskId, videoKey(video.source, video.externalId)), 'json'); } catch (e) { /* leeg */ }
 
+  // FEEDBACK-LOCK (dakstructuur Q, slice 3): eenmaal definitief doorgestuurd = read-only naslag.
+  // Locked zodra (a) er voor deze video al een bundel verzonden is, of (b) de taak voorbij de
+  // reviewfase is (goedgekeurd/afgerond). Een nieuwe montageversie = nieuwe link = nieuwe key = open.
+  const isLocked = !!last || isAfgerondStatus(g.task && g.task.status);
+
+  // naslag-bundel voor de read-only weergave: punten + comments + bijlagen met VERSE signed urls
+  let lastBundle = null;
+  if (last) {
+    const att = async (a) => ({ filename: str(a.filename), url: a.key ? await signedFileUrl(env, a.key) : '' });
+    const anns = [];
+    for (const a of (Array.isArray(last.annotations) ? last.annotations : [])) {
+      anns.push({
+        sequenceNumber: a.sequenceNumber, timestampSec: a.timestampSec, hasPin: !!a.hasPin,
+        xPct: a.xPct, yPct: a.yPct, comment: str(a.comment),
+        attachments: await Promise.all((Array.isArray(a.attachments) ? a.attachments : []).map(att)),
+      });
+    }
+    lastBundle = {
+      submittedAt: last.submittedAt || null,
+      summary: last.summary || null,
+      annotations: anns,
+      reviewAttachments: await Promise.all((Array.isArray(last.reviewAttachments) ? last.reviewAttachments : []).map(att)),
+    };
+  }
+
   return {
     status: 200,
     body: {
@@ -174,6 +199,8 @@ export async function videoReviewContext(bedrijfId, body, env) {
       video,
       stream_url: streamUrl,
       download_url: downloadUrl,
+      is_read_only: isLocked,
+      last_bundle: lastBundle,
       last_submitted_at: last && last.submittedAt ? last.submittedAt : null,
       last_counts: last && last.counts ? last.counts : null,
     },
@@ -257,6 +284,15 @@ export async function videoReviewSubmit(bedrijfId, body, env) {
   const source = vIn.source === 'drive' ? 'drive' : 'vimeo';
   const externalId = cleanId(vIn.externalId);
   if (!externalId) return { status: 400, body: { ok: false, message: 'Video-referentie ontbreekt.' } };
+
+  // FEEDBACK-LOCK server-side: na definitieve verzending (of goedgekeurde taak) geen nieuwe ronde
+  // op dezelfde video — de frontend toont dan de naslag-modus. Nieuwe versie = nieuwe video-key.
+  try {
+    const existing = await env.KV.get(kvKey(taskId, videoKey(source, externalId)), 'json');
+    if (existing || isAfgerondStatus(g.task && g.task.status)) {
+      return { status: 409, body: { ok: false, error: 'review_locked', message: 'Je feedback op deze versie is al definitief doorgestuurd. Het team bezorgt je een nieuwe versie zodra die klaar is.' } };
+    }
+  } catch (e) { /* KV-storing: niet blokkeren */ }
 
   const annotations = Array.isArray(body && body.annotations) ? body.annotations : [];
   const reviewAttachments = Array.isArray(body && body.reviewAttachments) ? body.reviewAttachments : [];

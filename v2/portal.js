@@ -483,6 +483,8 @@ async function goTab(name){
   stopChatPoll();   // tab-wissel/modal-sluiten -> chat-poller stoppen (berichten herstart 'm hieronder)
   currentTab=name; state.viewMode='tab'; state.activeProject=null; state._metaCampaign=null; state._chatStaged=[];
   setActiveNav(name);
+  // toevoegknop in de topbar kleurt mee met de actieve tak
+  (function(){ var nb=document.getElementById('topNewBtn'); if(!nb) return; var br=(typeof TAB_BRANCH!=='undefined'&&TAB_BRANCH[name])||''; nb.className='btn btn-sm '+(br?('btn-branch br-'+br):'btn-primary'); })();
   if(!state.demoMode && needsLoad(name)) renderLoading(name);
   await ensureTabData(name);
   renderPanel(name);
@@ -492,7 +494,7 @@ async function goTab(name){
   if(name==='webprestaties' && typeof webMountCharts==='function') webMountCharts();   // Webprestaties-grafieken mounten
   if(name==='socials' && isRichView() && socialTab && socialTab()==='rapport' && typeof socialRichMountCharts==='function') socialRichMountCharts();   // team-weergave: social-rapport-grafieken mounten
   updateNavBadges();
-  if(name==='berichten' && !state.demoMode){ var _fp=(window.S27DATA&&(S27DATA.projects()||[])[0]); if(_fp) openBerichtChat(_fp.id); }
+
   closeSidebar(); syncUrl();
 }
 // Zijbalk-badges dynamisch maken (shell.html heeft hardcoded mock-getallen).
@@ -554,7 +556,7 @@ async function openProject(id, from){
   // 'auto' (of onbekend) -> terug-tak afleiden uit de tak van het project (Dakstructuur Q)
   let f=(from && from!=='auto' && typeof PANELS!=='undefined' && PANELS[from])?from:'';
   stopChatPoll();
-  state.viewMode='project'; state.activeProject=id; state._mtab='overzicht'; state._chatStaged=[];
+  state.viewMode='project'; state.activeProject=id; state._mtab=(state._openChatTab?'chat':'overzicht'); state._openChatTab=false; state._chatStaged=[];
   if(!state.demoMode){ renderLoading(f||'start'); await Promise.all([ S27DATA.loadDetail(id), S27DATA.loadChat(id) ]); }
   const p=(S27DATA.projects()||(typeof PROJECTS!=='undefined'?PROJECTS:[])).find(x=>x.id===id);
   if(!f) f=(typeof takOfProject==='function')?takOfProject(p):'start';
@@ -631,7 +633,6 @@ function rerenderActiveChat(stickBottom){
   // een lopend concept in het tekstvak niet wegklikken bij een poll-herrender
   const oldInp=document.querySelector('.chat-input .chat-textin'); const draft=oldInp?oldInp.value:'';
   const p=(window.S27DATA&&(S27DATA.projects()||[]).find(function(x){return x.id===id;}))||null;
-  const berHost=$id('berichtChat');
   const dcBody=$id('dcBody');
   const adsBody=$id('adsChatBody');
   const socBody=$id('socChatBody');
@@ -640,8 +641,6 @@ function rerenderActiveChat(stickBottom){
     const ccBody=$id('clientChatBody');
     if(ccBody) ccBody.innerHTML='<div class="cc-with">'+saeChatWho(S27DATA.commsTeam())+'</div>'+chatHTML(id);
     else return;
-  } else if(berHost && p && !dcBody){
-    berHost.innerHTML=berichtChatInner(p);
   } else if(dcBody){
     // projectdetail-chat: enkel de chat-body verversen (laat de tabs/overzicht ongemoeid)
     const closed=!!(window.S27DATA && S27DATA.isChatClosed && p && p._raw && S27DATA.isChatClosed(p._raw.status));
@@ -689,26 +688,6 @@ async function pollChatOnce(taskId){
   if(!state._chatPoll || state._chatPoll.id!==taskId) return;   // tussentijds gestopt/gewisseld
   const sig=chatSig(taskId);
   if(sig!==pc.sig){ pc.sig=sig; if(state.activeProject===taskId) rerenderActiveChat(false); }
-}
-/* ---- Berichten: klik op een gesprek -> enkel de chatmodule wisselt (geen navigatie) ---- */
-async function openBerichtChat(id, el){
-  document.querySelectorAll('.bericht-row').forEach(function(r){ r.style.background=''; });
-  var row = el || document.querySelector('.bericht-row[data-bid="'+id+'"]'); if(row)row.style.background='var(--paper-2)';
-  const p=(window.S27DATA&&(S27DATA.projects()||[]).find(function(x){return x.id===id;}))||null; if(!p)return;
-  stopChatPoll();              // chat-wissel -> oude poller stoppen
-  state.activeProject=id; state._chatStaged=[];   // staging leegmaken bij wissel van gesprek
-  const host=$id('berichtChat'); if(!host)return;
-  host.className='card br-'+(p.br||'blue');
-  // ALTIJD verse data ophalen bij openen (niet blind de cache vertrouwen) -> verzonden berichten
-  // en antwoorden van het team staan meteen in de historie bij terug-schakelen tussen chats.
-  if(!state.demoMode){
-    if(!((state.data.chats||{})[id])) host.innerHTML='<div class="empty" style="padding:50px"><div class="brand-spinner" style="margin:0 auto"></div></div>';
-    try{ state.data.chats[id]=null; await S27DATA.loadChat(id); }catch(e){}
-    if(state.activeProject!==id) return;   // tussentijds van chat gewisseld
-  }
-  host.innerHTML=berichtChatInner(p);
-  const list=$id('chatList'); if(list) list.scrollTop=list.scrollHeight;
-  startChatPoll(id);
 }
 /* ---- Bestandsupload in de chat (overal waar chatHTML staat) ---- */
 async function chatUpload(input, taskId){
@@ -989,16 +968,26 @@ function goDienst(disc){
 // Kennismaking / koffiegesprek -> meetingpagina, automatisch bij Arne (kies een vrij moment in zijn agenda)
 function koffieMetArne(){ if(typeof openMeetingPlanner==='function'){ openMeetingPlanner('nieuw'); } else { goTab('meetings'); } }
 function switchModalTab(name){
-  state._mtab=name;
+  // projectdetail-subnav (dakstructuur slice 2): 'overzicht' (incl. bestanden-accordions als
+  // sub-blok) of 'chat' (schermvullend). Knoppen dragen data-mt, panes data-mpane.
+  state._mtab=(name==='chat')?'chat':'overzicht'; name=state._mtab;
   const c=document.querySelector('.detail'); if(!c)return;
-  if(name==='chat'){ c.classList.add('show-chat'); const ct=c.querySelector('.mtab-chat'); if(ct){ c.querySelectorAll('.detail-tabs .mtab').forEach(t=>t.classList.remove('active')); ct.classList.add('active'); } const inp=c.querySelector('.detail-chat input'); if(inp)inp.focus(); syncUrl(); return; }
-  c.classList.remove('show-chat');
-  const map={overzicht:0,deliverables:1,feedback:2};
-  c.querySelectorAll('.detail-tabs .mtab').forEach(t=>t.classList.remove('active'));
-  const tabs=[].slice.call(c.querySelectorAll('.detail-tabs .mtab:not(.mtab-chat)')); if(tabs[map[name]])tabs[map[name]].classList.add('active');
+  c.querySelectorAll('.detail-subnav .snav-btn').forEach(b=>b.classList.toggle('active', b.getAttribute('data-mt')===name));
   c.querySelectorAll('.detail-body .mpane').forEach(p=>p.classList.remove('active'));
-  const pane=c.querySelector('.mpane[data-mpane="'+name+'"]'); if(pane)pane.classList.add('active');
+  if(name==='overzicht'){
+    const ov=c.querySelector('.mpane[data-mpane="overzicht"]'); if(ov)ov.classList.add('active');
+    const sub=c.querySelector('.mpane.mpane-sub'); if(sub)sub.classList.add('active');
+  } else {
+    const ch=c.querySelector('.mpane[data-mpane="chat"]'); if(ch)ch.classList.add('active');
+    const list=c.querySelector('#dcBody .chat-list'); if(list) list.scrollTop=list.scrollHeight;
+    const inp=c.querySelector('#dcBody .chat-textin'); if(inp) inp.focus();
+  }
   syncUrl();
+}
+// Berichten-inbox of elders: open een project rechtstreeks op de Chat-tab (schermvullend gesprek)
+function openProjectChat(id){
+  state._openChatTab=true;
+  openProject(id, (currentTab==='berichten')?'berichten':'auto');
 }
 function toggleAcc(btn){ btn.classList.toggle('open'); btn.nextElementSibling.classList.toggle('open'); }
 /* ---- Per-bestand review (goedkeuren / feedback + via welke weg) ---- */

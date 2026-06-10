@@ -252,7 +252,8 @@
       var br = DATA.disc(p.discipline);
       var st = DATA.status(p.status);
       var deliv = st.key==='wait' || !!p.feedback_link;
-      return { id:p.task_id, name:p.naam, br:br.br, disc:br.label, discId:p.discipline, labels:mapLabels(p), status:st.key, deliv:deliv, sae:mapSae(p.sae), _raw:p };
+      var lc = p.last_chat ? { tekst:String(p.last_chat.tekst||''), ts:Number(p.last_chat.ts)||0, wacht:!!p.chat_wacht_op_klant } : (p.chat_wacht_op_klant ? { tekst:'', ts:0, wacht:true } : null);
+      return { id:p.task_id, name:p.naam, br:br.br, disc:br.label, discId:p.discipline, labels:mapLabels(p), status:st.key, deliv:deliv, sae:mapSae(p.sae), lastChat:lc, _raw:p };
     });
   };
 
@@ -304,21 +305,6 @@
     if(!n || isNaN(n)) return '';
     return DATA.relTime(n);
   }
-  // Volledig tak-archief (lazy, on-click): alle afgeronde taken + bestanden, ook >60d/gefactureerd.
-  DATA.loadArchief = async function(){
-    if(!live()) return false;
-    var res = await api(ENDPOINTS.archiefList, base());
-    if(res && res.ok && res.data && res.data.ok !== false){ state.data.archief = res.data.items || []; return true; }
-    return false;
-  };
-  DATA.archief = function(){
-    var raw = state.data.archief; if(!raw) return [];
-    return raw.map(function(p){
-      var br = DATA.disc(p.discipline);
-      return { id:p.task_id, br:br.br, name:p.naam, disc:br.label, discId:p.discipline,
-        labels:mapLabels(p), when:_whenLabel(p.opleverdatum), bestanden:(p.bestanden||[]) };
-    });
-  };
   DATA.done = function(){
     var d=state.data.dashboard; if(!d) return null;
     var raw = d.afgerond_60d; if(!raw) return null;
