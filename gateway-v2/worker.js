@@ -50,6 +50,13 @@ import {
 } from './handlers.mjs';
 import { handlePush, handlePushNotify } from './push.mjs';
 import { handleClickupHook } from './clickup-push.mjs';
+import * as vr from './videoreview.mjs';
+
+// Video-review (frame-accurate klantfeedback op Bestanden-veld-video's): registratie
+// hier i.p.v. in handlers.mjs zodat de module zelfstandig blijft (zie videoreview.mjs).
+READ_HANDLERS.videoReviewContext = vr.videoReviewContext;
+WRITE_HANDLERS.videoReviewUpload = vr.videoReviewUpload;
+WRITE_HANDLERS.videoReviewSubmit = vr.videoReviewSubmit;
 
 // Staff-only (is_staff) rijke-rapportage-handlers: gescoped op het acting-as-bedrijf, (bedrijfId, body, env).
 // webTraffic/webSearch = Webprestaties (GA4 + GSC); v1 team-only, later evt. naar READ_HANDLERS voor klanten.
@@ -125,7 +132,7 @@ const SENSITIVE = new Set([
   'chatAttachment', 'chatPost', 'commsChatPost', 'commsChatAttachment', 'directMessage', 'feedbackV2', 'newProjectIntake',
   'facturatieSave', 'projectFacturatieSave', 'bedrijfVoorkeuren', 'bedrijfContact',
   'bedrijfBeheer', 'inplannen', 'offerteGenereren', 'metricoolApprove', 'metricoolUpdate',
-  'metricoolMediaUpload', 'shootSubmit', 'meetingBook', 'ticketCreate',
+  'metricoolMediaUpload', 'shootSubmit', 'meetingBook', 'ticketCreate', 'ticketAttach',
 ]);
 const LIMIT_SENSITIVE = 15; // per minuut, per gebruiker
 const LIMIT_DEFAULT   = 80;
@@ -436,10 +443,16 @@ async function tryHandle(path, bedrijfId, body, claims, env, ctx, ch, noCache) {
 
   // WRITES (puur ClickUp)
   if (WRITE_HANDLERS[path]) {
+    // ticket-paden: server-side identiteit injecteren (overschrijft client-input) zodat de handler
+    // het ticket aan de juiste contactpersoon kan koppelen; claims is hier al geverifieerd.
+    if (path === 'ticketCreate' || path === 'ticketAttach') {
+      body.account_email = String((claims && claims.email) || '').trim().toLowerCase();
+    }
     const res = await WRITE_HANDLERS[path](bedrijfId, body, env);
     // writes op de bedrijf-taak bust de read-caches van dat bedrijf
-    // (offerteGenereren voegt een offerte toe -> raakt dashboard/get_offertes-views)
-    if (path === 'bedrijfVoorkeuren' || path === 'facturatieSave' || path === 'bedrijfUpload' || path === 'offerteGenereren') {
+    // (offerteGenereren voegt een offerte toe -> raakt dashboard/get_offertes-views;
+    //  ticketCreate maakt een nieuw support-project -> klant moet het meteen onder Projecten zien)
+    if (path === 'bedrijfVoorkeuren' || path === 'facturatieSave' || path === 'bedrijfUpload' || path === 'offerteGenereren' || path === 'ticketCreate') {
       bustCache(env, ctx, bedrijfId);
     }
     return json(res.body, res.status, ch);
@@ -503,6 +516,15 @@ export default {
       // GET-only, onraadbare sleutel, vaste content-type + nosniff (geen HTML/JS-uitvoering).
       if (_pub.indexOf('media/') === 0 && request.method === 'GET') {
         return handleMediaServe(_pub.slice(6), env);
+      }
+      // Video-review: <video src>/<img src> kunnen geen Authorization-header sturen →
+      // GET met HMAC-signed, expirerend token (GATEWAY_SECRET), uitgereikt door
+      // videoReviewContext/-Upload ná Firebase-auth + bedrijf-scope-check.
+      if (_pub === 'videostream' && request.method === 'GET') {
+        return vr.handleVideoStream(request, env);
+      }
+      if (_pub === 'videofile' && request.method === 'GET') {
+        return vr.handleVideoFile(request, env);
       }
     }
     const allowed = String(env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);

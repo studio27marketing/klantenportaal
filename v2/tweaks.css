@@ -517,15 +517,25 @@
 }
 .soc-period, .soc-subnav, .soc-subnav-row{position:sticky; top:60px; z-index:8;}
 .soc-subnav-row .soc-subnav{position:static;}
-@media(max-width:760px){ .soc-period, .soc-subnav, .soc-subnav-row{top:54px;} }
+/* mobiel: topbar is óók 60px hoog (styles.css min-height:60) — 54 schoof de balken erachter */
+@media(max-width:760px){ .soc-period, .soc-subnav, .soc-subnav-row{top:60px;} }
 /* ── Wave 2 polish ── */
 /* genummerd cluster-rondje (uniform blauw, niet per taaktype) */
 .projcluster-head .pc-num{width:26px;height:26px;border-radius:50%;background:var(--s27-blue,#3083DC);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:800;font-size:13px;flex:none;box-shadow:0 2px 7px rgba(48,131,220,.32);}
 /* socials sub-nav iconen in social-geel (ads/offertes blijven oranje/rood) */
 #socialSubnav .soc-subtab.active svg{color:var(--s27-yellow-ink,#B88500);}
-/* periodebalk stapelt ONDER de sub-nav (geen overlap meer); vergelijk + aangepaste periode in glass */
-.soc-period{position:sticky; top:108px; z-index:7;}
-@media(max-width:760px){.soc-period{top:100px;}}
+/* periodebalk stapelt ONDER de sub-nav MET behoud van de rust-spacing (20px):
+   top = 60 (topbar) + 47 (sub-nav-hoogte) + 20 (flow-marge) = 127 — geplakt ziet er nu
+   exact zo uit als in rust; content beweegt eronder door. (Was 108 → balken plakten tegen elkaar.) */
+.soc-period{position:sticky; top:127px; z-index:7;}
+@media(max-width:760px){.soc-period{top:127px;}}
+/* Adverteren heeft de OMGEKEERDE volgorde (periodebalk bovenaan, sub-nav eronder in team-view;
+   klant-view heeft enkel de periodebalk) → daar plakt de periodebalk bovenaan en de sub-nav eronder.
+   top sub-nav = 60 + 39 (periodebalk-hoogte) + 18 (flow-marge) = 117. */
+.panel[data-screen-label="advertenties"] .soc-period{top:60px;z-index:8;}
+.panel[data-screen-label="advertenties"] .soc-subnav{top:117px;z-index:7;}
+/* mobiel wrapt de periodebalk naar meerdere regels (hoogte > 39px) -> sub-nav daar niet pinnen (geen overlap) */
+@media(max-width:760px){ .panel[data-screen-label="advertenties"] .soc-subnav{position:static;} }
 .soc-percompare select, .soc-percustom input[type=date]{background:linear-gradient(180deg,rgba(255,255,255,.74),rgba(255,255,255,.40));-webkit-backdrop-filter:blur(10px) saturate(1.3);backdrop-filter:blur(10px) saturate(1.3);border:1px solid var(--glass-border,rgba(255,255,255,.6));box-shadow:0 4px 14px rgba(60,40,80,.08),inset 0 1px 0 rgba(255,255,255,.7);}
 /* Berichten-chat schermvullender + scrollbaar */
 #berichtChat .chat-list{height:calc(100vh - 340px);min-height:280px;max-height:none;overflow-y:auto;}
@@ -945,3 +955,14 @@ body.mp-lock{overflow:hidden;}
 .kanaal-pill{font-family:var(--font-body);font-size:13px;font-weight:700;padding:9px 15px;border-radius:999px;cursor:pointer;border:1px solid var(--line,#E7DFD3);background:#fff;color:var(--ink-2,#4A3A4A);transition:all .15s ease;-webkit-tap-highlight-color:transparent;}
 .kanaal-pill:not(.on):hover{border-color:var(--s27-indigo,#5B6B8C);color:var(--s27-indigo,#5B6B8C);}
 .kanaal-pill.on{background:var(--s27-indigo,#5B6B8C);border-color:var(--s27-indigo,#5B6B8C);color:#fff;box-shadow:0 2px 8px rgba(91,107,140,.28);}
+
+/* === Mobiel: niet schaalbaar + geen iOS-auto-zoom ===
+   iOS Safari zoomt automatisch in zodra een invoerveld met font-size <16px focus krijgt
+   (en zoomt nooit vanzelf terug) — dat was de "portaal staat ineens ingezoomd"-bug bij
+   het laden van een nieuwe klant. 16px op álle invoervelden (!important wint van de
+   inline font-styles) neutraliseert dat; de viewport-meta (maximum-scale=1) dekt de rest. */
+@media(max-width:760px){
+  input, select, textarea{ font-size:16px !important; }
+}
+/* pinch-zoom dempen waar de browser de meta negeert (PWA/Android): enkel pannen toestaan */
+html, body{ touch-action:pan-x pan-y; }

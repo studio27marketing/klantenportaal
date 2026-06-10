@@ -83,6 +83,7 @@ const PROJECTS = [
   {id:'p6',name:'Social contentkalender mei',br:'yellow',disc:'Social media',discId:'social',status:'done',deliv:false},
   {id:'p7',name:'Recruitmentvideo "Kom bij ons team"',br:'purple',disc:'Video- en fotografie',discId:'video_fotografie',status:'todo',deliv:false},
   {id:'p8',name:'TikTok-campagne lentepromo',br:'orange',disc:'Online adverteren',discId:'ads',status:'done',deliv:false},
+  {id:'p9',name:'🛠️ Contactformulier werkt niet',br:'indigo',disc:'Support',discId:'support',status:'prog',deliv:false},
 ];
 const STATUS_LABEL = {todo:['Nog in te plannen','pill-todo'],prog:['In productie','pill-prog'],wait:['Klaar voor feedback','pill-wait'],sent:['Klaar voor feedback','pill-wait'],done:['Goedgekeurd','pill-done']};
 const DISC = {
@@ -96,8 +97,9 @@ const DISC = {
   'Branding':{icon:'branding',br:'pink',stamp:'icon-branding-heart.svg'},
   'Opleidingen':{icon:'opleiding',br:'indigo'},
   'Automations':{icon:'spark',br:'indigo'},
+  'Support':{icon:'msg',br:'indigo'},
 };
-const DISC_ORDER = ['Strategie','Branding','Video- en fotografie','Webdesign','Website en SEO','SEO & GEO','Social media','Online adverteren','Opleidingen','Automations'];
+const DISC_ORDER = ['Strategie','Branding','Video- en fotografie','Webdesign','Website en SEO','SEO & GEO','Social media','Online adverteren','Opleidingen','Automations','Support'];
 const discMark = (disc,cls='disc-stamp')=>{const d=DISC[disc];return d&&d.stamp?`<img class="${cls}" src="${ASSET[d.stamp]||('assets/'+d.stamp)}" alt="">`:ic((d&&d.icon)||'doc',20);};
 const spill = (st)=>{const m=STATUS_LABEL[st]||STATUS_LABEL.prog;return `<span class="pill ${m[1]}">${ic(STATUS_ICON[st]||'st_progress',13)}<span>${m[0]}</span></span>`;};
 
@@ -110,7 +112,7 @@ function _adProject(){ return _projects().filter(_isAdProject)[0] || null; }   /
 // De Projecten-pagina toont ENKEL de echte 'deliverable'-trajecten: video/fotografie, webdesign en branding.
 // Doorlopende diensten (social, ads, seo) + losse disciplines (strategie, opleiding, automation) hebben hun
 // eigen pagina/flow en horen niet in het projectenoverzicht. (Cluster F — Vincent: "enkel video/branding/webdesign".)
-var PROJ_DISC_WHITELIST = ['video_fotografie','webdesign','branding'];
+var PROJ_DISC_WHITELIST = ['video_fotografie','webdesign','branding','support'];   // support = opvolgbare website-tickets
 function _isProjectDisc(p){ if(!p) return false; var ls=(p.labels&&p.labels.length)?p.labels:[{discId:p.discId}]; return ls.some(function(l){ return PROJ_DISC_WHITELIST.indexOf(l.discId)>=0; }); }
 function _nonAdProjects(){ return _projects().filter(function(p){ return !_isAdProject(p); }); }   // alle niet-ads-projecten (meeting-planner e.d.) — blacklist
 function _overviewProjects(){ return _projects().filter(_isProjectDisc); }   // ENKEL voor de Projecten-PAGINA: video/webdesign/branding (whitelist)
@@ -3433,7 +3435,9 @@ function webEnsureStyles(){
     +'.wp-tbl th{text-align:left;font:700 10.5px Montserrat,sans-serif;letter-spacing:.04em;text-transform:uppercase;color:'+mut+';padding:6px 8px;border-bottom:1px solid rgba(231,223,211,.8)}'
     +'.wp-tbl td{padding:7px 8px;border-bottom:1px solid rgba(231,223,211,.5);color:'+ink+'}'
     +'.wp-tbl td.r,.wp-tbl th.r{text-align:right;white-space:nowrap}'
-    +'.wp-per{display:inline-flex;gap:5px;margin:0 0 16px;padding:5px;border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,.74),rgba(255,255,255,.40));-webkit-backdrop-filter:blur(12px) saturate(1.3);backdrop-filter:blur(12px) saturate(1.3);border:1px solid rgba(255,255,255,.6);box-shadow:0 8px 24px rgba(60,40,80,.10),inset 0 1px 0 rgba(255,255,255,.75);position:sticky;top:60px;z-index:8}'
+    +'.wp-per{display:inline-flex;gap:5px;margin:0;padding:5px;border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,.74),rgba(255,255,255,.40));-webkit-backdrop-filter:blur(12px) saturate(1.3);backdrop-filter:blur(12px) saturate(1.3);border:1px solid rgba(255,255,255,.6);box-shadow:0 8px 24px rgba(60,40,80,.10),inset 0 1px 0 rgba(255,255,255,.75)}'
+    +'.wp-perrow{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 16px;position:sticky;top:60px;z-index:8}'
+    +'.wp-perrow .wp-support{margin-left:auto;flex:none}'
     +'.wp-per button{font:700 12px Montserrat,sans-serif;border:0;background:transparent;color:#6B5B6B;border-radius:999px;padding:7px 15px;cursor:pointer;transition:color .18s,background .18s}'
     +'.wp-per button:hover{color:'+ink+'}'
     +'.wp-per button.on{background:linear-gradient(180deg,#fff,#f7f3ec);color:'+ink+';box-shadow:0 2px 8px rgba(35,15,35,.13),inset 0 1px 0 #fff}'
@@ -3449,7 +3453,9 @@ function webPeriod(){ return state._webPeriod || 'last_30d'; }
 function webPeriodBar(){
   var p=webPeriod();
   var b=function(k,l){ return '<button class="'+(p===k?'on':'')+'" onclick="webSetPeriod(\''+k+'\')">'+l+'</button>'; };
-  return '<div class="wp-per">'+b('today','Vandaag')+b('last_7d','7 dagen')+b('last_30d','30 dagen')+b('last_90d','90 dagen')+'</div>';
+  // Periode-pills + prominente support-knop rechts op dezelfde sticky rij (altijd in beeld).
+  return '<div class="wp-perrow"><div class="wp-per">'+b('today','Vandaag')+b('last_7d','7 dagen')+b('last_30d','30 dagen')+b('last_90d','90 dagen')+'</div>'
+    +'<button class="btn btn-branch br-green btn-sm wp-support" onclick="openWebTicket()" title="Vraag of probleem met je website? Maak een supportticket aan">'+ic('msg',15)+' Support aanvragen</button></div>';
 }
 async function webSetPeriod(p){
   state._webPeriod=p;
@@ -3526,7 +3532,7 @@ function webBody(t,s){
   var qtbl='<div class="wp-card"><h3>Zoektermen (Google Search Console)</h3>'
     +(qrows?('<table class="wp-tbl"><thead><tr><th>Zoekterm</th><th class="r">Clicks</th><th class="r">Vert.</th><th class="r">CTR</th><th class="r">Positie</th></tr></thead><tbody>'+qrows+'</tbody></table>'):'<div style="color:#9E919E">Geen zoekdata in deze periode</div>')
     +'</div>';
-  return webPeriodBar()+kpis+charts+row2+qtbl+webSupportCard();
+  return webPeriodBar()+kpis+charts+row2+qtbl;   // support-ingang zit nu prominent op de periode-rij (wp-support)
 }
 /* Website-support (Cluster K): ticket-ingang onderaan de Website-tab — ook zichtbaar zonder GA4/GSC-koppeling. */
 function webSupportCard(){

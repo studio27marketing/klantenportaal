@@ -6,12 +6,12 @@
    - Alleen GET + same-origin. API (POST naar de worker) en Firebase/cross-origin gaan
      ongemoeid naar het netwerk, zodat auth en live data nooit door de SW worden geraakt.
    Cachenaam draagt de frontend-versie; bump dit bij een nieuwe release (samen met ?v=). */
-var CACHE = 's27-portaal-v63';
+var CACHE = 's27-portaal-v64';
 var SHELL = [
   '/', '/index.html', '/manifest.json',
-  '/styles.css?v=63', '/glass.css?v=63', '/tweaks.css?v=63', '/video-review.css?v=63',
-  '/api.js?v=63', '/data.js?v=63', '/assets-data.js?v=63', '/catalog-data.js?v=63',
-  '/panels.js?v=63', '/portal.js?v=63', '/tweaks.js?v=63', '/video-review.js?v=63', '/auth.js',
+  '/styles.css?v=64', '/glass.css?v=64', '/tweaks.css?v=64', '/video-review.css?v=64',
+  '/api.js?v=64', '/data.js?v=64', '/assets-data.js?v=64', '/catalog-data.js?v=64',
+  '/panels.js?v=64', '/portal.js?v=64', '/tweaks.js?v=64', '/video-review.js?v=64', '/auth.js',
   '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png'
 ];
 

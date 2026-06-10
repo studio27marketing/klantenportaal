@@ -22,6 +22,7 @@
     seo:             { br:'green',  label:'SEO & GEO',            stamp:'icon-webdesign.svg',        cat:'doorlopend'  },
     ads:             { br:'orange', label:'Online adverteren',    stamp:'icon-adverteren.svg',       cat:'doorlopend'  },
     social:          { br:'yellow', label:'Social media',         stamp:'icon-socialmedia.svg',      cat:'doorlopend'  },
+    support:         { br:'indigo', label:'Support',              icon:'msg',                        cat:'doorlopend'  },
     opleiding:       { br:'indigo', label:'Opleidingen',          icon:'opleiding',                  cat:'opleiding'   },
     automation:      { br:'indigo', label:'Automations',          icon:'spark',                      cat:'deliverable' }
   };

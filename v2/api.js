@@ -145,9 +145,11 @@ const ENDPOINTS = {
   webTraffic:        GATEWAY_BASE + '/webTraffic',
   // webSearch: { period | from,to } -> { ok, linked, site, totals, queries, pages, trend }.
   webSearch:         GATEWAY_BASE + '/webSearch',
-  // Website-supportticket: { onderwerp, omschrijving?, klant_naam?, filename?, file_data? } -> { ok, ticket_id }.
-  // Taak in de Tickets-lijst (assignee Klaas) + Bedrijf-relatie; push bij status on hold/doorgestuurd.
-  ticketCreate:      GATEWAY_BASE + '/ticketCreate'
+  // Website-supportticket: { onderwerp, omschrijving? } -> { ok, ticket_id }. Taak in de Tickets-lijst
+  // (assignee Klaas, TYPE JOB Support, contact-koppeling server-side); push bij on hold/doorgestuurd.
+  ticketCreate:      GATEWAY_BASE + '/ticketCreate',
+  // Extra bijlage op een supportticket: { ticket_id, filename, file_data } -> { ok, attached }. 1 bestand per call.
+  ticketAttach:      GATEWAY_BASE + '/ticketAttach'
 };
 
 /* AUTH v2 (Firebase + Cloudflare-gateway) is de DEFAULT. ?auth=v1 = legacy-vangnet. */

@@ -146,6 +146,17 @@ export async function handleClickupHook(request, env, ctx, ch) {
   if (!taskId) return jsonRes({ ok: true, note: 'no_task' }, 200, ch);
   if (!env.CLICKUP_TOKEN || !env.VAPID_PRIVATE_JWK) return jsonRes({ ok: true, note: 'not_configured' }, 200, ch);
 
+  // Echo-filter: comments die de WORKER zelf plaatst (klant-chatberichten '💬 [', ticket-briefings,
+  // interne notities) horen GEEN push naar de klant te geven — enkel échte team-reacties.
+  // Robuustst: alles gepost via het CLICKUP_TOKEN (bot-user 6022087) is per definitie geen team-reactie.
+  if (event === 'taskCommentPosted') {
+    const cm = (evt.history_items && evt.history_items[0] && evt.history_items[0].comment) || null;
+    const tekst = str(cm && cm.comment_text || (cm && Array.isArray(cm.comment) ? cm.comment.map((c) => str(c.text)).join('') : ''));
+    const authorId = str(cm && cm.user && cm.user.id);
+    if (authorId === '6022087') return jsonRes({ ok: true, note: 'own_bot_comment' }, 200, ch);
+    if (tekst.startsWith('💬 [') || tekst.slice(0, 8) === '[INTERN]') return jsonRes({ ok: true, note: 'client_or_internal' }, 200, ch);
+  }
+
   // Snel 200 teruggeven; het echte werk async (ClickUp verwacht een snelle 2xx).
   ctx.waitUntil(processEvent(env, event, taskId).catch(() => {}));
   return jsonRes({ ok: true, queued: true }, 200, ch);

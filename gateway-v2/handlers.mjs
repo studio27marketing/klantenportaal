@@ -50,6 +50,8 @@ export const PAYROLL_LIST = '901520180360';
 export const SOCIAL_LIST = '901520180312'; // Social media-planning: communicatietaak + maandtaken + input-subtaken
 export const TICKET_LIST = '901523697831'; // Tickets (website-support); standaard-statussen incl. on hold/doorgestuurd (push-triggers)
 export const TICKET_ASSIGNEE = 36517215;   // Klaas — vaste assignee voor website-support-tickets (lijsttoegang geverifieerd via 86ca6qth2)
+export const TICKET_TYPEJOB_SUPPORT = 'a8e2a949-3111-4d4b-b3ee-45f3a049d365'; // TYPE JOB-optie 'Support' (orderindex 19)
+export const KANBEGINNEN_JA = 'a3800974-cb47-4744-a2d1-1abc842b9bfd';          // 'Kan beginnen?'-optie JA (orderindex 0)
 
 export const FIELD = {
   bedrijf:        '4b1fb333-f47a-41bb-a976-dce63ed36657', // relatie 'Bedrijf' (scope-guard)
@@ -741,6 +743,7 @@ const DISCIPLINE_MAP = {
   4: 'video_fotografie', 5: 'video_fotografie', 6: 'video_fotografie', 7: 'video_fotografie', 8: 'video_fotografie',
   9: 'webdesign', 10: 'webdesign', 11: 'webdesign', 17: 'webdesign',
   12: 'seo', 13: 'social', 14: 'ads', 15: 'automation', 16: 'opleiding',
+  19: 'support',   // website-supporttickets (portaal) -> eigen discipline, wint van de naam-fallback
   // 0 (projectmanagement) en 18 (bestelling) bewust ongemapt -> '' (val terug op lijst/naam)
 };
 export function disciplineMapper(typeJobValue) {
@@ -975,7 +978,9 @@ function isDoneTask(t) {
   return ty === 'done' || ty === 'closed' || isAfgerondStatus(t && t.status);
 }
 function planTypeOf(t) {
-  if (Number(getCF(t, FIELD.typeJob)) === 6) return 'shoot';                         // TYPE JOB = Shoot
+  const tj = Number(getCF(t, FIELD.typeJob));
+  if (tj === 6) return 'shoot';                                                      // TYPE JOB = Shoot
+  if (tj === 19) return '';                                                          // support-tickets zijn nooit plannbaar (klant-tekst met 'meeting' mag geen plan-actiepunt triggeren)
   const hay = (String(t.name || '') + ' ' + String(t.description || t.text_content || '')).toLowerCase();
   if (hay.indexOf('meeting') >= 0) return 'meeting';
   return '';
@@ -1028,7 +1033,11 @@ export function isAfgerondStatus(statusObj) {
   if (label.includes('goedgekeur')) return true;             // goedgekeurd
   if (label.includes('gefactureer')) return true;            // gefactureerd
   if (label.includes('facturati')) return true;              // (klaar voor) facturatie
-  return label === 'done';                                    // ClickUp default done-status
+  // default-slotstatussen op status.TYPE keyen (robuust: 'Complete' op de Tickets-lijst,
+  // maar ook elke andere terminale status — zonder naam-collisie met custom statussen)
+  const type = String((statusObj && statusObj.type) || '').toLowerCase();
+  if (type === 'done' || type === 'closed') return true;
+  return label === 'done';                                    // fallback voor payloads zonder type
 }
 
 // "afgerond/opgeleverd"-tijdstip van een taak (ms): date_done > date_closed > due_date.
@@ -4792,7 +4801,24 @@ export async function ticketCreate(bedrijfId, body, env) {
   // bedrijfsnaam UITSLUITEND uit de eigen bedrijf-taak (body.klant_naam wordt bewust genegeerd:
   // client-spoofbaar -> impersonatie-vector richting het webteam)
   let naam = '';
-  try { const br = await cu.get(env, `/task/${bid}`); if (br.ok && br.data && br.data.name) naam = clean(br.data.name, 120); } catch (e) {}
+  let bedrijfTaak = null;
+  try { const br = await cu.get(env, `/task/${bid}`); if (br.ok && br.data) { bedrijfTaak = br.data; if (br.data.name) naam = clean(br.data.name, 120); } } catch (e) {}
+
+  // contactpersoon van de INGELOGDE klant resolven: account_email komt server-side uit het
+  // geverifieerde token (worker.js injecteert body.account_email, overschrijft client-input).
+  // Pad: bedrijf-taak -> Contact-relaties -> match op het Email-veld. Fail-soft: geen match = geen relatie.
+  let contactId = '';
+  const accountEmail = str(body && body.account_email).trim().toLowerCase();
+  if (accountEmail && bedrijfTaak) {
+    try {
+      const ids = getRelationIds(bedrijfTaak, FIELD.contact).slice(0, 12);
+      const results = await Promise.all(ids.map((id) => cu.get(env, `/task/${id}`).catch(() => ({ ok: false }))));
+      for (const r of results) {
+        if (!r.ok || !r.data) continue;
+        if (str(getCF(r.data, FIELD.email)).trim().toLowerCase() === accountEmail) { contactId = str(r.data.id); break; }
+      }
+    } catch (e) { /* fail-soft */ }
+  }
 
   const desc = [
     'WEBSITE-SUPPORTTICKET (via klantenportaal)',
@@ -4803,8 +4829,16 @@ export async function ticketCreate(bedrijfId, body, env) {
     omschrijving || '(geen omschrijving meegegeven)',
   ].filter((x) => x !== '').join('\n');
 
-  // (1) taak aanmaken; Bedrijf-relatie meteen in de create + (2) nogmaals via POST /field
-  //     (gordel-en-bretels tegen de custom-field-persist-gotcha).
+  // (1) taak aanmaken; relaties + dropdowns meteen in de create + (2) nogmaals via POST /field
+  //     (gordel-en-bretels tegen de custom-field-persist-gotcha). TYPE JOB=Support maakt het
+  //     ticket een 'support'-discipline-project in het dashboard (DISCIPLINE_MAP 19) zodat de
+  //     klant het onder Projecten kan opvolgen; Kan beginnen=JA conform de team-werkwijze.
+  const createFields = [
+    { id: FIELD.bedrijf, value: { add: [bid], rem: [] } },
+    { id: FIELD.typeJob, value: TICKET_TYPEJOB_SUPPORT },
+    { id: FIELD.kanBeginnen, value: KANBEGINNEN_JA },
+  ];
+  if (contactId) createFields.push({ id: FIELD.contact, value: { add: [contactId], rem: [] } });
   let created;
   try {
     created = await cu.post(env, `/list/${TICKET_LIST}/task`, {
@@ -4812,7 +4846,7 @@ export async function ticketCreate(bedrijfId, body, env) {
       description: desc,
       assignees: [TICKET_ASSIGNEE],
       notify_all: false,
-      custom_fields: [{ id: FIELD.bedrijf, value: { add: [bid], rem: [] } }],
+      custom_fields: createFields,
     });
   } catch (e) { created = null; }
   if (!created || !created.ok || !created.data || !created.data.id) {
@@ -4820,6 +4854,9 @@ export async function ticketCreate(bedrijfId, body, env) {
   }
   const taskId = str(created.data.id);
   await cu.relation(env, taskId, FIELD.bedrijf, { add: [bid], rem: [] }).catch(() => {});
+  await cu.field(env, taskId, FIELD.typeJob, TICKET_TYPEJOB_SUPPORT).catch(() => {});
+  await cu.field(env, taskId, FIELD.kanBeginnen, KANBEGINNEN_JA).catch(() => {});
+  if (contactId) await cu.relation(env, taskId, FIELD.contact, { add: [contactId], rem: [] }).catch(() => {});
 
   // (3) optionele bijlage — server-side caps (frontend bewaakt ook, maar is omzeilbaar):
   //     base64-cap VÓÓR atob (31 MB b64 ≈ 22 MB binair; voorkomt OOM op de isolate) +
@@ -4838,12 +4875,54 @@ export async function ticketCreate(bedrijfId, body, env) {
     }
   }
 
-  // (4) melding voor Klaas (gerichte assignee-notificatie -> Inbox + mobiele push)
+  // (4) briefing als KLANT-chatbericht ('💬 ['-prefix = klant-bubble in de projectdetail-chat,
+  //     zelfde formaat als chatPost) + gerichte assignee-notificatie voor Klaas (Inbox + push).
+  //     Eén comment, geen apart team-bericht — anders zou chat_wacht_op_klant meteen true zijn.
   try {
-    await cu.comment(env, taskId, `🛠️ Nieuw website-supportticket via het klantenportaal.\nKlant: ${naam || '-'}\nOnderwerp: ${onderwerp}${omschrijving ? `\n\n${omschrijving}` : ''}`, false, TICKET_ASSIGNEE);
+    const briefing = `💬 [Klant: ${naam || 'klant'}]\n\n${onderwerp}${omschrijving ? `\n\n${omschrijving}` : ''}`;
+    await cu.comment(env, taskId, briefing, false, TICKET_ASSIGNEE);
   } catch (e) {}
 
   return { status: 200, body: { ok: true, ticket_id: taskId, attached } };
+}
+
+/* ---- ticketAttach (WRITE) — extra bijlage(n) op een NET aangemaakt supportticket ----
+ * Body: { ticket_id, filename, file_data }. De frontend stuurt na ticketCreate per gestaged
+ * bestand één call (multi-bijlagen zonder mega-JSON-body: 1 bestand per request ≤ 31 MB b64).
+ * Scope: taak MOET in TICKET_LIST staan ÉN de Bedrijf-relatie van dit bedrijf dragen —
+ * dit endpoint mag nooit als generieke upload op andere taken bruikbaar zijn. */
+export async function ticketAttach(bedrijfId, body, env) {
+  const bid = cleanId(bedrijfId);
+  const ticketId = cleanId(body && body.ticket_id);
+  if (!bid || !ticketId) return { status: 400, body: { ok: false, error: 'bad_request' } };
+  const clean = (s, n) => str(s).replace(/[\u0000-\u001f\u007f]+/g, ' ').slice(0, n).trim();
+  const fname = clean(body && body.filename, 140);
+  const b64 = str(body && body.file_data);
+  if (!fname || !b64) return { status: 400, body: { ok: false, error: 'no_file' } };
+  const ext = (fname.lastIndexOf('.') >= 0 ? fname.slice(fname.lastIndexOf('.') + 1) : '').toLowerCase();
+  const ALLOWED_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'heic', 'mp4', 'mov', 'm4v', 'webm', 'pdf', 'doc', 'docx']);
+  if (!ALLOWED_EXT.has(ext)) return { status: 200, body: { ok: false, error: 'type_not_allowed' } };
+  if (b64.length > 31 * 1024 * 1024) return { status: 200, body: { ok: false, error: 'too_large' } };
+  // anti-abuse: dagcap per bedrijf (zelfde patroon als ticketcap) — 15/min-ratelimit remt requests,
+  // niet het VOLUME (15×22MB/min zou onbeperkt ClickUp-storage kunnen vullen)
+  try {
+    const dag = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const acKey = `ticketattachcap:${bid}:${dag}`;
+    const n = parseInt((await env.KV.get(acKey)) || '0', 10) || 0;
+    if (n >= 25) return { status: 429, body: { ok: false, error: 'too_many_attachments', message: 'Maximum aantal bijlagen voor vandaag bereikt.' } };
+    await env.KV.put(acKey, String(n + 1), { expirationTtl: 90000 });
+  } catch (e) { /* fail-open bij KV-storing */ }
+  // scope-guard: ticket van DIT bedrijf, in de Tickets-lijst
+  const tr = await cu.get(env, `/task/${ticketId}`);
+  if (!tr.ok || !tr.data) return { status: 404, body: { ok: false, error: 'not_found' } };
+  if (str(tr.data.list && tr.data.list.id) !== TICKET_LIST) return { status: 403, body: { ok: false, error: 'scope_violation' } };
+  if (!getRelationIds(tr.data, FIELD.bedrijf).includes(String(bid))) return { status: 403, body: { ok: false, error: 'scope_violation' } };
+  let bytes; try { bytes = base64ToBytes(b64); } catch (e) { bytes = new Uint8Array(0); }
+  if (!bytes.length || bytes.length > 22 * 1024 * 1024) return { status: 200, body: { ok: false, error: 'too_large' } };
+  try {
+    const up = await cu.uploadAttachment(env, ticketId, bytes, fname);
+    return { status: 200, body: { ok: !!(up && up.ok), attached: !!(up && up.ok) } };
+  } catch (e) { return { status: 200, body: { ok: false, error: 'upload_failed' } }; }
 }
 
 /* ---- Webprestaties (READ, staff/team) — GA4 + Search Console rechtstreeks via de Google-API's ----
@@ -5046,8 +5125,10 @@ export const WRITE_HANDLERS = {
   // Meeting-tunnel: taskloze Google-Calendar-boeking (Algemene/Project/Nieuw-project) +
   // invite. Muteert geen due_date; scope-guard enkel als er een project_task_id bij zit.
   meetingBook,
-  // Website-supportticket: taak in TICKET_LIST (Klaas) + Bedrijf-relatie + optionele bijlage.
+  // Website-supportticket: taak in TICKET_LIST (Klaas) + Bedrijf/Contact-relatie + TYPE JOB Support.
   ticketCreate,
+  // Extra bijlage(n) op een supportticket (1 bestand per call; scope = Tickets-lijst + eigen bedrijf).
+  ticketAttach,
 };
 // bedrijfBeheer sub-acties (read vs write split voor cache/rate-decisions in de shell)
 export const BEDRIJFBEHEER_READ_ACTIONS = { get_team: getTeam, get_offertes: getOffertes };

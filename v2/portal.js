@@ -983,33 +983,59 @@ async function removeContact(id, btn){
   if(state.demoMode){ if(row)row.remove(); return; }
   try { await api(ENDPOINTS.bedrijfBeheer, { action:'delete_contact', contact_id:id, email:(c&&c.email)||'', bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token }); state.data.team=null; try{ await S27DATA.loadTeam(); }catch(e){} renderPanel('instellingen'); } catch(e){ if(row){ row.style.opacity=''; row.style.pointerEvents=''; } }
 }
-/* ---- Website-supportticket (Cluster K): overlay-formulier -> worker ticketCreate ----
+/* ---- Website-supportticket (Cluster K2): overlay-formulier -> worker ticketCreate + ticketAttach ----
+   Meerdere bijlagen: stagen in state._wtFiles (chips-tray, zelfde CSS als de chat-composer), pas bij
+   "Versturen" gaat alles weg — eerst het ticket (tekst), daarna sequentieel per bestand één attach-call.
    Hergebruikt de meeting-planner-overlay-CSS (mp-overlay/mp-modal/mp-scroll). */
+var _wtFileSeq=0;
 function wtEl(){ var el=$id('webTicket'); if(!el){ el=document.createElement('div'); el.id='webTicket'; el.className='mp-overlay'; el.addEventListener('mousedown',function(e){ el._downScrim=(e.target===el); }); el.addEventListener('click',function(e){ if(e.target===el && el._downScrim) closeWebTicket(); }); document.body.appendChild(el); } return el; }
 function wtEsc(e){ if(e.key==='Escape') closeWebTicket(); }
-function closeWebTicket(){ var el=$id('webTicket'); if(el){ el.classList.remove('show'); el.innerHTML=''; } document.removeEventListener('keydown',wtEsc); document.body.classList.remove('mp-lock'); state._wtFile=null; }
-function openWebTicket(){ state._wtFile=null; var el=wtEl(); el.classList.add('show'); document.body.classList.add('mp-lock'); document.addEventListener('keydown',wtEsc); wtRender(); var s=$id('wtSubj'); if(s)s.focus(); }
+function closeWebTicket(){ var el=$id('webTicket'); if(el){ el.classList.remove('show'); el.innerHTML=''; } document.removeEventListener('keydown',wtEsc); document.body.classList.remove('mp-lock'); state._wtFiles=[]; }
+function openWebTicket(){ state._wtFiles=[]; var el=wtEl(); el.classList.add('show'); document.body.classList.add('mp-lock'); document.addEventListener('keydown',wtEsc); wtRender(); var s=$id('wtSubj'); if(s)s.focus(); }
+function _wtChipsHTML(){
+  var st=(state._wtFiles||[]); if(!st.length) return '';
+  return st.map(function(f){
+    var th=/^image\//.test(f.type)?'<img src="'+f.dataUrl+'" alt="">':ic('doc',15);
+    return '<span class="chat-chip" data-fid="'+f.id+'"><span class="chat-chip-th">'+th+'</span><span class="chat-chip-nm">'+escapeHtml(f.name)+'</span><button type="button" class="chat-chip-x" title="Verwijderen" onclick="wtUnstage(\''+f.id+'\')">'+ic('close',12)+'</button></span>';
+  }).join('');
+}
+function _wtRenderTray(){ var t=$id('wtTray'); if(t) t.innerHTML=_wtChipsHTML(); }
+var _wtPending=0;   // FileReader-race: submit wacht tot alle gekozen bestanden ingelezen zijn
+function wtStageFiles(input){
+  var files=(input&&input.files)?[].slice.call(input.files):[]; if(input) input.value='';
+  if(!files.length) return;
+  state._wtFiles=state._wtFiles||[];
+  var m=$id('wtMsg'); var over=0; var teveel=0; var WT_MAX=10;
+  files.forEach(function(f){
+    if((state._wtFiles.length+_wtPending)>=WT_MAX){ teveel++; return; }
+    if(f.size>22*1024*1024){ over++; return; }
+    _wtPending++;
+    var rd=new FileReader();
+    rd.onload=function(){ _wtPending--; state._wtFiles.push({ id:'wt'+(++_wtFileSeq), name:f.name, type:f.type||'', size:f.size, dataUrl:String(rd.result||'') }); _wtRenderTray(); };
+    rd.onerror=function(){ _wtPending--; var mm=$id('wtMsg'); if(mm) mm.innerHTML='<span style="color:var(--s27-orange-ink,#C44514)">'+escapeHtml(f.name)+' kon niet gelezen worden.</span>'; };
+    rd.readAsDataURL(f);
+  });
+  var melding=[];
+  if(over) melding.push(over+' bestand(en) overgeslagen: te groot (max 22 MB).');
+  if(teveel) melding.push('Maximaal '+WT_MAX+' bijlagen per ticket.');
+  if(m) m.innerHTML = melding.length ? '<span style="color:var(--s27-orange-ink,#C44514)">'+melding.join(' ')+'</span>' : '';
+}
+function wtUnstage(id){ state._wtFiles=(state._wtFiles||[]).filter(function(f){return f.id!==id;}); _wtRenderTray(); }
 function wtRender(){
   var el=$id('webTicket'); if(!el) return;
-  var fileLbl = state._wtFile ? ('📎 '+escapeHtml(state._wtFile.name)) : 'Bestand toevoegen (optioneel)';
   el.innerHTML='<div class="mp-modal" onclick="event.stopPropagation()">'
     +'<div class="mp-head"><span class="mp-back-sp"></span><div class="mp-head-c"><span class="mp-head-eyebrow">Website-support</span><b>Ticket aanvragen</b></div><button class="mp-close" onclick="closeWebTicket()" aria-label="Sluiten">'+ic('plus',22)+'</button></div>'
     +'<div class="mp-scroll">'
-      +'<p class="mp-intro">Beschrijf kort wat er aan de hand is. Ons webteam pakt je vraag op en je krijgt een melding zodra de status verandert.</p>'
+      +'<p class="mp-intro">Beschrijf kort wat er aan de hand is. Ons webteam pakt je vraag op, je volgt het ticket onder <b>Projecten</b> en je krijgt een melding zodra de status verandert.</p>'
       +'<label style="display:block;font:700 12px var(--font-display);color:var(--ink-3);margin:0 0 6px">Onderwerp</label>'
       +'<input id="wtSubj" type="text" maxlength="120" placeholder="Bv. Contactformulier werkt niet" style="width:100%;box-sizing:border-box;padding:11px 13px;border:1px solid var(--line);border-radius:12px;font:600 14px Nunito,sans-serif;margin-bottom:14px">'
       +'<label style="display:block;font:700 12px var(--font-display);color:var(--ink-3);margin:0 0 6px">Omschrijving</label>'
       +'<textarea id="wtBody" rows="6" placeholder="Wat zie je, op welke pagina, en wat verwacht je?" style="width:100%;box-sizing:border-box;padding:11px 13px;border:1px solid var(--line);border-radius:12px;font:600 14px Nunito,sans-serif;resize:vertical;margin-bottom:12px"></textarea>'
-      +'<label class="btn btn-outline btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">'+ic('upload',14)+' <span id="wtFileLbl">'+fileLbl+'</span><input type="file" accept="image/*,video/*,.pdf,.doc,.docx" style="display:none" onchange="wtPickFile(this)"></label>'
+      +'<div class="chat-tray" id="wtTray" style="margin-bottom:8px">'+_wtChipsHTML()+'</div>'
+      +'<label class="btn btn-outline btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">'+ic('upload',14)+' Bijlagen toevoegen (meerdere mogelijk)<input type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx" style="display:none" onchange="wtStageFiles(this)"></label>'
       +'<div id="wtMsg" style="min-height:18px;margin:10px 0 0;font:600 13px Nunito,sans-serif"></div>'
       +'<div style="padding:16px 0 22px"><button class="btn btn-branch br-green" id="wtSend" onclick="submitWebTicket(this)">'+ic('send',16)+' Ticket versturen</button></div>'
     +'</div></div>';
-}
-function wtPickFile(input){
-  var f=input.files&&input.files[0]; var l=$id('wtFileLbl'); var m=$id('wtMsg');
-  if(!f){ state._wtFile=null; if(l) l.textContent='Bestand toevoegen (optioneel)'; return; }
-  if(f.size>22*1024*1024){ if(m) m.innerHTML='<span style="color:var(--s27-orange-ink,#C44514)">Bestand te groot (max 22 MB). Plak liever een link in de omschrijving.</span>'; input.value=''; return; }
-  state._wtFile=f; if(l) l.textContent='📎 '+f.name; if(m) m.textContent='';
 }
 async function submitWebTicket(btn){
   var subj=((($id('wtSubj')||{}).value)||'').trim();
@@ -1017,19 +1043,33 @@ async function submitWebTicket(btn){
   var m=$id('wtMsg');
   if(!subj){ var si=$id('wtSubj'); if(si){ si.style.borderColor='var(--s27-orange)'; si.focus(); } if(m) m.innerHTML='<span style="color:var(--ink-3)">Geef even een onderwerp mee.</span>'; return; }
   if(btn){ btn.disabled=true; btn.innerHTML='Versturen…'; }
-  if(state.demoMode || !state.session){ if(btn) btn.innerHTML=ic('check',15)+' Verstuurd (demo)'; if(m) m.innerHTML='<span style="color:var(--s27-green-ink,#147A50)">Je ticket staat genoteerd (voorbeeldweergave).</span>'; setTimeout(closeWebTicket,1500); return; }
-  var payload={ onderwerp:subj, omschrijving:bodyTx };   // bedrijfsnaam leidt de worker zelf af (anti-spoof)
+  // FileReader-race: net-gekozen bestanden kunnen nog aan het inlezen zijn — even wachten (max ~8s)
+  for(var w=0; w<80 && _wtPending>0; w++){ if(m&&w===4) m.innerHTML='<span style="color:var(--ink-3)">Bestanden voorbereiden…</span>'; await new Promise(function(r){ setTimeout(r,100); }); }
+  var files=(state._wtFiles||[]).slice();
+  if(state.demoMode || !state.session){ if(btn) btn.innerHTML=ic('check',15)+' Verstuurd (demo)'; if(m) m.innerHTML='<span style="color:var(--s27-green-ink,#147A50)">Je ticket staat genoteerd'+(files.length?' met '+files.length+' bijlage(n)':'')+' (voorbeeldweergave).</span>'; setTimeout(closeWebTicket,1600); return; }
   var fail=function(){ if(btn){ btn.disabled=false; btn.innerHTML=ic('send',16)+' Ticket versturen'; } if(m) m.innerHTML='<span style="color:var(--s27-orange-ink,#C44514)">Versturen lukte niet. Probeer opnieuw of stuur ons een bericht via de chat.</span>'; };
-  var send=function(){
-    api(ENDPOINTS.ticketCreate, payload).then(function(r){
-      var d=(r&&r.data)?r.data:(r&&r.ok!==undefined?r:null);
-      if(d&&d.ok){ if(m) m.innerHTML='<span style="color:var(--s27-green-ink,#147A50)">'+ic('check',14)+' Je ticket staat genoteerd. We houden je op de hoogte met een melding.</span>'; if(btn) btn.innerHTML=ic('check',15)+' Verstuurd ✓'; setTimeout(closeWebTicket,1800); }
-      else fail();
-    }).catch(fail);
-  };
-  var f=state._wtFile;
-  if(f){ var rd=new FileReader(); rd.onload=function(){ var du=String(rd.result||''); payload.file_data=du.indexOf(',')>=0?du.slice(du.indexOf(',')+1):du; payload.filename=f.name; send(); }; rd.onerror=function(){ send(); }; rd.readAsDataURL(f); }
-  else send();
+  try{
+    // 1) ticket aanmaken (tekst); bedrijfsnaam + contactpersoon resolvet de worker server-side
+    var r=await api(ENDPOINTS.ticketCreate, { onderwerp:subj, omschrijving:bodyTx });
+    var d=(r&&r.data)?r.data:(r&&r.ok!==undefined?r:null);
+    if(!(d&&d.ok&&d.ticket_id)){ fail(); return; }
+    // 2) bijlagen sequentieel (1 bestand per call, fail-soft per bestand) met voortgang
+    var mislukt=0;
+    for(var i=0;i<files.length;i++){
+      if(m) m.innerHTML='<span style="color:var(--ink-3)">Bijlage '+(i+1)+'/'+files.length+' uploaden…</span>';
+      var f=files[i]; var b64=String(f.dataUrl||'').split(',')[1]||''; if(!b64){ mislukt++; continue; }
+      try{
+        var ar=await api(ENDPOINTS.ticketAttach, { ticket_id:d.ticket_id, filename:f.name, file_data:b64 });
+        var ad=(ar&&ar.data)?ar.data:(ar&&ar.ok!==undefined?ar:null);
+        if(!(ad&&ad.ok)) mislukt++;
+      }catch(e){ mislukt++; }
+    }
+    state._wtFiles=[];
+    if(m) m.innerHTML='<span style="color:var(--s27-green-ink,#147A50)">'+ic('check',14)+' Je ticket staat genoteerd'+(files.length?(' ('+(files.length-mislukt)+'/'+files.length+' bijlagen meegestuurd)'):'')+'. Je volgt het onder Projecten en krijgt een melding bij elke update.</span>'
+      +(mislukt?'<br><span style="color:var(--s27-orange-ink,#C44514)">'+mislukt+' bijlage(n) konden niet mee — stuur ze gerust na via de chat van het ticket.</span>':'');
+    if(btn) btn.innerHTML=ic('check',15)+' Verstuurd ✓';
+    setTimeout(closeWebTicket, mislukt?3500:2000);
+  }catch(e){ fail(); }
 }
 const MEET_HOSTS={ 'Arne':{email:'arne@studio27.be'}, 'Ilke':{email:'ilke@studio27.be'} };
 /* ---- Offerte: vraag stellen -> komt als comment op de offerte-taak (naar de assignee) ---- */
