@@ -22,6 +22,12 @@ ALLOWED_ORIGINS = "https://www.studio27.be,https://studio27.be,https://portaal.s
 binding = "KV"
 id = "dcbe89a0ed8a4256a6ab1db50ac47940"
 
+# R2: bijlagen + bundel-archief van de video-review-module (videoreview.mjs).
+# Bucket aangemaakt 2026-06-10 met: wrangler r2 bucket create s27-portal-files
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "s27-portal-files"
+
 # CRON (#22): maandelijkse ads-snapshot. Draait om 03:00 UTC op de 1e van elke maand
 # en roept de scheduled()-handler in worker.js aan -> adsSnapshotWrite() per bedrijf,
 # zodat de Meta/Google maandtotalen in KV bewaard blijven (overleven het API-retentievenster).
