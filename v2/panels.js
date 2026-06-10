@@ -1100,7 +1100,9 @@ function metaEnsureStyles(){
   document.head.appendChild(s);
 }
 function metaPeriodLabel(p){ return ({today:'Vandaag',last_7d:'7 dagen',last_30d:'30 dagen'})[p]||p; }
-function metaEur(n,cur){ var s=(Number(n)||0).toLocaleString('nl-BE',{minimumFractionDigits:2,maximumFractionDigits:2}); cur=cur||'EUR'; return cur==='EUR'?('€ '+s):(s+' '+cur); }
+// Taak 5: gebruik een NIET-AFBREKENDE spatie ( ) tussen € en het bedrag zodat de waarde op één regel blijft
+// (KPI-grids, per-campagne-KPI's én tabelcellen) en € nooit los op een vorige regel komt.
+function metaEur(n,cur){ var s=(Number(n)||0).toLocaleString('nl-BE',{minimumFractionDigits:2,maximumFractionDigits:2}); cur=cur||'EUR'; return cur==='EUR'?('€ '+s):(s+' '+cur); }
 function metaKpiCard(br,lab,val){ return '<div class="kpi br-'+br+'"><div class="kbar"></div><div class="klab">'+lab+'</div><div class="knum">'+val+'</div></div>'; }
 function adsKpiDelta(cur,prev,invert){ if(prev==null) return ''; cur=Number(cur)||0; prev=Number(prev)||0; if(!prev){ return cur>0?'<span class="kdelta up">nieuw</span>':''; } var pct=Math.round(((cur-prev)/prev)*1000)/10; var better=invert?pct<0:pct>0; var cls=pct===0?'flat':(better?'up':'down'); return '<span class="kdelta '+cls+'">'+(pct>0?'+':'')+pct+'%</span>'; }
 function adsKpiCard(br,lab,val,d){ return '<div class="kpi br-'+br+'"><div class="kbar"></div><div class="klab">'+lab+'</div><div class="knum">'+val+'</div>'+(d?'<div class="kdrow">'+d+'</div>':'')+'</div>'; }
@@ -1340,20 +1342,22 @@ function adsGegevensTable(){
   var rows=_adsGegFiltered().slice().sort(function(a,b){ var k=ADS_GEG_SORT.key,c; if(k==='name'||k==='campaign'){ c=String(a[k]||'').localeCompare(String(b[k]||''),'nl'); } else { c=(Number(a[k])||0)-(Number(b[k])||0); } return c*ADS_GEG_SORT.dir; });
   state._adsGegRows=rows;
   if(!rows.length) return '<div class="ar-empty" style="border:1px solid var(--line);border-radius:14px;margin-top:4px">Geen advertenties die aan de filters voldoen.</div>';
-  var eye='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
-  var cols=[['name','Advertentie',0],['campaign','Campagne',0],['spend','Besteed',1],['impressions','Vert.',1],['linkClicks','Klikken',1],['ctr','CTR',1],['cpc','CPC',1],['leads','Leads',1],['_v','Visual',0]];
-  var tpl=cols.map(function(c,i){ return i===0?'minmax(150px,1.5fr)':(c[0]==='campaign'?'minmax(110px,1.1fr)':(c[0]==='_v'?'66px':(c[2]?'minmax(70px,1fr)':'minmax(80px,1fr)'))); }).join(' ');
-  var head=cols.map(function(c){ if(c[0]==='_v') return '<span class="ar-th" style="text-align:center">'+esc(c[1])+'</span>'; var on=ADS_GEG_SORT.key===c[0]; var arr=on?(ADS_GEG_SORT.dir<0?' ▼':' ▲'):''; return '<button class="ar-th'+(c[2]?' num':'')+(on?' on':'')+'" onclick="adsGegSort(\''+c[0]+'\')">'+esc(c[1])+arr+'</button>'; }).join('');
-  var body=rows.map(function(a,i){ return '<div class="ar-trow" style="grid-template-columns:'+tpl+'">'
-    +'<span class="ar-td"><span class="ar-nm">'+esc(a.name||'–')+'</span>'+(a.merged?' <span class="ar-star">★'+a.count+'</span>':'')+'</span>'
+  // Taak 9: geen oog-icoon meer — de advertentienaam zelf opent de visual (adsGegVisual), net als elders.
+  var cols=[['name','Advertentie',0],['campaign','Campagne',0],['spend','Besteed',1],['impressions','Vert.',1],['linkClicks','Klikken',1],['ctr','CTR',1],['cpc','CPC',1],['leads','Leads',1]];
+  var tpl=cols.map(function(c,i){ return i===0?'minmax(150px,1.5fr)':(c[0]==='campaign'?'minmax(110px,1.1fr)':(c[2]?'minmax(70px,1fr)':'minmax(80px,1fr)')); }).join(' ');
+  var head=cols.map(function(c){ var on=ADS_GEG_SORT.key===c[0]; var arr=on?(ADS_GEG_SORT.dir<0?' ▼':' ▲'):''; return '<button class="ar-th'+(c[2]?' num':'')+(on?' on':'')+'" onclick="adsGegSort(\''+c[0]+'\')">'+esc(c[1])+arr+'</button>'; }).join('');
+  var body=rows.map(function(a,i){
+    var nm='<span class="ar-nm">'+esc(a.name||'–')+'</span>'+(a.merged?' <span class="ar-star">★'+a.count+'</span>':'');
+    var nmCell=a.campaignId?'<button class="ar-namebtn" type="button" onclick="adsGegVisual('+i+')" title="Bekijk de visual van deze advertentie">'+nm+'</button>':nm;
+    return '<div class="ar-trow" style="grid-template-columns:'+tpl+'">'
+    +'<span class="ar-td">'+nmCell+'</span>'
     +'<span class="ar-td">'+esc(a.campaign||'')+'</span>'
     +'<span class="ar-td num">'+metaEur(a.spend,cur)+'</span>'
     +'<span class="ar-td num">'+arNum(a.impressions)+'</span>'
     +'<span class="ar-td num">'+arNum(a.linkClicks||a.clicks)+'</span>'
     +'<span class="ar-td num">'+arPct(a.ctr)+'</span>'
     +'<span class="ar-td num">'+metaEur(a.cpc,cur)+'</span>'
-    +'<span class="ar-td num">'+(a.leads?arNum(a.leads):'–')+'</span>'
-    +'<span class="ar-td" style="justify-content:center"><button class="ads-vbtn" onclick="adsGegVisual('+i+')" title="Bekijk de visual" aria-label="Bekijk de visual">'+eye+'</button></span></div>'; }).join('');
+    +'<span class="ar-td num">'+(a.leads?arNum(a.leads):'–')+'</span></div>'; }).join('');
   return '<div class="ar-table"><div class="ar-tscroll"><div class="ar-thead" style="grid-template-columns:'+tpl+'">'+head+'</div>'+body+'</div></div>';
 }
 function adsGegVisual(i){
@@ -1409,21 +1413,36 @@ function adsRichMountTabCharts(){
    client-weergave (overzicht), zodat beide identiek aanvoelen.
    ============================================================================= */
 // Plotbare reeksen per platform (key MOET matchen met de KPI-kaart-key zodat een klik op de kaart de juiste reeks schakelt).
+// axis-GROEP per metric: 'money' (€), 'count' (#), 'ratio' (% / verhouding). Bepaalt links/rechts-as (taak 2).
+// Volgorde = CANONIEKE METRIEK-VOLGORDE — wordt overal in dit document gespiegeld.
 var ADS_SEL_METRICS = {
   meta: [
-    { key:'spend',       label:'Besteed',     color:'#3083DC', axis:'eur',   daily:'spend',       kind:'bar'  },
-    { key:'linkClicks',  label:'Klikken',     color:'#230F23', axis:'count', daily:'linkClicks',  kind:'line' },
-    { key:'impressions', label:'Vertoningen', color:'#1F5FA8', axis:'count', daily:'impressions', kind:'line' },
-    { key:'leads',       label:'Leads',       color:'#9441DB', axis:'count', daily:'leads',       kind:'line' }
+    { key:'spend',       label:'Besteed bedrag', color:'#3083DC', axis:'money', daily:'spend',       kind:'bar'  },
+    { key:'impressions', label:'Vertoningen',    color:'#1F5FA8', axis:'count', daily:'impressions', kind:'line' },
+    { key:'reach',       label:'Bereik',         color:'#0EA5A5', axis:'count', daily:'reach',       kind:'line' },
+    { key:'cpm',         label:'CPM',            color:'#C28E0E', axis:'money', daily:'cpm',         kind:'line' },
+    { key:'linkClicks',  label:'Klikken',        color:'#230F23', axis:'count', daily:'linkClicks',  kind:'line' },
+    { key:'ctr',         label:'CTR',            color:'#E07A1E', axis:'ratio', daily:'ctr',         kind:'line' },
+    { key:'cpc',         label:'CPC',            color:'#7A8794', axis:'money', daily:'cpc',         kind:'line' },
+    { key:'leads',       label:'Leads',          color:'#9441DB', axis:'count', daily:'leads',       kind:'line' },
+    { key:'cpl',         label:'CPL',            color:'#B4540B', axis:'money', daily:'cpl',         kind:'line' },
+    { key:'frequency',   label:'Frequentie',     color:'#6B5B6B', axis:'ratio', daily:'frequency',   kind:'line' }
   ],
   google: [
-    { key:'spend',       label:'Besteed',     color:'#C28E0E', axis:'eur',   daily:'spend',       kind:'bar'  },
-    { key:'clicks',      label:'Klikken',     color:'#230F23', axis:'count', daily:'clicks',      kind:'line' },
+    { key:'spend',       label:'Besteed',     color:'#C28E0E', axis:'money', daily:'spend',       kind:'bar'  },
     { key:'impressions', label:'Vertoningen', color:'#1F5FA8', axis:'count', daily:'impressions', kind:'line' },
+    { key:'cpm',         label:'CPM',         color:'#3083DC', axis:'money', daily:'cpm',         kind:'line' },
+    { key:'clicks',      label:'Klikken',     color:'#230F23', axis:'count', daily:'clicks',      kind:'line' },
+    { key:'ctr',         label:'CTR',         color:'#E07A1E', axis:'ratio', daily:'ctr',         kind:'line' },
+    { key:'cpc',         label:'CPC',         color:'#7A8794', axis:'money', daily:'cpc',         kind:'line' },
     { key:'conversions', label:'Conversies',  color:'#12AC4E', axis:'count', daily:'conversions', kind:'line' },
-    { key:'convValue',   label:'Conv.waarde', color:'#9441DB', axis:'eur',   daily:'convValue',   kind:'line' }
+    { key:'costPerConv', label:'Kost/conv.',  color:'#B4540B', axis:'money', daily:'costPerConv', kind:'line' },
+    { key:'convValue',   label:'Waarde',      color:'#9441DB', axis:'money', daily:'convValue',   kind:'line' },
+    { key:'convRate',    label:'Conv.ratio',  color:'#0EA5A5', axis:'ratio', daily:'convRate',    kind:'line' }
   ]
 };
+// axis-groep van een metric (voor links/rechts-as-toewijzing).
+function _adsAxisGroup(m){ return (m&&m.axis)||'count'; }
 function adsSelMetrics(plat){ return ADS_SEL_METRICS[plat==='google'?'google':'meta']; }
 function adsSelMetricKeys(plat){ return adsSelMetrics(plat).map(function(d){return d.key;}); }
 // Per-platform selectie (key->bool). Default: besteding + klikken aan; rest uit. Eén keer geïnitialiseerd, overleeft re-render.
@@ -1443,19 +1462,57 @@ function adsChartToggle(plat,key){
 // 'active'-classe op alle KPI-kaarten met deze metric-key synchroniseren (team + client view).
 function adsChartSelReflect(plat){
   var sel=adsChartSel(plat);
-  [].slice.call(document.querySelectorAll('[data-arkpi-metric][data-arkpi-plat="'+plat+'"]')).forEach(function(el){
+  [].slice.call(document.querySelectorAll('[data-arkpi-metric][data-arkpi-plat="'+plat+'"][data-arkpi-scope="account"]')).forEach(function(el){
     el.classList.toggle('on', !!sel[el.getAttribute('data-arkpi-metric')]);
   });
 }
+/* ---- Per-CAMPAGNE selectie (taak 3): zelfde mechaniek als de overzichtsgrafiek, maar per campagne gesleuteld.
+   De selectie leeft in state._adsCampSel[plat][cid] (key->bool) en overleeft re-render binnen de sessie. ---- */
+function adsCampSel(plat,cid){
+  state._adsCampSel=state._adsCampSel||{}; var pk=(plat==='google'?'google':'meta');
+  state._adsCampSel[pk]=state._adsCampSel[pk]||{};
+  if(!state._adsCampSel[pk][cid]){ var d={}; adsSelMetrics(plat).forEach(function(m){ d[m.key]=(m.key==='spend'||m.key==='linkClicks'||m.key==='clicks'); }); state._adsCampSel[pk][cid]=d; }
+  return state._adsCampSel[pk][cid];
+}
+function adsCampChartToggle(plat,cid,key){
+  var sel=adsCampSel(plat,cid); sel[key]=!sel[key];
+  var keys=adsSelMetricKeys(plat); var any=keys.some(function(k){return sel[k];});
+  if(!any) sel[key]=true;
+  // reflecteer 'on'-classe op enkel deze campagne's KPI-kaarten.
+  [].slice.call(document.querySelectorAll('[data-arkpi-scope="camp:'+cid+'"][data-arkpi-plat="'+plat+'"]')).forEach(function(el){ el.classList.toggle('on', !!sel[el.getAttribute('data-arkpi-metric')]); });
+  // herbouw enkel deze campagne-grafiek.
+  if(plat==='google'){ var g=_gFindCamp(cid); if(g) googleRichBuildCampChart(g,_gCur()); }
+  else { var c=_arFindCamp(cid); if(c) adsRichBuildChart(c,_arCur()); }
+}
 // Dag-reeksen samenstellen uit de campagnes hun daily[] (team) of een account-trend[] (client).
 // rows = [{date, <metric-velden>}]. Geeft {labels, series:{key:[...]}} terug voor de geselecteerde metrics.
+// Afgeleide (ratio/gemiddelde) metrics mogen NIET over campagnes opgeteld worden; ze worden per dag
+// herberekend uit de gesommeerde basismetrics. Overige metrics worden gesommeerd.
+var _ADS_DERIVED={
+  cpm:function(b){ return b.impressions?(b.spend/b.impressions*1000):0; },
+  cpc:function(b){ return b.linkClicks?(b.spend/b.linkClicks):(b.clicks?(b.spend/b.clicks):0); },
+  ctr:function(b){ return b.impressions?((b.linkClicks||b.clicks)/b.impressions*100):0; },
+  cpl:function(b){ return b.leads?(b.spend/b.leads):0; },
+  frequency:function(b){ return b.reach?(b.impressions/b.reach):0; },
+  costPerConv:function(b){ return b.conversions?(b.spend/b.conversions):0; },
+  convRate:function(b){ return b.clicks?(b.conversions/b.clicks*100):0; }
+};
 function _adsAggregateDaily(rows, metrics){
-  var maps={}, dates={};
-  metrics.forEach(function(m){ maps[m.key]={}; });
-  (rows||[]).forEach(function(d){ if(!d||!d.date) return; dates[d.date]=1; metrics.forEach(function(m){ var f=m.daily; var v=Number(d[f])||0; if(m.key==='linkClicks'&&d.linkClicks==null) v=Number(d.clicks)||0; maps[m.key][d.date]=(maps[m.key][d.date]||0)+v; }); });
+  var dates={};
+  // Basisvelden die we per dag sommeren om afgeleiden te kunnen herrekenen.
+  var base={}; ['spend','impressions','reach','clicks','linkClicks','leads','conversions','convValue'].forEach(function(f){ base[f]={}; });
+  var maps={}; metrics.forEach(function(m){ if(!_ADS_DERIVED[m.key]) maps[m.key]={}; });
+  (rows||[]).forEach(function(d){ if(!d||!d.date) return; dates[d.date]=1;
+    Object.keys(base).forEach(function(f){ var v=Number(d[f])||0; if(f==='linkClicks'&&d.linkClicks==null) v=Number(d.clicks)||0; base[f][d.date]=(base[f][d.date]||0)+v; });
+    metrics.forEach(function(m){ if(_ADS_DERIVED[m.key]) return; var f=m.daily; var v=Number(d[f])||0; if(m.key==='linkClicks'&&d.linkClicks==null) v=Number(d.clicks)||0; maps[m.key][d.date]=(maps[m.key][d.date]||0)+v; });
+  });
   var labels=Object.keys(dates).sort();
+  function baseAt(dt){ var o={}; Object.keys(base).forEach(function(f){ o[f]=base[f][dt]||0; }); return o; }
   var series={};
-  metrics.forEach(function(m){ series[m.key]=labels.map(function(dt){ var v=maps[m.key][dt]||0; return m.axis==='eur'?Math.round(v*100)/100:v; }); });
+  metrics.forEach(function(m){ series[m.key]=labels.map(function(dt){
+    var v=_ADS_DERIVED[m.key]?_ADS_DERIVED[m.key](baseAt(dt)):(maps[m.key][dt]||0);
+    return (m.axis==='money'||m.axis==='ratio')?Math.round(v*100)/100:v;
+  }); });
   return { labels:labels, series:series };
 }
 function _adsRowsFromCampaigns(camps){
@@ -1473,15 +1530,31 @@ function adsBuildSelChart(opts){
   if(!active.length) return;
   var agg=_adsAggregateDaily(opts.rows, active);
   if(agg.labels.length<2) return;
+  // Taak 2: bepaal de aanwezige axis-groepen onder de geselecteerde metrics. Dominante (meeste reeksen) groep
+  // = linkeras (y); een tweede groep -> rechteras (y1). y1 verschijnt ENKEL als er ≥2 groepen actief zijn.
+  var grpCount={}; active.forEach(function(m){ var g=_adsAxisGroup(m); grpCount[g]=(grpCount[g]||0)+1; });
+  var groups=Object.keys(grpCount);
+  // dominante groep = meeste reeksen; gelijkspel -> volgorde money>count>ratio voor stabiliteit.
+  var pref={money:3,count:2,ratio:1};
+  var leftGroup=groups.slice().sort(function(a,b){ return (grpCount[b]-grpCount[a])||((pref[b]||0)-(pref[a]||0)); })[0];
+  var dual=groups.length>1;
+  function fmtFor(g){ return g==='money'?function(v){return metaEur(v,cur);}:(g==='ratio'?function(v){return (Math.round((Number(v)||0)*100)/100).toLocaleString('nl-BE');}:function(v){return (Number(v)||0).toLocaleString('nl-BE');}); }
+  function tickFor(g){ return g==='money'?function(v){return '€'+v;}:(g==='ratio'?function(v){return v;}:function(v){return (Number(v)||0).toLocaleString('nl-BE');}); }
   var order=0;
   var ds=active.map(function(m){ order++;
-    if(m.kind==='bar') return {type:'bar',label:m.label,data:agg.series[m.key],backgroundColor:_hexA(m.color,.5),borderColor:_hexA(m.color,.92),borderWidth:1,borderRadius:4,yAxisID:m.axis==='eur'?'y':'y1',order:90-order,_eur:true};
-    return {type:'line',label:m.label,data:agg.series[m.key],borderColor:m.color,backgroundColor:m.color,borderWidth:2,tension:.32,pointRadius:0,yAxisID:m.axis==='eur'?'y':'y1',order:90-order,_eur:m.axis==='eur'};
+    var g=_adsAxisGroup(m); var ax=(dual && g!==leftGroup)?'y1':'y';
+    if(m.kind==='bar') return {type:'bar',label:m.label,data:agg.series[m.key],backgroundColor:_hexA(m.color,.5),borderColor:_hexA(m.color,.92),borderWidth:1,borderRadius:4,yAxisID:ax,order:90-order,_grp:g};
+    return {type:'line',label:m.label,data:agg.series[m.key],borderColor:m.color,backgroundColor:m.color,borderWidth:2,tension:.32,pointRadius:0,yAxisID:ax,order:90-order,_grp:g};
   });
+  // assen-config: linkeras altijd; rechteras enkel bij dual.
+  var rightGroup=null; if(dual){ for(var gi=0;gi<groups.length;gi++){ if(groups[gi]!==leftGroup){ rightGroup=groups[gi]; break; } } }
+  var scales={ x:{ticks:{font:{family:'Montserrat',size:10},color:'#9E919E',maxRotation:0,autoSkip:true,maxTicksLimit:12},grid:{display:false}},
+    y:{position:'left',beginAtZero:true,ticks:{font:{family:'Montserrat',size:10},color:'#9E919E',callback:tickFor(leftGroup)},grid:{color:'rgba(231,223,211,.55)'}} };
+  if(dual){ scales.y1={position:'right',beginAtZero:true,grid:{drawOnChartArea:false},ticks:{font:{family:'Montserrat',size:10},color:'#9E919E',precision:(rightGroup==='count'?0:undefined),callback:tickFor(rightGroup)}}; }
   try{ state._arCharts[ck]=new window.Chart(cv.getContext('2d'),{ data:{labels:agg.labels.map(_arDayLabel),datasets:ds},
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-      plugins:{legend:{labels:{font:{family:'Montserrat',size:11,weight:'600'},color:'#6B5B6B',boxWidth:12,padding:14,usePointStyle:true}},tooltip:{callbacks:{label:function(x){ var eur=x.dataset&&x.dataset._eur; return ' '+x.dataset.label+': '+(eur?metaEur(x.parsed.y,cur):(Number(x.parsed.y)||0).toLocaleString('nl-BE')); }}}},
-      scales:{ y:{position:'left',beginAtZero:true,ticks:{font:{family:'Montserrat',size:10},color:'#9E919E',callback:function(v){return '€'+v;}},grid:{color:'rgba(231,223,211,.55)'}}, y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false},ticks:{font:{family:'Montserrat',size:10},color:'#9E919E',precision:0}}, x:{ticks:{font:{family:'Montserrat',size:10},color:'#9E919E',maxRotation:0,autoSkip:true,maxTicksLimit:12},grid:{display:false}} } } }); }catch(e){}
+      plugins:{legend:{labels:{font:{family:'Montserrat',size:11,weight:'600'},color:'#6B5B6B',boxWidth:12,padding:14,usePointStyle:true}},tooltip:{callbacks:{label:function(x){ var g=(x.dataset&&x.dataset._grp)||'count'; return ' '+x.dataset.label+': '+fmtFor(g)(x.parsed.y); }}}},
+      scales:scales } }); }catch(e){}
 }
 // '#3083DC' + alpha -> 'rgba(48,131,220,a)'
 function _hexA(hex,a){ var h=String(hex||'').replace('#',''); if(h.length===3) h=h.replace(/(.)/g,'$1$1'); var n=parseInt(h,16); return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')'; }
@@ -1505,6 +1578,13 @@ function adsChartStyles(){ if(document.getElementById('adsChartStyles'))return; 
  +'.arkpi.arkpi-clk .arkpi-l{display:flex;align-items:center;gap:6px;}'
  +'.arkpi-tg{width:9px;height:9px;border-radius:50%;flex:none;border:1.5px solid var(--arkpi-dot,#3083DC);background:transparent;transition:background .15s;}'
  +'.arkpi.arkpi-clk.on .arkpi-tg{background:var(--arkpi-dot,#3083DC);}'
+ /* per-campagne klikbare KPI-cellen (taak 3) — zelfde toggle-gevoel als de overzichts-KPI's */
+ +'.ar-ck.ar-ck-clk{cursor:pointer;position:relative;transition:border-color .15s,box-shadow .15s;}'
+ +'.ar-ck.ar-ck-clk:hover{border-color:var(--ck-dot,#3083DC);box-shadow:0 3px 10px rgba(48,131,220,.14);}'
+ +'.ar-ck.ar-ck-clk.on{border-color:var(--ck-dot,#3083DC);box-shadow:inset 0 0 0 1px var(--ck-dot,#3083DC);}'
+ +'.ar-ck.ar-ck-clk i{display:flex;align-items:center;gap:5px;}'
+ +'.ar-cktg{width:8px;height:8px;border-radius:50%;flex:none;border:1.5px solid var(--ck-dot,#3083DC);background:transparent;transition:background .15s;}'
+ +'.ar-ck.ar-ck-clk.on .ar-cktg{background:var(--ck-dot,#3083DC);}'
  +'.ads-mhint{font-size:12px;color:var(--ink-4);font-weight:600;margin:-2px 0 12px;}'
  +'.ads-mctl{display:flex;flex-direction:column;gap:12px;margin:4px 0 14px;}'
  +'.ads-mctl-row{display:flex;flex-direction:column;gap:6px;}'
@@ -1647,15 +1727,19 @@ function arCmp(cur,prev,invert){
   var better = invert ? pct<0 : pct>0;
   return '<span class="arcmp '+(better?'good':'bad')+'">'+(pct>0?'▲ +':'▼ ')+pct+'%</span>';
 }
-// absolute-vergelijking: kleur via richting (pct+invert), maar toont het ABSOLUTE vorige-periode-getal
-// ("vs €0,42") i.p.v. een %. Voor CPC/kliks/besteding/frequentie enz.; ratio's (CTR/conv.ratio) blijven % via arCmp.
+// absolute-vergelijking: kleur via richting (pct+invert), toont een RICHTINGPIJL (▲/▼) + het ABSOLUTE
+// vorige-periode-getal (taak 4 — nooit een kale "vs" zonder pijl). Voor CPC/kliks/besteding/frequentie enz.;
+// ratio's (CTR/conv.ratio) blijven % via arCmp.
 function arCmpAbs(cur,prev,invert,fmt){
   if(prev==null) return '';
   cur=Number(cur)||0; prev=Number(prev)||0;
   if(!prev) return cur>0?'<span class="arcmp good">nieuw</span>':'';
-  var pct=(cur-prev)/Math.abs(prev);
-  var cls=pct===0?'flat':((invert?pct<0:pct>0)?'good':'bad');
-  return '<span class="arcmp '+cls+'">vs '+(fmt?fmt(prev):prev)+'</span>';
+  var diff=cur-prev;
+  var prevTxt=(fmt?fmt(prev):prev);
+  if(diff===0) return '<span class="arcmp flat">▬ '+prevTxt+'</span>';
+  var cls=((invert?diff<0:diff>0)?'good':'bad');
+  var arrow=diff>0?'▲':'▼';
+  return '<span class="arcmp '+cls+'">'+arrow+' '+prevTxt+'</span>';
 }
 // metric-config: [invert (lager=beter), type] — type 'pct' = ratio (% via arCmp), e/n/d = absoluut (vs vorig getal).
 var AR_METRIC={spend:[true,'e'],cpc:[true,'e'],cpm:[true,'e'],cpl:[true,'e'],costPerConv:[true,'e'],frequency:[true,'d'],clicks:[false,'n'],linkClicks:[false,'n'],impressions:[false,'n'],reach:[false,'n'],leads:[false,'n'],results:[false,'n'],conversions:[false,'d'],convValue:[false,'e'],ctr:[false,'pct'],convRate:[false,'pct']};
@@ -1672,7 +1756,10 @@ function arRowDelta(r,key,cur){
 function adsRichKpiGrid(k,p,cur,cmpLabel){ return adsKpiGridGeneric('meta',k,p,cur,cmpLabel); }
 /* ---- per campagne ---- */
 function _titleCase(s){ return String(s).toLowerCase().replace(/_/g,' ').replace(/^\w/,function(c){return c.toUpperCase();}); }
-function adsRichStatus(st){ st=String(st||'').toUpperCase(); var map={ACTIVE:['Actief','green'],PAUSED:['Gepauzeerd','orange'],CAMPAIGN_PAUSED:['Gepauzeerd','orange'],ADSET_PAUSED:['Gepauzeerd','orange'],ARCHIVED:['Gearchiveerd','grey'],DELETED:['Verwijderd','grey'],DISAPPROVED:['Afgekeurd','red'],PENDING_REVIEW:['In review','blue'],IN_PROCESS:['Bezig','blue'],WITH_ISSUES:['Aandacht','orange'],ENABLED:['Actief','green'],REMOVED:['Verwijderd','grey']}; var m=map[st]||[st?_titleCase(st):'–','grey']; return '<span class="ar-pill ar-'+m[1]+'">'+esc(m[0])+'</span>'; }
+// Taak 6: status als KLEINE GEKLEURDE STIP (geen tekst-pill meer) — spaart horizontale ruimte in de tabellen.
+// groen=actief, licht-oranje=gepauzeerd, grijs=gearchiveerd/verwijderd, rood=afgekeurd, blauw=review/bezig.
+var _AR_STATUS_DOT={green:'#12AC4E',orange:'#E8A33A',grey:'#B8AEA0',red:'#DC2626',blue:'#3083DC'};
+function adsRichStatus(st){ st=String(st||'').toUpperCase(); var map={ACTIVE:['Actief','green'],PAUSED:['Gepauzeerd','orange'],CAMPAIGN_PAUSED:['Gepauzeerd','orange'],ADSET_PAUSED:['Gepauzeerd','orange'],ARCHIVED:['Gearchiveerd','grey'],DELETED:['Verwijderd','grey'],DISAPPROVED:['Afgekeurd','red'],PENDING_REVIEW:['In review','blue'],IN_PROCESS:['Bezig','blue'],WITH_ISSUES:['Aandacht','orange'],ENABLED:['Actief','green'],REMOVED:['Verwijderd','grey']}; var m=map[st]||[st?_titleCase(st):'–','grey']; var col=_AR_STATUS_DOT[m[1]]||_AR_STATUS_DOT.grey; return '<span class="ar-stdot" title="'+esc(m[0])+'" aria-label="'+esc(m[0])+'" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+col+';box-shadow:0 0 0 2px rgba(255,255,255,.6)"></span>'; }
 function adsRichObjLabel(o){ o=String(o||'').toUpperCase(); var map={OUTCOME_LEADS:'Leads',LEAD_GENERATION:'Leadgeneratie',OUTCOME_SALES:'Verkoop',CONVERSIONS:'Conversies',OUTCOME_TRAFFIC:'Verkeer',LINK_CLICKS:'Verkeer',OUTCOME_ENGAGEMENT:'Betrokkenheid',POST_ENGAGEMENT:'Betrokkenheid',OUTCOME_AWARENESS:'Naamsbekendheid',BRAND_AWARENESS:'Naamsbekendheid',REACH:'Bereik',VIDEO_VIEWS:'Videoweergaven',OUTCOME_APP_PROMOTION:'App-promotie'}; return o?(map[o]||_titleCase(o)):''; }
 function adsRichCampaign(c,cur){
   var obj=c.objective?'<span class="ar-obj">'+esc(adsRichObjLabel(c.objective))+'</span>':'';
@@ -1685,16 +1772,36 @@ function adsRichCampaign(c,cur){
     +adsRichAdTable(c,cur)
     +'</div>';
 }
+// Klikbare per-campagne KPI-cellen (taak 3): elke cel die overeenkomt met een plotbare reeks (ADS_SEL_METRICS)
+// schakelt die reeks in/uit de campagne-grafiek. 'items' = [label, waarde, key] in CANONIEKE volgorde.
+function adsCampKpiGrid(plat,c,cur,items){
+  adsChartStyles();
+  var selMap={}; adsSelMetrics(plat).forEach(function(m){ selMap[m.key]=m; });
+  var sel=adsCampSel(plat,c.id);
+  var cid=c.id;
+  return '<div class="ar-campkpis">'+items.map(function(it){
+    var d=arRowDelta(c,it[2],cur);
+    var sm=selMap[it[2]];
+    if(sm){
+      var on=!!sel[it[2]];
+      return '<div class="ar-ck ar-ck-clk'+(on?' on':'')+'" data-arkpi-metric="'+esc(it[2])+'" data-arkpi-plat="'+plat+'" data-arkpi-scope="camp:'+esc(cid)+'" style="--ck-dot:'+sm.color+'" role="button" tabindex="0" title="Toon/verberg in de grafiek" onclick="adsCampChartToggle(\''+plat+'\',\''+esc(cid)+'\',\''+esc(it[2])+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();adsCampChartToggle(\''+plat+'\',\''+esc(cid)+'\',\''+esc(it[2])+'\');}">'
+        +'<i><span class="ar-cktg"></span>'+it[0]+'</i><b>'+it[1]+'</b>'+(d?'<span class="ar-ckd">'+d+'</span>':'')+'</div>';
+    }
+    return '<div class="ar-ck"><i>'+it[0]+'</i><b>'+it[1]+'</b>'+(d?'<span class="ar-ckd">'+d+'</span>':'')+'</div>';
+  }).join('')+'</div>';
+}
 function adsRichCampKpis(c,cur){
   var hasLeads=((Number(c.leads)||0)>0)||(c.prev&&(Number(c.prev.leads)||0)>0);
-  var items=[['Besteed',arEur(c.spend,cur),'spend']];
+  // CANONIEKE volgorde: Besteed → Vertoningen → Bereik → CPM → Klikken → CTR → CPC → Leads → CPL → Frequentie.
+  var items=[['Besteed',arEur(c.spend,cur),'spend'],['Vertoningen',arNum(c.impressions),'impressions'],['Bereik',arNum(c.reach),'reach'],['CPM',arEur(c.cpm,cur),'cpm'],['Klikken',arNum(c.linkClicks||c.clicks),'linkClicks'],['CTR',arPct(c.ctr),'ctr'],['CPC',arEur(c.cpc,cur),'cpc']];
   if(hasLeads){ items.push(['Leads',arNum(c.leads),'leads']); items.push(['CPL',c.leads?arEur(c.cpl,cur):'–','cpl']); }
-  items=items.concat([['Klikken',arNum(c.linkClicks||c.clicks),'linkClicks'],['Vertoningen',arNum(c.impressions),'impressions'],['CTR',arPct(c.ctr),'ctr'],['CPC',arEur(c.cpc,cur),'cpc'],['CPM',arEur(c.cpm,cur),'cpm'],['Freq.',arDec(c.frequency,2),'frequency']]);
-  return '<div class="ar-campkpis">'+items.map(function(it){var d=arRowDelta(c,it[2],cur);return '<div class="ar-ck"><i>'+it[0]+'</i><b>'+it[1]+'</b>'+(d?'<span class="ar-ckd">'+d+'</span>':'')+'</div>';}).join('')+'</div>';
+  items.push(['Frequentie',arDec(c.frequency,2),'frequency']);
+  return adsCampKpiGrid('meta',c,cur,items);
 }
 /* ---- sorteerbare tabellen (adsets + ads met gelijke-naam-merge) ---- */
-var AR_ADSET_COLS=[['name','Adset',0],['status','Status',0],['spend','Besteed',1],['impressions','Vert.',1],['linkClicks','Klikken',1],['ctr','CTR',1],['cpc','CPC',1],['leads','Leads',1],['cpl','CPL',1],['frequency','Freq.',1]];
-var AR_AD_COLS=[['name','Advertentie',0],['status','Status',0],['spend','Besteed',1],['impressions','Vert.',1],['linkClicks','Klikken',1],['ctr','CTR',1],['cpc','CPC',1],['leads','Leads',1],['cpl','CPL',1]];
+// CANONIEKE Meta-kolomvolgorde: Besteed → Vert. → Bereik → CPM → Klikken → CTR → CPC → Leads → CPL → Freq.
+var AR_ADSET_COLS=[['name','Adset',0],['status','Status',0],['spend','Besteed',1],['impressions','Vert.',1],['reach','Bereik',1],['cpm','CPM',1],['linkClicks','Klikken',1],['ctr','CTR',1],['cpc','CPC',1],['leads','Leads',1],['cpl','CPL',1],['frequency','Freq.',1]];
+var AR_AD_COLS=[['name','Advertentie',0],['status','Status',0],['spend','Besteed',1],['impressions','Vert.',1],['reach','Bereik',1],['cpm','CPM',1],['linkClicks','Klikken',1],['ctr','CTR',1],['cpc','CPC',1],['leads','Leads',1],['cpl','CPL',1]];
 function arSortState(cid,which){ state._arSort=state._arSort||{}; state._arSort[cid]=state._arSort[cid]||{}; if(!state._arSort[cid][which]) state._arSort[cid][which]={key:'spend',dir:-1}; return state._arSort[cid][which]; }
 function _arCmpVal(a,b,s){ var k=s.key, c; if(k==='name'||k==='status'){ c=String(a[k]||'').localeCompare(String(b[k]||''),'nl'); } else { c=(Number(a[k])||0)-(Number(b[k])||0); } return c*s.dir; }
 function _arFindCamp(cid){ var m=(window.S27DATA&&S27DATA.metaAdsRich&&S27DATA.metaAdsRich()); if(!m||!m.campaigns) return null; for(var i=0;i<m.campaigns.length;i++){ if(String(m.campaigns[i].id)===String(cid)) return m.campaigns[i]; } return null; }
@@ -1711,7 +1818,7 @@ function adsRichMergeAds(ads){
     return g;
   });
 }
-function _arGridCols(cols){ return cols.map(function(col,i){ return i===0?'minmax(190px,2.2fr)':(col[2]?'minmax(72px,1fr)':'minmax(96px,1fr)'); }).join(' '); }
+function _arGridCols(cols){ return cols.map(function(col,i){ return i===0?'minmax(190px,2.2fr)':(col[0]==='status'?'46px':(col[2]?'minmax(72px,1fr)':'minmax(96px,1fr)')); }).join(' '); }
 function _arCell(key,r,cur){
   switch(key){
     case 'name': var _nm='<span class="ar-nm">'+esc(r.name||'–')+'</span>'+(r.merged?' <span class="ar-star" title="'+r.count+' advertenties met dezelfde naam, samengeteld">★'+r.count+'</span>':''); return r._cid?'<button class="ar-namebtn" type="button" onclick="adsRichAdVisual(\''+esc(r._cid)+'\',\''+encodeURIComponent(r.name||'')+'\')" title="Bekijk de visual van deze advertentie">'+_nm+'</button>':_nm;
@@ -1724,6 +1831,7 @@ function _arCell(key,r,cur){
   switch(key){
     case 'spend': v=arEur(r.spend,cur); break;
     case 'impressions': v=arNum(r.impressions); break;
+    case 'reach': v=arNum(r.reach); break;
     case 'clicks': v=arNum(r.clicks); break;
     case 'linkClicks': v=arNum(r.linkClicks||r.clicks); break;
     case 'ctr': v=arPct(r.ctr); break;
@@ -1733,7 +1841,9 @@ function _arCell(key,r,cur){
     case 'cpl': v=r.leads?arEur(r.cpl,cur):'–'; break;
     case 'frequency': v=arDec(r.frequency,2); break;
     case 'conversions': v=arDec(r.conversions,2); break;
+    case 'costPerConv': v=r.conversions?arEur(r.costPerConv,cur):'–'; break;
     case 'convValue': v=arEur(r.convValue,cur); break;
+    case 'convRate': v=arPct(r.convRate); break;
     default: return '';
   }
   var d=arRowDelta(r,key,cur);
@@ -1773,28 +1883,11 @@ function adsRichMountCharts(){
   var m=(window.S27DATA&&S27DATA.metaAdsRich&&S27DATA.metaAdsRich()); if(!m||!m.linked||!m.campaigns) return;
   adsRichLoadChart().then(function(ok){ if(!ok||!window.Chart) return; m.campaigns.forEach(function(c){ adsRichBuildChart(c, m.currency||'EUR'); }); });
 }
+// Per-campagne dag-grafiek (taak 3): zelfde klikbare selector-mechaniek als het overzicht, per campagne gesleuteld.
 function adsRichBuildChart(c,cur){
-  var cv=document.getElementById('arch_'+c.id); if(!cv||!window.Chart) return;
-  state._arCharts=state._arCharts||{};
-  try{ if(state._arCharts[c.id]){ state._arCharts[c.id].destroy(); delete state._arCharts[c.id]; } }catch(e){}
-  var d=(c.daily||[]); if(!d.length) return;
-  var labels=d.map(function(x){return _arDayLabel(x.date);});
-  var spend=d.map(function(x){return Math.round((x.spend||0)*100)/100;});
-  var clicks=d.map(function(x){return x.linkClicks||x.clicks||0;});
-  var leads=d.map(function(x){return x.leads||0;});
-  var hasLeads=leads.some(function(v){return v>0;});
-  var ds=[{type:'bar',label:'Besteed',data:spend,backgroundColor:'rgba(48,131,220,.5)',borderColor:'rgba(48,131,220,.9)',borderWidth:1,borderRadius:4,yAxisID:'y',order:3},
-          {type:'line',label:'Klikken',data:clicks,borderColor:'#230F23',backgroundColor:'#230F23',borderWidth:2,tension:.32,pointRadius:0,yAxisID:'y1',order:2}];
-  if(hasLeads) ds.push({type:'line',label:'Leads',data:leads,borderColor:'#9441DB',backgroundColor:'#9441DB',borderWidth:2,tension:.32,pointRadius:0,yAxisID:'y1',order:1});
-  try{
-    state._arCharts[c.id]=new window.Chart(cv.getContext('2d'),{ data:{labels:labels,datasets:ds},
-      options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-        plugins:{legend:{labels:{font:{family:'Montserrat',size:11,weight:'600'},color:'#6B5B6B',boxWidth:12,padding:14,usePointStyle:true}},
-          tooltip:{callbacks:{label:function(x){ if(x.dataset.label==='Besteed') return ' Besteed: '+metaEur(x.parsed.y,cur); return ' '+x.dataset.label+': '+(Number(x.parsed.y)||0).toLocaleString('nl-BE'); }}}},
-        scales:{ y:{position:'left',beginAtZero:true,ticks:{font:{family:'Montserrat',size:10},color:'#9E919E',callback:function(v){return '€'+v;}},grid:{color:'rgba(231,223,211,.55)'}},
-          y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false},ticks:{font:{family:'Montserrat',size:10},color:'#9E919E',precision:0}},
-          x:{ticks:{font:{family:'Montserrat',size:10},color:'#9E919E',maxRotation:0,autoSkip:true,maxTicksLimit:12},grid:{display:false}} } } });
-  }catch(e){}
+  adsBuildSelChart({ canvasId:'arch_'+c.id, chartKey:c.id, rows:(c.daily||[]),
+    metrics:adsSelMetrics('meta'), sel:adsCampSel('meta',c.id), cur:cur,
+    has:function(k){ return (c.daily||[]).some(function(d){ return Number(k==='linkClicks'?(d.linkClicks||d.clicks):d[k])>0; }); } });
 }
 // Dag-rijen voor de CLIENT-grafiek: account-trend[] (date,spend,clicks,impressions) of, indien aanwezig,
 // per-campagne daily[] (rijkere bron). Hergebruikt de team-grafiekbouwer zodat client = team-look.
@@ -1869,9 +1962,8 @@ function googleOverviewInner(){
   var g=(window.S27DATA&&S27DATA.googleAds&&S27DATA.googleAds())||{}; var cur=g.currency||'EUR';
   if(g.error){ return '<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">De real-time Google Ads-data is even niet beschikbaar. Probeer straks opnieuw.</div>'; }
   var k=g.kpis||{}, pv=g.prevKpis||null, clab=g.compareLabel||'';
-  var resd = pv?('<div class="ads-reschip-d">'+adsKpiDelta(k.results,pv.results)+'<span>vs '+esc(clab)+'</span></div>'):'';
-  var resChip='<div class="ads-reschip"><div class="ads-reschip-ic">'+ic('st_approved',20)+'</div><div class="ads-reschip-tx"><div class="ads-reschip-lab">Conversies in deze periode</div><div class="ads-reschip-num">'+adsNum(k.results)+'</div></div>'+resd+'</div>';
-  // #17: identiek aan de team-weergave — zelfde klikbare KPI-kaarten + dezelfde Chart.js dag-grafiek.
+  // Taak 12: de losse "Conversies in deze periode"-blok is verwijderd; conversies blijft als gewone
+  // klikbare parameter in de KPI-rij (googleRichKpiGrid) hieronder.
   var grid=googleRichKpiGrid(k, pv, cur, clab);
   var camps0=(g.campaigns||[]); var hasDaily=camps0.some(function(c){return (c.daily||[]).length;});
   var rows=hasDaily?_adsRowsFromCampaigns(camps0):(g.trend||[]);
@@ -1880,7 +1972,7 @@ function googleOverviewInner(){
   var camps=camps0.slice().sort(function(a,b){return (b.spend||0)-(a.spend||0);});
   var campSec='<div class="section-head"><h2>Actieve campagnes</h2><span class="count">'+camps.length+'</span></div>'+(camps.length?camps.map(function(c){return googleCampaignCard(c,cur);}).join(''):'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">Geen campagnes met besteding in deze periode.</div>');
   _adsDeferClientMount();
-  return '<div class="ads-ovw">'+resChip+grid+chart+'<div class="ads-camps">'+campSec+'</div></div>';
+  return '<div class="ads-ovw">'+grid+chart+'<div class="ads-camps">'+campSec+'</div></div>';
 }
 function googleCampaignCard(c,cur){
   var ms=[['Besteed',metaEur(c.spend,cur),'spend'],['Vertoningen',adsNum(c.impressions),'impressions'],['Klikken',adsNum(c.clicks),'clicks'],['CPC',metaEur(c.cpc,cur),'cpc'],['CTR',(Number(c.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%','ctr'],['Conversies',adsNum(c.results),'results']];
@@ -1946,38 +2038,39 @@ function adsKpiGridGeneric(plat,k,p,cur,cmpLabel){
     var sm=selMap[key];
     if(sm){
       var on=!!sel[key];
-      return '<div class="arkpi arkpi-clk'+(on?' on':'')+'" data-arkpi-metric="'+esc(key)+'" data-arkpi-plat="'+plat+'" style="--arkpi-dot:'+sm.color+'" role="button" tabindex="0" title="Toon/verberg deze reeks in de grafiek" onclick="adsChartToggle(\''+plat+'\',\''+esc(key)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();adsChartToggle(\''+plat+'\',\''+esc(key)+'\');}">'
+      return '<div class="arkpi arkpi-clk'+(on?' on':'')+'" data-arkpi-metric="'+esc(key)+'" data-arkpi-plat="'+plat+'" data-arkpi-scope="account" style="--arkpi-dot:'+sm.color+'" role="button" tabindex="0" title="Toon/verberg deze reeks in de grafiek" onclick="adsChartToggle(\''+plat+'\',\''+esc(key)+'\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();adsChartToggle(\''+plat+'\',\''+esc(key)+'\');}">'
         +'<div class="arkpi-l"><span class="arkpi-tg"></span>'+lab+'</div><div class="arkpi-v">'+val+'</div>'+(d?'<div class="arkpi-d">'+d+'</div>':'')+'</div>';
     }
     return '<div class="arkpi"><div class="arkpi-l">'+lab+'</div><div class="arkpi-v">'+val+'</div>'+(d?'<div class="arkpi-d">'+d+'</div>':'')+'</div>';
   }
+  // CANONIEKE METRIEK-VOLGORDE (taak 1+7) — elke metric is nu klikbaar (zit in ADS_SEL_METRICS).
   var cards;
   if(g){
     cards=[
       card('Besteed',arEur(k.spend,cur),'spend',true,fE),
-      card('Conversies',arDec(k.conversions,2),'conversions',false,fD),
-      card('Conv.waarde',arEur(k.convValue,cur),'convValue',false,fE),
-      card('Kost/conv.',k.conversions?arEur(k.costPerConv,cur):'–','costPerConv',true,fE),
-      card('Conv.ratio',arPct(k.convRate),'convRate',false),
-      card('Klikken',arNum(k.clicks),'clicks',false,fN),
       card('Vertoningen',arNum(k.impressions),'impressions',false,fN),
+      card('CPM',arEur(k.cpm,cur),'cpm',true,fE),
+      card('Klikken',arNum(k.clicks),'clicks',false,fN),
       card('CTR',arPct(k.ctr),'ctr',false),
       card('CPC',arEur(k.cpc,cur),'cpc',true,fE),
-      card('CPM',arEur(k.cpm,cur),'cpm',true,fE)
+      card('Conversies',arDec(k.conversions,2),'conversions',false,fD),
+      card('Kost/conv.',k.conversions?arEur(k.costPerConv,cur):'–','costPerConv',true,fE),
+      card('Waarde',arEur(k.convValue,cur),'convValue',false,fE),
+      card('Conv.ratio',arPct(k.convRate),'convRate',false)
     ];
   } else {
     var hasLeads=((Number(k.leads)||0)>0)||(p&&(Number(p.leads)||0)>0);
-    cards=[ card('Besteed', arEur(k.spend,cur), 'spend', true, fE) ];
-    if(hasLeads){ cards.push(card('Leads', arNum(k.leads), 'leads', false, fN)); cards.push(card('Cost per lead', k.leads?arEur(k.cpl,cur):'–', 'cpl', true, fE)); }
-    cards=cards.concat([
-      card('Klikken', arNum(k.linkClicks||k.clicks), 'linkClicks', false, fN),
+    cards=[
+      card('Besteed bedrag', arEur(k.spend,cur), 'spend', true, fE),
       card('Vertoningen', arNum(k.impressions), 'impressions', false, fN),
       card('Bereik', arNum(k.reach), 'reach', false, fN),
       card('CPM', arEur(k.cpm,cur), 'cpm', true, fE),
+      card('Klikken', arNum(k.linkClicks||k.clicks), 'linkClicks', false, fN),
       card('CTR', arPct(k.ctr), 'ctr', false),
-      card('CPC', arEur(k.cpc,cur), 'cpc', true, fE),
-      card('Frequentie', arDec(k.frequency,2), 'frequency', true, fD)
-    ]);
+      card('CPC', arEur(k.cpc,cur), 'cpc', true, fE)
+    ];
+    if(hasLeads){ cards.push(card('Leads', arNum(k.leads), 'leads', false, fN)); cards.push(card('Cost per lead', k.leads?arEur(k.cpl,cur):'–', 'cpl', true, fE)); }
+    cards.push(card('Frequentie', arDec(k.frequency,2), 'frequency', true, fD));
   }
   var note=(p && cmpLabel)?'<div class="arkpi-note">Vergeleken met '+esc(cmpLabel)+'</div>':'';
   return '<div class="ar-summary"><div class="ar-kpigrid">'+cards.join('')+'</div>'+note+'<div class="ads-mhint">Klik op een KPI om de bijbehorende reeks in de grafiek hieronder aan of uit te zetten.</div></div>';
@@ -1990,8 +2083,9 @@ function googleRichSamengevat(g,cur){
     +(hasDaily?'<div class="ar-chartwrap"><canvas id="garch_account"></canvas></div>':'<div class="sr-chempty">Nog te weinig dagen met data om een grafiek te tonen in deze periode.</div>')+'</div>';
 }
 function googleRichCampKpis(c,cur){
-  var items=[['Besteed',arEur(c.spend,cur),'spend'],['Conversies',arDec(c.conversions,2),'conversions'],['Conv.waarde',arEur(c.convValue,cur),'convValue'],['Kost/conv.',c.conversions?arEur(c.costPerConv,cur):'–','costPerConv'],['Conv.ratio',arPct(c.convRate),'convRate'],['Klikken',arNum(c.clicks),'clicks'],['Vertoningen',arNum(c.impressions),'impressions'],['CTR',arPct(c.ctr),'ctr'],['CPC',arEur(c.cpc,cur),'cpc']];
-  return '<div class="ar-campkpis">'+items.map(function(it){var d=arRowDelta(c,it[2],cur);return '<div class="ar-ck"><i>'+it[0]+'</i><b>'+it[1]+'</b>'+(d?'<span class="ar-ckd">'+d+'</span>':'')+'</div>';}).join('')+'</div>';
+  // CANONIEKE Google-volgorde: Besteed → Vertoningen → CPM → Klikken → CTR → CPC → Conversies → Kost/conv. → Waarde → Conv.ratio.
+  var items=[['Besteed',arEur(c.spend,cur),'spend'],['Vertoningen',arNum(c.impressions),'impressions'],['CPM',arEur(c.cpm,cur),'cpm'],['Klikken',arNum(c.clicks),'clicks'],['CTR',arPct(c.ctr),'ctr'],['CPC',arEur(c.cpc,cur),'cpc'],['Conversies',arDec(c.conversions,2),'conversions'],['Kost/conv.',c.conversions?arEur(c.costPerConv,cur):'–','costPerConv'],['Waarde',arEur(c.convValue,cur),'convValue'],['Conv.ratio',arPct(c.convRate),'convRate']];
+  return adsCampKpiGrid('google',c,cur,items);
 }
 function googleRichCampaign(c,cur){
   var chan=c.channel?'<span class="ar-obj">'+esc(c.channel)+'</span>':'';
@@ -2009,8 +2103,9 @@ function googleRichCampagnes(g,cur){
   if(!camps.length) return '<div class="card" style="padding:24px;text-align:center;color:var(--ink-3)">Geen campagnes met activiteit in deze periode.</div>';
   return '<div class="section-head" style="margin-top:2px"><h2>Campagnes</h2><span class="count">'+camps.length+'</span></div>'+camps.map(function(c){ return googleRichCampaign(c,cur); }).join('');
 }
-var G_AG_COLS=[['name','Advertentiegroep',0],['status','Status',0],['spend','Besteed',1],['impressions','Vert.',1],['clicks','Klikken',1],['ctr','CTR',1],['cpc','CPC',1],['conversions','Conv.',1],['convValue','Waarde',1]];
-var G_KW_COLS=[['text','Zoekwoord',0],['matchType','Type',0],['campaign','Campagne',0],['spend','Besteed',1],['impressions','Vert.',1],['clicks','Klikken',1],['ctr','CTR',1],['cpc','CPC',1],['conversions','Conv.',1]];
+// CANONIEKE Google-kolomvolgorde: Besteed → Vert. → CPM → Klikken → CTR → CPC → Conv. → Kost/conv. → Waarde → Conv.ratio.
+var G_AG_COLS=[['name','Advertentiegroep',0],['status','Status',0],['spend','Besteed',1],['impressions','Vert.',1],['cpm','CPM',1],['clicks','Klikken',1],['ctr','CTR',1],['cpc','CPC',1],['conversions','Conv.',1],['costPerConv','Kost/conv.',1],['convValue','Waarde',1],['convRate','Conv.ratio',1]];
+var G_KW_COLS=[['text','Zoekwoord',0],['matchType','Type',0],['campaign','Campagne',0],['spend','Besteed',1],['impressions','Vert.',1],['cpm','CPM',1],['clicks','Klikken',1],['ctr','CTR',1],['cpc','CPC',1],['conversions','Conv.',1],['costPerConv','Kost/conv.',1],['convRate','Conv.ratio',1]];
 function _gTable(which,cid,cols,s,rows,cur,emptyMsg,title){
   var tpl=_arGridCols(cols);
   var head=cols.map(function(col){ var on=s.key===col[0]; var arr=on?(s.dir<0?' ▼':' ▲'):''; return '<button class="ar-th'+(col[2]?' num':'')+(on?' on':'')+'" onclick="googleRichSort(\''+esc(cid)+'\',\''+which+'\',\''+col[0]+'\')">'+esc(col[1])+arr+'</button>'; }).join('');
@@ -2098,7 +2193,14 @@ function adsWsStyles(){ if(document.getElementById('adsWsStyles'))return; var s=
   +'.ws-empty{border:1px dashed var(--line,#E7DFD3);border-radius:12px;padding:22px;text-align:center;color:var(--ink-4);font-size:13px}';
   document.head.appendChild(s);
 }
-var ADS_WS_CATS=[['content','Content & creatives','img'],['landingspagina','Landingspagina','doc'],['budget','Budget & bieden','st_progress'],['doelgroep','Doelgroep','msg'],['overig','Overig','st_approved']];
+// Taak 10: elke categorie een subtiele, eigen accentkleur (4e element [tint,ink]) — blauw/teal/amber/violet/leisteen. NOOIT rood.
+var ADS_WS_CATS=[
+  ['content','Content & creatives','img',['rgba(48,131,220,.12)','#1F5FA8']],
+  ['landingspagina','Landingspagina','doc',['rgba(14,165,165,.13)','#0B7A7A']],
+  ['budget','Budget & bieden','st_progress',['rgba(224,138,30,.14)','#B4540B']],
+  ['doelgroep','Doelgroep','msg',['rgba(148,65,219,.12)','#6D28C9']],
+  ['overig','Overig','st_approved',['rgba(100,116,139,.13)','#475569']]
+];
 function adsWsGuessCat(title,body){
   var s=((title||'')+' '+(body||'')).toLowerCase();
   if(/landingspag|formulier|landing|website|pagina|tracking|conversie-track|conversie track/.test(s)) return 'landingspagina';
@@ -2158,8 +2260,9 @@ function adsWsRecsRender(seedList){
         +'<div class="ws-rec-b" contenteditable="true" data-ph="Beschrijving…" oninput="adsWsRecEdit(\''+esc(r.id)+'\',\'body\',this)">'+esc(r.body||'')+'</div>'
         +'</div>';
     }).join('');
+    var ac=c[3]||['rgba(100,116,139,.13)','#475569']; // [tint-achtergrond, ink-kleur] per categorie (taak 10)
     return '<div class="ws-grp">'
-      +'<div class="ws-grp-head"><span class="ws-grp-ic">'+ic(c[2],17)+'</span><span class="ws-grp-ttl">'+esc(c[1])+'</span><span class="ws-grp-n">'+items.length+'</span></div>'
+      +'<div class="ws-grp-head"><span class="ws-grp-ic" style="background:'+ac[0]+';border-color:'+ac[0]+';color:'+ac[1]+'">'+ic(c[2],17)+'</span><span class="ws-grp-ttl">'+esc(c[1])+'</span><span class="ws-grp-n">'+items.length+'</span></div>'
       +cards
       +'<button class="ws-grp-add" onclick="adsWsRecAdd(\''+c[0]+'\')">'+ic('plus',14)+' Toevoegen</button>'
       +'</div>';
@@ -2310,12 +2413,11 @@ function googleRichBuildAccountChart(g,cur){
     metrics:adsSelMetrics('google'), sel:adsChartSel('google'), cur:cur,
     has:function(k){ return (g.campaigns||[]).some(function(c){ return (c.daily||[]).some(function(d){ return Number(d[k])>0; }); }); } });
 }
+// Per-campagne Google-grafiek (taak 3): zelfde klikbare selector als het overzicht, per campagne gesleuteld.
 function googleRichBuildCampChart(c,cur){
-  var cv=document.getElementById('garch_'+c.id); if(!cv||!window.Chart) return;
-  state._arCharts=state._arCharts||{}; try{ if(state._arCharts['g'+c.id]){ state._arCharts['g'+c.id].destroy(); delete state._arCharts['g'+c.id]; } }catch(e){}
-  var d=(c.daily||[]); if(!d.length) return;
-  var labels=d.map(function(x){return _arDayLabel(x.date);}), spend=d.map(function(x){return Math.round((x.spend||0)*100)/100;}), clicks=d.map(function(x){return x.clicks||0;}), conv=d.map(function(x){return Math.round((x.conversions||0)*100)/100;});
-  try{ state._arCharts['g'+c.id]=new window.Chart(cv.getContext('2d'),{ data:{labels:labels,datasets:_gChartDs(spend,clicks,conv)}, options:_gChartOpts(cur) }); }catch(e){}
+  adsBuildSelChart({ canvasId:'garch_'+c.id, chartKey:'g'+c.id, rows:(c.daily||[]),
+    metrics:adsSelMetrics('google'), sel:adsCampSel('google',c.id), cur:cur,
+    has:function(k){ return (c.daily||[]).some(function(d){ return Number(d[k])>0; }); } });
 }
 /* =============================================================================
    #23 — GOOGLE MAANDOVERZICHT (team). Eén grote, dynamische Chart.js-grafiek over
