@@ -1554,8 +1554,12 @@ function adsBuildSelChart(opts){
   var ck=opts.chartKey;
   try{ if(state._arCharts[ck]){ state._arCharts[ck].destroy(); delete state._arCharts[ck]; } }catch(e){}
   var metrics=opts.metrics, sel=opts.sel, cur=opts.cur||'EUR';
-  var active=metrics.filter(function(m){ return sel[m.key] && (opts.has?opts.has(m.key):true); });
-  if(!active.length) active=metrics.filter(function(m){ return opts.has?opts.has(m.key):true; }).slice(0,1);
+  // Afgeleide metrics (cpm/cpc/ctr/cpl/frequency/costPerConv/convRate) worden in _adsAggregateDaily
+  // herrekend uit de gesommeerde basisvelden; ze hebben GEEN eigen dag-kolom, dus de has()-poort
+  // (die op een ruwe dag-kolom test) mag ze niet droppen. Basis-metrics blijven wél has()-gepoort.
+  function _chartOK(k){ return _ADS_DERIVED[k]?true:(opts.has?opts.has(k):true); }
+  var active=metrics.filter(function(m){ return sel[m.key] && _chartOK(m.key); });
+  if(!active.length) active=metrics.filter(function(m){ return _chartOK(m.key); }).slice(0,1);
   if(!active.length) return;
   var agg=_adsAggregateDaily(opts.rows, active);
   if(agg.labels.length<2) return;
@@ -2687,6 +2691,7 @@ function metaCarTo(j){
 function metaCarGo(d){ if(_metaLbCar) metaCarTo(_metaLbCar.idx+d); }
 function openMetaCreative(i){
   var a=(state._metaAdsView||[])[i]; if(!a) return;
+  _metaLbCar=null; // reset carrousel-state: pijltjes mogen nooit op een vorige carrousel inwerken
   metaEnsureStyles();
   // 1) Open de lightbox-shell ONMIDDELLIJK met een spinner — directe klik-feedback.
   var ov=document.getElementById('metaLightbox');

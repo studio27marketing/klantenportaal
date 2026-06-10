@@ -3601,10 +3601,11 @@ export async function metaAds(bedrijfId, body, env) {
   }).filter((c) => c.spend > 0);
 
   // dagelijkse trend over het GEKOZEN venster (per dag spend/impressions/clicks)
-  const tins = await metaGet(env, `${act}/insights`, Object.assign({ level: 'account', time_increment: '1', fields: 'spend,impressions,clicks,inline_link_clicks', limit: '200' }, tp));
+  const tins = await metaGet(env, `${act}/insights`, Object.assign({ level: 'account', time_increment: '1', fields: 'spend,impressions,reach,clicks,inline_link_clicks,actions', limit: '200' }, tp));
   const trend = (tins.ok && Array.isArray(tins.data.data) ? tins.data.data : []).map((d) => ({
     date: d.date_start || '', spend: Number(d.spend) || 0,
-    impressions: Number(d.impressions) || 0, clicks: Number(d.clicks) || 0, linkClicks: Number(d.inline_link_clicks) || 0,
+    impressions: Number(d.impressions) || 0, reach: Number(d.reach) || 0, clicks: Number(d.clicks) || 0, linkClicks: Number(d.inline_link_clicks) || 0,
+    leads: metaLeads(d.actions),
   }));
 
   // Alleen een 'error' als beide primaire calls faalden (bv. token/permissie) → UI toont nette melding i.p.v. nullen.
@@ -3662,7 +3663,7 @@ export async function metaAdsRich(bedrijfId, body, env) {
     metaGet(env, `${act}/insights`, Object.assign({ level: 'account', fields: INS }, tp)),
     metaGet(env, `${act}/campaigns`, { fields: 'name,objective,effective_status,daily_budget,lifetime_budget', effective_status: '["ACTIVE","PAUSED"]', limit: '300' }),
     metaGet(env, `${act}/insights`, Object.assign({ level: 'campaign', limit: '400', fields: 'campaign_id,campaign_name,' + INS }, tp)),
-    metaGet(env, `${act}/insights`, Object.assign({ level: 'campaign', time_increment: '1', limit: '800', fields: 'campaign_id,spend,impressions,clicks,inline_link_clicks,actions' }, tp)),
+    metaGet(env, `${act}/insights`, Object.assign({ level: 'campaign', time_increment: '1', limit: '800', fields: 'campaign_id,spend,impressions,reach,clicks,inline_link_clicks,actions' }, tp)),
     metaGet(env, `${act}/insights`, Object.assign({ level: 'adset', limit: '500', fields: 'adset_id,adset_name,campaign_id,' + INS }, tp)),
     metaGet(env, `${act}/insights`, Object.assign({ level: 'ad', limit: '800', fields: 'ad_id,ad_name,adset_id,campaign_id,' + INS }, tp)),
     metaGet(env, `${act}/adsets`, { fields: 'name,effective_status,campaign_id', effective_status: '["ACTIVE","PAUSED"]', limit: '500' }),
@@ -3710,7 +3711,7 @@ export async function metaAdsRich(bedrijfId, body, env) {
     const k = metaRichKpi(ins);
     const daily = (dailyByCamp[cid] || []).map((d) => {
       const lds = metaLeads(d.actions), sp = Number(d.spend) || 0;
-      return { date: d.date_start || '', spend: sp, impressions: Number(d.impressions) || 0, clicks: Number(d.clicks) || 0, linkClicks: Number(d.inline_link_clicks) || 0, leads: lds, cpl: lds > 0 ? Math.round((sp / lds) * 100) / 100 : 0 };
+      return { date: d.date_start || '', spend: sp, impressions: Number(d.impressions) || 0, reach: Number(d.reach) || 0, clicks: Number(d.clicks) || 0, linkClicks: Number(d.inline_link_clicks) || 0, leads: lds, cpl: lds > 0 ? Math.round((sp / lds) * 100) / 100 : 0 };
     }).sort((a, b) => (a.date < b.date ? -1 : 1));
     const adsets = (adsetsByCamp[cid] || []).map((r) => {
       const m = adsetMetaMap[r.adset_id] || {};
@@ -3920,7 +3921,7 @@ export async function googleAds(bedrijfId, body, env) {
     gadsQuery(env, token, acct,
       `SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.ctr, metrics.average_cpc, metrics.conversions FROM campaign WHERE campaign.status = 'ENABLED' AND ${dateFilter} ORDER BY metrics.cost_micros DESC`),
     gadsQuery(env, token, acct,
-      `SELECT segments.date, metrics.cost_micros, metrics.impressions, metrics.clicks FROM customer WHERE ${dateFilter} ORDER BY segments.date`),
+      `SELECT segments.date, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions, metrics.conversions_value FROM customer WHERE ${dateFilter} ORDER BY segments.date`),
   ]);
   const kpis = aggKpi(kpiRes.rows);
 
@@ -3962,7 +3963,7 @@ export async function googleAds(bedrijfId, body, env) {
 
   const trend = (trendRes.rows || []).map((r) => {
     const m = r.metrics || {}, s = r.segments || {};
-    return { date: s.date || '', spend: Number(m.costMicros || 0) / 1e6, impressions: Number(m.impressions || 0), clicks: Number(m.clicks || 0) };
+    return { date: s.date || '', spend: Number(m.costMicros || 0) / 1e6, impressions: Number(m.impressions || 0), clicks: Number(m.clicks || 0), conversions: Number(m.conversions || 0), convValue: Number(m.conversionsValue || 0) };
   });
 
   const error = (!kpiRes.ok && !campRes.ok) ? (kpiRes.err || campRes.err || 'fetch_failed') : null;
@@ -4007,7 +4008,7 @@ export async function googleAdsRich(bedrijfId, body, env) {
   const [accRes, campRes, dailyRes, agRes, kwRes] = await Promise.all([
     gadsQuery(env, token, acct, KPIQ(dateFilter)),
     gadsQuery(env, token, acct, `SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, campaign_budget.amount_micros, ${METR}, metrics.search_impression_share FROM campaign WHERE ${dateFilter} AND metrics.impressions > 0 ORDER BY metrics.cost_micros DESC`),
-    gadsQuery(env, token, acct, `SELECT campaign.id, segments.date, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions FROM campaign WHERE ${dateFilter} ORDER BY segments.date`),
+    gadsQuery(env, token, acct, `SELECT campaign.id, segments.date, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions, metrics.conversions_value FROM campaign WHERE ${dateFilter} ORDER BY segments.date`),
     gadsQuery(env, token, acct, `SELECT campaign.id, ad_group.id, ad_group.name, ad_group.status, ${METR} FROM ad_group WHERE ${dateFilter} AND metrics.impressions > 0`),
     gadsQuery(env, token, acct, `SELECT campaign.id, campaign.name, ad_group.name, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.ctr, metrics.average_cpc, metrics.conversions FROM keyword_view WHERE ${dateFilter} AND metrics.impressions > 0 ORDER BY metrics.cost_micros DESC LIMIT 250`),
   ]);
@@ -4042,7 +4043,7 @@ export async function googleAdsRich(bedrijfId, body, env) {
   const dailyByCamp = {};
   for (const r of (dailyRes.rows || [])) {
     const cid = String((r.campaign || {}).id || ''), m = r.metrics || {}, s = r.segments || {};
-    (dailyByCamp[cid] = dailyByCamp[cid] || []).push({ date: s.date || '', spend: Number(m.costMicros || 0) / 1e6, impressions: Number(m.impressions || 0), clicks: Number(m.clicks || 0), conversions: Number(m.conversions || 0) });
+    (dailyByCamp[cid] = dailyByCamp[cid] || []).push({ date: s.date || '', spend: Number(m.costMicros || 0) / 1e6, impressions: Number(m.impressions || 0), clicks: Number(m.clicks || 0), conversions: Number(m.conversions || 0), convValue: Number(m.conversionsValue || 0) });
   }
   const agByCamp = {};
   for (const r of (agRes.rows || [])) {
