@@ -3452,6 +3452,41 @@ function metaAdVideoId(cr) {
 function metaChildAtts(cr) {
   return (cr.object_story_spec && cr.object_story_spec.link_data && Array.isArray(cr.object_story_spec.link_data.child_attachments)) ? cr.object_story_spec.link_data.child_attachments : [];
 }
+// Full-res still uit de creative-spec (geen low-res thumbnail): object_story_spec…picture
+// > link_data.picture > asset_feed_spec.images[0].url > image_url. Defensief, nooit throw.
+function metaCreativeStill(cr) {
+  try {
+    if (!cr) return '';
+    const oss = cr.object_story_spec || {};
+    const ld = oss.link_data || {};
+    const pd = oss.photo_data || {};
+    const vd = oss.video_data || {};
+    const afs = cr.asset_feed_spec || {};
+    const afsImg = (Array.isArray(afs.images) && afs.images[0] && (afs.images[0].url || afs.images[0].permalink_url)) || '';
+    return ld.picture || pd.url || pd.image_url || (vd.image_url || '') || afsImg || cr.image_url || '';
+  } catch (e) { return ''; }
+}
+// Alle carrousel-kaarten uit BEIDE bronnen. link_data.child_attachments = de klassieke
+// carrousel (picture/link/name/description). asset_feed_spec.images/videos = de dynamische
+// (Advantage+) carrousel. Geeft een uniforme {image,video_id,title,link}-lijst. Nooit throw.
+function metaCarouselCards(cr) {
+  try {
+    const out = [];
+    const ch = metaChildAtts(cr);
+    for (const c of ch) {
+      if (!c) continue;
+      out.push({ image: c.picture || '', video_id: c.video_id || '', title: c.name || c.description || '', link: c.link || '' });
+    }
+    if (!out.length) {
+      const afs = (cr && cr.asset_feed_spec) || {};
+      const imgs = Array.isArray(afs.images) ? afs.images : [];
+      const vids = Array.isArray(afs.videos) ? afs.videos : [];
+      for (const im of imgs) { if (im && (im.url || im.permalink_url)) out.push({ image: im.url || im.permalink_url, video_id: '', title: '', link: '' }); }
+      for (const v of vids) { if (v && v.video_id) out.push({ image: v.thumbnail_url || '', video_id: String(v.video_id), title: '', link: '' }); }
+    }
+    return out.filter((c) => c.image || c.video_id);
+  } catch (e) { return []; }
+}
 
 const META_YMD = /^\d{4}-\d{2}-\d{2}$/;
 // time-params: time_range bij geldige from/to, anders date_preset (legacy).
@@ -3713,40 +3748,94 @@ export async function metaCampaignAds(bedrijfId, body, env) {
   const pageTok = {};
   await Promise.all(pageIds.map(async (pid) => { const d = await metaGet(env, pid, { fields: 'access_token' }); if (d.ok && d.data && d.data.access_token) pageTok[pid] = d.data.access_token; }));
 
-  const ads = await Promise.all(adRows.map(async (a) => {
+  // ── Video-bronnen in BULK resolven ───────────────────────────────────────
+  // Verzamel alle video_ids (ad-niveau + carrousel-kaarten) en haal source/picture/
+  // permalink in EÉN gegroepeerde Graph-call per page-token op (?ids=…&fields=…).
+  // Het PAGE-token mag de (dark-post) video's lezen; we groeperen per token zodat we
+  // niet per video een aparte round-trip doen. Volledig defensief — faalt nooit hard.
+  const vidIdsByTok = {};                      // token -> Set(video_id)
+  const adMeta = adRows.map((a) => {
     const cr = a.creative || {};
-    const ins = (a.insights && Array.isArray(a.insights.data) && a.insights.data[0]) || {};
+    const ptok = pageTok[pageOf(cr)] || str(env && env.META_SYSTEM_TOKEN) || '';
     const fmt = metaCreativeFormat(cr);
-    const sid = cr.effective_object_story_id || ''; const ptok = pageTok[pageOf(cr)] || '';
+    const cards = fmt === 'carousel' ? metaCarouselCards(cr) : [];
+    const adVid = metaAdVideoId(cr);
+    if (ptok) {
+      const set = vidIdsByTok[ptok] || (vidIdsByTok[ptok] = new Set());
+      if (adVid) set.add(String(adVid));
+      for (const c of cards) { if (c.video_id) set.add(String(c.video_id)); }
+    }
+    return { a, cr, ptok, fmt, cards, adVid };
+  });
+  const vidInfo = {};                          // video_id -> {source,permalink,picture}
+  await Promise.all(Object.keys(vidIdsByTok).map(async (tok) => {
+    const ids = [...vidIdsByTok[tok]];
+    if (!ids.length) return;
+    try {
+      // Graph staat een ruime ids-batch toe; chunk op 45 om limieten te respecteren.
+      for (let i = 0; i < ids.length; i += 45) {
+        const chunk = ids.slice(i, i + 45);
+        const r = await metaGet(env, '', { ids: chunk.join(','), fields: 'source,permalink_url,picture' }, tok);
+        if (r.ok && r.data && typeof r.data === 'object') {
+          for (const k of Object.keys(r.data)) {
+            const v = r.data[k] || {};
+            vidInfo[k] = { source: v.source || '', permalink: v.permalink_url || '', picture: v.picture || '' };
+          }
+        }
+      }
+    } catch (e) { /* fail-soft: zonder source valt de frontend terug op permalink/poster */ }
+  }));
+
+  const ads = await Promise.all(adMeta.map(async ({ a, cr, ptok, fmt, cards, adVid }) => {
+    const ins = (a.insights && Array.isArray(a.insights.data) && a.insights.data[0]) || {};
+    const sid = cr.effective_object_story_id || '';
+    const still = metaCreativeStill(cr);       // full-res still uit de spec (geen thumbnail)
     const out = {
       id: a.id, name: a.name || '', campaignId: a.campaign_id || '', format: fmt,
-      thumb: cr.thumbnail_url || cr.image_url || '', image: cr.image_url || '',
+      thumb: cr.thumbnail_url || cr.image_url || '', image: still || cr.image_url || '',
       spend: Number(ins.spend) || 0, impressions: Number(ins.impressions) || 0,
       clicks: Number(ins.clicks) || 0, linkClicks: Number(ins.inline_link_clicks) || 0, ctr: Number(ins.ctr) || 0, cpc: Number(ins.cpc) || 0,
     };
-    const vid = metaAdVideoId(cr);
-    if (fmt === 'video' && vid && ptok) {
-      const v = await metaGet(env, String(vid), { fields: 'source,picture' }, ptok);
-      if (v.ok && v.data) { out.videoSrc = v.data.source || ''; out.poster = v.data.picture || ''; }
+    // Video-bron uit de batch (source = afspeelbare .mp4; permalink = fallback-link).
+    if (fmt === 'video' && adVid) {
+      const vi = vidInfo[String(adVid)] || {};
+      if (vi.source) out.videoSrc = vi.source;
+      if (vi.permalink) out.videoPermalink = vi.permalink;
+      if (vi.picture && !out.poster) out.poster = vi.picture;
     }
+    // Carrousel: vul per kaart de afspeelbare videobron in (indien video-kaart).
     if (fmt === 'carousel') {
-      let cards = [];
-      if (ptok && sid) {
-        const pr = await metaGet(env, sid, { fields: 'attachments{subattachments{media}}' }, ptok);
-        const at = pr.ok && pr.data && pr.data.attachments && Array.isArray(pr.data.attachments.data) && pr.data.attachments.data[0];
-        const subs = at && at.subattachments && at.subattachments.data;
-        if (Array.isArray(subs)) cards = subs.map((s) => ({ image: ((s.media || {}).image || {}).src || '', title: '' })).filter((c) => c.image);
-      }
-      if (!cards.length) cards = metaChildAtts(cr).map((ch) => ({ image: ch.picture || '', title: ch.name || '' })).filter((c) => c.image);
-      out.cards = cards;
-      if (cards[0]) out.image = cards[0].image;
+      out.cards = cards.map((c) => {
+        const card = { image: c.image || '', title: c.title || '' };
+        if (c.video_id) {
+          const vi = vidInfo[String(c.video_id)] || {};
+          if (vi.source) card.video = vi.source;
+          if (vi.permalink) card.permalink = vi.permalink;
+          if (!card.image && vi.picture) card.image = vi.picture;
+        }
+        return card;
+      }).filter((c) => c.image || c.video);
+      if (out.cards[0] && out.cards[0].image && !still) out.image = out.cards[0].image;
     }
-    if (ptok && sid && (fmt === 'image' || (fmt === 'video' && !out.poster))) {
+    // Full-res still ophalen via de gepubliceerde post (full_picture) als de spec niets gaf.
+    if (ptok && sid && ((fmt === 'image' && !still) || (fmt === 'video' && !out.poster))) {
       const pr = await metaGet(env, sid, { fields: 'full_picture' }, ptok);
-      if (pr.ok && pr.data && pr.data.full_picture) { if (fmt === 'image') out.image = pr.data.full_picture; if (fmt === 'video' && !out.poster) out.poster = pr.data.full_picture; }
+      if (pr.ok && pr.data && pr.data.full_picture) {
+        if (fmt === 'image' && !still) out.image = pr.data.full_picture;
+        if (fmt === 'video' && !out.poster) out.poster = pr.data.full_picture;
+      }
     }
     if (!out.image) out.image = out.poster || cr.thumbnail_url || '';
     if (!out.thumb) out.thumb = out.image;
+
+    // ── Genormaliseerde, schone media-vorm voor de frontend (additief) ──────
+    try {
+      const cm = { type: fmt, image: out.image || '', video: out.videoSrc || '', permalink: out.videoPermalink || '', poster: out.poster || '', cards: [] };
+      if (fmt === 'carousel') {
+        cm.cards = (out.cards || []).map((c) => ({ image: c.image || '', video: c.video || '', title: c.title || '', permalink: c.permalink || '' }));
+      }
+      out.creativeMedia = cm;
+    } catch (e) { /* never throw — out blijft bruikbaar zonder creativeMedia */ }
     return out;
   }));
 

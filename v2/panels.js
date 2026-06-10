@@ -1073,15 +1073,30 @@ function metaEnsureStyles(){
 .meta-fmt.br-purple{background:#9441DB}.meta-fmt.br-blue{background:#3083DC}.meta-fmt.br-green{background:#12AC4E}
 .meta-lb{position:fixed;inset:0;z-index:9999;background:rgba(20,8,20,.78);display:none;align-items:center;justify-content:center;padding:24px;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
 .meta-lb-box{max-width:680px;width:100%;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.42)}
+.meta-lb-stage{position:relative;background:#000;display:flex;align-items:center;justify-content:center;min-height:280px}
 .meta-lb-box img.meta-lb-media{width:100%;max-height:74vh;object-fit:contain;display:block;background:#000}
 .meta-lb-box video.meta-lb-vid{width:100%;max-height:74vh;display:block;background:#000;outline:none}
 .meta-lb-cap{padding:13px 16px;font-family:var(--font-display);font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:12px}
-.meta-car{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;background:#000}
-.meta-car>div{flex:0 0 100%;scroll-snap-align:center;position:relative}
-.meta-car img{width:100%;max-height:72vh;object-fit:contain;display:block;background:#000}
-.meta-car-t{position:absolute;left:0;right:0;bottom:0;padding:10px 14px;color:#fff;font-size:13px;font-weight:600;background:linear-gradient(transparent,rgba(0,0,0,.6))}
-.meta-car-n{position:absolute;top:10px;right:12px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;font-weight:800;border-radius:999px;padding:3px 10px;z-index:2}
-@media(max-width:560px){.meta-cre-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}`;
+.meta-lb-load{display:flex;flex-direction:column;align-items:center;gap:12px;color:#fff;padding:48px 16px}
+.meta-lb-load .brand-spinner{width:40px;height:40px}
+.meta-lb-load span{font-family:var(--font-display);font-weight:700;font-size:13px;opacity:.92}
+.meta-lb-permalink{display:inline-flex;align-items:center;gap:6px;color:#fff;background:#3083DC;border-radius:999px;padding:8px 16px;font-weight:700;font-size:13px;text-decoration:none;margin:22px auto}
+/* Carrousel met klik-doorklik (pijlen + dots), per kaart in correcte verhouding */
+.meta-car{position:relative;background:#000;overflow:hidden}
+.meta-car-track{display:flex;transition:transform .32s cubic-bezier(.4,0,.2,1)}
+.meta-car-slide{flex:0 0 100%;position:relative;display:flex;align-items:center;justify-content:center;min-height:280px}
+.meta-car-slide img{width:100%;max-height:72vh;object-fit:contain;display:block;background:#000}
+.meta-car-slide video{width:100%;max-height:72vh;display:block;background:#000;outline:none}
+.meta-car-t{position:absolute;left:0;right:0;bottom:0;padding:14px;color:#fff;font-size:13px;font-weight:600;background:linear-gradient(transparent,rgba(0,0,0,.72));pointer-events:none}
+.meta-car-n{position:absolute;top:10px;right:12px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;font-weight:800;border-radius:999px;padding:3px 10px;z-index:3}
+.meta-car-nav{position:absolute;top:50%;transform:translateY(-50%);z-index:3;width:42px;height:42px;border-radius:50%;border:none;background:rgba(0,0,0,.5);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s ease}
+.meta-car-nav:hover{background:rgba(0,0,0,.78)}
+.meta-car-nav[disabled]{opacity:.32;cursor:default}
+.meta-car-nav.prev{left:12px}.meta-car-nav.next{right:12px}
+.meta-car-dots{position:absolute;left:0;right:0;bottom:8px;display:flex;gap:7px;justify-content:center;z-index:3}
+.meta-car-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.42);border:none;padding:0;cursor:pointer;transition:background .15s ease,transform .15s ease}
+.meta-car-dot.on{background:#fff;transform:scale(1.25)}
+@media(max-width:560px){.meta-cre-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}.meta-car-nav{width:36px;height:36px}}`;
   document.head.appendChild(s);
 }
 function metaPeriodLabel(p){ return ({today:'Vandaag',last_7d:'7 dagen',last_30d:'30 dagen'})[p]||p; }
@@ -2486,23 +2501,74 @@ function metaCampaignDetail(m,cur){
   }
   return back+head+kpis+subGrid+creSec;
 }
-function metaCloseLightbox(){ var o=document.getElementById('metaLightbox'); if(o){ o.style.display='none'; o.innerHTML=''; } }
+var _metaLbCar=null; // carrousel-state {idx,n} voor toetsenbord-/pijl-navigatie
+function metaCloseLightbox(){ var o=document.getElementById('metaLightbox'); if(o){ o.style.display='none'; o.innerHTML=''; } _metaLbCar=null; document.removeEventListener('keydown',_metaLbKey); }
+function _metaLbKey(e){
+  if(e.key==='Escape'){ metaCloseLightbox(); return; }
+  if(_metaLbCar){ if(e.key==='ArrowLeft') metaCarGo(-1); else if(e.key==='ArrowRight') metaCarGo(1); }
+}
+// Bouwt de media-inhoud (full-res foto in juiste verhouding / afspeelbare video /
+// klik-doorklik carrousel). Gebruikt de genormaliseerde creativeMedia indien aanwezig,
+// met terugval op de losse velden zodat oude data ook blijft werken.
+function _metaLbMedia(a){
+  var cm=a.creativeMedia||{};
+  var type=cm.type||a.format||'image';
+  if(type==='video'){
+    var vsrc=cm.video||a.videoSrc||''; var poster=cm.poster||a.poster||'';
+    if(vsrc) return '<div class="meta-lb-stage"><video class="meta-lb-vid" controls autoplay playsinline preload="metadata" poster="'+esc(poster)+'" src="'+esc(vsrc)+'"></video></div>';
+    var plink=cm.permalink||a.videoPermalink||'';
+    if(plink) return '<div class="meta-lb-stage">'+(poster?'<img class="meta-lb-media" src="'+esc(poster)+'" alt="" referrerpolicy="no-referrer">':'')+'<a class="meta-lb-permalink" href="'+esc(plink)+'" target="_blank" rel="noopener">'+ic('play',14)+' Bekijk video op Facebook</a></div>';
+    var pf=poster||a.image||a.thumb||'';
+    return pf?'<div class="meta-lb-stage"><img class="meta-lb-media" src="'+esc(pf)+'" alt="" referrerpolicy="no-referrer"></div>':'<div class="meta-lb-stage"><div class="meta-lb-load"><span>Video niet beschikbaar</span></div></div>';
+  }
+  var cards=(cm.cards&&cm.cards.length)?cm.cards:(a.cards||[]);
+  if(type==='carousel' && cards.length){
+    _metaLbCar={idx:0,n:cards.length};
+    var slides=cards.map(function(c){
+      var inner=c.video?'<video src="'+esc(c.video)+'" controls playsinline preload="metadata" poster="'+esc(c.image||'')+'"></video>'
+                       :'<img src="'+esc(c.image||'')+'" alt="" referrerpolicy="no-referrer">';
+      return '<div class="meta-car-slide">'+inner+(c.title?'<div class="meta-car-t">'+esc(c.title)+'</div>':'')+'</div>';
+    }).join('');
+    var dots=cards.map(function(c,j){ return '<button class="meta-car-dot'+(j===0?' on':'')+'" onclick="metaCarTo('+j+')" aria-label="Kaart '+(j+1)+'"></button>'; }).join('');
+    return '<div class="meta-car" id="metaCar">'
+      +'<span class="meta-car-n"><span id="metaCarPos">1</span> / '+cards.length+'</span>'
+      +'<div class="meta-car-track" id="metaCarTrack" style="transform:translateX(0)">'+slides+'</div>'
+      +'<button class="meta-car-nav prev" id="metaCarPrev" disabled onclick="metaCarGo(-1)" aria-label="Vorige">'+_metaChevL()+'</button>'
+      +'<button class="meta-car-nav next" id="metaCarNext"'+(cards.length<2?' disabled':'')+' onclick="metaCarGo(1)" aria-label="Volgende">'+_metaChevR()+'</button>'
+      +'<div class="meta-car-dots">'+dots+'</div></div>';
+  }
+  var src=cm.image||a.image||a.poster||a.thumb||'';
+  if(!src) return '<div class="meta-lb-stage"><div class="meta-lb-load"><span>Geen voorbeeld beschikbaar</span></div></div>';
+  return '<div class="meta-lb-stage"><img class="meta-lb-media" src="'+esc(src)+'" alt="" referrerpolicy="no-referrer"></div>';
+}
+function _metaChevL(){ return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>'; }
+function _metaChevR(){ return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>'; }
+function metaCarTo(j){
+  if(!_metaLbCar) return; j=Math.max(0,Math.min(_metaLbCar.n-1,j)); _metaLbCar.idx=j;
+  var tr=document.getElementById('metaCarTrack'); if(tr) tr.style.transform='translateX(-'+(j*100)+'%)';
+  var pos=document.getElementById('metaCarPos'); if(pos) pos.textContent=(j+1);
+  var prev=document.getElementById('metaCarPrev'); if(prev) prev.disabled=(j<=0);
+  var next=document.getElementById('metaCarNext'); if(next) next.disabled=(j>=_metaLbCar.n-1);
+  var dots=document.querySelectorAll('#metaCar .meta-car-dot'); for(var k=0;k<dots.length;k++) dots[k].classList.toggle('on',k===j);
+  // pauzeer video's op niet-actieve kaarten
+  var vids=document.querySelectorAll('#metaCarTrack video'); for(var v=0;v<vids.length;v++){ try{ vids[v].pause(); }catch(e){} }
+}
+function metaCarGo(d){ if(_metaLbCar) metaCarTo(_metaLbCar.idx+d); }
 function openMetaCreative(i){
   var a=(state._metaAdsView||[])[i]; if(!a) return;
-  var media;
-  if(a.format==='video' && a.videoSrc){
-    media='<video class="meta-lb-vid" controls autoplay playsinline preload="metadata" poster="'+esc(a.poster||'')+'" src="'+esc(a.videoSrc)+'"></video>';
-  } else if(a.format==='carousel' && a.cards && a.cards.length){
-    media='<div class="meta-car"><span class="meta-car-n">'+a.cards.length+' kaarten</span>'+a.cards.map(function(c){ return '<div><img src="'+esc(c.image)+'" alt="" referrerpolicy="no-referrer">'+(c.title?'<div class="meta-car-t">'+esc(c.title)+'</div>':'')+'</div>'; }).join('')+'</div>';
-  } else {
-    var src=a.image||a.poster||a.thumb||''; if(!src) return;
-    media='<img class="meta-lb-media" src="'+esc(src)+'" alt="" referrerpolicy="no-referrer">';
-  }
+  metaEnsureStyles();
+  // 1) Open de lightbox-shell ONMIDDELLIJK met een spinner — directe klik-feedback.
   var ov=document.getElementById('metaLightbox');
   if(!ov){ ov=document.createElement('div'); ov.id='metaLightbox'; ov.className='meta-lb'; ov.addEventListener('click',metaCloseLightbox); document.body.appendChild(ov); }
-  var note=(a.format==='video' && !a.videoSrc)?' — video niet beschikbaar':'';
-  ov.innerHTML='<div class="meta-lb-box" onclick="event.stopPropagation()">'+media+'<div class="meta-lb-cap"><span>'+esc(a.name||'Advertentie')+note+'</span><button class="btn btn-ghost btn-sm" onclick="metaCloseLightbox()">Sluiten</button></div></div>';
+  ov.innerHTML='<div class="meta-lb-box" onclick="event.stopPropagation()"><div class="meta-lb-stage"><div class="meta-lb-load"><div class="brand-spinner"></div><span>Voorbeeld laden…</span></div></div><div class="meta-lb-cap"><span>'+esc(a.name||'Advertentie')+'</span><button class="btn btn-ghost btn-sm" onclick="metaCloseLightbox()">Sluiten</button></div></div>';
   ov.style.display='flex';
+  document.addEventListener('keydown',_metaLbKey);
+  // 2) Vul de echte media in (volgende frame, zodat de spinner zeker geverfd is).
+  requestAnimationFrame(function(){
+    var cur=document.getElementById('metaLightbox'); if(!cur || cur.style.display==='none') return;
+    var note=((a.creativeMedia&&a.creativeMedia.type==='video')||a.format==='video') && !((a.creativeMedia&&a.creativeMedia.video)||a.videoSrc||(a.creativeMedia&&a.creativeMedia.permalink)||a.videoPermalink)?' — video niet beschikbaar':'';
+    cur.innerHTML='<div class="meta-lb-box" onclick="event.stopPropagation()">'+_metaLbMedia(a)+'<div class="meta-lb-cap"><span>'+esc(a.name||'Advertentie')+note+'</span><button class="btn btn-ghost btn-sm" onclick="metaCloseLightbox()">Sluiten</button></div></div>';
+  });
 }
 
 // (Resultaten-tab verwijderd — alle advertentiedata staat nu real-time op de Advertenties-tab via metaAds.)
