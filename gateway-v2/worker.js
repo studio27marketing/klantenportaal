@@ -414,12 +414,15 @@ async function handlePerfReport(request, env) {
 /* ---- ROUTER-SHIM: directe ClickUp-handlers vóór de Make-forward ---------- */
 // Geeft een Response terug als het pad geport is; anders null (→ val door naar Make).
 async function tryHandle(path, bedrijfId, body, claims, env, ctx, ch, noCache) {
+  // TEAM (staff/acting-as): stale-while-revalidate toegestaan -> klant-wissel voelt instant,
+  // data kan tot 5 min achterlopen (alleen voor het team; klanten blijven vers laden).
+  const swr = !!(claims && claims.is_staff === true);
   // READS (met KV-cache voor dashboard/bedrijfContent)
   if (READ_HANDLERS[path]) {
     const cacheable = (path === 'dashboard' || path === 'bedrijfContent' || path === 'metricoolPostStats');
     const run = () => READ_HANDLERS[path](bedrijfId, body, env);
     const res = cacheable
-      ? await withCache(env, ctx, path, bedrijfId, noCache, run)
+      ? await withCache(env, ctx, path, bedrijfId, noCache, run, swr)
       : await run();
     return json(res.body, res.status, ch);
   }
@@ -431,7 +434,7 @@ async function tryHandle(path, bedrijfId, body, claims, env, ctx, ch, noCache) {
       const run = () => BEDRIJFBEHEER_READ_ACTIONS[action](bedrijfId, body, env);
       // alleen get_team cachen (get_offertes is goedkoop + minder hot)
       const res = action === 'get_team'
-        ? await withCache(env, ctx, 'get_team', bedrijfId, noCache, run)
+        ? await withCache(env, ctx, 'get_team', bedrijfId, noCache, run, swr)
         : await run();
       return json(res.body, res.status, ch);
     }

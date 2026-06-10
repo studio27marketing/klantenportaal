@@ -312,10 +312,35 @@ function updateAdminViewToggle(){
    zoek-overlay (openAdminPicker) zodat een admin tussen ALLE klanten kan springen.
    ============================================================================= */
 async function enterAdminMode(){
-  playLoader();
+  // INSTANT: bedrijvenlijst uit de lokale cache (10 min) -> kiezer staat er meteen,
+  // de verse lijst wordt stil op de achtergrond opgehaald (zoekquery blijft staan).
+  var cached=null;
+  try{
+    var raw=localStorage.getItem('s27_admin_companies');
+    if(raw){ var p=JSON.parse(raw); if(p && Array.isArray(p.list) && p.list.length && (Date.now()-(p._t||0)) < 10*60*1000) cached=p.list; }
+  }catch(e){}
+  var bewaar=function(list){ try{ localStorage.setItem('s27_admin_companies', JSON.stringify({_t:Date.now(), list:list})); }catch(e){} };
+  if(cached){
+    state.adminCompanies=cached;
+    openAdminPicker();
+    S27DATA.loadAdminCompanies().then(function(list){
+      if(!Array.isArray(list)||!list.length) return;
+      state.adminCompanies=list; bewaar(list);
+      var el=$id('adminPicker');
+      if(el && el.classList.contains('show')){
+        var q=((($id('apickSearch')||{}).value)||'');
+        el.innerHTML=adminPickerHTML();
+        var s=$id('apickSearch'); if(s && q){ s.value=q; filterAdminPicker(); }
+      }
+    }).catch(function(){});
+    return;
+  }
+  playLoader(); loaderStep(18,'Teamtoegang gecontroleerd…');
   var list=[];
-  try { list = await S27DATA.loadAdminCompanies(); } catch(e){ list=[]; }
+  try { loaderStep(40,'Klantenlijst ophalen…'); list = await S27DATA.loadAdminCompanies(); } catch(e){ list=[]; }
   state.adminCompanies = Array.isArray(list)?list:[];
+  if(state.adminCompanies.length) bewaar(state.adminCompanies);
+  loaderStep(92,'Bijna klaar…');
   hideLoader();
   if(!state.adminCompanies.length){
     renderLogin('v2'); loginErr('Kon de bedrijvenlijst niet laden. Ververs de pagina of meld je opnieuw aan.');

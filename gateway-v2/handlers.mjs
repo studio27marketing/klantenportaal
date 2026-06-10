@@ -605,13 +605,25 @@ async function huisstijlDelete(bedrijfId, body, env) {
    ============================================================================= */
 // page=0,1,2... tot last_page===true; accumuleert .tasks. Fixt Make's page0-bug.
 export async function pageAll(env, buildPath, maxPages = 50) {
+  // Pagina's in golven van 3 PARALLEL (was serieel): grote workspaces (bv. Studio 27 zelf met
+  // 5-6 pagina's) gaan van N round-trips naar ceil(N/3). Volgorde blijft behouden (golf-volgorde);
+  // kost hooguit 2 speculatieve calls op de laatste golf.
+  const BURST = 3;
   const out = [];
-  for (let page = 0; page < maxPages; page++) {
-    const r = await cu.get(env, buildPath(page));
-    if (!r.ok || !r.data) break;            // fail-open: stop, geef wat we hebben
-    const tasks = r.data.tasks || [];
-    out.push(...tasks);
-    if (r.data.last_page === true || tasks.length === 0) break;
+  for (let page = 0; page < maxPages; page += BURST) {
+    const wave = [];
+    for (let i = 0; i < BURST && page + i < maxPages; i++) {
+      wave.push(cu.get(env, buildPath(page + i)).catch(() => ({ ok: false })));
+    }
+    const results = await Promise.all(wave);
+    let done = false;
+    for (const r of results) {
+      if (!r.ok || !r.data) { done = true; break; }   // fail-open: stop, geef wat we hebben
+      const tasks = r.data.tasks || [];
+      out.push(...tasks);
+      if (r.data.last_page === true || tasks.length === 0) { done = true; break; }
+    }
+    if (done) break;
   }
   return out;
 }
@@ -1294,21 +1306,46 @@ export function buildSae(task) {
 }
 
 /* =============================================================================
-   KV-cache-wrapper (TTL 60s) voor reads dashboard/bedrijfContent/get_team.
+   KV-cache-wrapper voor reads dashboard/bedrijfContent/get_team.
    key = endpoint:bedrijfId, bypass via header X-No-Cache, bust bij writes.
+   - Iedereen: <60s oud = verse hit (zoals voorheen).
+   - TEAM (swr=true, staff/acting-as): 60s-5min oud = STALE serveren + stil verversen op de
+     achtergrond -> klant-wissel in de admin-kiezer voelt instant; het team weet dat data
+     enkele minuten kan achterlopen (ze werken zelf in ClickUp). KLANTEN krijgen dit pad NIET:
+     ouder dan 60s = gewoon blocking vers laden (gedrag ongewijzigd).
    ============================================================================= */
-const CACHE_TTL = 60;
+const CACHE_FRESH_MS = 60000;   // verse-venster (iedereen)
+const CACHE_TTL = 300;          // KV-bewaartijd; tussen 60s en 5min = SWR-venster (enkel team)
 function cacheKey(endpoint, bedrijfId) { return `cache:${endpoint}:${bedrijfId}`; }
 
-export async function withCache(env, ctx, endpoint, bedrijfId, noCache, producer) {
+export async function withCache(env, ctx, endpoint, bedrijfId, noCache, producer, swr) {
   if (!env.KV || noCache) return producer();
+  const key = cacheKey(endpoint, bedrijfId);
+  let wrap = null;
   try {
-    const hit = await env.KV.get(cacheKey(endpoint, bedrijfId));
-    if (hit) { try { return { status: 200, body: JSON.parse(hit) }; } catch (e) {} }
+    const hit = await env.KV.get(key);
+    if (hit) {
+      const parsed = JSON.parse(hit);
+      // backward compat: oude entries zonder envelope behandelen als meteen-stale body
+      wrap = (parsed && parsed._t !== undefined) ? parsed : { _t: 0, body: parsed };
+    }
   } catch (e) { /* KV-storing mag read niet breken */ }
+  const refresh = () => producer().then((res) => {
+    if (res && res.status === 200) {
+      return env.KV.put(key, JSON.stringify({ _t: Date.now(), body: res.body }), { expirationTtl: CACHE_TTL });
+    }
+  });
+  if (wrap) {
+    const age = Date.now() - (wrap._t || 0);
+    if (age < CACHE_FRESH_MS) return { status: 200, body: wrap.body };
+    if (swr) {
+      try { ctx && ctx.waitUntil && ctx.waitUntil(refresh().catch(() => {})); } catch (e) {}
+      return { status: 200, body: wrap.body };
+    }
+  }
   const res = await producer();
   if (res && res.status === 200 && env.KV) {
-    try { ctx && ctx.waitUntil && ctx.waitUntil(env.KV.put(cacheKey(endpoint, bedrijfId), JSON.stringify(res.body), { expirationTtl: CACHE_TTL })); } catch (e) {}
+    try { ctx && ctx.waitUntil && ctx.waitUntil(env.KV.put(key, JSON.stringify({ _t: Date.now(), body: res.body }), { expirationTtl: CACHE_TTL })); } catch (e) {}
   }
   return res;
 }
