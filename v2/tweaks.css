@@ -966,3 +966,28 @@ body.mp-lock{overflow:hidden;}
 }
 /* pinch-zoom dempen waar de browser de meta negeert (PWA/Android): enkel pannen toestaan */
 html, body{ touch-action:pan-x pan-y; }
+
+/* === Cluster G: meldingen wisbaar (×-knop per item) === */
+.notif{position:relative;}
+.notif .nclose{flex:none;align-self:flex-start;margin-left:auto;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1;color:var(--ink-4,#9E919E);background:transparent;cursor:pointer;transition:.14s;}
+.notif .nclose:hover{background:var(--paper-2,#F4EFE7);color:var(--s27-orange-ink,#C44514);}
+
+/* === Cluster H: offerte-wizard (mp-overlay-hergebruik) === */
+.ow-modal{max-width:860px;}
+.ow-steps{display:flex;gap:6px;margin-top:6px;}
+.ow-dot{width:22px;height:5px;border-radius:999px;background:var(--line,#E7DFD3);transition:background .2s;}
+.ow-dot.on{background:var(--owc,var(--s27-blue,#3083DC));}
+.ow-takgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+@media(max-width:680px){.ow-takgrid{grid-template-columns:1fr;}}
+.ow-tak{display:flex;align-items:center;gap:12px;text-align:left;padding:15px 16px;border:1px solid var(--line,#E7DFD3);border-radius:14px;background:#fff;cursor:pointer;font:inherit;transition:all .15s ease;}
+.ow-tak:hover{border-color:var(--ink-4,#9E919E);box-shadow:0 4px 14px rgba(60,40,80,.08);transform:translateY(-1px);}
+.ow-tak>svg:last-child{margin-left:auto;color:var(--ink-4,#9E919E);flex:none;}
+.ow-grouphead{font-family:var(--font-display);font-weight:800;font-size:14px;color:var(--ink-2,#3A2A3A);margin:18px 0 8px;padding-bottom:5px;border-bottom:2px solid var(--paper-3,#EFE8DD);}
+.ow-contact{display:flex;gap:9px;flex-wrap:wrap;}
+.ow-sum{padding:16px 18px;}
+.ow-sumrow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px dashed var(--line,#E7DFD3);font-size:13.5px;}
+.ow-sumrow:last-child{border-bottom:none;}
+.ow-sumtak{font-family:var(--font-display);font-weight:800;font-size:14px;border-bottom:1px solid var(--line,#E7DFD3);}
+.ow-takdot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;}
+.ow-sumtotal{font-family:var(--font-display);font-weight:800;font-size:14.5px;border-top:1px solid var(--line,#E7DFD3);margin-top:4px;padding-top:11px;border-bottom:none;}
+.ow-sumnote{font-size:12.5px;color:var(--ink-3,#6B5B6B);padding:7px 0 0;line-height:1.5;}

@@ -210,15 +210,9 @@ function panelStart(){
 
 // svc-kaart-key -> de offerte-samensteller-GROEP die we openen bij 'Vraag offerte aan'.
 // Strategie én Ads gaan bewust naar 'Adverteren' (daar bemachtigen we de aanvraag).
-const SVC_TO_OFFGROUP = { strategie:'Adverteren', ads:'Adverteren', video:'Content & video', website:'Webdesign', seo:'Webdesign', branding:'Branding & grafisch', social:'Social media', opleiding:'Opleidingen' };
-function goDienstOfferte(key){
-  goTab('offertes');
-  const groep=SVC_TO_OFFGROUP[key];
-  setTimeout(function(){
-    if(groep && typeof offSetGroup==='function'){ try{ offSetGroup(groep); }catch(e){} }
-    const card=document.getElementById('offBuilder'); if(card&&card.scrollIntoView) card.scrollIntoView({behavior:'smooth',block:'start'});
-  },90);
-}
+// dienst-tegels openen de offerte-wizard met de juiste tak voorgeselecteerd (stap 2)
+const SVC_TO_TAK = { strategie:'strategie', ads:'ads', video:'video', website:'website', seo:'website', branding:'branding', social:'social', opleiding:'strategie' };
+function goDienstOfferte(key){ openOfferteWizard(SVC_TO_TAK[key]||''); }
 function berichtChatInner(p){
   return `<div style="padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:11px">
     <span class="ber-dot" style="background:var(--c)"></span>
@@ -2924,21 +2918,224 @@ function offerteSetTab(name){
     if(window.scrollTo) window.scrollTo({top:0,behavior:'smooth'});
   } else { renderPanel('offertes'); }
 }
-function goOfferteNieuw(){ state._offTab='nieuw'; if(typeof goTab==='function') goTab('offertes'); }
+function goOfferteNieuw(){ openOfferteWizard(); }   // topbar "Nieuw project" -> de wizard (stap 1: tak kiezen)
 function goOffertes(){ state._offTab='overzicht'; if(typeof goTab==='function') goTab('offertes'); }   // zijbalk: altijd met het overzicht openen
+
+/* =============================================================================
+   OFFERTE-WIZARD (Cluster H): schermvullende 4-staps overlay (mp-overlay-patroon).
+   Stap 1 tak -> stap 2 producten (catalogus) -> stap 3 context -> stap 4 bevestigen.
+   Hergebruikt offCart/offBySku/offEur + de off-prow-stijlen; output = ENDPOINTS.offerteGenereren
+   (PandaDoc blijft server-side uit zolang PANDADOC_CREATE_ENABLED != 'true').
+   ============================================================================= */
+const OW_TAKKEN=[
+  {key:'strategie',label:'Strategie',br:'blue',icon:'strategie',groups:['Strategie','Opleidingen'],sub:'Strategiesessies & opleidingen'},
+  {key:'branding',label:'Branding',br:'pink',icon:'branding',groups:['Branding & grafisch','Overig'],sub:'Logo, huisstijl & drukwerk'},
+  {key:'video',label:'Video- en fotografie',br:'purple',icon:'video',groups:['Content & video','Fotografie','Audio'],sub:'Shoots, montage, foto & audio'},
+  {key:'website',label:'Website en SEO',br:'green',icon:'website',groups:['Webdesign'],sub:'Website, CMS & vindbaarheid'},
+  {key:'ads',label:'Online adverteren',br:'orange',icon:'ads',groups:['Adverteren'],sub:'Meta & Google campagnes'},
+  {key:'social',label:'Social media',br:'yellow',icon:'social',groups:['Social media'],sub:'Beheer & content'},
+];
+function owTak(){ var k=state.ow&&state.ow.takKey; for(var i=0;i<OW_TAKKEN.length;i++){ if(OW_TAKKEN[i].key===k) return OW_TAKKEN[i]; } return null; }
+function owEl(){
+  var el=$id('offWizard');
+  if(!el){ el=document.createElement('div'); el.id='offWizard'; el.className='mp-overlay';
+    el.addEventListener('mousedown',function(e){ el._downScrim=(e.target===el); });
+    el.addEventListener('click',function(e){ if(e.target===el && el._downScrim) closeOfferteWizard(); });
+    document.body.appendChild(el); }
+  return el;
+}
+function owEsc(e){ if(e.key==='Escape') closeOfferteWizard(); }
+function openOfferteWizard(takKey){
+  state.ow={ step:(takKey?2:1), takKey:(takKey||''), search:'', note:(state._offerteOpm||''), contact:'uitwerken', submitting:false, _doneHTML:'' };
+  // off-stijlen in <head> injecteren: de overlay leeft buiten #page, waar offStyle normaal landt
+  var s=offBuilderStyleOnce();
+  if(s){ var t=document.createElement('template'); t.innerHTML=s; document.head.appendChild(t.content.firstChild); }
+  var el=owEl(); el.classList.add('show'); document.body.classList.add('mp-lock');
+  document.addEventListener('keydown',owEsc);
+  owRender();
+}
+function closeOfferteWizard(){
+  var el=$id('offWizard'); if(el){ el.classList.remove('show'); el.innerHTML=''; }
+  document.removeEventListener('keydown',owEsc);
+  document.body.classList.remove('mp-lock');
+  state.ow=null;   // selectie (state._offerteCart) blijft bewust bewaard — heropenen = verder waar je was
+}
+function owHeader(){
+  var s=state.ow||{}; var tak=owTak(); var br=(tak&&tak.br)||'blue';
+  var titles={1:'Waar gaat je project over?',2:'Wat heb je nodig?',3:'Vertel ons iets meer',4:'Klopt alles?',done:'Aanvraag verstuurd'};
+  var back=(s.step!=='done'&&Number(s.step)>1)?'<button class="mp-back" onclick="owBack()" aria-label="Terug">'+ic('arrow',18)+'</button>':'<span class="mp-back-sp"></span>';
+  var dots=(s.step==='done')?'':'<div class="ow-steps">'+[1,2,3,4].map(function(n){ return '<span class="ow-dot'+(n<=Number(s.step)?' on':'')+'" style="--owc:var(--s27-'+br+')"></span>'; }).join('')+'</div>';
+  return '<div class="mp-head">'+back+'<div class="mp-head-c"><span class="mp-head-eyebrow">Nieuw project</span><b>'+esc(titles[s.step]||'')+'</b>'+dots+'</div><button class="mp-close" onclick="closeOfferteWizard()" aria-label="Sluiten">'+ic('plus',22)+'</button></div>';
+}
+function owBack(){ var s=state.ow; if(!s) return; if(s.step==='done') return; s.step=Math.max(1,Number(s.step)-1); owRender(); }
+function owNext(){ var s=state.ow; if(!s) return; s.step=Number(s.step)+1; owRender(); }
+function owPickTak(k){ if(!state.ow) return; state.ow.takKey=k; state.ow.step=2; owRender(); }
+function owStep1(){
+  return '<p class="mp-intro">Kies de tak waarin je iets wil opstarten. Daarna stel je zelf samen wat je nodig hebt — wij werken het persoonlijk uit.</p>'
+    +'<div class="ow-takgrid">'+OW_TAKKEN.map(function(t){
+      return '<button class="ow-tak br-'+t.br+'" onclick="owPickTak(\''+t.key+'\')"><span class="mp-host-av" style="background:var(--s27-'+t.br+')">'+ic(t.icon,20)+'</span><span class="mp-host-tx"><b>'+esc(t.label)+'</b><span class="mp-host-tag">'+esc(t.sub)+'</span></span>'+ic('arrow',16)+'</button>';
+    }).join('')+'</div>';
+}
+function owProductRow(p, showGroup){
+  var c=offCart(), qty=c[p.sku]||0;
+  var sub=(showGroup? (p.group+(p.sub?(' · '+p.sub):'')) : (p.sub||''));
+  var priceTxt=(Number(p.price)>0)?offEur(p.price):'op maat';
+  var stepper=qty>0
+    ? '<div class="off-step"><button class="off-stepbtn" aria-label="Minder" onclick="owQty(\''+esc(p.sku)+'\',-1)">'+ic('minus',15)+'</button><span class="off-qty">'+qty+'</span><button class="off-stepbtn" aria-label="Meer" onclick="owQty(\''+esc(p.sku)+'\',1)">'+ic('plus',15)+'</button></div>'
+    : '<button class="btn btn-branch br-purple btn-sm off-addbtn" onclick="owAdd(\''+esc(p.sku)+'\')">'+ic('plus',14)+' Toevoegen</button>';
+  return '<div class="off-prow'+(qty>0?' in-cart':'')+'" data-sku="'+esc(p.sku)+'">'
+    +'<div class="off-pinfo"><div class="off-pname">'+esc(p.name)+'</div>'
+    +(sub?'<div class="off-psub">'+esc(sub)+'</div>':'')
+    +(offDescShort(p.desc_html)?'<div class="off-pdesc">'+esc(offDescShort(p.desc_html))+'</div>':'')
+    +'</div><div class="off-pright"><div class="off-pprice">'+priceTxt+'</div>'+stepper+'</div></div>';
+}
+function owListHTML(){
+  var s=state.ow||{}; var tak=owTak(); var cat=offCatalog();
+  var q=String(s.search||'').trim().toLowerCase();
+  if(q){
+    var hits=cat.filter(function(p){ return (p.name||'').toLowerCase().indexOf(q)>=0 || (p.sub||'').toLowerCase().indexOf(q)>=0 || (p.group||'').toLowerCase().indexOf(q)>=0; });
+    return hits.length ? hits.map(function(p){return owProductRow(p,true);}).join('') : '<div class="off-noresult">Geen producten gevonden voor "'+esc(s.search)+'". Probeer een andere zoekterm.</div>';
+  }
+  var groups=(tak&&tak.groups)||[];
+  return groups.map(function(g){
+    var items=cat.filter(function(p){return p.group===g;});
+    if(!items.length) return '';
+    var bySub={}; items.forEach(function(p){ var k=p.sub||'Algemeen'; (bySub[k]=bySub[k]||[]).push(p); });
+    var inner=Object.keys(bySub).map(function(k){
+      return (Object.keys(bySub).length>1?'<div class="off-subhead">'+esc(k)+'</div>':'')+bySub[k].map(function(p){return owProductRow(p,false);}).join('');
+    }).join('');
+    return (groups.length>1?'<div class="ow-grouphead">'+esc(g)+'</div>':'')+inner;
+  }).join('');
+}
+function owStep2(){
+  var s=state.ow||{};
+  return '<div class="off-search"><span class="off-searchic">'+ic('search',16)+'</span><input id="owSearch" type="search" placeholder="Zoek een product of dienst…" value="'+esc(s.search||'')+'" oninput="owSearchInput(this.value)"></div>'
+    +'<div id="owList" class="off-list">'+owListHTML()+'</div>';
+}
+function owSearchInput(v){
+  if(!state.ow) return; state.ow.search=v;
+  clearTimeout(state._owSearchT);
+  state._owSearchT=setTimeout(function(){ var l=$id('owList'); if(l) l.innerHTML=owListHTML(); },120);
+}
+function owRefreshRow(sku){
+  var l=$id('owList'); if(!l) return;
+  var safe=(window.CSS&&CSS.escape)?CSS.escape(sku):String(sku).replace(/"/g,'\\"');
+  var row=l.querySelector('.off-prow[data-sku="'+safe+'"]'); if(!row) return;
+  var p=offBySku(sku); if(!p) return;
+  var t=document.createElement('template'); t.innerHTML=owProductRow(p, !!String(state.ow&&state.ow.search||'').trim());
+  row.replaceWith(t.content.firstChild);
+}
+function owRefreshFoot(){ var f=$id('owFoot'); if(f) f.innerHTML=owFootInner(); }
+function owAdd(sku){ var c=offCart(); c[sku]=(c[sku]||0)+1; owRefreshRow(sku); owRefreshFoot(); }
+function owQty(sku,d){ var c=offCart(); var n=(c[sku]||0)+d; if(n<=0) delete c[sku]; else c[sku]=n; owRefreshRow(sku); owRefreshFoot(); }
+const OW_CONTACT={ uitwerken:'Werk de offerte voor me uit', bellen:'Bel me even op', meeting:'Plan eerst een meeting' };
+function owSetContact(k){ if(!state.ow) return; state.ow.contact=k; document.querySelectorAll('#offWizard .ow-contact .mp-tg').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-k')===k); }); }
+function owStep3(){
+  var s=state.ow||{};
+  return '<p class="mp-intro">Vertel kort wat je voor ogen hebt — zo kunnen we je offerte meteen juist uitwerken.</p>'
+    +'<label class="mp-lbl">Context (optioneel)</label>'
+    +'<textarea id="owNote" class="mp-note" rows="4" placeholder="Context, timing, doel…" oninput="state.ow.note=this.value">'+esc(s.note||'')+'</textarea>'
+    +'<label class="mp-lbl" style="margin-top:14px">Hoe gaan we verder?</label>'
+    +'<div class="ow-contact">'+Object.keys(OW_CONTACT).map(function(k){
+      return '<button type="button" class="mp-tg'+(s.contact===k?' on':'')+'" data-k="'+k+'" onclick="owSetContact(\''+k+'\')">'+esc(OW_CONTACT[k])+'</button>';
+    }).join('')+'</div>';
+}
+function owStep4(){
+  var s=state.ow||{}; var tak=owTak(); var c=offCart();
+  var skus=Object.keys(c).filter(function(k){return c[k]>0;});
+  var rows=skus.map(function(sku){
+    var p=offBySku(sku); if(!p) return '';
+    var line=(Number(p.price)||0)*(c[sku]||0);
+    return '<div class="ow-sumrow"><span>'+c[sku]+'× '+esc(p.name)+'</span><b>'+((Number(p.price)>0)?offEur(line):'op maat')+'</b></div>';
+  }).join('');
+  var hasOpMaat=skus.some(function(sku){ var p=offBySku(sku); return p && !(Number(p.price)>0); });
+  return '<div class="ow-sum card">'
+    +(tak?'<div class="ow-sumrow ow-sumtak"><span><i class="ow-takdot" style="background:var(--s27-'+tak.br+')"></i>'+esc(tak.label)+'</span></div>':'')
+    +rows
+    +'<div class="ow-sumrow ow-sumtotal"><span>Totaal (richtprijs)</span><b>'+offEur(offCartTotal())+'</b></div>'
+    +(hasOpMaat?'<div class="off-cartnote">Items "op maat" prijzen we persoonlijk in je offerte.</div>':'')
+    +(String(s.note||'').trim()?'<div class="ow-sumnote"><b>Jouw context:</b> '+esc(s.note)+'</div>':'')
+    +'<div class="ow-sumnote"><b>Vervolg:</b> '+esc(OW_CONTACT[s.contact]||OW_CONTACT.uitwerken)+'</div>'
+  +'</div>'
+  +'<p class="off-cartdisc" style="margin-top:12px">'+ic('info',14)+' Je krijgt een richtprijs — wij kijken alles persoonlijk na voor je definitieve offerte.</p>';
+}
+function owFootInner(){
+  var s=state.ow||{}; var tak=owTak(); var br=(tak&&tak.br)||'blue';
+  if(s.step===1||s.step==='done') return '';
+  if(s.step===2){
+    var n=offCartCount();
+    return '<button class="btn btn-branch br-'+br+' mp-confirm"'+(n?'':' disabled')+' onclick="owNext()">Verder · '+n+' product'+(n===1?'':'en')+' · '+offEur(offCartTotal())+'</button>';
+  }
+  if(s.step===3) return '<button class="btn btn-branch br-'+br+' mp-confirm" onclick="owNext()">Naar bevestiging</button>';
+  if(s.step===4) return '<button class="btn btn-branch br-'+br+' mp-confirm" id="owSubmitBtn" onclick="owSubmit(this)">'+ic('send',16)+' Verstuur aanvraag</button>';
+  return '';
+}
+function owRender(){
+  var el=$id('offWizard'); if(!el||!state.ow) return;
+  var s=state.ow; var body='';
+  if(s.step==='done') body=s._doneHTML;
+  else if(s.step===1) body=owStep1();
+  else if(s.step===2) body=owStep2();
+  else if(s.step===3) body=owStep3();
+  else body=owStep4();
+  el.innerHTML='<div class="mp-modal ow-modal" onclick="event.stopPropagation()">'+owHeader()
+    +'<div class="mp-scroll" id="owScroll">'+body+'</div>'
+    +'<div class="mp-foot" id="owFoot">'+owFootInner()+'</div></div>';
+  if(s.step===2){ var inp=$id('owSearch'); if(inp && s.search) inp.focus(); }
+}
+function owDone(msg){
+  var s=state.ow; if(!s) return;
+  var tak=owTak(); var br=(tak&&tak.br)||'blue';
+  s.step='done';
+  s._doneHTML='<div class="mp-done"><div class="mp-done-ic br-'+br+'">'+ic('st_approved',60)+'</div>'
+    +'<b class="mp-done-title">Aanvraag verstuurd!</b>'
+    +'<p class="mp-done-sub">'+esc(msg||'We hebben je aanvraag goed ontvangen.')+' Je vindt je offerte hier terug zodra ze klaarstaat.</p>'
+    +'<button class="btn btn-branch br-'+br+'" onclick="closeOfferteWizard();goOffertes()">Bekijk mijn offertes</button>'
+    +((s.contact==='meeting')?'<button class="btn btn-outline" onclick="closeOfferteWizard();openMeetingPlanner(\'nieuw\')">Plan meteen een meeting</button>':'')
+    +'<button class="btn btn-ghost" onclick="closeOfferteWizard()">Sluiten</button></div>';
+  owRender();
+}
+async function owSubmit(btn){
+  var s=state.ow; if(!s||s.submitting) return;
+  var c=offCart(); var skus=Object.keys(c).filter(function(k){return c[k]>0;});
+  if(!skus.length){ owBack(); return; }
+  var tak=owTak();
+  var items=skus.map(function(sku){ var p=offBySku(sku)||{}; return { sku:sku, naam:String(p.name||sku), groep:String(p.group||''), prijs:Number(p.price)||0, aantal:c[sku]||1 }; });
+  var note=String(s.note||'').trim();
+  var opmerking=(note?note+'\n\n':'')+'— Aangevraagd via de offerte-wizard —\nTak: '+(tak?tak.label:'-')+'\nContactvoorkeur: '+(OW_CONTACT[s.contact]||OW_CONTACT.uitwerken);
+  if(state.demoMode || !state.session){ state._offerteCart={}; state._offerteOpm=''; owDone('Dit is de voorbeeldweergave — in je echte portaal versturen we deze aanvraag meteen.'); return; }
+  s.submitting=true;
+  if(btn){ btn.disabled=true; btn.innerHTML='Versturen…'; }
+  try{
+    var r=await api(ENDPOINTS.offerteGenereren, { items:items, opmerking:opmerking });
+    var d=(r&&r.data)?r.data:null;
+    if(r&&r.ok&&d&&d.ok!==false&&(d.offerte_task_url||d.offerte_task_id||d.pandadoc_id)){
+      state._offerteCart={}; state._offerteOpm=''; state.data.offertes=null;
+      s.submitting=false;
+      owDone(d.message);
+      return;
+    }
+    throw new Error('offerte_failed');
+  }catch(e){
+    s.submitting=false;
+    if(btn){ btn.disabled=false; btn.innerHTML=ic('send',16)+' Opnieuw proberen'; }
+    var sc=$id('owScroll'); if(sc && !sc.querySelector('.mp-notebox-err')){ var w=document.createElement('div'); w.className='mp-notebox mp-notebox-err'; w.textContent='Versturen lukte niet. Probeer het zo opnieuw, of stuur ons een bericht via de chat.'; sc.insertBefore(w, sc.firstChild); }
+  }
+}
 function offerteOverzichtHTML(){
   var live=_live(); var raw = live ? S27DATA.offertes() : OFFERTE_MOCK;
   if(raw===null||raw===undefined) return '<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je offertes worden geladen…</p></div>';
   var offs = live ? raw.filter(function(o){return offerteVisible(o.status);}) : raw;  // verberg concept/draft
-  if(!offs.length) return '<div class="empty" style="padding:44px 20px;text-align:center"><div class="em-ic">'+ic('doc',52)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog geen offertes</b><p style="margin:6px 0 16px;color:var(--ink-3)">Hier verschijnen je offertes zodra we er één klaarzetten.</p><button class="btn btn-primary btn-sm" onclick="offerteSetTab(\'nieuw\')">Nieuwe offerte aanvragen</button></div>';
+  if(!offs.length) return '<div class="empty" style="padding:44px 20px;text-align:center"><div class="em-ic">'+ic('doc',52)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog geen offertes</b><p style="margin:6px 0 16px;color:var(--ink-3)">Hier verschijnen je offertes zodra we er één klaarzetten.</p><button class="btn btn-primary btn-sm" onclick="openOfferteWizard()">Nieuwe offerte aanvragen</button></div>';
   var lopend=offs.filter(function(o){return !offerteAfgerond(o.status);}), afge=offs.filter(function(o){return offerteAfgerond(o.status);});
   return '<p class="sdesc" style="margin:-2px 0 16px;max-width:60ch">Klik een offerte open om ze te bekijken of goed te keuren (PandaDoc). Een vraag? Stel ze per offerte, ze komt rechtstreeks bij je Studio 27-contact terecht.</p>'
     +(lopend.length?'<div class="section-head" style="margin-top:4px"><h2>Lopend</h2><span class="count">'+lopend.length+'</span></div><div style="display:flex;flex-direction:column;gap:10px">'+lopend.map(offerteRow).join('')+'</div>':'')
     +(afge.length?'<div class="section-head" style="margin-top:30px"><h2>Goedgekeurd &amp; eerdere</h2><span class="count">'+afge.length+'</span></div><div style="display:flex;flex-direction:column;gap:10px">'+afge.map(offerteRow).join('')+'</div>':'')
-    +((lopend.length||afge.length)?'<div style="margin-top:24px;text-align:center"><button class="btn btn-outline btn-sm" onclick="offerteSetTab(\'nieuw\')">'+ic('doc',15)+' Nieuwe offerte aanvragen</button></div>':'');
+    +((lopend.length||afge.length)?'<div style="margin-top:24px;text-align:center"><button class="btn btn-outline btn-sm" onclick="openOfferteWizard()">'+ic('doc',15)+' Nieuwe offerte aanvragen</button></div>':'');
 }
 function offerteBodyHTML(){
-  if(offerteTab()==='nieuw') return '<div class="section-head" style="margin-top:2px"><h2>Nieuwe offerte aanvragen</h2></div><p class="sdesc" style="margin:-2px 0 14px;max-width:62ch">Stel zelf je offerte samen uit de catalogus. Je aanvraag komt rechtstreeks bij je Studio 27-contact terecht.</p>'+offerteSamensteller();
+  // 'nieuw'-tab is een slanke CTA naar de wizard (de inline-samensteller is vervangen door de overlay)
+  if(offerteTab()==='nieuw') return '<div class="card" style="padding:30px 26px;text-align:center;max-width:560px;margin:8px auto"><div style="font-family:var(--font-display);font-weight:800;font-size:18px;margin-bottom:6px">Nieuwe offerte aanvragen</div><p class="sdesc" style="margin:0 auto 16px;max-width:46ch">Kies je tak, stel je producten samen en verstuur — wij werken je offerte persoonlijk uit.</p><button class="btn btn-primary" onclick="openOfferteWizard()">'+ic('doc',16)+' Start je aanvraag</button></div>';
   return offerteOverzichtHTML();
 }
 function panelOffertes(){ return offerteSubnav()+'<div id="offBody">'+offerteBodyHTML()+'</div>'; }
@@ -3370,13 +3567,8 @@ function buildOverlays(){
 
   <!-- Notification panel -->
   <div class="notif-panel" id="notifPanel">
-    <div class="notif-head"><h3>Meldingen</h3><button class="mark" onclick="markAllSeen()">Alles gezien</button></div>
-    <div class="notif-list">
-      <div class="notif br-purple"><div class="nic">${ic('st_feedback',18)}</div><div class="ntx"><b>Nieuwe deliverable</b><p>Montage "Onder één dak" staat klaar voor review.</p><div class="ntm">10 min geleden</div></div><span class="unread"></span></div>
-      <div class="notif br-blue"><div class="nic">${ic('st_feedback',18)}</div><div class="ntx"><b>Feedback gevraagd</b><p>We willen je input op de positionering 2026.</p><div class="ntm">2 u geleden</div></div><span class="unread"></span></div>
-      <div class="notif br-orange"><div class="nic">${ic('st_plan',18)}</div><div class="ntx"><b>Plan dit in</b><p>Tijd voor je maandelijkse rapportage.</p><div class="ntm">gisteren</div></div><span class="unread"></span></div>
-      <div class="notif seen br-green"><div class="nic">${ic('st_approved',18)}</div><div class="ntx"><b>Goedgekeurd</b><p>Contentkalender mei is bevestigd.</p><div class="ntm">2 dagen geleden</div></div></div>
-    </div>
+    <div class="notif-head"><h3>Meldingen</h3><button class="mark" onclick="markAllSeen()">Alles wissen</button></div>
+    <div class="notif-list"></div>
   </div>
 
   <!-- Chatbot -->
@@ -3384,10 +3576,7 @@ function buildOverlays(){
   <div class="bot-panel" id="botPanel">
     <div class="bot-head"><div class="ba">${logo27(24)}</div><div><h3>Vraag het aan Studio 27</h3><div class="st"><i></i> meestal binnen enkele minuten</div></div><button class="bclose" onclick="toggleBot()"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
     <div class="bot-msgs" id="botMsgs"><div class="bmsg bot" id="botGreet">Hallo! Ik help je graag op weg. Waarmee kan ik je verder helpen?</div></div>
-    <div class="bot-chips" id="botChips">
-      <button class="bot-chip" onclick="botAsk(this)">Wanneer is mijn volgende meeting?</button>
-      <button class="bot-chip" onclick="botAsk(this)">Status van mijn website?</button>
-      <button class="bot-chip" onclick="botAsk(this)">Hoe geef ik feedback?</button>
+    <div class="bot-chips" id="botChips"><!-- dynamisch gevuld door renderBotChips() bij elke open -->
     </div>
     <div class="bot-input"><input id="botInput" placeholder="Typ je vraag…" onkeydown="if(event.key==='Enter')botSend()"><button class="chat-send" onclick="botSend()">${ic('send',18)}</button></div>
   </div>

@@ -206,20 +206,52 @@ async function loadAndEnter(skipLink){
   state.data = { dashboard:null, details:{}, chats:{}, meetings:null, bedrijf:null, team:null, huisstijl:null, offertes:null, metricool:null, metricoolStats:null, metricoolPostStats:null, ads:null };
   state.perfUrl = null;
   try {
-    // skipLink (bedrijf-switch): switchCompany koppelde + ververste de claim al -> niet opnieuw provisionen
-    if(!skipLink){ try { await loadCompaniesAndLink(); } catch(e){} }
+    loaderStep(14,'Inloggen gecontroleerd…');
+    // skipLink (bedrijf-switch): switchCompany koppelde + ververste de claim al -> niet opnieuw provisionen.
+    // SNELPAD terugkerende klant: klopt de bedrijf_id-claim in het huidige token al (en is er geen
+    // afwijkende bedrijfskeuze), dan hoeft de provision-roundtrip (1,5-2,5s) NIET in het kritieke pad —
+    // hij draait op de achtergrond (switcher/badges verversen daarna stil). Bij een verouderde claim
+    // vangt de bestaande JIT-provision-retry in apiV2 het dashboard-403 alsnog op.
+    if(!skipLink){
+      var _cb=''; try { _cb=await tokenClaimBedrijf(); } catch(e){}
+      var _sel=lastSelectedBedrijf();
+      if(_cb && (!_sel || _sel===_cb)){
+        loadCompaniesAndLink().then(function(){ try{ renderCompanySwitcher(); updateNavBadges(); }catch(e){} }).catch(function(){});
+      } else {
+        loaderStep(22,'Je account koppelen…');
+        try { await loadCompaniesAndLink(); } catch(e){}
+      }
+    }
+    loaderStep(38,'Je projecten ophalen…');
     // dashboard + bedrijf zijn onafhankelijk -> parallel (scheelt 1 seriële round-trip vóór de render).
     // loadBedrijf (enkel voor de voornaam in de begroeting) mag de boot nooit breken: eigen catch.
     await Promise.all([
       S27DATA.loadDashboard(),
       S27DATA.loadBedrijf().catch(function(){ return false; })
     ]);
+    loaderStep(78,'Bijna klaar…');
     await applyRoute();
     afterEnter();
     renderCompanySwitcher();
     updateNavBadges();   // bel-/zijbalk-badges meteen op het nieuwe bedrijf zetten (ook na deep-link/switch)
     const np=$id('notifPanel'); if(np && np.classList.contains('show')) renderNotifs();
+    setTimeout(prefetchAdjacent, 800);   // na de eerste render: aangrenzende tabs alvast warm (tab-switch = 0ms)
   } finally { hideLoader(); }   // loader blijft staan tot alles gerenderd is -> geen template-flits
+}
+/* ---- Prefetch van aangrenzende tabs ná de eerste render (Cluster L) ----
+   Sequentieel met korte pauzes (rate-limit-vriendelijk; reads zijn 60s KV-gecached in de worker),
+   via S27DATA.once zodat een gelijktijdige tab-klik dezelfde promise deelt i.p.v. dubbel te laden. */
+async function prefetchAdjacent(){
+  if(state.demoMode || !state.session || state.viewMode==='login') return;
+  var steps=[];
+  if(!state.data.metricool) steps.push(['metricool', function(){ return S27DATA.loadMetricool(); }]);
+  if(!state.data.meetings)  steps.push(['meetings',  function(){ return S27DATA.loadMeetings(); }]);
+  if(!state.data.team)      steps.push(['team',      function(){ return S27DATA.loadTeam(); }]);
+  if(!state.data.offertes)  steps.push(['offertes',  function(){ return S27DATA.loadOffertes(); }]);
+  for(var i=0;i<steps.length;i++){
+    try { await S27DATA.once(steps[i][0], steps[i][1]); } catch(e){}
+    await new Promise(function(r){ setTimeout(r, 350); });   // spreiding: nooit een burst
+  }
 }
 function afterEnter(){
   applyTakVisibility();
@@ -339,9 +371,17 @@ async function adminEnterCompany(id){
 /* ---- app/login tonen + loader ---- */
 function showApp(){ $id('app').classList.add('show'); const l=$id('login'); l.classList.add('hide'); l.style.opacity=''; window.scrollTo(0,0); }
 function showLogin(){ $id('app').classList.remove('show'); const l=$id('login'); l.classList.remove('hide'); l.style.opacity='1'; }
-function playLoader(){ const loader=$id('loader'); if(!loader) return; state._loaderAt=Date.now(); loader.style.opacity='1'; loader.classList.add('show'); }
-// Loader pas verbergen wanneer de inhoud écht klaar is (geen mock-flits meer). Min. 900ms tegen geflikker.
-function hideLoader(){ const loader=$id('loader'); if(!loader) return; const wait=Math.max(0, 900-(Date.now()-(state._loaderAt||0))); setTimeout(()=>{ loader.style.opacity='0'; setTimeout(()=>{ try{loader.classList.remove('show');}catch(e){} },460); }, wait); }
+function playLoader(){ const loader=$id('loader'); if(!loader) return; state._loaderAt=Date.now(); loader.style.opacity='1'; loader.classList.add('show'); loaderStep(6,'Je portaal wordt klaargezet…'); }
+// laadbalk-fase: vult de balk naar pct% + optioneel label (volgt de échte progressie, geen fake animatie)
+function loaderStep(pct,label){
+  try{
+    var l=$id('loader'); if(!l) return;
+    var b=l.querySelector('.loader-bar i'); if(b) b.style.width=Math.max(4,Math.min(100,pct))+'%';
+    if(label){ var t=l.querySelector('.loader-text'); if(t) t.textContent=label; }
+  }catch(e){}
+}
+// Loader pas verbergen wanneer de inhoud écht klaar is (geen mock-flits meer). Min. 450ms tegen geflikker.
+function hideLoader(){ const loader=$id('loader'); if(!loader) return; loaderStep(100); const wait=Math.max(0, 450-(Date.now()-(state._loaderAt||0))); setTimeout(()=>{ loader.style.opacity='0'; setTimeout(()=>{ try{loader.classList.remove('show');}catch(e){} },460); }, wait); }
 function onSessionExpired(msg){
   stopChatPoll();
   const b=document.createElement('div');
@@ -362,8 +402,14 @@ async function ensureTabData(name){
   if(['start','projecten','berichten','socials','advertenties'].indexOf(name)>=0){ if(!state.data.dashboard) await S27DATA.loadDashboard(); }
   if(name==='meetings' && !state.data.meetings) await S27DATA.loadMeetings();
   if(name==='huisstijl' && !state.data.huisstijl) await S27DATA.loadHuisstijl();
-  if(name==='facturatie'||name==='instellingen'){ if(!state.data.bedrijf) await S27DATA.loadBedrijf(); if(!state.data.team) await S27DATA.loadTeam(); }
-  if(name==='instellingen' && !state.data.huisstijl) await S27DATA.loadHuisstijl();
+  // facturatie/instellingen: onafhankelijke loads parallel (was serieel: -300 à -800ms)
+  if(name==='facturatie'||name==='instellingen'){
+    var _fi=[];
+    if(!state.data.bedrijf) _fi.push(S27DATA.loadBedrijf());
+    if(!state.data.team) _fi.push(S27DATA.loadTeam());
+    if(name==='instellingen' && !state.data.huisstijl) _fi.push(S27DATA.loadHuisstijl());
+    if(_fi.length){ try{ await Promise.all(_fi); }catch(e){} }
+  }
   // (Resultaten-tab verwijderd — advertentiedata staat real-time op de Advertenties-tab)
   if(name==='offertes'){ var _t=[]; if(!state.data.offertes) _t.push(S27DATA.loadOffertes()); if(!state.data.bedrijf) _t.push(S27DATA.loadBedrijf()); if(_t.length){ try{ await Promise.all(_t); }catch(e){} } }
   if(name==='socials'){ var _s=[]; if(!state.data.metricool) _s.push(S27DATA.loadMetricool());
@@ -406,6 +452,7 @@ async function goTab(name){
 // In demo laten we de mock staan; in live tonen we echte tellingen / verbergen we wat we niet betrouwbaar weten.
 function updateNavBadges(){
   try{
+    updateBellBadge();   // bel-badge werkt óók in demo (meldingen zijn daar nu wisbaar)
     if(state.demoMode) return;
     var setB=function(tab,n){ var b=document.querySelector('.sb-item[data-tab="'+tab+'"] .sb-badge'); if(!b)return; if(n>0){ b.textContent=n; b.style.display=''; } else { b.style.display='none'; } };
     var projs=(window.S27DATA&&S27DATA.projects())||null;
@@ -415,7 +462,6 @@ function updateNavBadges(){
     // berichten + topbar-bel: geen betrouwbare ongelezen-telling -> mock-badge verbergen
     var bb=document.querySelector('.sb-item[data-tab="berichten"] .sb-badge'); if(bb) bb.style.display='none';
     var topBer=document.querySelector('.icon-btn[data-topnav="berichten"] .badge'); if(topBer) topBer.style.display='none';
-    var bell=document.querySelector('#bellBtn .badge'); if(bell){ var n=unseenCount(); if(n>0){ bell.textContent=n; bell.style.display=''; } else bell.style.display='none'; }
   }catch(e){}
 }
 function needsLoad(name){
@@ -705,7 +751,44 @@ function botFormatAnswer(raw){
   }
   return escapeHtml(s).replace(/\n/g,'<br>');
 }
-function botContext(){ const ps=S27DATA.projects()||[]; return ps.map(p=>'- '+p.name+' ('+p.disc+', '+p.status+(p.pct?(', '+p.pct+'% klaar'):'')+')').join('\n')||'(geen projecten)'; }
+// context voor de AI: projecten + aanstaande meetings + openstaande actiepunten (zo kan de
+// bestaande antwoord-flow ook de dynamische chip-vragen aan)
+function botContext(){
+  const ps=S27DATA.projects()||[];
+  var out=ps.map(p=>'- '+p.name+' ('+p.disc+', '+p.status+(p.pct?(', '+p.pct+'% klaar'):'')+')').join('\n')||'(geen projecten)';
+  try{
+    var mt=(window.S27DATA&&S27DATA.meetings&&S27DATA.meetings())||null;
+    var up=((mt&&mt.list)||[]).filter(function(m){return m.dt&&m.dt.getTime()>=Date.now();}).slice(0,3);
+    if(up.length) out+='\n\nAanstaande meetings:\n'+up.map(function(m){return '- '+(m.titel||m.title||'meeting')+' op '+m.dt.toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'long'});}).join('\n');
+    var cock=(typeof _notifItems==='function'?_notifItems():[]);
+    if(cock.length) out+='\n\nOpenstaande actiepunten voor de klant:\n'+cock.slice(0,4).map(function(a){return '- '+a.title+' ('+(a.cat||'')+')';}).join('\n');
+  }catch(e){}
+  return out;
+}
+/* ---- Dynamische chatbot-chips (Cluster G): voorgestelde vragen op basis van context ---- */
+function botDynChips(){
+  var chips=[];
+  try{
+    var ps=(window.S27DATA&&S27DATA.projects&&S27DATA.projects())||(typeof PROJECTS!=='undefined'?PROJECTS:[]);
+    var actief=(ps||[]).filter(function(p){return p.status!=='done';});
+    // 1) openstaand actiepunt -> meest relevante vraag eerst
+    var cock=(typeof _notifItems==='function'?_notifItems():[]);
+    if(cock.length) chips.push('Wat staat er voor mij klaar?');
+    // 2) status van het recentste actieve project (concreet, herkenbaar)
+    if(actief.length) chips.push('Wat is de status van '+String(actief[0].name||'').replace(/"/g,'')+'?');
+    // 3) meetings (vaste vraag — heeft ook een demo-antwoord)
+    chips.push('Wanneer is mijn volgende meeting?');
+    // 4) feedback-uitleg (vaste vraag — heeft ook een demo-antwoord)
+    chips.push('Hoe geef ik feedback?');
+  }catch(e){}
+  if(!chips.length) chips=Object.keys(BOT_ANSWERS);
+  return chips.slice(0,4);
+}
+function renderBotChips(){
+  var c=$id('botChips'); if(!c) return;
+  c.style.display='';   // chips komen terug bij her-openen, ook na een eerder gesprek
+  c.innerHTML=botDynChips().map(function(q){ return '<button class="bot-chip" onclick="botAsk(this)">'+escapeHtml(q)+'</button>'; }).join('');
+}
 
 /* ---- bedrijf-switcher in de topbar (>1 bedrijf) ---- */
 function renderCompanySwitcher(){
@@ -768,8 +851,11 @@ function notifId(a){
   // anders mismatcht 'SEO & GEO' (& -> &amp;) en daalt de bel-badge niet bij die melding.
   return raw.replace(/[^A-Za-z0-9:_-]+/g,'_');
 }
-function _readSeen(){ try{ return JSON.parse(localStorage.getItem(_seenKey())||'{}')||{}; }catch(e){ return {}; } }
-function _writeSeen(o){ try{ localStorage.setItem(_seenKey(), JSON.stringify(o||{})); }catch(e){} }
+// demo: in-memory seen (refresh reset de demo); live: localStorage (persistent, per bedrijf)
+function _readSeen(){ if(state.demoMode) return state._demoSeen||{}; try{ return JSON.parse(localStorage.getItem(_seenKey())||'{}')||{}; }catch(e){ return {}; } }
+function _writeSeen(o){ if(state.demoMode){ state._demoSeen=o||{}; return; } try{ localStorage.setItem(_seenKey(), JSON.stringify(o||{})); }catch(e){} }
+// één bron voor meldingen in beide modes (demo = dezelfde mock als Home's "Voor jou te doen")
+function _notifItems(){ if(state.demoMode) return (typeof _COCKPIT_MOCK!=='undefined')?_COCKPIT_MOCK:[]; return (window.S27DATA&&S27DATA.cockpit())||[]; }
 // houd enkel keys die nog overeenkomen met een bestaande actie (pragmatisch: gezien=gezien, anders opruimen)
 function pruneSeen(ids){
   var seen=_readSeen(), live={}, changed=false;
@@ -782,38 +868,53 @@ function isSeen(a){ return !!_readSeen()[notifId(a)]; }
 function markSeen(a){ var s=_readSeen(); s[notifId(a)]=Date.now(); _writeSeen(s); }
 // aantal ongeziene acties (voor de bel-badge), met opruiming van verdwenen acties
 function unseenCount(){
-  if(state.demoMode) return 0;
-  var cock=(window.S27DATA&&S27DATA.cockpit())||[];
+  var cock=_notifItems();
   var seen=pruneSeen(cock.map(notifId));
   return cock.filter(function(a){ return !seen[notifId(a)]; }).length;
 }
+// bel-badge apart bijwerken (werkt ook in demo, los van de andere nav-badges)
+function updateBellBadge(){
+  try{
+    var bell=document.querySelector('#bellBtn .badge'); if(!bell) return;
+    var n=unseenCount();
+    if(n>0){ bell.textContent=n; bell.style.display=''; } else bell.style.display='none';
+  }catch(e){}
+}
 
-// echte meldingen uit de cockpit (Voor jou te doen), klikbaar -> juiste bestemming
+// echte meldingen uit de cockpit (Voor jou te doen), klikbaar -> juiste bestemming.
+// Weggeklikte/geziene meldingen VERDWIJNEN (niet meer gedimd onderaan); per item een ×-knop.
 function renderNotifs(){
-  if(state.demoMode) return;
   const list=document.querySelector('#notifPanel .notif-list'); if(!list) return;
-  const cock=(window.S27DATA&&S27DATA.cockpit())||[];
+  const cock=_notifItems();
   pruneSeen(cock.map(notifId));
-  if(!cock.length){ list.innerHTML='<div class="empty" style="padding:30px 16px;text-align:center"><div class="em-ic">'+ic('st_approved',40)+'</div><b style="font-family:var(--font-display);font-size:14px;color:var(--ink-2)">Alles is bij!</b><p style="margin:6px 0 0;font-size:13px;color:var(--ink-3)">Geen openstaande acties, wij werken ondertussen verder.</p></div>'; return; }
-  // ongeziene bovenaan, geziene (gedimd) onderaan
-  const sorted=cock.slice().sort(function(a,b){ return (isSeen(a)?1:0)-(isSeen(b)?1:0); });
-  list.innerHTML=sorted.map(function(a){
-    var seen=isSeen(a); var nid=escapeHtml(notifId(a));
-    return '<button class="notif br-'+a.br+(seen?' seen':'')+'" data-nid="'+nid+'" style="width:100%;text-align:left;border:none;border-bottom:1px solid var(--line);background:none;cursor:pointer;display:flex;gap:12px;align-items:flex-start;padding:14px 16px'+(seen?';opacity:.55':'')+'" onclick="notifGo(\''+nid+'\');'+a.action+'"><div class="nic">'+ic(a.icon||'st_feedback',18)+'</div><div class="ntx"><b>'+escapeHtml(a.title)+'</b><p>'+(a.ctx||'')+'</p><div class="ntm">'+escapeHtml(a.tag||'')+'</div></div>'+((a.urgent&&!seen)?'<span class="unread"></span>':'')+'</button>';
+  const open=cock.filter(function(a){ return !isSeen(a); });
+  if(!open.length){ list.innerHTML='<div class="empty" style="padding:30px 16px;text-align:center"><div class="em-ic">'+ic('st_approved',40)+'</div><b style="font-family:var(--font-display);font-size:14px;color:var(--ink-2)">Alles is bij!</b><p style="margin:6px 0 0;font-size:13px;color:var(--ink-3)">Geen openstaande acties, wij werken ondertussen verder.</p></div>'; return; }
+  list.innerHTML=open.map(function(a){
+    var nid=escapeHtml(notifId(a));
+    return '<button class="notif br-'+a.br+'" data-nid="'+nid+'" style="width:100%;text-align:left;border:none;border-bottom:1px solid var(--line);background:none;cursor:pointer;display:flex;gap:12px;align-items:flex-start;padding:14px 16px" onclick="notifGo(\''+nid+'\');'+a.action+'"><div class="nic">'+ic(a.icon||'st_feedback',18)+'</div><div class="ntx"><b>'+escapeHtml(a.title)+'</b><p>'+(a.ctx||'')+'</p><div class="ntm">'+escapeHtml(a.tag||'')+'</div></div>'+(a.urgent?'<span class="unread"></span>':'')+'<span class="nclose" role="button" aria-label="Melding wissen" onclick="event.stopPropagation();notifDismiss(\''+nid+'\')">&times;</span></button>';
   }).join('');
 }
-// klik op één melding -> markeer díe als gezien + werk de badge meteen bij
+// klik op één melding -> actie uitvoeren ÉN melding verdwijnt (seen = weggeklikt)
 function notifGo(nid){
   const np=$id('notifPanel'); if(np)np.classList.remove('show');
-  if(nid){ var s=_readSeen(); s[nid]=Date.now(); _writeSeen(s); updateNavBadges(); }
+  if(nid){
+    var s=_readSeen(); s[nid]=Date.now(); _writeSeen(s);
+    var el=document.querySelector('#notifPanel .notif[data-nid="'+nid+'"]'); if(el) el.remove();
+    updateBellBadge();
+  }
+}
+// ×-knop: melding wissen zonder de actie uit te voeren (paneel blijft open)
+function notifDismiss(nid){
+  if(!nid) return;
+  var s=_readSeen(); s[nid]=Date.now(); _writeSeen(s);
+  var el=document.querySelector('#notifPanel .notif[data-nid="'+nid+'"]'); if(el) el.remove();
+  if(!document.querySelector('#notifPanel .notif')) renderNotifs();   // lege lijst -> "Alles is bij!"
+  updateBellBadge();
 }
 function markAllSeen(){
-  if(!state.demoMode){
-    var cock=(window.S27DATA&&S27DATA.cockpit())||[]; var s=_readSeen();
-    cock.forEach(function(a){ s[notifId(a)]=Date.now(); }); _writeSeen(s);
-  }
-  document.querySelectorAll('#notifPanel .notif').forEach(n=>{ n.classList.add('seen'); n.style.opacity='.55'; const u=n.querySelector('.unread'); if(u)u.remove(); });
-  const b=document.querySelector('#bellBtn .badge'); if(b)b.style.display='none';
+  var cock=_notifItems(); var s=_readSeen();
+  cock.forEach(function(a){ s[notifId(a)]=Date.now(); }); _writeSeen(s);
+  renderNotifs(); updateBellBadge();
 }
 document.addEventListener('click',e=>{ if(!e.target.closest('.client-switch-wrap')){ const m=$id('switchMenu'); if(m)m.style.display='none'; const sw=$id('clientSwitch'); if(sw)sw.classList.remove('open'); } if(!e.target.closest('#notifPanel')&&!e.target.closest('#bellBtn')){ const np=$id('notifPanel'); if(np)np.classList.remove('show'); } });
 function filterDienst(disc,btn){ document.querySelectorAll('.proj-filter .fchip').forEach(c=>c.classList.remove('active')); if(btn)btn.classList.add('active'); const body=$id('projViewBody'); if(!body)return; body.querySelectorAll('.projflat-card').forEach(c=>{ const ds=(c.dataset.discs||'').split('|'); c.style.display=(disc==='all'||ds.indexOf(disc)>=0)?'':'none'; }); body.querySelectorAll('.projcluster').forEach(sec=>{ const vis=[].slice.call(sec.querySelectorAll('.projflat-card')).some(c=>c.style.display!=='none'); sec.style.display=vis?'':'none'; }); }
@@ -1933,7 +2034,7 @@ async function shootInitAutocomplete(tid){
   }catch(e){ /* autocomplete optioneel */ }
 }
 
-function toggleBot(){ const p=$id('botPanel'),f=$id('botFab'); const open=p.classList.toggle('show'); f.style.display=open?'none':'flex'; if(open){ const g=$id('botGreet'); if(g){ var nm=(typeof _greetNaam==='function'?_greetNaam():'')||''; g.innerHTML='Hallo '+escapeHtml(nm||'daar')+'! Ik help je graag op weg. Waarmee kan ik je verder helpen?'; } const inp=p.querySelector('.bot-input input'); if(inp)setTimeout(()=>inp.focus(),50); } }
+function toggleBot(){ const p=$id('botPanel'),f=$id('botFab'); const open=p.classList.toggle('show'); f.style.display=open?'none':'flex'; if(open){ const g=$id('botGreet'); if(g){ var nm=(typeof _greetNaam==='function'?_greetNaam():'')||''; g.innerHTML='Hallo '+escapeHtml(nm||'daar')+'! Ik help je graag op weg. Waarmee kan ik je verder helpen?'; } if(typeof renderBotChips==='function') renderBotChips(); const inp=p.querySelector('.bot-input input'); if(inp)setTimeout(()=>inp.focus(),50); } }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($id('tourScrim')&&$id('tourScrim').classList.contains('show'))endTour(false); else if(state.viewMode==='project')goTab('projecten'); } });
 
 /* ---------- Onboarding tour (1x + opt-out) ---------- */

@@ -290,6 +290,16 @@ async function provisionFetch(token, selectedBid){
   return d;
 }
 function lastSelectedBedrijf(){ try { return localStorage.getItem('s27_active_bedrijf') || ''; } catch(e){ return ''; } }
+// bedrijf_id-claim uit het HUIDIGE Firebase-token (zonder refresh): klopt die al, dan kan de
+// provision-roundtrip (1,5-2,5s) uit het kritieke boot-pad en op de achtergrond draaien.
+async function tokenClaimBedrijf(){
+  try {
+    var t = window.S27Auth ? await window.S27Auth.token() : null;
+    if(!t) return '';
+    var p = JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+    return String(p.bedrijf_id || '');
+  } catch(e){ return ''; }
+}
 async function tryProvision(token){
   const d = await provisionFetch(token, lastSelectedBedrijf());
   return !!(d && d.ok && d.bedrijf_id);
@@ -300,7 +310,9 @@ async function loadCompaniesAndLink(){
     const token = window.S27Auth ? await window.S27Auth.token() : null;
     if(!token) return;
     const d = await provisionFetch(token, lastSelectedBedrijf());
-    if(d && d.ok && window.S27Auth) { await window.S27Auth.token(true); }
+    // geforceerde token-refresh (200-400ms) enkel als de claim écht wijzigde
+    // (claim_changed ontbreekt bij een oudere worker -> dan veiligheidshalve wél verversen)
+    if(d && d.ok && window.S27Auth) { if(d.claim_changed !== false) await window.S27Auth.token(true); }
   } catch(e){}
 }
 // Wissel van actief bedrijf (>1 bedrijf): verse claim + herlaad dashboard via hook.

@@ -644,48 +644,63 @@ function cleanCompanyName(n) { n = str(n).replace(/\|/g, '/').replace(/::/g, ':'
 export async function provisionLookup(env, email, selectedBid) {
   email = str(email).trim().toLowerCase();
   if (!email) return { companies: '', ids: [], bid: '' };
-  const rows = []; const seen = {};
-  const add = (id, naam) => { id = str(id); if (!id || seen[id]) return; seen[id] = 1; rows.push(`${id}::${cleanCompanyName(naam)}`); };
 
-  // Lookup B: contactpersonen met email == X -> hun task-IDs + contact-ZIJDE relatie 'Bedrijf'.
-  const contactIds = [];
-  for (let page = 0; page < 25; page++) {
-    const q = `/list/${LIST.contactpersonen}/task?include_closed=true&page=${page}&custom_fields=` +
-      encodeURIComponent(`[{"field_id":"${FIELD.email}","operator":"=","value":"${email}"}]`);
-    let r; try { r = await cu.get(env, q); } catch (e) { break; }
-    const tasks = (r && r.data && r.data.tasks) || [];
-    for (const t of tasks) {
-      if (t && t.id) contactIds.push(str(t.id));
-      const rel = getCF(t, FIELD.bedrijf);
-      if (Array.isArray(rel)) for (const b of rel) { if (b && b.id && str(b.name).trim()) add(b.id, b.name); }
-    }
-    if (tasks.length < 100 || (r && r.data && r.data.last_page)) break;
-  }
-  // Lookup C: Bedrijven waarvan het contact-veld een van die contact-IDs bevat (bedrijf-ZIJDE).
-  // Cruciaal: de twee relatievelden in ClickUp spiegelen NIET, dus een koppeling aan de bedrijf-kant
-  // staat niet automatisch op de contactfiche. Zonder deze stap miste de oude flow die bedrijven.
-  if (contactIds.length) {
+  // Lookup B->C en Lookup A zijn onafhankelijk -> PARALLEL (-300 a -800ms). Elk verzamelt in een
+  // EIGEN buffer; de merge hieronder houdt de volgorde deterministisch: B/C eerst (eigen bedrijf
+  // vooraan, bepaalt de default-bid), dan A. Dedupe gebeurt pas bij de merge.
+  const lookupBC = async () => {
+    const out = [];
+    // Lookup B: contactpersonen met email == X -> hun task-IDs + contact-ZIJDE relatie 'Bedrijf'.
+    const contactIds = [];
     for (let page = 0; page < 25; page++) {
-      const q = `/list/${LIST.bedrijven}/task?include_closed=true&page=${page}&custom_fields=` +
-        encodeURIComponent(`[{"field_id":"${FIELD.contact}","operator":"ANY","value":${JSON.stringify(contactIds)}}]`);
+      const q = `/list/${LIST.contactpersonen}/task?include_closed=true&page=${page}&custom_fields=` +
+        encodeURIComponent(`[{"field_id":"${FIELD.email}","operator":"=","value":"${email}"}]`);
       let r; try { r = await cu.get(env, q); } catch (e) { break; }
       const tasks = (r && r.data && r.data.tasks) || [];
-      for (const t of tasks) { if (t && t.id && str(t.name).trim()) add(t.id, t.name); }
+      for (const t of tasks) {
+        if (t && t.id) contactIds.push(str(t.id));
+        const rel = getCF(t, FIELD.bedrijf);
+        if (Array.isArray(rel)) for (const b of rel) { if (b && b.id && str(b.name).trim()) out.push([str(b.id), b.name]); }
+      }
       if (tasks.length < 100 || (r && r.data && r.data.last_page)) break;
     }
-  }
-  // Lookup A: Bedrijven met portaalToegang-CSV die het e-mailadres EXACT als token bevat.
-  for (let page = 0; page < 25; page++) {
-    const q = `/list/${LIST.bedrijven}/task?include_closed=true&page=${page}&custom_fields=` +
-      encodeURIComponent(`[{"field_id":"${FIELD.portaalToegang}","operator":"IS NOT NULL"}]`);
-    let r; try { r = await cu.get(env, q); } catch (e) { break; }
-    const tasks = (r && r.data && r.data.tasks) || [];
-    for (const t of tasks) {
-      const toks = str(getCF(t, FIELD.portaalToegang)).toLowerCase().split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean);
-      if (toks.includes(email)) add(t.id, t.name);
+    // Lookup C: Bedrijven waarvan het contact-veld een van die contact-IDs bevat (bedrijf-ZIJDE).
+    // Cruciaal: de twee relatievelden in ClickUp spiegelen NIET, dus een koppeling aan de bedrijf-kant
+    // staat niet automatisch op de contactfiche. Zonder deze stap miste de oude flow die bedrijven.
+    if (contactIds.length) {
+      for (let page = 0; page < 25; page++) {
+        const q = `/list/${LIST.bedrijven}/task?include_closed=true&page=${page}&custom_fields=` +
+          encodeURIComponent(`[{"field_id":"${FIELD.contact}","operator":"ANY","value":${JSON.stringify(contactIds)}}]`);
+        let r; try { r = await cu.get(env, q); } catch (e) { break; }
+        const tasks = (r && r.data && r.data.tasks) || [];
+        for (const t of tasks) { if (t && t.id && str(t.name).trim()) out.push([str(t.id), t.name]); }
+        if (tasks.length < 100 || (r && r.data && r.data.last_page)) break;
+      }
     }
-    if (tasks.length < 100 || (r && r.data && r.data.last_page)) break;
-  }
+    return out;
+  };
+  const lookupA = async () => {
+    const out = [];
+    // Lookup A: Bedrijven met portaalToegang-CSV die het e-mailadres EXACT als token bevat.
+    for (let page = 0; page < 25; page++) {
+      const q = `/list/${LIST.bedrijven}/task?include_closed=true&page=${page}&custom_fields=` +
+        encodeURIComponent(`[{"field_id":"${FIELD.portaalToegang}","operator":"IS NOT NULL"}]`);
+      let r; try { r = await cu.get(env, q); } catch (e) { break; }
+      const tasks = (r && r.data && r.data.tasks) || [];
+      for (const t of tasks) {
+        const toks = str(getCF(t, FIELD.portaalToegang)).toLowerCase().split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean);
+        if (toks.includes(email)) out.push([str(t.id), t.name]);
+      }
+      if (tasks.length < 100 || (r && r.data && r.data.last_page)) break;
+    }
+    return out;
+  };
+  const [bcRows, aRows] = await Promise.all([lookupBC().catch(() => []), lookupA().catch(() => [])]);
+
+  const rows = []; const seen = {};
+  const add = (id, naam) => { id = str(id); if (!id || seen[id]) return; seen[id] = 1; rows.push(`${id}::${cleanCompanyName(naam)}`); };
+  for (const [id, naam] of bcRows) add(id, naam);   // B/C eerst -> eigen bedrijf vooraan
+  for (const [id, naam] of aRows) add(id, naam);
 
   const companies = rows.join('|');
   const ids = rows.map((x) => x.split('::')[0]);

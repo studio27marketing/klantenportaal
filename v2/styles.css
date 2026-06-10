@@ -535,9 +535,9 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;}
   font-family:var(--font-display);font-weight:900;font-size:28px;letter-spacing:-0.03em;animation:badgePop .55s var(--bounce) both;box-shadow:0 6px 16px rgba(48,131,220,.35);}
 .loader-text{font-family:var(--font-display);font-weight:700;font-size:14px;color:var(--ink-3);}
 .loader-bar{width:220px;height:6px;border-radius:var(--r-pill);background:var(--paper-3);overflow:hidden;}
-.loader-bar i{display:block;height:100%;width:6%;border-radius:var(--r-pill);background:linear-gradient(90deg,var(--s27-blue),var(--s27-blue-ink));animation:loadFill 1.75s var(--ease-out) forwards;}
+/* laadbalk volgt nu de ECHTE laadfases (loaderStep in portal.js) i.p.v. een fake 1,75s-animatie */
+.loader-bar i{display:block;height:100%;width:6%;border-radius:var(--r-pill);background:linear-gradient(90deg,var(--s27-blue),var(--s27-blue-ink));transition:width .45s var(--ease-out);}
 @keyframes badgePop{from{transform:scale(.4);opacity:0;}to{transform:scale(1);opacity:1;}}
-@keyframes loadFill{0%{width:6%;}60%{width:72%;}100%{width:100%;}}
 .bot-panel{position:fixed;bottom:26px;right:26px;width:min(380px,calc(100vw - 32px));height:min(560px,80vh);background:var(--paper);
   border-radius:var(--r-lg);box-shadow:var(--sh-lg);z-index:85;display:none;flex-direction:column;overflow:hidden;
   animation:popIn .3s var(--bounce);transform-origin:bottom right;}

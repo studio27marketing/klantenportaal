@@ -135,6 +135,16 @@
   /* =========================================================================
      LOADERS (async), vullen state.data, retourneren of het lukte
      ========================================================================= */
+  // in-flight-dedupe: prefetch + gelijktijdige tab-klik delen dezelfde promise (geen dubbele API-call)
+  var _inflight = {};
+  DATA.once = function(key, fn){
+    if(_inflight[key]) return _inflight[key];
+    var p = Promise.resolve().then(fn);
+    var clear = function(){ delete _inflight[key]; };
+    p.then(clear, clear);
+    _inflight[key] = p;
+    return p;
+  };
   DATA.loadDashboard = async function(){
     if(!live()) return false;
     var res = await api(ENDPOINTS.dashboard, base());

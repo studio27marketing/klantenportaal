@@ -383,9 +383,11 @@ async function handleProvision(request, env, cors) {
   let res;
   try { res = await provisionLookup(env, email, selectedBid); }
   catch (e) { return fail({ email, error: 'lookup_failed' }); }
-  // claim zetten mag de bedrijvenlijst niet breken (best-effort).
-  if (res.bid) { try { await setBedrijfClaim(env, email, res.bid); } catch (e) {} }
-  return json({ ok: !!res.bid, bedrijf_id: res.bid, email, companies: res.companies }, 200, cors);
+  // claim zetten mag de bedrijvenlijst niet breken (best-effort). Enkel schrijven als de claim
+  // écht wijzigt: de SA-mint + 2 Firebase-REST-calls kosten 400-800ms en zijn anders zinloos.
+  const claimChanged = !!res.bid && String(claims.bedrijf_id || '') !== String(res.bid);
+  if (claimChanged) { try { await setBedrijfClaim(env, email, res.bid); } catch (e) {} }
+  return json({ ok: !!res.bid, bedrijf_id: res.bid, email, companies: res.companies, claim_changed: claimChanged }, 200, cors);
 }
 
 /* ---- PERFORMANCE-RAPPORT: gescopet ophalen uit de ads-cache (key = bedrijf_id) ---- */
@@ -613,7 +615,15 @@ export default {
       let abody = {};
       try { abody = await request.json(); } catch (e) { abody = {}; }
       try {
+        // staff-picker: volledige Bedrijven-paginering is zwaar -> 300s KV-cache (bedrijvenlijst
+        // wijzigt zelden; -500 a -1500ms per staff-login). Cache is staff-only data.
+        if (env.KV) {
+          try { const hit = await env.KV.get('cache:adminCompanies'); if (hit) return json(JSON.parse(hit), 200, ch); } catch (e) {}
+        }
         const r = await adminCompanies(env, abody || {});
+        if (r.status === 200 && env.KV) {
+          try { ctx.waitUntil(env.KV.put('cache:adminCompanies', JSON.stringify(r.body), { expirationTtl: 300 })); } catch (e) {}
+        }
         return json(r.body, r.status, ch);
       } catch (e) {
         return json({ ok: false, error: 'handler_error' }, 502, ch);

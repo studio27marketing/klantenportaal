@@ -48,8 +48,9 @@ function emit(phase, extra) {
 }
 
 async function load() {
-  const appMod = await import(`${G}/firebase-app.js`);
-  fb = await import(`${G}/firebase-auth.js`);
+  // beide CDN-modules parallel (-100 a -300ms tot login-klaar)
+  const [appMod, authMod] = await Promise.all([import(`${G}/firebase-app.js`), import(`${G}/firebase-auth.js`)]);
+  fb = authMod;
   const app = appMod.initializeApp(firebaseConfig);
   auth = fb.getAuth(app);
 }
