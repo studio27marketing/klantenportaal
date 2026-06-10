@@ -2958,6 +2958,7 @@ function closeOfferteWizard(){
   var el=$id('offWizard'); if(el){ el.classList.remove('show'); el.innerHTML=''; }
   document.removeEventListener('keydown',owEsc);
   document.body.classList.remove('mp-lock');
+  if(state.ow && state.ow.note!=null) state._offerteOpm=state.ow.note;   // notitie net zo persistent als de mand
   state.ow=null;   // selectie (state._offerteCart) blijft bewust bewaard — heropenen = verder waar je was
 }
 function owHeader(){
@@ -2978,11 +2979,12 @@ function owStep1(){
 }
 function owProductRow(p, showGroup){
   var c=offCart(), qty=c[p.sku]||0;
+  var sku=String(p.sku||'').replace(/[^A-Za-z0-9_-]/g,'');   // whitelist vóór inline-onclick (quote-breakout-proof)
   var sub=(showGroup? (p.group+(p.sub?(' · '+p.sub):'')) : (p.sub||''));
   var priceTxt=(Number(p.price)>0)?offEur(p.price):'op maat';
   var stepper=qty>0
-    ? '<div class="off-step"><button class="off-stepbtn" aria-label="Minder" onclick="owQty(\''+esc(p.sku)+'\',-1)">'+ic('minus',15)+'</button><span class="off-qty">'+qty+'</span><button class="off-stepbtn" aria-label="Meer" onclick="owQty(\''+esc(p.sku)+'\',1)">'+ic('plus',15)+'</button></div>'
-    : '<button class="btn btn-branch br-purple btn-sm off-addbtn" onclick="owAdd(\''+esc(p.sku)+'\')">'+ic('plus',14)+' Toevoegen</button>';
+    ? '<div class="off-step"><button class="off-stepbtn" aria-label="Minder" onclick="owQty(\''+sku+'\',-1)">'+ic('minus',15)+'</button><span class="off-qty">'+qty+'</span><button class="off-stepbtn" aria-label="Meer" onclick="owQty(\''+sku+'\',1)">'+ic('plus',15)+'</button></div>'
+    : '<button class="btn btn-branch br-purple btn-sm off-addbtn" onclick="owAdd(\''+sku+'\')">'+ic('plus',14)+' Toevoegen</button>';
   return '<div class="off-prow'+(qty>0?' in-cart':'')+'" data-sku="'+esc(p.sku)+'">'
     +'<div class="off-pinfo"><div class="off-pname">'+esc(p.name)+'</div>'
     +(sub?'<div class="off-psub">'+esc(sub)+'</div>':'')

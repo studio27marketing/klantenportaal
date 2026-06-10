@@ -305,15 +305,19 @@ async function tryProvision(token){
   return !!(d && d.ok && d.bedrijf_id);
 }
 // Bij login: koppel + haal de bedrijvenlijst (switcher) + forceer een verse claim.
-async function loadCompaniesAndLink(){
+// selectedBidOverride: het boot-snelpad geeft de token-claim mee zodat een lege/afwijkende
+// localStorage de achtergrond-provision nooit naar een ÁNDER default-bedrijf (ids[0]) laat flippen.
+// Retourneert de provision-respons zodat de caller een claim-mismatch kan detecteren.
+async function loadCompaniesAndLink(selectedBidOverride){
   try {
     const token = window.S27Auth ? await window.S27Auth.token() : null;
-    if(!token) return;
-    const d = await provisionFetch(token, lastSelectedBedrijf());
+    if(!token) return null;
+    const d = await provisionFetch(token, selectedBidOverride || lastSelectedBedrijf());
     // geforceerde token-refresh (200-400ms) enkel als de claim écht wijzigde
     // (claim_changed ontbreekt bij een oudere worker -> dan veiligheidshalve wél verversen)
     if(d && d.ok && window.S27Auth) { if(d.claim_changed !== false) await window.S27Auth.token(true); }
-  } catch(e){}
+    return d;
+  } catch(e){ return null; }
 }
 // Wissel van actief bedrijf (>1 bedrijf): verse claim + herlaad dashboard via hook.
 // localStorage wordt PAS geschreven na een bevestigde provision (d.ok && d.bedrijf_id); zo blijft een

@@ -135,16 +135,21 @@
   /* =========================================================================
      LOADERS (async), vullen state.data, retourneren of het lukte
      ========================================================================= */
-  // in-flight-dedupe: prefetch + gelijktijdige tab-klik delen dezelfde promise (geen dubbele API-call)
+  // in-flight-dedupe: prefetch + gelijktijdige tab-klik delen dezelfde promise (geen dubbele API-call).
+  // Keys zijn per bedrijf gescoped en de cache wordt bij elke boot/switch geleegd (resetInflight in
+  // loadAndEnter) zodat een oude-bedrijf-promise nooit aan de nieuwe sessie wordt uitgedeeld.
   var _inflight = {};
+  function _ifKey(key){ return key + ':' + String(state.activeBedrijf || (state.session && state.session.bedrijf_id) || ''); }
   DATA.once = function(key, fn){
-    if(_inflight[key]) return _inflight[key];
+    var k = _ifKey(key);
+    if(_inflight[k]) return _inflight[k];
     var p = Promise.resolve().then(fn);
-    var clear = function(){ delete _inflight[key]; };
+    var clear = function(){ delete _inflight[k]; };
     p.then(clear, clear);
-    _inflight[key] = p;
+    _inflight[k] = p;
     return p;
   };
+  DATA.resetInflight = function(){ _inflight = {}; };
   DATA.loadDashboard = async function(){
     if(!live()) return false;
     var res = await api(ENDPOINTS.dashboard, base());
@@ -271,7 +276,8 @@
         var isShoot=it.type==='shoot';
         out.push({ br:br.br, cat:br.label, title:'Klaar om in te plannen',
           ctx:'Er staat een nieuwe taak voor je klaar bij <b>'+esc(p.naam)+'</b>'+(it.label?' ('+esc(it.label)+')':'')+'. Je kunt nu '+(isShoot?'je shoot':'een meeting')+' inplannen.',
-          cta:(isShoot?'Plan shoot':'Plan moment'), action:"openProject('"+esc(p.task_id)+"','projecten')", urgent:true, icon:'st_plan' });
+          cta:(isShoot?'Plan shoot':'Plan moment'), action:"openProject('"+esc(p.task_id)+"','projecten')", urgent:true, icon:'st_plan',
+          nid:'plan::'+p.task_id+'::'+(it.task_id||it.label||it.type||'') });   // uniek per plan-item (anders wist 1 klik álle plan-kaarten van dit project)
       });
       // Project-chat wacht op de klant: worker-veld chat_wacht_op_klant (Cluster F). Inert zolang de worker
       // dit veld nog niet levert (undefined -> geen kaart), dus veilig vóór de worker-deploy.

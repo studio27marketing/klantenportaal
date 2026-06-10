@@ -385,8 +385,10 @@ async function handleProvision(request, env, cors) {
   catch (e) { return fail({ email, error: 'lookup_failed' }); }
   // claim zetten mag de bedrijvenlijst niet breken (best-effort). Enkel schrijven als de claim
   // écht wijzigt: de SA-mint + 2 Firebase-REST-calls kosten 400-800ms en zijn anders zinloos.
-  const claimChanged = !!res.bid && String(claims.bedrijf_id || '') !== String(res.bid);
-  if (claimChanged) { try { await setBedrijfClaim(env, email, res.bid); } catch (e) {} }
+  // Ook bij VOLLEDIGE revocatie (res.bid leeg, claim nog gezet) schrijven we — de claim wordt dan
+  // gewist zodat de eerstvolgende call in het 403/JIT-pad valt i.p.v. blijvend toegang te houden.
+  const claimChanged = String(claims.bedrijf_id || '') !== String(res.bid || '');
+  if (claimChanged) { try { await setBedrijfClaim(env, email, res.bid || ''); } catch (e) {} }
   return json({ ok: !!res.bid, bedrijf_id: res.bid, email, companies: res.companies, claim_changed: claimChanged }, 200, cors);
 }
 

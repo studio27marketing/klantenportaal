@@ -187,6 +187,10 @@ function enterDemo(){
 async function loadAndEnter(skipLink){
   playLoader(); showApp();
   state._sessionExpiredHandled=false;
+  // generation-teller: elke boot/bedrijf-switch verhoogt 'm; in-flight prefetches van een vorige
+  // generatie breken af (geen oude-bedrijf-data in de nieuwe sessie) + dedupe-cache leegmaken
+  state._bootGen=(state._bootGen||0)+1;
+  try{ if(window.S27DATA && S27DATA.resetInflight) S27DATA.resetInflight(); }catch(e){}
   // INSTANT terugschakelen: als dit bedrijf al eerder geladen werd, toon meteen de gecachte
   // snapshot (geen blind moment) en ververs stil op de achtergrond. state.activeBedrijf is bij
   // een switch al het NIEUWE bedrijf (switchCompany zette het via provisionFetch).
@@ -216,7 +220,20 @@ async function loadAndEnter(skipLink){
       var _cb=''; try { _cb=await tokenClaimBedrijf(); } catch(e){}
       var _sel=lastSelectedBedrijf();
       if(_cb && (!_sel || _sel===_cb)){
-        loadCompaniesAndLink().then(function(){ try{ renderCompanySwitcher(); updateNavBadges(); }catch(e){} }).catch(function(){});
+        // achtergrond-provision MET de boot-claim als selectie (lege localStorage kan dan nooit
+        // naar een ander default-bedrijf flippen). Mismatch-guard: blijkt de claim verouderd
+        // (ander bedrijf of geen toegang meer), dan volledige herlaad i.p.v. een gemengde sessie.
+        var _gen=state._bootGen;
+        loadCompaniesAndLink(_cb).then(function(d){
+          if(_gen!==state._bootGen) return;   // intussen geswitcht/herboot -> niets doen
+          if(d && d.ok && String(d.bedrijf_id||'')===String(_cb)){
+            try{ renderCompanySwitcher(); updateNavBadges(); }catch(e){}
+          } else {
+            // claim verouderd of ingetrokken: verse claim staat al (token(true) in loadCompaniesAndLink)
+            // -> volledige herlaad op het juiste bedrijf
+            try{ if(d && d.bedrijf_id) state.activeBedrijf=String(d.bedrijf_id); state._provisionTried=false; loadAndEnter(true); }catch(e){}
+          }
+        }).catch(function(){});
       } else {
         loaderStep(22,'Je account koppelen…');
         try { await loadCompaniesAndLink(); } catch(e){}
@@ -243,13 +260,16 @@ async function loadAndEnter(skipLink){
    via S27DATA.once zodat een gelijktijdige tab-klik dezelfde promise deelt i.p.v. dubbel te laden. */
 async function prefetchAdjacent(){
   if(state.demoMode || !state.session || state.viewMode==='login') return;
+  var gen=state._bootGen;   // bij bedrijf-switch/herboot meteen stoppen (geen oude-bedrijf-data)
   var steps=[];
   if(!state.data.metricool) steps.push(['metricool', function(){ return S27DATA.loadMetricool(); }]);
   if(!state.data.meetings)  steps.push(['meetings',  function(){ return S27DATA.loadMeetings(); }]);
   if(!state.data.team)      steps.push(['team',      function(){ return S27DATA.loadTeam(); }]);
   if(!state.data.offertes)  steps.push(['offertes',  function(){ return S27DATA.loadOffertes(); }]);
   for(var i=0;i<steps.length;i++){
+    if(gen!==state._bootGen) return;
     try { await S27DATA.once(steps[i][0], steps[i][1]); } catch(e){}
+    if(gen!==state._bootGen) return;
     await new Promise(function(r){ setTimeout(r, 350); });   // spreiding: nooit een burst
   }
 }
@@ -400,19 +420,20 @@ function logout(){ stopChatPoll(); try{ if(window.S27Auth) window.S27Auth.logout
 async function ensureTabData(name){
   if(state.demoMode) return;
   if(['start','projecten','berichten','socials','advertenties'].indexOf(name)>=0){ if(!state.data.dashboard) await S27DATA.loadDashboard(); }
-  if(name==='meetings' && !state.data.meetings) await S27DATA.loadMeetings();
+  // gedeelde keys via S27DATA.once -> een tab-klik tijdens de prefetch deelt dezelfde promise
+  if(name==='meetings' && !state.data.meetings) await S27DATA.once('meetings', function(){ return S27DATA.loadMeetings(); });
   if(name==='huisstijl' && !state.data.huisstijl) await S27DATA.loadHuisstijl();
   // facturatie/instellingen: onafhankelijke loads parallel (was serieel: -300 à -800ms)
   if(name==='facturatie'||name==='instellingen'){
     var _fi=[];
     if(!state.data.bedrijf) _fi.push(S27DATA.loadBedrijf());
-    if(!state.data.team) _fi.push(S27DATA.loadTeam());
+    if(!state.data.team) _fi.push(S27DATA.once('team', function(){ return S27DATA.loadTeam(); }));
     if(name==='instellingen' && !state.data.huisstijl) _fi.push(S27DATA.loadHuisstijl());
     if(_fi.length){ try{ await Promise.all(_fi); }catch(e){} }
   }
   // (Resultaten-tab verwijderd — advertentiedata staat real-time op de Advertenties-tab)
-  if(name==='offertes'){ var _t=[]; if(!state.data.offertes) _t.push(S27DATA.loadOffertes()); if(!state.data.bedrijf) _t.push(S27DATA.loadBedrijf()); if(_t.length){ try{ await Promise.all(_t); }catch(e){} } }
-  if(name==='socials'){ var _s=[]; if(!state.data.metricool) _s.push(S27DATA.loadMetricool());
+  if(name==='offertes'){ var _t=[]; if(!state.data.offertes) _t.push(S27DATA.once('offertes', function(){ return S27DATA.loadOffertes(); })); if(!state.data.bedrijf) _t.push(S27DATA.loadBedrijf()); if(_t.length){ try{ await Promise.all(_t); }catch(e){} } }
+  if(name==='socials'){ var _s=[]; if(!state.data.metricool) _s.push(S27DATA.once('metricool', function(){ return S27DATA.loadMetricool(); }));
     if(isRichView()){ if(!state.data.metricoolStatsRich){ var _sp=(typeof socialPeriod==='function')?socialPeriod():null; _s.push(S27DATA.loadMetricoolStatsRich(_sp?{from:_sp.from,to:_sp.to,compare:_sp.compare}:undefined)); } }
     else { if(!state.data.metricoolStats){ var _spc=(typeof socialPeriod==='function')?socialPeriod():null; _s.push(S27DATA.loadMetricoolStats(_spc?{from:_spc.from,to:_spc.to,compare:_spc.compare}:undefined)); } if(!state.data.metricoolPostStats) _s.push(S27DATA.loadMetricoolPostStats()); }
     if(_s.length){ try{ await Promise.all(_s); }catch(e){} } }
@@ -728,12 +749,19 @@ async function sendDringend(btn, id){
 }
 
 const BOT_ANSWERS={'Wanneer is mijn volgende meeting?':'Je vindt al je geplande meetings onder <b>Meetings</b> in de zijbalk. Wil je er een verzetten? Laat het hier weten.','Status van mijn website?':'Open je webdesign-project onder <b>Projecten</b>, daar zie je live de status en de laatste deliverables.','Hoe geef ik feedback?':'Open een project en ga naar het tabblad <b>Bestanden</b>. Per bestand kan je apart goedkeuren of feedback geven (met de weg waarlangs je het doorgaf), alles passen we gratis aan!'};
+// demo-antwoorden: ook de DYNAMISCHE chips krijgen een zinnig antwoord (prefix-match)
+function botDemoAnswer(q){
+  if(BOT_ANSWERS[q]) return BOT_ANSWERS[q];
+  if(/^Wat staat er voor mij klaar/i.test(q)) return 'Op je <b>Home</b> zie je alles wat op jou wacht: feedback geven, iets inplannen of een bericht beantwoorden. Klik een kaart aan en je springt er meteen naartoe.';
+  if(/^Wat is de status van /i.test(q)) return 'Open dit project onder <b>Projecten</b> — daar zie je live de status, de planning en de laatste deliverables. Vragen? Stel ze in de projectchat.';
+  return 'Goeie vraag! Ik verbind je even door met <b>Ilke</b>, je vaste contact, zij antwoordt je zo.';
+}
 function botAsk(btn){ pushBot(btn.textContent,'user'); const q=btn.textContent; const c=$id('botChips'); if(c)c.style.display='none'; botReply(q); }
 function botSend(){ const inp=$id('botInput'); const tx=(inp.value||'').trim(); if(!tx) return; pushBot(tx,'user'); inp.value=''; botReply(tx); }
 function pushBot(text,who){ const m=$id('botMsgs'); const d=document.createElement('div'); d.className='bmsg '+who; d.innerHTML = who==='user'?escapeHtml(text):text; m.appendChild(d); m.scrollTop=m.scrollHeight; }
 async function botReply(q){
   const m=$id('botMsgs'); const t=document.createElement('div'); t.className='typing'; t.innerHTML='<i></i><i></i><i></i><span class="typing-tx">Onze assistent denkt na…</span>'; m.appendChild(t); m.scrollTop=m.scrollHeight;
-  if(state.demoMode){ setTimeout(()=>{ t.remove(); pushBot(BOT_ANSWERS[q]||'Goeie vraag! Ik verbind je even door met <b>Ilke</b>, je vaste contact, zij antwoordt je zo.','bot'); },1100); return; }
+  if(state.demoMode){ setTimeout(()=>{ t.remove(); pushBot(botDemoAnswer(q),'bot'); },1100); return; }
   try {
     const res = await api(ENDPOINTS.aiStatusBot, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), vraag:q, projecten_context:botContext() });
     t.remove(); pushBot(botFormatAnswer(res&&res.data&&res.data.answer),'bot');
@@ -844,6 +872,8 @@ function _bedrijfScope(){ return state.activeBedrijf || (state.session&&state.se
 function _seenKey(){ return 's27_notif_seen_'+_bedrijfScope(); }
 // stabiele identiteit van een cockpit-actie: taak-id (uit action) + categorie + titel-type
 function notifId(a){
+  // expliciete nid (bv. plan-items: meerdere kaarten op hetzelfde project) wint van de action-afleiding
+  if(a && a.nid) return String(a.nid).replace(/[^A-Za-z0-9:_-]+/g,'_');
   var m=String(a&&a.action||'').match(/openProject\('([^']+)'/);
   var tid=m?m[1]:String(a&&a.title||'');
   var raw=tid+'::'+String(a&&a.cat||'')+'::'+String(a&&a.title||'');
