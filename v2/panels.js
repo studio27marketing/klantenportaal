@@ -84,6 +84,7 @@ const PROJECTS = [
   {id:'p7',name:'Recruitmentvideo "Kom bij ons team"',br:'purple',disc:'Video- en fotografie',discId:'video_fotografie',status:'todo',deliv:false},
   {id:'p8',name:'TikTok-campagne lentepromo',br:'orange',disc:'Online adverteren',discId:'ads',status:'done',deliv:false},
   {id:'p9',name:'🛠️ Contactformulier werkt niet',br:'indigo',disc:'Support',discId:'support',status:'prog',deliv:false},
+  {id:'p10',name:'Huisstijl-refresh 2026',br:'pink',disc:'Branding',discId:'branding',status:'prog',deliv:false},
 ];
 const STATUS_LABEL = {todo:['Nog in te plannen','pill-todo'],prog:['In productie','pill-prog'],wait:['Klaar voor feedback','pill-wait'],sent:['Klaar voor feedback','pill-wait'],done:['Goedgekeurd','pill-done']};
 const DISC = {
@@ -115,7 +116,28 @@ function _adProject(){ return _projects().filter(_isAdProject)[0] || null; }   /
 var PROJ_DISC_WHITELIST = ['video_fotografie','webdesign','branding','support'];   // support = opvolgbare website-tickets
 function _isProjectDisc(p){ if(!p) return false; var ls=(p.labels&&p.labels.length)?p.labels:[{discId:p.discId}]; return ls.some(function(l){ return PROJ_DISC_WHITELIST.indexOf(l.discId)>=0; }); }
 function _nonAdProjects(){ return _projects().filter(function(p){ return !_isAdProject(p); }); }   // alle niet-ads-projecten (meeting-planner e.d.) — blacklist
-function _overviewProjects(){ return _projects().filter(_isProjectDisc); }   // ENKEL voor de Projecten-PAGINA: video/webdesign/branding (whitelist)
+function _overviewProjects(){ return _projects().filter(_isProjectDisc); }   // (legacy; tak-pagina's gebruiken _takProjects)
+/* ---- Dakstructuur (Q): tak-registry — elke tak = eigen zijbalk-pagina ---- */
+const TAK_TABS = {
+  strategie: { discIds:['strategie'],        label:'Strategie',            br:'blue',   stamp:'icon-strategie.svg' },
+  branding:  { discIds:['branding'],         label:'Branding',             br:'pink',   stamp:'icon-branding-heart.svg' },
+  video:     { discIds:['video_fotografie'], label:'Video- en fotografie', br:'purple', stamp:'icon-video-fotografie.svg' },
+};
+const TAK_WEBSITE = { discIds:['webdesign','support'], label:'Website', br:'green', stamp:'icon-webdesign.svg' };   // sub-sectie van de Website-tab
+function _takProjects(discIds){
+  return _projects().filter(function(p){
+    var ls=(p.labels&&p.labels.length)?p.labels:[{discId:p.discId}];
+    return ls.some(function(l){ return discIds.indexOf(l.discId)>=0; });
+  });
+}
+// terug-tak van een project (voor openProject('auto') + detail-terugknop)
+function takOfProject(p){
+  if(!p) return 'start';
+  var ls=(p.labels&&p.labels.length)?p.labels:[{discId:p.discId}];
+  for(var key in TAK_TABS){ if(ls.some(function(l){ return TAK_TABS[key].discIds.indexOf(l.discId)>=0; })) return key; }
+  if(ls.some(function(l){ return TAK_WEBSITE.discIds.indexOf(l.discId)>=0; })) return 'webprestaties';
+  return 'berichten';
+}
 function _isSocialProject(p){ if(!p) return false; if(p.discId==='social') return true; var ls=p.labels||[]; return ls.length>0 && ls.every(function(l){return l.discId==='social';}); }
 function _socProject(){ return _projects().filter(_isSocialProject)[0] || null; }   // sociale-media-taak (zelfde maand-logica als de ads-taak)
 function _greetNaam(){ var n=(window.S27DATA && S27DATA.klantNaam && S27DATA.klantNaam())||''; if(n && n!=='daar') return n; return _live()?'daar':'Sarah'; }
@@ -184,13 +206,13 @@ function _cockpitCard(a){
     <div class="ac-foot"><button class="btn btn-branch btn-sm br-${a.br}" onclick="${a.action}">${esc(a.cta)}</button></div>
   </div>`;
 }
-function _runRow(r){ const sae=saeNames(r.sae); const discBit=(r.labels&&r.labels.length)?discChips(r.labels):`<span class="run-disc">${esc(r.disc)}</span>`; return `<button class="run-row br-${r.br}" onclick="${r.id?`openProject('${esc(r.id)}','projecten')`:`goTab('projecten')`}"><div class="run-top">${discBit}<span class="pill pill-${r.status}">${ic(STATUS_ICON[r.status]||'st_progress',12)}<span>${esc(r.label)}</span></span></div><b class="run-name">${esc(r.name)}</b>${sae?`<span class="sae-line">${sae}</span>`:''}<div class="run-prog"><div class="rp-bar"><i style="width:${r.pct||0}%"></i></div><span class="rp-pct">${r.pct||0}%</span></div></button>`; }
+function _runRow(r){ const sae=saeNames(r.sae); const discBit=(r.labels&&r.labels.length)?discChips(r.labels):`<span class="run-disc">${esc(r.disc)}</span>`; return `<button class="run-row br-${r.br}" onclick="${r.id?`openProject('${esc(r.id)}','auto')`:`goTab('start')`}"><div class="run-top">${discBit}<span class="pill pill-${r.status}">${ic(STATUS_ICON[r.status]||'st_progress',12)}<span>${esc(r.label)}</span></span></div><b class="run-name">${esc(r.name)}</b>${sae?`<span class="sae-line">${sae}</span>`:''}<div class="run-prog"><div class="rp-bar"><i style="width:${r.pct||0}%"></i></div><span class="rp-pct">${r.pct||0}%</span></div></button>`; }
 function _doneRow(d){
   const meta=[esc(d.disc), (d.when&&typeof d.when==='string')?esc(d.when):''].filter(Boolean).join(' · ');
   const sae=saeNames(d.sae);
   const inner=`<span class="check-circ">${ic('check',13)}</span><div class="done-main"><b>${esc(d.name)}</b><span class="done-meta">${meta}</span>${sae?`<span class="sae-line">${sae}</span>`:''}</div><span class="run-dot"></span>`;
   // klikbaar als de afgeronde taak een project-id heeft (opent het detail; bestanden zichtbaar indien aanwezig)
-  if(d.id) return `<button class="done-row br-${d.br}" style="width:100%;text-align:left;border:none;cursor:pointer;background:none" onclick="openProject('${esc(d.id)}','projecten')">${inner}</button>`;
+  if(d.id) return `<button class="done-row br-${d.br}" style="width:100%;text-align:left;border:none;cursor:pointer;background:none" onclick="openProject('${esc(d.id)}','auto')">${inner}</button>`;
   return `<div class="done-row br-${d.br}">${inner}</div>`;
 }
 function panelStart(){
@@ -201,7 +223,7 @@ function panelStart(){
   if(cock){
     cockHtml = cock.length
       ? `<div class="section-head"><h2>Voor jou te doen</h2><span class="count">${cock.length} ${cock.length===1?'item':'items'}</span></div><div class="cockpit-row">${cock.map(_cockpitCard).join('')}</div>`
-      : `<div class="empty" style="margin-top:24px"><div class="em-ic">${ic('st_approved',64)}</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Alles is bij!</b><p style="margin:6px 0 0">Er staat momenteel niets op jou te wachten, wij werken ondertussen verder.</p><button class="btn btn-outline btn-sm" style="margin-top:16px" onclick="goTab('projecten')">${ic('arrow',14)} Bekijk je projecten</button></div>`;
+      : `<div class="empty" style="margin-top:24px"><div class="em-ic">${ic('st_approved',64)}</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Alles is bij!</b><p style="margin:6px 0 0">Er staat momenteel niets op jou te wachten, wij werken ondertussen verder.</p></div>`;
   } else {
     cockHtml = `<div class="section-head"><h2>Voor jou te doen</h2><span class="count">${_COCKPIT_MOCK.length} items</span></div><div class="cockpit-row">${_COCKPIT_MOCK.map(_cockpitCard).join('')}</div>`;
   }
@@ -253,32 +275,33 @@ const PROJ_CLUSTERS = [
   {key:'plannen',  statuses:['todo'],        title:'Nog in te plannen of op te starten', sub:'Klaar om samen te beginnen — prik een moment of laat iets weten.', br:'blue'},
   {key:'bezig',    statuses:['prog'],        title:'Wij werken eraan', sub:'Loopt bij ons, je hoeft nu even niets te doen.', br:'green'}
 ];
-function projCluster(cl, grp, num){
+function projCluster(cl, grp, num, fromTab){
   if(!grp.length) return '';
   return `<section class="projcluster" data-cluster="${cl.key}">
     <div class="projcluster-head br-${cl.br}"><span class="pc-num">${num||''}</span>
       <div class="pc-htx"><h3>${esc(cl.title)}</h3><p>${esc(cl.sub)}</p></div>
       <span class="pc-count">${grp.length}</span></div>
-    <div class="projflat-grid">${grp.map(projCardFlat).join('')}</div>
+    <div class="projflat-grid">${grp.map(function(p){return projCardFlat(p, fromTab);}).join('')}</div>
   </section>`;
 }
-function projDienst(){
-  const all=_overviewProjects().filter(p=>p.status!=='done');
+function projDienst(list, fromTab){
+  const all=(list||_overviewProjects()).filter(p=>p.status!=='done');
   if(!all.length) return `<div class="empty"><div class="em-ic">${ic('st_approved',64)}</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Geen actieve projecten</b><p style="margin:6px 0 0">Zodra we samen aan iets nieuws starten, verschijnt het hier.</p></div>`;
   const sortFn=(a,b)=>{ const ia=DISC_ORDER.indexOf(a.disc),ib=DISC_ORDER.indexOf(b.disc); return ((ia<0?99:ia)-(ib<0?99:ib))||String(a.name).localeCompare(String(b.name)); };
   let html='', _n=0;
-  PROJ_CLUSTERS.forEach(cl=>{ var grp=all.filter(p=>cl.statuses.indexOf(p.status)>=0).sort(sortFn); if(grp.length){ _n++; html+=projCluster(cl, grp, _n); } });
+  PROJ_CLUSTERS.forEach(cl=>{ var grp=all.filter(p=>cl.statuses.indexOf(p.status)>=0).sort(sortFn); if(grp.length){ _n++; html+=projCluster(cl, grp, _n, fromTab); } });
   // statussen die in geen enkel cluster vallen: verzamelcluster zodat nooit een project verdwijnt
   const rest=all.filter(p=>!PROJ_CLUSTERS.some(cl=>cl.statuses.indexOf(p.status)>=0)).sort(sortFn);
-  if(rest.length){ _n++; html+=projCluster({key:'overig', statuses:[], title:'Overige projecten', sub:'Lopende trajecten bij Studio 27.', br:'blue'}, rest, _n); }
+  if(rest.length){ _n++; html+=projCluster({key:'overig', statuses:[], title:'Overige projecten', sub:'Lopende trajecten bij Studio 27.', br:'blue'}, rest, _n, fromTab); }
   return `<div class="projclusters">${html}</div>`;
 }
 // platte hoofdtaak-kaart: naam + discipline-chip(s), status, deliverable-badge, SA&E-namen.
-function projCardFlat(p){
+function projCardFlat(p, fromTab){
   const sae=saeNames(p.sae);
   const discs=(p.labels&&p.labels.length)?p.labels:[{discId:p.discId,br:p.br,label:p.disc}];
   const dataDiscs=discs.map(function(l){return l.label;}).join('|');
-  return `<button class="projflat-card br-${p.br}" data-discs="${esc(dataDiscs)}" data-status="${p.status}" onclick="openProject('${esc(p.id)}','projecten')">
+  const cid=String(p.id||'').replace(/[^A-Za-z0-9_-]/g,'');
+  return `<button class="projflat-card br-${p.br}" data-discs="${esc(dataDiscs)}" data-status="${p.status}" onclick="openProject('${cid}','${esc(fromTab||'auto')}')">
     <span class="pf-main">
       <span class="pf-name pf-name--calm">${esc(p.name)}</span>
       ${discChips(discs)}
@@ -286,12 +309,56 @@ function projCardFlat(p){
     <span class="pf-foot">${spill(p.status)}${sae?`<span class="sae-line">${sae}</span>`:''}${p.deliv?`<span class="pc-deliv">${ic('download',13)} klaar</span>`:''}</span>
   </button>`;
 }
-function panelProjecten(){
-  // filter-opties = ALLE disciplines die ergens als label voorkomen (ook secundaire), zodat
-  // je ook op 'Webdesign' kan filteren als dat enkel een tweede label van een hoofdtaak is.
-  const order=[]; _overviewProjects().filter(p=>p.status!=='done').forEach(p=>{ ((p.labels&&p.labels.length)?p.labels:[{label:p.disc}]).forEach(l=>{ if(l.label && order.indexOf(l.label)<0) order.push(l.label); }); });
-  order.sort((a,b)=>{ const ia=DISC_ORDER.indexOf(a),ib=DISC_ORDER.indexOf(b); return (ia<0?99:ia)-(ib<0?99:ib); });
-  return `<div id="projViewBody">${projDienst()}</div>`;
+/* ---- Tak-pagina (Q): lopende projecten + hoofdcontact + archief, per tak ---- */
+function _takHoofdcontact(actief){
+  // meest voorkomende assignee over de actieve takprojecten = hoofdcontactpersoon
+  var tel={}; var beste=null;
+  actief.forEach(function(p){ (p.sae||[]).forEach(function(s){ var k=s.naam||''; if(!k) return; tel[k]=(tel[k]||0)+1; if(!beste||tel[k]>tel[beste.naam||'']) beste=s; }); });
+  return beste;   // {naam, initialen} of null -> accountmanager-fallback
+}
+function takContactCard(key, T, actief){
+  var hc=_takHoofdcontact(actief);
+  var naam=hc?hc.naam:'Ilke Meeusen';
+  var ini=hc?(hc.initialen||'?'):'IM';
+  var rol=hc?'Werkt aan jouw '+T.label.toLowerCase()+'-projecten':'Jouw accountmanager';
+  return '<div class="takcontact card br-'+T.br+'"><span class="dc-av" style="background:var(--s27-'+T.br+')">'+esc(ini)+'</span>'
+    +'<div class="takcontact-tx"><b>'+esc(naam)+'</b><span>'+esc(rol)+'</span></div>'
+    +'<button class="btn btn-branch br-'+T.br+' btn-sm" onclick="openMeetingPlannerForTak(\''+key+'\')">'+ic('cal',15)+' Plan een meeting</button></div>';
+}
+function takArchiefSectie(key, T){
+  if(state.demoMode){
+    return '<section class="takarch" id="takArch-'+key+'"><div class="section-head" style="margin-top:26px"><h2>Archief</h2></div>'
+      +'<p class="sdesc">In je echte portaal vind je hier álle afgeronde '+esc(T.label.toLowerCase())+'-projecten terug, met hun bestanden — ook van langer geleden.</p></section>';
+  }
+  var done=(window.S27DATA&&S27DATA.done&&S27DATA.done())||[];
+  var rows=done.filter(function(d){ var ls=(d.labels&&d.labels.length)?d.labels:[{discId:''}]; return ls.some(function(l){ return T.discIds.indexOf(l.discId)>=0; }); });
+  var inner=rows.length?rows.map(function(d){ return _doneRow(d); }).join(''):'<p class="sdesc">Nog geen afgeronde projecten in de laatste 60 dagen.</p>';
+  return '<section class="takarch" id="takArch-'+key+'"><div class="section-head" style="margin-top:26px"><h2>Archief</h2><span class="count">'+rows.length+'</span></div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px">'+inner+'</div>'
+    +'<div style="margin-top:12px"><button class="btn btn-outline btn-sm" onclick="takArchiefLoad(\''+key+'\',this)">'+ic('doc',14)+' Volledig archief bekijken</button></div></section>';
+}
+// volledig archief lazy laden (alle afgeronde taken + bestanden, ook >60d/gefactureerd)
+async function takArchiefLoad(key, btn){
+  var T=TAK_TABS[key]||TAK_WEBSITE;
+  if(btn){ btn.disabled=true; btn.innerHTML='Laden…'; }
+  try{ if(!state.data.archief){ await S27DATA.loadArchief(); } }catch(e){}
+  var host=document.getElementById('takArch-'+key); if(!host) return;
+  var items=(window.S27DATA&&S27DATA.archief&&S27DATA.archief())||[];
+  var rows=items.filter(function(d){ var ls=(d.labels&&d.labels.length)?d.labels:[{discId:d.discId}]; return ls.some(function(l){ return T.discIds.indexOf(l.discId||l)>=0; }); });
+  var inner=rows.length?rows.map(function(d){
+    var files=(d.bestanden||[]).map(function(f){ return '<a class="deliv-file takarch-file" data-label="'+esc(f.label||'Bestand')+'" href="'+esc(f.url)+'" target="_blank" rel="noopener">'+ic('doc',13)+' '+esc(f.label||'Bestand')+'</a>'; }).join('');
+    return '<div class="takarch-row card br-'+(d.br||T.br)+'"><div class="takarch-top"><b>'+esc(d.name||d.naam)+'</b><span class="takarch-when">'+esc(d.when||'')+'</span></div>'+(files?'<div class="takarch-files">'+files+'</div>':'')+'</div>';
+  }).join(''):'<p class="sdesc">Geen afgeronde projecten gevonden in deze tak.</p>';
+  host.innerHTML='<div class="section-head" style="margin-top:26px"><h2>Volledig archief</h2><span class="count">'+rows.length+'</span></div><div style="display:flex;flex-direction:column;gap:8px">'+inner+'</div>';
+}
+function panelTak(key){
+  const T=TAK_TABS[key]; if(!T) return '';
+  const all=_takProjects(T.discIds);
+  const actief=all.filter(p=>p.status!=='done');
+  const lopend=actief.length
+    ? projDienst(all, key)
+    : '<div class="empty"><div class="em-ic">'+(T.stamp?'<img src="assets/'+T.stamp+'" width="56" height="56" alt="">':ic('doc',56))+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog geen '+esc(T.label.toLowerCase())+'-projecten</b><p style="margin:6px 0 14px">Zin om hier samen iets op te starten?</p><button class="btn btn-branch br-'+T.br+'" onclick="openOfferteWizard(\''+(key==='video'?'video':key)+'\')">'+ic('plus',15)+' Start een aanvraag</button></div>';
+  return takContactCard(key, T, actief)+lopend+takArchiefSectie(key, T);
 }
 
 /* ---- Socials (Metricool), netwerk/status-helpers + render ---- */
@@ -3651,8 +3718,10 @@ function buildModal(id, from){
   const isVideo=(p.disc||'').indexOf('Video')===0;
   const needsFeedback=p.status==='wait';
   const chatClosed = (p.status==='done') || !!(window.S27DATA && S27DATA.isChatClosed && p._raw && S27DATA.isChatClosed(p._raw.status));
-  const backTo=(from==='berichten')?'berichten':'projecten';
-  const backLabel=(backTo==='berichten')?'berichten':'projecten';
+  const backTo=(typeof PANELS!=='undefined'&&PANELS[from])?from:((typeof takOfProject==='function')?takOfProject(p):'start');
+  const backLabel=(backTo==='berichten')?'berichten'
+    :(typeof TAK_TABS!=='undefined'&&TAK_TABS[backTo])?TAK_TABS[backTo].label
+    :(backTo==='webprestaties')?'Website':'overzicht';
   let SUBTASKS = isVideo ? [
     {t:'Montage',st:'wait',files:[['Montage v1, volledige film','MP4 · 02:14','video'],['Korte teaser (15s)','MP4 · 00:15','video']]},
     {t:'Fotografie',st:'wait',files:[['Still, openingsshot','JPG · hoge resolutie','img'],['Still, teamportret','JPG · hoge resolutie','img']]},
@@ -3883,9 +3952,28 @@ function webBuildTrendChart(trend){
       scales:{ y:{ beginAtZero:true, ticks:{ font:{family:'Montserrat',size:10}, color:'#9E919E', precision:0 }, grid:{ color:'rgba(231,223,211,.55)' } },
         x:{ ticks:{ font:{family:'Montserrat',size:10}, color:'#9E919E', maxRotation:0, autoSkip:true, maxTicksLimit:10 }, grid:{ display:false } } } } });
 }
+function webTakTab(){
+  if(state._webTakTab) return state._webTakTab;
+  return _takProjects(TAK_WEBSITE.discIds).some(function(p){return p.status!=='done';}) ? 'projecten' : 'stats';
+}
+function webSetTakTab(t){ state._webTakTab=t; renderPanel('webprestaties'); }
+function webTakSubnav(){
+  var t=webTakTab();
+  var mk=function(key,label,icn){ return '<button class="soc-subtab'+(t===key?' active':'')+'" onclick="webSetTakTab(\''+key+'\')">'+ic(icn,17)+'<span>'+label+'</span></button>'; };
+  return '<div class="soc-subnav" id="webTakNav">'+mk('projecten','Projecten','doc')+mk('stats','Statistieken','st_progress')+'</div>';
+}
 function panelWebprestaties(){
   webEnsureStyles();
-  var head='';
+  // sub-sectie 'Projecten' (webdesign + support-tickets) boven de statistieken (Dakstructuur Q)
+  if(webTakTab()==='projecten'){
+    var T=TAK_WEBSITE;
+    var all=_takProjects(T.discIds);
+    var actief=all.filter(function(p){return p.status!=='done';});
+    var lopend=actief.length?projDienst(all,'webprestaties')
+      :'<div class="empty"><div class="em-ic"><img src="assets/icon-webdesign.svg" width="56" height="56" alt=""></div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Geen lopende website-projecten</b><p style="margin:6px 0 14px">Een nieuwe site of aanpassing nodig?</p><button class="btn btn-branch br-green" onclick="openOfferteWizard(\'website\')">'+ic('plus',15)+' Start een aanvraag</button></div>';
+    return webTakSubnav()+takContactCard('webprestaties', T, actief)+lopend+takArchiefSectie('webprestaties', T);
+  }
+  var head=webTakSubnav();
   var t=(window.S27DATA&&S27DATA.webTraffic&&S27DATA.webTraffic())||null;
   var s=(window.S27DATA&&S27DATA.webSearch&&S27DATA.webSearch())||null;
   if(t===null && s===null){
@@ -3937,10 +4025,11 @@ function webSupportCard(){
 
 /* ---- panel registry ---- */
 const PANELS={
-  start:panelStart, berichten:panelBerichten, projecten:panelProjecten,
+  start:panelStart, berichten:panelBerichten,
+  strategie:function(){return panelTak('strategie');}, branding:function(){return panelTak('branding');}, video:function(){return panelTak('video');},
   socials:panelSocials, advertenties:panelAdvertenties, webprestaties:panelWebprestaties,
   meetings:panelMeetings, nieuwproject:panelOffertes, offertes:panelOffertes,
   huisstijl:panelHuisstijl, facturatie:panelFacturatie, instellingen:panelInstellingen,
 };
-const TAB_BRANCH={start:'blue',berichten:'blue',projecten:'blue',socials:'yellow',advertenties:'orange',webprestaties:'green',meetings:'blue',nieuwproject:'blue',offertes:'purple',huisstijl:'pink',facturatie:'green',instellingen:'indigo'};
+const TAB_BRANCH={start:'blue',berichten:'blue',strategie:'blue',branding:'pink',video:'purple',socials:'yellow',advertenties:'orange',webprestaties:'green',meetings:'blue',nieuwproject:'blue',offertes:'purple',huisstijl:'pink',facturatie:'green',instellingen:'indigo'};
 const TAB_GROUP={projecten:'werk',socials:'werk',advertenties:'werk',webprestaties:'werk',meetings:'plannen',nieuwproject:'plannen',offertes:'plannen',huisstijl:'bedrijf',facturatie:'bedrijf',instellingen:'bedrijf'};

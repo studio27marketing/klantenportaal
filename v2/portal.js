@@ -9,7 +9,7 @@
 "use strict";
 
 let currentTab = 'start';
-const SECTION_LABEL = { start:'Home', berichten:'Berichten', projecten:'Actieve projecten', socials:'Socials', advertenties:'Adverteren', webprestaties:'Website', meetings:'Meetings', nieuwproject:'Nieuw project', offertes:'Offertes', facturatie:'Facturatie', instellingen:'Instellingen' };
+const SECTION_LABEL = { start:'Home', berichten:'Berichten', strategie:'Strategie', branding:'Branding', video:'Video- en fotografie', socials:'Socials', advertenties:'Adverteren', webprestaties:'Website', meetings:'Meetings', nieuwproject:'Nieuw project', offertes:'Offertes', facturatie:'Facturatie', instellingen:'Instellingen' };
 
 function qsp(){ return new URLSearchParams(location.search); }
 function $id(x){ return document.getElementById(x); }
@@ -46,8 +46,9 @@ function syncUrl(){
 async function applyRoute(){
   const r = state.route; state.route = null;
   if(!r){ goTab('start'); return; }
-  if(r.project){ await openProject(r.project, 'projecten'); if(r.mtab) switchModalTab(r.mtab); return; }
+  if(r.project){ await openProject(r.project, 'auto'); if(r.mtab) switchModalTab(r.mtab); return; }
   if(r.chat){ await openProject(r.chat, 'berichten'); switchModalTab('chat'); return; }
+  if(r.tab==='projecten') r.tab='start';   // legacy deep-links naar de oude Projecten-pagina
   if(r.tab && PANELS[r.tab]){ goTab(r.tab); return; }
   if(r.notif){ goTab('start'); setTimeout(()=>{ const np=$id('notifPanel'); if(np) np.classList.add('show'); }, 400); return; }
   goTab('start');
@@ -444,7 +445,7 @@ function logout(){ stopChatPoll(); try{ if(window.S27Auth) window.S27Auth.logout
    ============================================================================= */
 async function ensureTabData(name){
   if(state.demoMode) return;
-  if(['start','projecten','berichten','socials','advertenties'].indexOf(name)>=0){ if(!state.data.dashboard) await S27DATA.loadDashboard(); }
+  if(['start','strategie','branding','video','berichten','socials','advertenties','webprestaties'].indexOf(name)>=0){ if(!state.data.dashboard) await S27DATA.loadDashboard(); }
   // gedeelde keys via S27DATA.once -> een tab-klik tijdens de prefetch deelt dezelfde promise
   if(name==='meetings' && !state.data.meetings) await S27DATA.once('meetings', function(){ return S27DATA.loadMeetings(); });
   if(name==='huisstijl' && !state.data.huisstijl) await S27DATA.loadHuisstijl();
@@ -502,7 +503,12 @@ function updateNavBadges(){
     if(state.demoMode) return;
     var setB=function(tab,n){ var b=document.querySelector('.sb-item[data-tab="'+tab+'"] .sb-badge'); if(!b)return; if(n>0){ b.textContent=n; b.style.display=''; } else { b.style.display='none'; } };
     var projs=(window.S27DATA&&S27DATA.projects())||null;
-    if(projs){ setB('projecten', projs.filter(function(p){return p.status!=='done';}).length); }
+    if(projs && typeof TAK_TABS!=='undefined'){
+      Object.keys(TAK_TABS).forEach(function(key){
+        setB(key, _takProjects(TAK_TABS[key].discIds).filter(function(p){return p.status!=='done';}).length);
+      });
+      setB('webprestaties', _takProjects(TAK_WEBSITE.discIds).filter(function(p){return p.status!=='done';}).length);
+    }
     var mt=(window.S27DATA&&S27DATA.meetings());
     if(mt){ setB('meetings', (mt.list||[]).filter(function(m){return m.dt&&m.dt.getTime()>=Date.now()-86400000;}).length); }
     // berichten + topbar-bel: geen betrouwbare ongelezen-telling -> mock-badge verbergen
@@ -511,7 +517,7 @@ function updateNavBadges(){
   }catch(e){}
 }
 function needsLoad(name){
-  if(state.data.dashboard && ['start','projecten','berichten'].indexOf(name)>=0) return false;
+  if(state.data.dashboard && ['start','strategie','branding','video','berichten'].indexOf(name)>=0) return false;
   if(name==='socials') return !state.data.metricool;   // wacht op Metricool-data
   if(name==='advertenties') return isRichView() ? !state.data.metaAdsRich : !state.data.metaAds;  // wacht op Meta-ads-data
   if(name==='webprestaties') return !state.data.webTraffic && !state.data.webSearch;  // wacht op GA4/GSC-data
@@ -545,13 +551,16 @@ function applyTakVisibility(){
    PROJECTDETAIL, lazy detail + chat, dan buildModal
    ============================================================================= */
 async function openProject(id, from){
-  const f=(from==='berichten')?'berichten':'projecten';
+  // 'auto' (of onbekend) -> terug-tak afleiden uit de tak van het project (Dakstructuur Q)
+  let f=(from && from!=='auto' && typeof PANELS!=='undefined' && PANELS[from])?from:'';
   stopChatPoll();
   state.viewMode='project'; state.activeProject=id; state._mtab='overzicht'; state._chatStaged=[];
+  if(!state.demoMode){ renderLoading(f||'start'); await Promise.all([ S27DATA.loadDetail(id), S27DATA.loadChat(id) ]); }
+  const p=(S27DATA.projects()||(typeof PROJECTS!=='undefined'?PROJECTS:[])).find(x=>x.id===id);
+  if(!f) f=(typeof takOfProject==='function')?takOfProject(p):'start';
+  state._backTab=f;
   document.querySelectorAll('.sb-item').forEach(t=>t.classList.remove('active'));
   const item=document.querySelector('.sb-item[data-tab="'+f+'"]'); if(item) item.classList.add('active');
-  if(!state.demoMode){ renderLoading(f); await Promise.all([ S27DATA.loadDetail(id), S27DATA.loadChat(id) ]); }
-  const p=(S27DATA.projects()||(typeof PROJECTS!=='undefined'?PROJECTS:[])).find(x=>x.id===id);
   const page=$id('page');
   page.innerHTML='<div class="panel active br-'+(p?p.br:'blue')+'" data-screen-label="projectdetail">'+buildModal(id,f)+'</div>';
   window.scrollTo({top:0,behavior:'auto'});
@@ -559,7 +568,7 @@ async function openProject(id, from){
   closeSidebar(); syncUrl();
   if($id('chatList')) startChatPoll(id);   // projectchat staat in de DOM (tenzij afgerond) -> auto-refresh
 }
-function closeModal(){ goTab('projecten'); }
+function closeModal(){ goTab(state._backTab||'start'); }
 
 /* =============================================================================
    ECHTE HANDLERS
@@ -972,8 +981,11 @@ function markAllSeen(){
   renderNotifs(); updateBellBadge();
 }
 document.addEventListener('click',e=>{ if(!e.target.closest('.client-switch-wrap')){ const m=$id('switchMenu'); if(m)m.style.display='none'; const sw=$id('clientSwitch'); if(sw)sw.classList.remove('open'); } if(!e.target.closest('#notifPanel')&&!e.target.closest('#bellBtn')){ const np=$id('notifPanel'); if(np)np.classList.remove('show'); } });
-function filterDienst(disc,btn){ document.querySelectorAll('.proj-filter .fchip').forEach(c=>c.classList.remove('active')); if(btn)btn.classList.add('active'); const body=$id('projViewBody'); if(!body)return; body.querySelectorAll('.projflat-card').forEach(c=>{ const ds=(c.dataset.discs||'').split('|'); c.style.display=(disc==='all'||ds.indexOf(disc)>=0)?'':'none'; }); body.querySelectorAll('.projcluster').forEach(sec=>{ const vis=[].slice.call(sec.querySelectorAll('.projflat-card')).some(c=>c.style.display!=='none'); sec.style.display=vis?'':'none'; }); }
-function goDienst(disc){ goTab('projecten'); setTimeout(()=>{ const sel=document.querySelector('.proj-filter select'); if(sel){ sel.value=disc; filterDienst(disc); } },60); }
+// dienst-label -> tak-pagina (Dakstructuur Q)
+function goDienst(disc){
+  const M={'Strategie':'strategie','Branding':'branding','Video- en fotografie':'video','Webdesign':'webprestaties','Website en SEO':'webprestaties','SEO & GEO':'webprestaties','Social media':'socials','Online adverteren':'advertenties','Support':'webprestaties'};
+  goTab(M[disc]||'start');
+}
 // Kennismaking / koffiegesprek -> meetingpagina, automatisch bij Arne (kies een vrij moment in zijn agenda)
 function koffieMetArne(){ if(typeof openMeetingPlanner==='function'){ openMeetingPlanner('nieuw'); } else { goTab('meetings'); } }
 function switchModalTab(name){
@@ -1316,6 +1328,18 @@ async function scSubmit(btn){
     if(m) m.innerHTML='<span style="color:var(--s27-orange-ink,#C44514)">Inplannen lukte niet. Probeer opnieuw.</span>';
   }
 }
+/* ---- Meeting per tak / per project (Dakstructuur Q): juiste teamlid komt uit p.sae via mpHostStep ---- */
+function openMeetingPlannerForTak(takKey){
+  openMeetingPlanner('project');
+  try{
+    var T=(typeof TAK_TABS!=='undefined'&&TAK_TABS[takKey])||(takKey==='webprestaties'?TAK_WEBSITE:null);
+    if(!T||!state.mp) return;
+    var ids=T.discIds;
+    var projs=(mpActiveProjects()||[]).filter(function(p){ var ls=(p.labels&&p.labels.length)?p.labels:[{discId:p.discId}]; return ls.some(function(l){ return ids.indexOf(l.discId)>=0; }); });
+    if(projs.length===1 && typeof mpPickProject==='function'){ mpPickProject(projs[0].id); }
+  }catch(e){}
+}
+function openMeetingPlannerForProject(id){ openMeetingPlanner('project'); try{ if(typeof mpPickProject==='function') mpPickProject(id); }catch(e){} }
 const MEET_HOSTS={ 'Arne':{email:'arne@studio27.be'}, 'Ilke':{email:'ilke@studio27.be'} };
 /* ---- Offerte: vraag stellen -> komt als comment op de offerte-taak (naar de assignee) ---- */
 function offerteVraag(id, btn){
@@ -2179,12 +2203,12 @@ async function shootInitAutocomplete(tid){
 }
 
 function toggleBot(){ const p=$id('botPanel'),f=$id('botFab'); const open=p.classList.toggle('show'); f.style.display=open?'none':'flex'; if(open){ const g=$id('botGreet'); if(g){ var nm=(typeof _greetNaam==='function'?_greetNaam():'')||''; g.innerHTML='Hallo '+escapeHtml(nm||'daar')+'! Ik help je graag op weg. Waarmee kan ik je verder helpen?'; } if(typeof renderBotChips==='function') renderBotChips(); const inp=p.querySelector('.bot-input input'); if(inp)setTimeout(()=>inp.focus(),50); } }
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($id('tourScrim')&&$id('tourScrim').classList.contains('show'))endTour(false); else if(state.viewMode==='project')goTab('projecten'); } });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($id('tourScrim')&&$id('tourScrim').classList.contains('show'))endTour(false); else if(state.viewMode==='project')goTab(state._backTab||'start'); } });
 
 /* ---------- Onboarding tour (1x + opt-out) ---------- */
 const TOUR=[
   {t:'Jouw startscherm',b:'Hier vind je altijd wat er voor jóu klaarstaat, reviews, feedback en meetings. Begin hier elke dag.',target:'.sb-item[data-tab="start"]'},
-  {t:'Al je werk, gebundeld',b:'In de zijbalk staat alles altijd zichtbaar: je projecten, socials én advertenties.',target:'.sb-item[data-tab="projecten"]'},
+  {t:'Al je werk, gebundeld',b:'In de zijbalk staat alles altijd zichtbaar: je projecten, socials én advertenties.',target:'.sb-item[data-tab="video"]'},
   {t:'Altijd in contact',b:'Vragen? Onze slimme assistent helpt je meteen op weg en schakelt zo nodig door naar een echt mens.',target:'#botFab'},
   {t:'Plan vlot een moment',b:'Een meeting nodig? Prik zelf een vrij tijdslot. Wij staan klaar, vrijblijvend.',target:'.sb-item[data-tab="meetings"]'},
 ];

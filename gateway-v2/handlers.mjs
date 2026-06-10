@@ -1656,6 +1656,39 @@ export async function getOffertes(bedrijfId, body, env) {
 }
 
 /* ---- dashboard ----------------------------------------------------------- */
+/* ---- archiefList (READ, lazy) — VOLLEDIG tak-archief: alle afgeronde taken, ook >60d en
+ * 'gefactureerd', mét hun bestanden-links (Dakstructuur Q). Bewust een APART endpoint zodat
+ * de dashboard-call even zwaar blijft; uitsluitend on-click geladen, KV-gecachet (60s/SWR-team). */
+export async function archiefList(bedrijfId, body, env) {
+  const cf = `[{"field_id":"${FIELD.bedrijf}","operator":"ANY","value":["${bedrijfId}"]}]`;
+  const enc = encodeURIComponent(cf);
+  const [tasks, tree] = await Promise.all([
+    pageAll(env, (page) =>
+      `/team/${TEAM_ID}/task?subtasks=false&include_closed=true&page=${page}&custom_fields=${enc}`),
+    fetchBedrijfTree(env, bedrijfId),
+  ]);
+  const childrenByParent = tree.childrenByParent;
+  const items = [];
+  for (const t of tasks) {
+    const rel = getRelationIds(t, FIELD.bedrijf);
+    if (!rel.includes(String(bedrijfId))) continue;            // scope-hercheck per taak
+    if (!isAfgerondStatus(t.status)) continue;                 // enkel afgerond/gefactureerd
+    const labels = labelsForProject(t, childrenByParent.get(String(t.id)) || []);
+    if (!labels.length) continue;                              // geen discipline -> geen archiefkaart
+    items.push({
+      task_id: str(t.id),
+      naam: str(t.name),
+      discipline: labels[0] || '',
+      labels,
+      opleverdatum: afgerondMs(t) || 0,                        // epoch-ms (0 = onbekend)
+      status_raw: str(t.status && t.status.status),
+      bestanden: parseDeliverables(getCF(t, FIELD.deliverablesRaw)),   // links direct mee (geen N detail-calls)
+    });
+  }
+  items.sort((a, b) => (b.opleverdatum || 0) - (a.opleverdatum || 0));
+  return { status: 200, body: { ok: true, items: items.slice(0, 200) } };
+}
+
 export async function dashboard(bedrijfId, body, env) {
   // 1) team-task-filter op 4b1fb333 (ANY), volledig gepagineerd. De projectlijst komt UIT
   //    subtasks=false (de bewezen, volledige top-level set). De subtaak-boom (voor de
@@ -5300,6 +5333,8 @@ export async function webSearch(bedrijfId, body, env) {
 }
 
 export const READ_HANDLERS = {
+  // Volledig tak-archief (lazy, on-click): alle afgeronde taken + bestanden, ook >60d/gefactureerd.
+  archiefList,
   projectDetailV2,
   chatList,
   commsChatList,

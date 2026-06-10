@@ -419,7 +419,7 @@ async function tryHandle(path, bedrijfId, body, claims, env, ctx, ch, noCache) {
   const swr = !!(claims && claims.is_staff === true);
   // READS (met KV-cache voor dashboard/bedrijfContent)
   if (READ_HANDLERS[path]) {
-    const cacheable = (path === 'dashboard' || path === 'bedrijfContent' || path === 'metricoolPostStats');
+    const cacheable = (path === 'dashboard' || path === 'bedrijfContent' || path === 'metricoolPostStats' || path === 'archiefList');
     const run = () => READ_HANDLERS[path](bedrijfId, body, env);
     const res = cacheable
       ? await withCache(env, ctx, path, bedrijfId, noCache, run, swr)

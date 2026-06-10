@@ -269,14 +269,14 @@
       var br = DATA.disc(p.discipline);
       if(norm(p.status)==='doorgestuurd' || p.feedback_link){
         out.push({ br:br.br, cat:br.label, title:'Review nodig', ctx:'Er staat iets klaar voor jou bij <b>'+esc(p.naam)+'</b>. Geef je akkoord of je feedback.',
-          cta:'Bekijk', action:"openProject('"+esc(p.task_id)+"','projecten')", urgent:true, icon:'st_feedback' });
+          cta:'Bekijk', action:"openProject('"+esc(p.task_id)+"','auto')", urgent:true, icon:'st_feedback' });
       }
       // Plannbare taken (wij hebben 'Kan beginnen' aangevinkt, nog geen due date) -> 'nieuwe taak klaar'-melding.
       (p.plan_items||[]).forEach(function(it){
         var isShoot=it.type==='shoot';
         out.push({ br:br.br, cat:br.label, title:'Klaar om in te plannen',
           ctx:'Er staat een nieuwe taak voor je klaar bij <b>'+esc(p.naam)+'</b>'+(it.label?' ('+esc(it.label)+')':'')+'. Je kunt nu '+(isShoot?'je shoot':'een meeting')+' inplannen.',
-          cta:(isShoot?'Plan shoot':'Plan moment'), action:"openProject('"+esc(p.task_id)+"','projecten')", urgent:true, icon:'st_plan',
+          cta:(isShoot?'Plan shoot':'Plan moment'), action:"openProject('"+esc(p.task_id)+"','auto')", urgent:true, icon:'st_plan',
           nid:'plan::'+p.task_id+'::'+(it.task_id||it.label||it.type||'') });   // uniek per plan-item (anders wist 1 klik álle plan-kaarten van dit project)
       });
       // Project-chat wacht op de klant: worker-veld chat_wacht_op_klant (Cluster F). Inert zolang de worker
@@ -304,6 +304,21 @@
     if(!n || isNaN(n)) return '';
     return DATA.relTime(n);
   }
+  // Volledig tak-archief (lazy, on-click): alle afgeronde taken + bestanden, ook >60d/gefactureerd.
+  DATA.loadArchief = async function(){
+    if(!live()) return false;
+    var res = await api(ENDPOINTS.archiefList, base());
+    if(res && res.ok && res.data && res.data.ok !== false){ state.data.archief = res.data.items || []; return true; }
+    return false;
+  };
+  DATA.archief = function(){
+    var raw = state.data.archief; if(!raw) return [];
+    return raw.map(function(p){
+      var br = DATA.disc(p.discipline);
+      return { id:p.task_id, br:br.br, name:p.naam, disc:br.label, discId:p.discipline,
+        labels:mapLabels(p), when:_whenLabel(p.opleverdatum), bestanden:(p.bestanden||[]) };
+    });
+  };
   DATA.done = function(){
     var d=state.data.dashboard; if(!d) return null;
     var raw = d.afgerond_60d; if(!raw) return null;

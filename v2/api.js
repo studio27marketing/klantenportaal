@@ -152,7 +152,9 @@ const ENDPOINTS = {
   ticketAttach:      GATEWAY_BASE + '/ticketAttach',
   // Nieuwe social post aanmaken als concept: { text, providers[], media[], date } -> { ok, post_id, draft }.
   // Vereist het 'Socials-bewerkbaar'-recht op de bedrijf-taak (worker gate't server-side).
-  metricoolCreate:   GATEWAY_BASE + '/metricoolCreate'
+  metricoolCreate:   GATEWAY_BASE + '/metricoolCreate',
+  // Volledig tak-archief (lazy): alle afgeronde taken + bestanden-links, ook >60d/gefactureerd.
+  archiefList:       GATEWAY_BASE + '/archiefList'
 };
 
 /* AUTH v2 (Firebase + Cloudflare-gateway) is de DEFAULT. ?auth=v1 = legacy-vangnet. */
