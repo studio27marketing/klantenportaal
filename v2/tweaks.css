@@ -456,7 +456,7 @@
 .soc-ph-user{font-family:var(--font-display);font-weight:800;font-size:13px;color:var(--ink,#230F23);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .soc-ph-more{color:var(--ink-3,#6B5B6B);font-weight:900;letter-spacing:1px;}
 .soc-ph-mediawrap{width:100%;aspect-ratio:1/1;background:var(--paper-3,#F1EBE2);display:flex;align-items:center;justify-content:center;overflow:hidden;}
-.soc-ph-mediawrap img,.soc-ph-mediawrap video{width:100%;height:100%;object-fit:cover;display:block;}
+.soc-ph-mediawrap img,.soc-ph-mediawrap video{width:100%;height:100%;object-fit:contain;display:block;}   /* contain: volledige aspect-ratio zichtbaar, nooit uitgerekt/gecropt */
 .soc-ph-empty{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--ink-4,#9E919E);font-family:var(--font-body);font-size:12.5px;}
 .soc-ph-bar{display:flex;align-items:center;gap:15px;padding:11px 13px 5px;color:var(--ink,#230F23);}
 .soc-ph-bar svg{width:23px;height:23px;}
@@ -643,8 +643,8 @@
 .apick-chev{flex:none;color:var(--ink-4);}
 .apick-empty{color:var(--ink-3);font-size:14px;text-align:center;padding:18px;}
 body.admin-picking{overflow:hidden;}
-/* TEAM-badge naast de actieve klantnaam in de sidebar wanneer een admin in een klantportaal werkt */
-body.admin-mode .sb-client .nm::after{content:'TEAM';margin-left:8px;font-family:var(--font-display);font-weight:800;font-size:9px;letter-spacing:.08em;color:#fff;background:var(--grad-bp);padding:2px 6px;border-radius:6px;vertical-align:middle;}
+/* TEAM-badge naast de klantnaam VERWIJDERD (Vincent: oogt slecht bij lange klantnamen zoals
+   'Snoepwinkeltje'; de admin-context blijkt al uit de TeamView-toggle in de topbar) */
 @media(max-width:560px){.apick-title{font-size:25px;}.apick-list{max-height:42vh;}}
 
 /* ===== ADMIN — uitgebreide Meta-rapportage (team-weergave) ================= */
@@ -991,3 +991,14 @@ html, body{ touch-action:pan-x pan-y; }
 .ow-takdot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;}
 .ow-sumtotal{font-family:var(--font-display);font-weight:800;font-size:14.5px;border-top:1px solid var(--line,#E7DFD3);margin-top:4px;padding-top:11px;border-bottom:none;}
 .ow-sumnote{font-size:12.5px;color:var(--ink-3,#6B5B6B);padding:7px 0 0;line-height:1.5;}
+
+/* === Cluster R: socials-planner === */
+/* ×-sluitknop rechtsboven in de post-editor (het losse balkje is weg) */
+.soc-editor{position:relative;}
+.soc-editor>.soc-close{position:absolute;top:0;right:0;z-index:9;}
+.soc-egrid{padding-top:6px;}
+/* '+ Nieuwe post'-rij boven de plannerfilters (alleen zichtbaar met het Socials-bewerkbaar-recht) */
+.soc-newpost-row{display:flex;justify-content:flex-end;margin:0 0 12px;}
+/* create-overlay: mockup links, formulier rechts (mobiel gestapeld) */
+.sc-grid{display:grid;grid-template-columns:300px 1fr;gap:24px;align-items:start;}
+@media(max-width:760px){.sc-grid{grid-template-columns:1fr;}.sc-pv{max-width:300px;margin:0 auto;}}

@@ -1227,6 +1227,95 @@ async function submitWebTicket(btn){
     setTimeout(closeWebTicket, mislukt?3500:2000);
   }catch(e){ fail(); }
 }
+/* ---- Nieuwe social post aanmaken (Cluster R) — enkel met 'Socials-bewerkbaar'-recht ----
+   mp-overlay met datum/tijd, kanalen, caption, visual-upload en live mockup-preview.
+   Submit -> worker metricoolCreate: de post wordt als CONCEPT ingepland (team finaliseert). */
+function scEl(){ var el=$id('socCreate'); if(!el){ el=document.createElement('div'); el.id='socCreate'; el.className='mp-overlay'; el.addEventListener('mousedown',function(e){ el._downScrim=(e.target===el); }); el.addEventListener('click',function(e){ if(e.target===el && el._downScrim) closeSocialCreate(); }); document.body.appendChild(el); } return el; }
+function scEsc(e){ if(e.key==='Escape') closeSocialCreate(); }
+function closeSocialCreate(){ var el=$id('socCreate'); if(el){ el.classList.remove('show'); el.innerHTML=''; } document.removeEventListener('keydown',scEsc); document.body.classList.remove('mp-lock'); state._sc=null; }
+function openSocialCreate(){
+  var d=new Date(Date.now()+2*86400000);   // voorstel: overmorgen 10:00
+  var p2=function(n){return (n<10?'0':'')+n;};
+  state._sc={ nets:['instagram'], media:[], text:'', date:d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate()), time:'10:00', busy:false };
+  var el=scEl(); el.classList.add('show'); document.body.classList.add('mp-lock');
+  document.addEventListener('keydown',scEsc);
+  scRender();
+}
+function scMockHTML(){
+  var s=state._sc||{};
+  var net=(s.nets&&s.nets[0])||'instagram';
+  return socialPhoneMock({ brand:(typeof _socAccountName==='function'?_socAccountName(net):''), caption:s.text||'', net:net, format:'feed', mediaArr:(s.media||[]) });
+}
+function scRender(){
+  var el=$id('socCreate'); if(!el||!state._sc) return;
+  var s=state._sc;
+  var CHAN=['facebook','instagram','linkedin','tiktok','youtube','gbp'];
+  var chans=CHAN.map(function(net){
+    var on=s.nets.indexOf(net)>=0;
+    var n=mcNet(net);
+    return '<button type="button" class="soc-chic'+(on?' on':'')+'" style="--cn:'+n[1]+'" data-net="'+net+'" title="'+escapeHtml(n[0])+'" onclick="scToggleNet(\''+net+'\')">'+mcNetIcon(net)+'</button>';
+  }).join('');
+  el.innerHTML='<div class="mp-modal ow-modal" onclick="event.stopPropagation()">'
+    +'<div class="mp-head"><span class="mp-back-sp"></span><div class="mp-head-c"><span class="mp-head-eyebrow">Socials</span><b>Nieuwe post</b></div><button class="mp-close" onclick="closeSocialCreate()" aria-label="Sluiten">'+ic('plus',22)+'</button></div>'
+    +'<div class="mp-scroll"><div class="sc-grid">'
+      +'<div class="sc-pv" id="scPv">'+scMockHTML()+'</div>'
+      +'<div class="sc-form">'
+        +'<p class="mp-intro" style="margin-top:0">Stel je post samen — wij plannen ’m in als <b>concept</b> en finaliseren de publicatie voor je.</p>'
+        +'<label class="soc-elab">Kanalen</label><div class="soc-chics">'+chans+'</div>'
+        +'<label class="soc-elab">Wanneer</label>'
+        +'<div style="display:flex;gap:9px;flex-wrap:wrap"><input type="date" id="scDate" value="'+escapeHtml(s.date)+'" onchange="state._sc.date=this.value" style="padding:10px 12px;border:1px solid var(--line);border-radius:11px;font:600 14px Nunito,sans-serif"><input type="time" id="scTime" value="'+escapeHtml(s.time)+'" onchange="state._sc.time=this.value" style="padding:10px 12px;border:1px solid var(--line);border-radius:11px;font:600 14px Nunito,sans-serif"></div>'
+        +'<label class="soc-elab">Tekst &amp; hashtags</label><textarea id="scCap" class="soc-cap" rows="7" oninput="state._sc.text=this.value;scSyncMock()" placeholder="Schrijf je caption…">'+escapeHtml(s.text||'')+'</textarea>'
+        +'<label class="soc-elab">Visual</label>'
+        +'<div class="soc-visrow"><button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById(\'scFile\').click()">'+ic('upload',15)+' Upload foto/video</button><input type="file" id="scFile" accept="image/*,video/*" style="display:none" onchange="scUpload(this)"></div>'
+        +'<div id="scUpMsg" class="fs" style="margin-top:7px;min-height:16px">'+(s.media.length?('📎 '+s.media.length+' visual(s) toegevoegd'):'')+'</div>'
+        +'<div id="scMsg" style="min-height:18px;margin-top:6px;font:600 13px Nunito,sans-serif"></div>'
+      +'</div>'
+    +'</div></div>'
+    +'<div class="mp-foot"><button class="btn btn-branch br-yellow mp-confirm" id="scSend" onclick="scSubmit(this)">'+ic('send',16)+' Inplannen als concept</button></div></div>';
+}
+function scToggleNet(net){ var s=state._sc; if(!s) return; var i=s.nets.indexOf(net); if(i>=0){ if(s.nets.length>1) s.nets.splice(i,1); } else s.nets.push(net); scRender(); }
+function scSyncMock(){ var pv=$id('scPv'); if(pv) pv.innerHTML=scMockHTML(); }
+async function scUpload(input){
+  var f=input&&input.files&&input.files[0]; if(!f) return; input.value='';
+  var m=$id('scUpMsg');
+  if(f.size>22*1024*1024){ if(m) m.innerHTML='<span style="color:var(--s27-orange-ink,#C44514)">Bestand te groot (max 22 MB).</span>'; return; }
+  if(m) m.innerHTML='Uploaden…';
+  if(state.demoMode || !state.session){ state._sc.media.push(URL.createObjectURL(f)); scSyncMock(); if(m) m.textContent='📎 '+state._sc.media.length+' visual(s) toegevoegd (demo)'; return; }
+  try{
+    var b64=await _fileToBase64(f);
+    var r=await api(ENDPOINTS.metricoolMediaUpload, { filename:f.name, content_type:f.type, file_data:String(b64).split(',')[1]||'' });
+    var d=(r&&r.ok&&r.data)?r.data:null;
+    if(d&&d.ok&&d.url){ state._sc.media.push(d.url); scSyncMock(); if(m) m.textContent='📎 '+state._sc.media.length+' visual(s) toegevoegd'; }
+    else { if(m) m.innerHTML='<span style="color:var(--s27-orange-ink,#C44514)">Upload lukte niet'+((d&&d.message)?(': '+escapeHtml(d.message)):'')+'.</span>'; }
+  }catch(e){ if(m) m.innerHTML='<span style="color:var(--s27-orange-ink,#C44514)">Upload lukte niet.</span>'; }
+}
+async function scSubmit(btn){
+  var s=state._sc; if(!s||s.busy) return;
+  var m=$id('scMsg');
+  if(!String(s.text||'').trim() && !s.media.length){ if(m) m.innerHTML='<span style="color:var(--ink-3)">Schrijf een tekst of voeg een visual toe.</span>'; return; }
+  if(!s.date||!s.time){ if(m) m.innerHTML='<span style="color:var(--ink-3)">Kies een datum en tijd.</span>'; return; }
+  if(btn){ btn.disabled=true; btn.innerHTML='Inplannen…'; }
+  if(state.demoMode || !state.session){ if(m) m.innerHTML='<span style="color:var(--s27-green-ink,#147A50)">'+ic('check',14)+' Ingepland als concept (voorbeeldweergave).</span>'; if(btn) btn.innerHTML=ic('check',15)+' Ingepland ✓'; setTimeout(closeSocialCreate,1500); return; }
+  s.busy=true;
+  try{
+    var r=await api(ENDPOINTS.metricoolCreate, { text:s.text||'', providers:s.nets, media:s.media, date:s.date+'T'+s.time+':00' });
+    var d=(r&&r.data)?r.data:null;
+    if(d&&d.ok){
+      if(m) m.innerHTML='<span style="color:var(--s27-green-ink,#147A50)">'+ic('check',14)+' Je post staat als concept in de planning. Wij finaliseren de publicatie.</span>';
+      if(btn) btn.innerHTML=ic('check',15)+' Ingepland ✓';
+      try{ state.data.metricool=null; await S27DATA.loadMetricool(); var box=document.getElementById('socialBody'); if(box&&typeof socialBodyHTML==='function') box.innerHTML=socialBodyHTML(); }catch(e){}
+      setTimeout(closeSocialCreate,1800);
+    } else {
+      s.busy=false;
+      if(btn){ btn.disabled=false; btn.innerHTML=ic('send',16)+' Inplannen als concept'; }
+      if(m) m.innerHTML='<span style="color:var(--s27-orange-ink,#C44514)">'+escapeHtml((d&&d.message)||'Inplannen lukte niet. Probeer opnieuw.')+'</span>';
+    }
+  }catch(e){
+    s.busy=false;
+    if(btn){ btn.disabled=false; btn.innerHTML=ic('send',16)+' Inplannen als concept'; }
+    if(m) m.innerHTML='<span style="color:var(--s27-orange-ink,#C44514)">Inplannen lukte niet. Probeer opnieuw.</span>';
+  }
+}
 const MEET_HOSTS={ 'Arne':{email:'arne@studio27.be'}, 'Ilke':{email:'ilke@studio27.be'} };
 /* ---- Offerte: vraag stellen -> komt als comment op de offerte-taak (naar de assignee) ---- */
 function offerteVraag(id, btn){

@@ -132,7 +132,7 @@ const SENSITIVE = new Set([
   'chatAttachment', 'chatPost', 'commsChatPost', 'commsChatAttachment', 'directMessage', 'feedbackV2', 'newProjectIntake',
   'facturatieSave', 'projectFacturatieSave', 'bedrijfVoorkeuren', 'bedrijfContact',
   'bedrijfBeheer', 'inplannen', 'offerteGenereren', 'metricoolApprove', 'metricoolUpdate',
-  'metricoolMediaUpload', 'shootSubmit', 'meetingBook', 'ticketCreate', 'ticketAttach',
+  'metricoolMediaUpload', 'metricoolCreate', 'shootSubmit', 'meetingBook', 'ticketCreate', 'ticketAttach',
 ]);
 const LIMIT_SENSITIVE = 15; // per minuut, per gebruiker
 const LIMIT_DEFAULT   = 80;
@@ -455,6 +455,9 @@ async function tryHandle(path, bedrijfId, body, claims, env, ctx, ch, noCache) {
     if (path === 'ticketCreate' || path === 'ticketAttach') {
       body.account_email = String((claims && claims.email) || '').trim().toLowerCase();
     }
+    // staff-vlag ALTIJD server-side zetten (overschrijft elke client-waarde — niet spoofbaar):
+    // handlers gebruiken dit voor permissie-gates (bv. socials-bewerken: team mag altijd).
+    body.__staff = claims.is_staff === true;
     const res = await WRITE_HANDLERS[path](bedrijfId, body, env);
     // writes op de bedrijf-taak bust de read-caches van dat bedrijf
     // (offerteGenereren voegt een offerte toe -> raakt dashboard/get_offertes-views;

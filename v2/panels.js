@@ -467,7 +467,10 @@ function socialCustomPeriod(){
   var pp=socialPeriod(); pp.from=f.value+'T00:00:00'; pp.to=t.value+'T23:59:59'; socialReloadStats();
 }
 function socialSetCompare(mode){ var pp=socialPeriod(); pp.compare=mode; socialReloadStats(); }
-function socialPlannerHTML(){ return socialFilters()+'<div id="socialCalContainer">'+socialCalendar(socialShownPosts())+'</div>'; }
+function socialPlannerHTML(){
+  var nieuw=socialsEditable()?'<div class="soc-newpost-row"><button class="btn btn-branch br-yellow btn-sm" onclick="openSocialCreate()">'+ic('plus',15)+' Nieuwe post</button></div>':'';
+  return nieuw+socialFilters()+'<div id="socialCalContainer">'+socialCalendar(socialShownPosts())+'</div>';
+}
 function socialInzichtenHTML(){
   var it=socialInzTab();
   var tabs=[['momenten','Beste momenten'],['topscore','Topscore'],['hashtags','Hashtags']];
@@ -855,6 +858,25 @@ function _socAccountName(net){
   return /@/.test(b) ? '' : b;   // nooit een e-mailadres in de mockup tonen
 }
 // Formaat afleiden: reel/verticaal (9:16) vs feed (1:1) — bepaalt de beeldverhouding van de mockup, zodat een reel niet wordt afgeknipt.
+/* Schrijfrecht 'Socials-bewerkbaar' (Cluster R): team + demo altijd; klanten enkel met het
+   recht op de bedrijf-taak (worker gate't dezelfde regel server-side — dit is enkel UI). */
+function socialsEditable(){
+  if(state.demoMode) return true;
+  if(state.adminMode) return true;
+  var d=state.data&&state.data.dashboard;
+  return !!(d&&d.modules&&d.modules.socials_bewerkbaar===true);
+}
+/* Mockup volgt de ECHTE aspect-ratio van de media (geen uitrekken/croppen meer):
+   zodra metadata laadt, neemt de mediawrap de ratio van de actieve slide aan. */
+function socialMockMetaRatio(el){
+  try{
+    var w=el.videoWidth||el.naturalWidth, h=el.videoHeight||el.naturalHeight;
+    if(!w||!h) return;
+    var slide=el.closest('.soc-ph-slide'); if(slide) slide.setAttribute('data-ratio', w+' / '+h);
+    var host=el.closest('.soc-ph-mediawrap');
+    if(host && slide && slide.classList.contains('on')) host.style.aspectRatio=w+' / '+h;
+  }catch(e){}
+}
 function socialInferFormat(p,net,isVid,nMedia,captionOverride){
   net=String(net||'').toLowerCase();
   if(net==='tiktok'||net==='youtube') return 'reel';
@@ -879,7 +901,7 @@ function socialPhoneMock(opts){
   var book='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
   var avStyle=(net==='instagram')?'':' style="background:'+accent+'"';
   var slides=arr.length
-    ? arr.map(function(u,i){ var v=_isVidUrl(u); return '<div class="soc-ph-slide'+(i===0?' on':'')+'" data-i="'+i+'">'+(v?'<video src="'+esc(u)+'" controls playsinline preload="metadata"></video>':'<img src="'+esc(u)+'" alt="">')+'</div>'; }).join('')
+    ? arr.map(function(u,i){ var v=_isVidUrl(u); return '<div class="soc-ph-slide'+(i===0?' on':'')+'" data-i="'+i+'">'+(v?'<video src="'+esc(u)+'" controls playsinline preload="metadata" onloadedmetadata="socialMockMetaRatio(this)"></video>':'<img src="'+esc(u)+'" alt="" onload="socialMockMetaRatio(this)">')+'</div>'; }).join('')
     : '<div class="soc-ph-empty">'+ic('img',30)+'<span>Nog geen visual</span></div>';
   var dots=(arr.length>1)?'<div class="soc-ph-dots">'+arr.map(function(u,i){ return '<button type="button" class="soc-ph-dot'+(i===0?' on':'')+'" data-i="'+i+'" onclick="socialMockSlide('+i+')" aria-label="Naar slide '+(i+1)+'"></button>'; }).join('')+'</div>':'';
   var counter=(arr.length>1)?'<span class="soc-ph-count" id="socPhCount">1/'+arr.length+'</span>':'';
@@ -898,6 +920,7 @@ function socialMockSlide(i){
   [].forEach.call(host.querySelectorAll('.soc-ph-dot'),function(d,j){ d.classList.toggle('on',j===i); });
   var c=document.getElementById('socPhCount'); if(c) c.textContent=(i+1)+'/'+slides.length;
   host.setAttribute('data-i',i);
+  var r=slides[i].getAttribute('data-ratio'); if(r) host.style.aspectRatio=r;   // mockup volgt de actieve slide
 }
 var _socSwipeX=null;
 function socialSwipeStart(e){ _socSwipeX=(e&&e.touches&&e.touches[0])?e.touches[0].clientX:null; }
@@ -940,8 +963,7 @@ function socialDetailPage(id){
   var datebadge=(dd?'<span class="soc-emeta-date">'+ic('cal',13)+' '+esc(dd)+(tt?' · '+tt:'')+'</span>':'');
   if(published){
     var nets=(p.netwerken||[]).map(function(nw){ var n=mcNet(nw.netwerk); return '<span class="soc-chic on" style="--cn:'+n[1]+'" title="'+esc(n[0])+'">'+mcNetIcon(nw.netwerk)+'</span>'; }).join('');
-    return '<div class="soc-editor">'
-      +'<div class="soc-etopbar">'+back+'</div>'
+    return '<div class="soc-editor">'+back
       +'<div class="soc-egrid"><div class="soc-ecol-pv" id="socPv">'+phone+'</div><div class="soc-ecol-form">'
         +'<div class="soc-emeta">'+datebadge+'</div>'
         +'<label class="soc-elab">Kanalen</label><div class="soc-chics soc-chics-ro">'+(nets||'<span class="fs" style="color:var(--ink-4)">—</span>')+'</div>'
@@ -950,19 +972,26 @@ function socialDetailPage(id){
       +'</div></div></div>';
   }
   // EDITOR (geplande post): kanalen aan/uit (icoontjes wisselen de preview), caption groot, visual.
+  // Zonder 'Socials-bewerkbaar'-recht: alles read-only (feedback + goedkeuren blijven wél).
+  var editable=socialsEditable();
   var CHAN=['facebook','instagram','linkedin','tiktok','youtube','gbp'];
   var on={}; onNets.forEach(function(n){ on[n]=true; });
-  var chans=CHAN.map(function(net){ return socialChanIcon(net,!!on[net]); }).join('');
-  return '<div class="soc-editor">'
-    +'<div class="soc-etopbar">'+back+'</div>'
+  var chans=editable
+    ? CHAN.map(function(net){ return socialChanIcon(net,!!on[net]); }).join('')
+    : (onNets.map(function(nw){ var n=mcNet(nw); return '<span class="soc-chic on" style="--cn:'+n[1]+'" title="'+esc(n[0])+'">'+mcNetIcon(nw)+'</span>'; }).join('')||'<span class="fs" style="color:var(--ink-4)">—</span>');
+  return '<div class="soc-editor">'+back
     +'<div class="soc-egrid"><div class="soc-ecol-pv" id="socPv">'+phone+'</div><div class="soc-ecol-form">'
       +'<div class="soc-emeta">'+datebadge+'</div>'
-      +'<label class="soc-elab">Kanalen</label><div class="soc-chics">'+chans+'</div>'
-      +'<label class="soc-elab">Tekst &amp; hashtags</label><textarea id="socCap" class="soc-cap" rows="12" oninput="socialPreviewSync()" placeholder="Schrijf je caption… hashtags typ je gewoon mee (#voorbeeld)">'+esc(p.tekst||'')+'</textarea>'
-      +'<label class="soc-elab">Visual</label>'
-      +'<div class="soc-visrow"><button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById(\'socFile\').click()">'+ic('upload',15)+' Upload foto/video</button><input type="file" id="socFile" accept="image/*,video/*" style="display:none" onchange="socialUploadMedia(this)"><span class="soc-upor">of</span><input id="socMedia" class="soc-hashin" style="flex:1;min-width:150px;box-sizing:border-box" placeholder="plak een URL" oninput="socialPreviewMedia()"></div>'
-      +'<div id="socUpMsg" class="fs" style="margin-top:7px"></div>'
-      +'<p class="fs" style="color:var(--ink-4);margin:6px 0 0">Laat leeg om de huidige visual te behouden. Een geüploade foto/video gebruiken we automatisch.</p>'
+      +'<label class="soc-elab">Kanalen</label><div class="soc-chics'+(editable?'':' soc-chics-ro')+'">'+chans+'</div>'
+      +'<label class="soc-elab">Tekst &amp; hashtags</label>'+(editable
+        ? '<textarea id="socCap" class="soc-cap" rows="12" oninput="socialPreviewSync()" placeholder="Schrijf je caption… hashtags typ je gewoon mee (#voorbeeld)">'+esc(p.tekst||'')+'</textarea>'
+        : '<div class="soc-dtxt-box">'+esc(p.tekst||'(geen tekst)')+'</div>')
+      +(editable
+        ? '<label class="soc-elab">Visual</label>'
+          +'<div class="soc-visrow"><button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById(\'socFile\').click()">'+ic('upload',15)+' Upload foto/video</button><input type="file" id="socFile" accept="image/*,video/*" style="display:none" onchange="socialUploadMedia(this)"><span class="soc-upor">of</span><input id="socMedia" class="soc-hashin" style="flex:1;min-width:150px;box-sizing:border-box" placeholder="plak een URL" oninput="socialPreviewMedia()"></div>'
+          +'<div id="socUpMsg" class="fs" style="margin-top:7px"></div>'
+          +'<p class="fs" style="color:var(--ink-4);margin:6px 0 0">Laat leeg om de huidige visual te behouden. Een geüploade foto/video gebruiken we automatisch.</p>'
+        : '')
       +'<div id="socFbWrap" class="soc-fbwrap" style="display:none;margin-top:14px"><label class="soc-elab">Wat wil je aangepast zien?</label><textarea id="socFbTx" class="soc-cap" rows="3" placeholder="Beschrijf kort je feedback voor dit bericht…"></textarea><button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="socialFeedback(\''+esc(p.id)+'\',this)">'+ic('check',15)+' Verstuur feedback</button></div>'
       +'<div id="socSaveMsg" style="margin-top:12px"></div>'
       +'<div class="soc-eactions" id="socEditActsForm">'+socialEditorActions(p.id)+'</div>'
@@ -977,7 +1006,7 @@ function socialEditorActions(id){
   if(st==='gepubliceerd') return statusbadge;
   var approved=(p.approved||(state._mcApproved&&state._mcApproved[p.id]));
   var waitBtn='<button class="btn btn-outline btn-sm" onclick="socialToggleFeedback()">Wacht op feedback</button>';
-  var saveBtn='<button class="btn btn-primary btn-sm" onclick="socialSavePost(\''+esc(p.id)+'\',this)">'+ic('check',16)+' Opslaan</button>';
+  var saveBtn=socialsEditable()?'<button class="btn btn-primary btn-sm" onclick="socialSavePost(\''+esc(p.id)+'\',this)">'+ic('check',16)+' Opslaan</button>':'';
   var apprBtn=approved?'<span class="soc-fbok" style="margin:0;padding:8px 13px">'+ic('check',15)+' Goedgekeurd</span>':'<button class="btn btn-branch br-green btn-sm" onclick="socialApprove(\''+esc(p.id)+'\',this)">'+ic('check',16)+' Goedkeuren</button>';
   return (approved?'':statusbadge)+waitBtn+saveBtn+apprBtn;
 }

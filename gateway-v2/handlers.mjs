@@ -1090,6 +1090,12 @@ export function showVisible(discipline, dueDateMs, nowMs = Date.now()) {
 }
 
 // module-labels: UUID->key. moduleOn = mods leeg (default-on) OF uuid aanwezig.
+// RECHTEN-opties op hetzelfde labels-veld: dit zijn GEEN zichtbaarheids-modules maar permissies.
+// Ze moeten uit de moduleOn-berekening gefilterd worden (anders maakt 1 recht het veld "niet leeg"
+// en vallen alle zichtbaarheids-modules met leeg-default uit) en zijn STRIKT opt-in.
+export const RIGHT_UUIDS = {
+  socialsBewerkbaar: 'e7d8583c-1d9f-4f70-b475-e58bffe7f3ed',   // klant mag social-posts bewerken/aanmaken
+};
 export const MODULE_UUIDS = {
   performance:      '74c2e17b-faa8-482f-97c2-ecdc21962d91',
   socials:          'c7255337-8ef8-4186-8766-5f7de709d1d3',
@@ -1756,17 +1762,24 @@ export async function dashboard(bedrijfId, body, env) {
     historie_3mnd: [],
     aankomende_meetings: [],
     contact: { am_naam: 'Ilke Meeusen', am_email: 'ilke@studio27.be', am_rol: 'Account manager Studio 27' },
-    modules: {
-      performance: moduleOn(mods, MODULE_UUIDS.performance),
-      socials: moduleOn(mods, MODULE_UUIDS.socials),
-      ads: moduleOn(mods, MODULE_UUIDS.ads),
-      seo: moduleOn(mods, MODULE_UUIDS.seo),
-      opleidingen: moduleOn(mods, MODULE_UUIDS.opleidingen),
-      strategie: moduleOn(mods, MODULE_UUIDS.strategie),
-      branding: moduleOn(mods, MODULE_UUIDS.branding),
-      video_fotografie: moduleOn(mods, MODULE_UUIDS.video_fotografie),
-      webdesign: moduleOn(mods, MODULE_UUIDS.webdesign),
-    },
+    modules: (function () {
+      // rechten-opties wegfilteren vóór de zichtbaarheids-berekening (zie RIGHT_UUIDS-comment)
+      const rightSet = new Set(Object.values(RIGHT_UUIDS));
+      const visMods = mods.filter((u) => !rightSet.has(u));
+      return {
+        performance: moduleOn(visMods, MODULE_UUIDS.performance),
+        socials: moduleOn(visMods, MODULE_UUIDS.socials),
+        ads: moduleOn(visMods, MODULE_UUIDS.ads),
+        seo: moduleOn(visMods, MODULE_UUIDS.seo),
+        opleidingen: moduleOn(visMods, MODULE_UUIDS.opleidingen),
+        strategie: moduleOn(visMods, MODULE_UUIDS.strategie),
+        branding: moduleOn(visMods, MODULE_UUIDS.branding),
+        video_fotografie: moduleOn(visMods, MODULE_UUIDS.video_fotografie),
+        webdesign: moduleOn(visMods, MODULE_UUIDS.webdesign),
+        // RECHT (strikt opt-in, géén leeg-default): klant mag social-posts bewerken + aanmaken
+        socials_bewerkbaar: mods.includes(RIGHT_UUIDS.socialsBewerkbaar),
+      };
+    })(),
   };
   return { status: 200, body: out };
 }
@@ -4290,6 +4303,70 @@ export async function metricoolApprove(bedrijfId, body, env) {
   return { status: 200, body: { ok: true, id: postId, approved: true } };
 }
 
+/* ---- metricoolCreate (WRITE) — klant maakt zelf een nieuwe post aan (Cluster R) ----
+ * Vereist het 'Socials-bewerkbaar'-recht (of team). De post wordt als CONCEPT (draft) op de
+ * gekozen datum ingepland: het team finaliseert in Metricool — voorkomt mispublicaties.
+ * Body: { text, providers:['instagram',...], media:['url',...], date:'YYYY-MM-DDTHH:mm:ss' }. */
+export async function metricoolCreate(bedrijfId, body, env) {
+  const br = await cu.get(env, `/task/${bedrijfId}`);
+  const blogId = br.ok && br.data ? str(getCF(br.data, FIELD.metricoolId)).trim() : '';
+  if (!blogId) return { status: 403, body: { ok: false, error: 'not_linked' } };
+  if (!socialsEditAllowed(br.data, body)) return SOCIALS_NOT_EDITABLE;
+  if (!str(env && env.METRICOOL_API_KEY)) return { status: 200, body: { ok: false, error: 'no_key' } };
+
+  const text = str(body && body.text).slice(0, 4000);
+  const providers = (Array.isArray(body && body.providers) ? body.providers : [])
+    .map((n) => str(n).toLowerCase()).filter((n) => /^[a-z]+$/.test(n)).slice(0, 8);
+  const media = (Array.isArray(body && body.media) ? body.media : [])
+    .map((u) => str(u).trim()).filter((u) => /^https:\/\//.test(u)).slice(0, 10);
+  const date = str(body && body.date).trim();
+  if (!providers.length) return { status: 400, body: { ok: false, error: 'no_providers', message: 'Kies minstens één kanaal.' } };
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(date)) return { status: 400, body: { ok: false, error: 'bad_date', message: 'Kies een geldige datum en tijd.' } };
+  if (!text && !media.length) return { status: 400, body: { ok: false, error: 'empty', message: 'Schrijf een tekst of voeg een visual toe.' } };
+
+  // anti-spam: dagcap per bedrijf (zelfde patroon als ticketcap)
+  try {
+    const dag = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const k = `mccreatecap:${bedrijfId}:${dag}`;
+    const n = parseInt((await env.KV.get(k)) || '0', 10) || 0;
+    if (n >= 20) return { status: 429, body: { ok: false, error: 'too_many', message: 'Maximum aantal nieuwe posts voor vandaag bereikt.' } };
+    await env.KV.put(k, String(n + 1), { expirationTtl: 90000 });
+  } catch (e) { /* fail-open bij KV-storing */ }
+
+  const userId = await metricoolUserId(env, blogId).catch(() => '');
+  const info = {
+    text,
+    media,
+    mediaAltText: media.map(() => null),
+    providers: providers.map((n) => ({ network: n })),
+    publicationDate: { dateTime: date.length === 16 ? date + ':00' : date, timezone: METRICOOL_TZ },
+    draft: true,            // CONCEPT: team finaliseert (bewuste veiligheidskeuze)
+    autoPublish: true,
+    shortener: false,
+    firstCommentText: '',
+    smartLinkData: { ids: [] },
+  };
+  for (const n of providers) { info[n + 'Data'] = (n === 'twitter' || n === 'facebook') ? { type: 'POST' } : {}; }
+
+  const pq = new URLSearchParams({ blogId: String(blogId), timezone: METRICOOL_TZ });
+  if (userId) pq.set('userId', String(userId));
+  let res;
+  try {
+    res = await fetch(`${METRICOOL_BASE}/scheduler/posts?${pq.toString()}`, {
+      method: 'POST',
+      headers: { ...mcHeaders(env), 'Content-Type': 'application/json' },
+      body: JSON.stringify(info),
+    });
+  } catch (e) { return { status: 502, body: { ok: false, error: 'upstream', message: 'Metricool is even niet bereikbaar.' } }; }
+  if (!res.ok) {
+    let detail = ''; try { detail = (await res.text()).slice(0, 200); } catch (e) {}
+    return { status: 200, body: { ok: false, error: 'create_failed', detail } };
+  }
+  let created = null; try { created = await res.json(); } catch (e) {}
+  const newId = str(created && (created.id || (created.data && created.data.id)) || '');
+  return { status: 200, body: { ok: true, post_id: newId, draft: true } };
+}
+
 /* ---- metricoolFeedback (WRITE) - klant geeft feedback/aanpassing op een post --- */
 // Geen directe Metricool-mutatie: de feedback (incl. een gewenste tekstaanpassing) gaat
 // als opdracht naar de ClickUp-inbox, zodat Studio 27 ze veilig verwerkt.
@@ -4341,12 +4418,24 @@ function mcCleanInfo(p) {
   for (const k of Object.keys(p)) { if (/Data$/.test(k) && p[k] && typeof p[k] === 'object') info[k] = p[k]; }  // *Data-blokken 1-op-1
   return info;
 }
+/* ---- Permissie: mag deze klant social-posts bewerken/aanmaken? (Cluster R) ----
+ * Team (body.__staff — door worker.js server-side uit het geverifieerde token gezet, niet
+ * spoofbaar) mag altijd. Klanten enkel met het 'Socials-bewerkbaar'-recht op de bedrijf-taak:
+ * STRIKT opt-in, géén leeg-default zoals bij de zichtbaarheids-modules. */
+function socialsEditAllowed(bedrijfTaak, body) {
+  if (body && body.__staff === true) return true;
+  const mods = normalizeModuleLabels(getCF(bedrijfTaak, FIELD.modules));
+  return mods.includes(RIGHT_UUIDS.socialsBewerkbaar);
+}
+const SOCIALS_NOT_EDITABLE = { status: 403, body: { ok: false, error: 'not_editable', message: 'Posts bewerken is niet geactiveerd voor jouw portaal. Vraag het gerust aan je Studio 27-contact.' } };
+
 export async function metricoolUpdate(bedrijfId, body, env) {
   const postId = cleanId(body && (body.id || body.post_id));
   if (!postId) return { status: 400, body: { ok: false, error: 'missing_post_id' } };
   const br = await cu.get(env, `/task/${bedrijfId}`);
   const blogId = br.ok && br.data ? str(getCF(br.data, FIELD.metricoolId)).trim() : '';
   if (!blogId) return { status: 403, body: { ok: false, error: 'not_linked' } };
+  if (!socialsEditAllowed(br.data, body)) return SOCIALS_NOT_EDITABLE;
   if (!str(env && env.METRICOOL_API_KEY)) return { status: 200, body: { ok: false, error: 'no_key' } };
 
   const userId = await metricoolUserId(env, blogId).catch(() => '');
@@ -4791,6 +4880,7 @@ export async function metricoolMediaUpload(bedrijfId, body, env) {
   const br = await cu.get(env, `/task/${bedrijfId}`);
   const blogId = br.ok && br.data ? str(getCF(br.data, FIELD.metricoolId)).trim() : '';
   if (!blogId) return { status: 403, body: { ok: false, error: 'not_linked' } };
+  if (!socialsEditAllowed(br.data, body)) return SOCIALS_NOT_EDITABLE;
   if (!env.KV) return { status: 200, body: { ok: false, error: 'no_storage', message: 'Upload tijdelijk niet beschikbaar.' } };
   const ct = str(body && (body.content_type || body.contentType)).toLowerCase().split(';')[0].trim();
   if (!/^image\/(jpeg|jpg|png|gif|webp)$/.test(ct) && !/^video\/(mp4|quicktime|webm)$/.test(ct)) {
@@ -5255,6 +5345,8 @@ export const WRITE_HANDLERS = {
   // Metricool: klant keurt een geplande post goed (KV + ClickUp-melding) of geeft feedback.
   metricoolApprove,
   metricoolFeedback,
+  // Metricool: klant maakt zelf een nieuwe post aan als concept (vereist 'Socials-bewerkbaar'-recht).
+  metricoolCreate,
   // Metricool: klant uploadt een foto/video als post-visual (KV-hosting -> publieke URL).
   metricoolMediaUpload,
   metricoolUpdate,

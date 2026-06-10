@@ -149,7 +149,10 @@ const ENDPOINTS = {
   // (assignee Klaas, TYPE JOB Support, contact-koppeling server-side); push bij on hold/doorgestuurd.
   ticketCreate:      GATEWAY_BASE + '/ticketCreate',
   // Extra bijlage op een supportticket: { ticket_id, filename, file_data } -> { ok, attached }. 1 bestand per call.
-  ticketAttach:      GATEWAY_BASE + '/ticketAttach'
+  ticketAttach:      GATEWAY_BASE + '/ticketAttach',
+  // Nieuwe social post aanmaken als concept: { text, providers[], media[], date } -> { ok, post_id, draft }.
+  // Vereist het 'Socials-bewerkbaar'-recht op de bedrijf-taak (worker gate't server-side).
+  metricoolCreate:   GATEWAY_BASE + '/metricoolCreate'
 };
 
 /* AUTH v2 (Firebase + Cloudflare-gateway) is de DEFAULT. ?auth=v1 = legacy-vangnet. */
