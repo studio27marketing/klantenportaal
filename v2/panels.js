@@ -300,16 +300,25 @@ function projCluster(cl, grp, num, fromTab){
     <div class="projflat-grid">${grp.map(function(p){return projCardFlat(p, fromTab);}).join('')}</div>
   </section>`;
 }
-function projDienst(list, fromTab){
-  const all=(list||_overviewProjects()).filter(p=>p.status!=='done');
+function projDienst(list, fromTab, incDone){
+  const all=(list||_overviewProjects()).filter(p=>incDone?true:(p.status!=='done'));
   if(!all.length) return `<div class="empty"><div class="em-ic">${ic('st_approved',64)}</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Geen actieve projecten</b><p style="margin:6px 0 0">Zodra we samen aan iets nieuws starten, verschijnt het hier.</p></div>`;
   const sortFn=(a,b)=>{ const ia=DISC_ORDER.indexOf(a.disc),ib=DISC_ORDER.indexOf(b.disc); return ((ia<0?99:ia)-(ib<0?99:ib))||String(a.name).localeCompare(String(b.name)); };
   let html='', _n=0;
-  PROJ_CLUSTERS.forEach(cl=>{ var grp=all.filter(p=>cl.statuses.indexOf(p.status)>=0).sort(sortFn); if(grp.length){ _n++; html+=projCluster(cl, grp, _n, fromTab); } });
+  const clusters=incDone?PROJ_CLUSTERS.concat([{key:'goedgekeurd', statuses:['done'], title:'Goedgekeurd', sub:'Afgerond en goedgekeurd — verdwijnt hier na facturatie.', br:'green'}]):PROJ_CLUSTERS;
+  clusters.forEach(cl=>{ var grp=all.filter(p=>cl.statuses.indexOf(p.status)>=0).sort(sortFn); if(grp.length){ _n++; html+=projCluster(cl, grp, _n, fromTab); } });
   // statussen die in geen enkel cluster vallen: verzamelcluster zodat nooit een project verdwijnt
   const rest=all.filter(p=>!PROJ_CLUSTERS.some(cl=>cl.statuses.indexOf(p.status)>=0)).sort(sortFn);
   if(rest.length){ _n++; html+=projCluster({key:'overig', statuses:[], title:'Overige projecten', sub:'Lopende trajecten bij Studio 27.', br:'blue'}, rest, _n, fromTab); }
   return `<div class="projclusters">${html}</div>`;
+}
+// actieteller per project: feedback die wacht + in te plannen shoots/meetings + chat-wacht.
+function projActieTeller(p){
+  var n=0;
+  if(p.status==='wait'||p.status==='sent') n++;                       // klaar voor jouw feedback
+  n+=((p.planItems&&p.planItems.length)||0);                          // shoots/meetings in te plannen
+  if(p.lastChat&&p.lastChat.wacht) n++;                               // bericht wacht op antwoord
+  return n;
 }
 // platte hoofdtaak-kaart: naam + discipline-chip(s), status, deliverable-badge, SA&E-namen.
 function projCardFlat(p, fromTab){
@@ -320,7 +329,9 @@ function projCardFlat(p, fromTab){
   if(takDef) discs=discs.filter(function(l){ return takDef.discIds.indexOf(l.discId)<0; });
   const dataDiscs=discs.map(function(l){return l.label;}).join('|');
   const cid=String(p.id||'').replace(/[^A-Za-z0-9_-]/g,'');
+  const acties=projActieTeller(p);
   return `<button class="projflat-card br-${p.br}" data-discs="${esc(dataDiscs)}" data-status="${p.status}" onclick="openProject('${cid}','${esc(fromTab||'auto')}')">
+    ${acties?`<span class="pf-notif" title="${acties} actie${acties===1?'':'s'} voor jou">${acties}</span>`:''}
     <span class="pf-main">
       <span class="pf-name pf-name--calm">${esc(p.name)}</span>
       ${discChips(discs)}
@@ -358,11 +369,14 @@ function takArchiefSectie(key, T){
 function panelTak(key){
   const T=TAK_TABS[key]; if(!T) return '';
   const all=_takProjects(T.discIds);
-  const actief=all.filter(p=>p.status!=='done');
-  const lopend=actief.length
-    ? projDienst(all, key)
-    : '<div class="empty"><div class="em-ic">'+(T.stamp?'<img src="assets/'+T.stamp+'" width="56" height="56" alt="">':ic('doc',56))+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog geen '+esc(T.label.toLowerCase())+'-projecten</b><p style="margin:6px 0 14px">Zin om hier samen iets op te starten?</p><button class="btn btn-branch br-'+T.br+'" onclick="openOfferteWizard(\''+(key==='video'?'video':key)+'\')">'+ic('plus',15)+' Start een aanvraag</button></div>';
-  return takContactCard(key, T, actief)+lopend+takArchiefSectie(key, T);
+  const isVideo=(key==='video');           // video-tak = pure projectenlijst (Vincent 2026-06-11)
+  const zicht=isVideo?all:all.filter(p=>p.status!=='done');
+  const leeg='<div class="empty"><div class="em-ic">'+(T.stamp?'<img src="assets/'+T.stamp+'" width="56" height="56" alt="">':ic('doc',56))+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog geen '+esc(T.label.toLowerCase())+'-projecten</b><p style="margin:6px 0 14px">Zin om hier samen iets op te starten?</p><button class="btn btn-branch br-'+T.br+'" onclick="openOfferteWizard(\''+(key==='video'?'video':key)+'\')">'+ic('plus',15)+' Start een aanvraag</button></div>';
+  if(isVideo){
+    return zicht.length ? projDienst(all, key, true) : leeg;
+  }
+  const lopend=zicht.length ? projDienst(all, key) : leeg;
+  return takContactCard(key, T, zicht)+lopend+takArchiefSectie(key, T);
 }
 
 /* ---- Socials (Metricool), netwerk/status-helpers + render ---- */
@@ -3745,6 +3759,112 @@ function procesBlock(det,p){
   h+='</div>';
   return h;
 }
+/* ---- Video-onderdelen (V): subtaken per TYPE JOB (4=Pre 6=Shoot 7=Edit 8=FB-ronde) ---- */
+function _ondMs(v){ var n=Number(v); return Number.isFinite(n)&&n>0?n:0; }
+function _ondDatum(ms){ var d=new Date(_ondMs(ms)); return _ondMs(ms)?d.toLocaleDateString('nl-BE',{weekday:'short',day:'numeric',month:'short'}):''; }
+function _ondUur(ms){ var d=new Date(_ondMs(ms)); return _ondMs(ms)?(('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)):''; }
+function ondToggleInfo(btn){ var r=btn.closest('.ond-row'); if(r) r.classList.toggle('open'); }
+function openVideoFeedback(subId, url, label, btn){
+  if(window.S27VideoReview){ S27VideoReview.open({ taskId:String(subId), url:String(url), label:String(label||'Video'), sourceEl:btn }); }
+  else window.open(url,'_blank','noopener');
+}
+function _ondShootRij(s, br){
+  var gepland=_ondMs(s.startDate)||_ondMs(s.datum);
+  if(gepland){
+    var startMs=_ondMs(s.startDate)||_ondMs(s.datum);
+    return '<div class="ond-row ond-shoot card br-'+br+'">'
+      +'<button class="ond-head" onclick="ondToggleInfo(this)">'+ic('cal',16)
+      +'<span class="ond-naam">'+esc(s.naam)+'</span>'
+      +'<span class="ond-chip ond-chip-ok">'+esc(_ondDatum(startMs))+' · '+esc(_ondUur(startMs))+'</span>'
+      +'<svg class="chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>'
+      +'<div class="ond-info"><div class="ond-kv"><b>Startdatum</b><span>'+esc(_ondDatum(startMs))+'</span></div>'
+      +'<div class="ond-kv"><b>Startuur</b><span>'+esc(_ondUur(startMs))+' (aankomst op locatie)</span></div>'
+      +(s.locatie?'<div class="ond-kv"><b>Startlocatie</b><span>'+esc(s.locatie)+'</span></div>':'')
+      +'<p class="ond-locknote">'+ic('info',13)+' Deze shoot staat vast ingepland. Wijzigen kan enkel via het team — stuur ons gerust een berichtje in de chat.</p></div></div>';
+  }
+  return '<div class="ond-row ond-shoot card br-'+br+'"><div class="ond-head">'+ic('cal',16)
+    +'<span class="ond-naam">'+esc(s.naam)+'</span>'
+    +'<span class="ond-chip ond-chip-todo">Nog in te plannen</span>'
+    +'<button class="btn btn-branch br-'+br+' btn-sm" onclick="openShootOverlay(\''+esc(s.id)+'\')">'+ic('cal',14)+' Plan deze shoot</button></div></div>';
+}
+function _ondEditRij(s, br){
+  var isNab=/nabewerk/i.test(s.naam||'');
+  var files=s.bestanden||[];
+  var inner='';
+  if(s.status==='wait'||s.status==='sent'){
+    if(files.length===1){
+      inner='<button class="btn btn-branch br-'+br+' btn-sm" onclick="openVideoFeedback(\''+esc(s.id)+'\',\''+esc(files[0].url)+'\',\''+esc(files[0].label||s.naam)+'\',this)">'+ic('st_feedback',14)+' Feedback geven</button>';
+    } else if(files.length>1){
+      inner='<button class="btn btn-branch br-'+br+' btn-sm" onclick="ondToggleInfo(this)">'+ic('doc',14)+' Alle bestanden bekijken ('+files.length+')</button>';
+    } else {
+      inner='<span class="ond-chip ond-chip-wait">Klaar voor feedback</span>';
+    }
+  } else if(s.status==='done'){
+    inner='<span class="ond-chip ond-chip-ok">'+ic('check',12)+' Goedgekeurd</span>';
+  } else {
+    inner='<span class="ond-chip ond-chip-prog">'+esc((s.statusRaw==='to do')?'Nog te starten':'In productie')+'</span>';
+  }
+  var lijst='';
+  if(files.length>1 && (s.status==='wait'||s.status==='sent')){
+    lijst='<div class="ond-info"><div class="ond-files">'+files.map(function(f){
+      return '<div class="ond-file"><span class="df-ic">'+ic(f.type==='video'?'video':f.type==='img'?'img':'doc',16)+'</span>'
+        +'<span class="ond-file-nm">'+esc(f.label||'Video')+'</span>'
+        +'<button class="btn btn-outline btn-sm" onclick="openVideoFeedback(\''+esc(s.id)+'\',\''+esc(f.url)+'\',\''+esc(f.label||'Video')+'\',this)">Bekijk &amp; geef feedback</button></div>';
+    }).join('')+'</div></div>';
+  }
+  // download-links pas ná goedkeuring (Vincent: content downloaden mag pas na akkoord)
+  var dls='';
+  if(s.status==='done' && files.length){
+    dls='<div class="ond-info open-static"><div class="ond-files">'+files.map(function(f){
+      return '<a class="deliv-file ond-file" data-label="'+esc(f.label||'Bestand')+'" href="'+esc(f.url)+'" target="_blank" rel="noopener"><span class="df-ic">'+ic(f.type==='video'?'video':f.type==='img'?'img':'doc',16)+'</span><span class="ond-file-nm">'+esc(f.label||'Bestand')+'</span>'+ic('download',14)+'</a>';
+    }).join('')+'</div></div>';
+  }
+  return '<div class="ond-row ond-edit card br-'+br+'"><div class="ond-head">'+ic(isNab?'img':'video',16)
+    +'<span class="ond-naam">'+esc(s.naam)+'</span>'+inner+'</div>'+lijst+dls+'</div>';
+}
+function onderdelenBlok(det, p){
+  var subs=(det&&det.subtasks)||[];
+  var typed=subs.filter(function(s){ return s.typeJob!=null && s.typeJob!==''; });
+  if(!typed.length) return null;   // geen TYPE JOB-data -> klassieke detailweergave
+  var br=p.br||'purple';
+  var pre=typed.filter(function(s){ return s.typeJob===4 && s.heeftBestanden; });
+  var shoots=typed.filter(function(s){ return s.typeJob===6; });
+  var edits=typed.filter(function(s){ return s.typeJob===7 && !/nabewerk/i.test(s.naam||''); });
+  var nab=typed.filter(function(s){ return s.typeJob===7 && /nabewerk/i.test(s.naam||''); });
+  var fb=typed.filter(function(s){ return s.typeJob===8; });
+  var h='';
+  function kop(t,n){ return '<div class="section-head ond-kop"><h2>'+esc(t)+'</h2>'+(n?'<span class="count">'+n+'</span>':'')+'</div>'; }
+  if(pre.length){
+    h+=kop('Pre-productie',pre.length);
+    h+=pre.map(function(s){
+      return '<div class="ond-row card br-'+br+'"><div class="ond-head">'+ic('doc',16)+'<span class="ond-naam">'+esc(s.naam)+'</span></div>'
+        +'<div class="ond-info open-static"><div class="ond-files">'+(s.bestanden||[]).map(function(f){
+          return '<a class="deliv-file ond-file" data-label="'+esc(f.label||'Document')+'" href="'+esc(f.url)+'" target="_blank" rel="noopener"><span class="df-ic">'+ic('doc',16)+'</span><span class="ond-file-nm">'+esc(f.label||'Document')+'</span>'+ic('download',14)+'</a>';
+        }).join('')+'</div></div></div>';
+    }).join('');
+  }
+  if(shoots.length){ h+=kop(shoots.length===1?'Shoot':'Shoots',shoots.length)+shoots.map(function(s){ return _ondShootRij(s,br); }).join(''); }
+  if(edits.length){ h+=kop('Montage',edits.length)+edits.map(function(s){ return _ondEditRij(s,br); }).join(''); }
+  if(nab.length){ h+=kop('Nabewerking',nab.length)+nab.map(function(s){ return _ondEditRij(s,br); }).join(''); }
+  if(fb.length){
+    h+=kop('Feedbackrondes',fb.length);
+    h+=fb.map(function(s){
+      return '<div class="ond-row card br-'+br+'"><div class="ond-head">'+ic('st_feedback',15)+'<span class="ond-naam">'+esc(s.naam)+'</span><span class="ond-chip '+(s.status==='done'?'ond-chip-ok':'ond-chip-prog')+'">'+(s.status==='done'?'Verwerkt':'Ontvangen')+'</span></div></div>';
+    }).join('');
+  }
+  return h||null;
+}
+// demo-onderdelen voor het voorbeeldportaal (video-project zonder live data)
+function demoVideoDet(){
+  var nu=Date.now();
+  return { subtasks:[
+    { id:'d-pre', naam:'Preproductie — draaiboek', status:'done', typeJob:4, heeftBestanden:true, bestanden:[{label:'Draaiboek v2.pdf', url:'#', type:'doc'}] },
+    { id:'d-sh1', naam:'Shoot 1 — kantoor & team', status:'prog', typeJob:6, startDate:String(nu+5*86400000), datum:String(nu+5*86400000+4*3600000), locatie:'Industrieweg 27, 2320 Hoogstraten', heeftBestanden:false, bestanden:[] },
+    { id:'d-sh2', naam:'Shoot 2 — klantcases on-site', status:'todo', typeJob:6, startDate:'', datum:'', locatie:'', heeftBestanden:false, bestanden:[] },
+    { id:'d-ed1', naam:'Montage bedrijfsfilm', status:'wait', typeJob:7, heeftBestanden:true, bestanden:[{label:'Montage v1 — bedrijfsfilm', url:'https://vimeo.com/76979871', type:'video'}] },
+    { id:'d-nab', naam:'Nabewerking foto\u2019s', status:'prog', typeJob:7, heeftBestanden:false, bestanden:[] }
+  ] };
+}
 function buildModal(id, from){
   const p=_projects().find(x=>x.id===id)||{id:id,name:'Project',disc:'',status:'prog',br:'blue'};
   const sl=STATUS_LABEL[p.status]||STATUS_LABEL.prog; const lab=sl[0], cls=sl[1];
@@ -3797,8 +3917,14 @@ function buildModal(id, from){
   }
   const showDeliv = needsFeedback || (delivList && delivList.length) || (delivList===null);
 
+  // Video-projecten: onderdelen per TYPE JOB (pre-productie/shoots/montage/nabewerking) i.p.v.
+  // het generieke proces-overzicht. Valt automatisch terug zodra er geen TYPE JOB-data is.
+  let detOnd = det;
+  if(!detOnd && state.demoMode && p.discId==='video_fotografie') detOnd = demoVideoDet();
+  const OND = (p.discId==='video_fotografie') ? onderdelenBlok(detOnd, p) : null;
   const hasProces = !!(det && det.proces && det.proces.aantal_stappen);
-  const overview=`<div class="mpane active" data-mpane="overzicht">
+  const overview = OND ? `<div class="mpane active" data-mpane="overzicht"><div class="ond-wrap">${OND}</div></div>`
+   : `<div class="mpane active" data-mpane="overzicht">
     ${procesBlock(det,p)}
     ${scheduleBlock(det,p)}
     ${showDeliv?`<h4 style="font-family:var(--font-display);font-size:15px;margin:0 0 4px">${(delivList&&delivList.length>1)||(delivList===null)?'Jouw deliverables':'Jouw deliverable'}</h4>
@@ -3838,7 +3964,7 @@ function buildModal(id, from){
   const fromCap=backLabel.charAt(0).toUpperCase()+backLabel.slice(1);
   // Bestanden-accordions enkel tonen als ze iets unieks toevoegen (subtaken-pad);
   // bij directe deliverables dekt het overzicht-blok alles al.
-  const toonAccordions = !(delivList && delivList.length) && SUBTASKS.length;
+  const toonAccordions = !OND && !(delivList && delivList.length) && SUBTASKS.length;
   const startTab=(state._mtab==='chat')?'chat':'overzicht';
   const overviewPane=overview.replace('class="mpane active"', startTab==='overzicht'?'class="mpane active"':'class="mpane"');
   const chatWacht=!chatClosed && p.lastChat && p.lastChat.wacht;

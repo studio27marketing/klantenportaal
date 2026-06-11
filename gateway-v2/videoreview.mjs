@@ -19,7 +19,7 @@
  *   /videofile?key=&exp=&tok=                   → R2-bijlage (inline beeld/pdf, anders download)
  * Secrets/bindings: GATEWAY_SECRET (HMAC), SA_* + GDRIVE_SUBJECT (Drive), R2 (bucket).
  * ============================================================================= */
-import { cu, scopeCheckTask, mintGoogleToken, DRIVE_SCOPE, isAfgerondStatus } from './handlers.mjs';
+import { cu, scopeCheckTask, mintGoogleToken, DRIVE_SCOPE, isAfgerondStatus, FIELD } from './handlers.mjs';
 
 const str = (v) => (v == null ? '' : String(v));
 const cleanId = (v) => str(v).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
@@ -377,9 +377,43 @@ export async function videoReviewSubmit(bedrijfId, body, env) {
     lines.push('');
   }
   lines.push(`🔗 Video: ${bundle.video.url}`);
-  const cm = await cu.comment(env, taskId, lines.join('\n'), true);
 
-  // — Bijlagen ook als échte ClickUp-attachments op de taak (blijvend, geen expiry)
+  // — Feedbackronde = SUBTAAK onder de montagetaak (TYPE JOB FB-Edit) — de bundel-tekst als
+  //   omschrijving, zodat het team de ronde als taak oppakt (Vincent 2026-06-11). Bedrijf-relatie
+  //   mee zodat de subtaak in het portaal-scope-model past.
+  const TYPEJOB_FBEDIT = '38d2c712-4acc-4cf3-ba02-f87e752d4e88';  // optie-UUID 'FB-Edit' (write = UUID)
+  let subId = '';
+  try {
+    const listId = str(g.task && g.task.list && g.task.list.id);
+    if (listId) {
+      const subName = `FB - ${str(bundle.video.title || 'montage').slice(0, 60)} - ${klantNaam}`.slice(0, 120);
+      const sub = await cu.post(env, `/list/${listId}/task`, {
+        name: subName,
+        description: lines.join('\n'),
+        parent: taskId,
+        notify_all: false,
+        custom_fields: [
+          { id: FIELD.bedrijf, value: { add: [String(bedrijfId)], rem: [] } },
+          { id: FIELD.typeJob, value: TYPEJOB_FBEDIT },
+        ],
+      });
+      if (sub.ok && sub.data && sub.data.id) {
+        subId = str(sub.data.id);
+        // dropdown/relatie nazetten via het dedicated field-endpoint (create-persist-gotcha)
+        await cu.post(env, `/task/${subId}/field/${FIELD.typeJob}`, { value: TYPEJOB_FBEDIT }).catch(() => {});
+        await cu.relation(env, subId, FIELD.bedrijf, { add: [String(bedrijfId)] }).catch(() => {});
+      }
+    }
+  } catch (e) { /* subtaak best-effort; comment hieronder blijft de vangrail */ }
+
+  // — Korte comment op de montagetaak (notify -> bestaande push-pipeline blijft werken)
+  const cmTxt = subId
+    ? `🎬 Video-feedback van ${klantNaam}${bundle.video.title ? ` — "${bundle.video.title}"` : ''}\n${bundle.counts.annotations} feedbackpunt${bundle.counts.annotations === 1 ? '' : 'en'}${attCountTxt(bundle)} · volledige ronde staat in de subtaak.`
+    : lines.join('\n');
+  const cm = await cu.comment(env, taskId, cmTxt, true);
+
+  // — Bijlagen als échte ClickUp-attachments op de FEEDBACK-subtaak (fallback: montagetaak)
+  const attTarget = subId || taskId;
   let attached = 0;
   if (env.R2) {
     const all = [...bundle.reviewAttachments, ...bundle.annotations.flatMap((a) => a.attachments)].slice(0, 8);
@@ -388,20 +422,25 @@ export async function videoReviewSubmit(bedrijfId, body, env) {
         const obj = await env.R2.get(att.key);
         if (!obj) continue;
         const bytes = new Uint8Array(await obj.arrayBuffer());
-        const up = await cu.uploadAttachment(env, taskId, bytes, att.filename);
+        const up = await cu.uploadAttachment(env, attTarget, bytes, att.filename);
         if (up.ok) attached++;
       } catch (e) { /* best-effort */ }
     }
     try {
-      const up = await cu.uploadAttachment(env, taskId, new TextEncoder().encode(jsonStr), `video-feedback-${Date.now()}.json`);
+      const up = await cu.uploadAttachment(env, attTarget, new TextEncoder().encode(jsonStr), `video-feedback-${Date.now()}.json`);
       if (up.ok) attached++;
     } catch (e) { /* best-effort */ }
   }
 
   return {
     status: 200,
-    body: { ok: true, counts: bundle.counts, comment_id: cm.ok && cm.data ? str(cm.data.id) : '', clickup_attachments: attached, submitted_at: bundle.submittedAt },
+    body: { ok: true, counts: bundle.counts, feedback_task_id: subId, comment_id: cm.ok && cm.data ? str(cm.data.id) : '', clickup_attachments: attached, submitted_at: bundle.submittedAt },
   };
+}
+
+function attCountTxt(bundle) {
+  const n = bundle.reviewAttachments.length + bundle.annotations.reduce((s, a) => s + a.attachments.length, 0);
+  return n ? ` · ${n} bijlage${n === 1 ? '' : 'n'}` : '';
 }
 
 /* =============================================================================

@@ -84,6 +84,7 @@ export const FIELD = {
   shootlink:      'c6a7da95-80b4-45c7-8004-227e01c421d4',
   startdatum:     '7086dc88-f247-430a-bed6-839fee4eea77', // date 'Startdatum' (shoot-aanvang, wegschrijven bij booking)
   locatie:        'fcbb46ff-66d5-432c-8edb-80de053197f3', // location 'Locatie' (shoot start-locatie, lat/lng + adres)
+  planningGedrag: '04df389f-b802-49ab-a316-dc014198714b', // dropdown 'Planning gedrag': 0=Volgen 1=Vast 2=Negeren (read=orderindex)
   // offerte-velden
   offerteLink:    '36264fc2-f348-4e14-b81c-063045ce1264',
   offerteBudget:  'c8d2dd2c-2428-4236-ba37-a3f3cd90c9ec',
@@ -1055,6 +1056,7 @@ export function statusMapper(statusObj) {
   let key;
   if (label.includes('doorgestuur')) key = 'doorgestuurd';
   else if (label.includes('goedgekeur')) key = 'done';
+  else if (label.includes('facturati')) key = 'done';   // klaar voor facturatie = afgewerkt voor de klant
   else if (type === 'done') key = 'done';
   else if (type === 'closed') key = 'done';
   else if (type === 'open') key = 'to_do';
@@ -1416,6 +1418,9 @@ export async function projectDetailV2(bedrijfId, body, env) {
       start_date: str(s.start_date),
       orderindex: str(s.orderindex != null ? s.orderindex : '0'),
       url: str(s.url),
+      type_job: str(getCF(s, FIELD.typeJob)),                 // orderindex bij read: 4=Preproductie 6=Shoot 7=Edit 8=FB-Edit
+      time_estimate: str(s.time_estimate || ''),
+      locatie: (function () { const lv = getCF(s, FIELD.locatie); return lv && lv.formatted_address ? str(lv.formatted_address) : ''; })(),
       heeft_bestanden: subDeliv.length > 0,                   // goedgekeurde subtaak met bestanden = klikbaar in de tijdlijn
       bestanden: subDeliv,                                    // [{label, url, type}]
     };
@@ -1707,14 +1712,14 @@ export async function dashboard(bedrijfId, body, env) {
     const labels = labelsForProject(t, directChildren);
     let discipline = labels[0] || '';
 
-    // (A) archief: goedgekeurd/klaar-voor-facturatie = altijd zichtbaar (tijdelijke fase
-    //     richting facturatie); gefactureerd of terminale status = enkel de laatste 30 dagen.
-    //     Onafhankelijk van het discipline-filter; niet-projectlijsten vallen weg via 'isAfgerondStatus'.
-    if (isAfgerondStatus(t.status)) {
-      const lbl = String((t.status && t.status.status) || '').toLowerCase();
-      const inFacturatieFase = lbl.includes('goedgekeur') || lbl.includes('facturati');
+    // (A) archief: ENKEL gefactureerd/terminaal, max 30 dagen na afronding. Goedgekeurd en
+    //     klaar-voor-facturatie blijven gewone lijst-projecten (vallen door naar (B)) — een
+    //     project verdwijnt pas uit het overzicht zodra het gefactureerd is (Vincent 2026-06-11).
+    const _lblA = String((t.status && t.status.status) || '').toLowerCase();
+    const _inFactFase = _lblA.includes('goedgekeur') || _lblA.includes('facturati');
+    if (isAfgerondStatus(t.status) && !_inFactFase) {
       const opMs = afgerondMs(t);
-      if (inFacturatieFase || (opMs && opMs >= cutoff30)) {
+      if (opMs && opMs >= cutoff30) {
         afgerond60.push({
           task_id: str(t.id),
           naam: str(t.name),
@@ -1729,7 +1734,7 @@ export async function dashboard(bedrijfId, body, env) {
     // (B) actieve_projecten: enkel OPEN/lopende projecten (goedgekeurde/afgeronde apart in (A)).
     if (!labels.length) continue;                             // geen enkele discipline -> geen project
     if (!labels.some((d) => showVisible(d, t.due_date, now))) continue; // ≥1 label zichtbaar deze maand
-    if (isAfgerondStatus(t.status)) continue;                 // done/goedgekeurd/facturatie → afgerond_60d, niet actief
+    if (isAfgerondStatus(t.status) && !_inFactFase) continue; // gefactureerd/terminaal → archief, niet actief
     const st = statusMapper(t.status);
     actieve.push({
       task_id: str(t.id),
@@ -4859,6 +4864,42 @@ export async function shootContext(bedrijfId, body, env) {
  *         locatieGemeente, contactNaam, contactGsm, extraInfo, lat?, lng? }.
  * Scope-guard fail-CLOSED + dubbel-boek-guard (bestaande due_date).
  */
+// Na het inplannen van een shoot: zet op elke Edit-taak (TYPE JOB 7) binnen hetzelfde project
+// de Startdatum (7086dc88) = due van de LAATSTE relevante shoot. Relevant = de shoots waar de
+// Edit-taak via ClickUp-dependencies op wacht; geen dependencies = alle shoots van het project.
+// Pas als ál die shoots een datum hebben, wordt de startdatum geschreven (anders blijft hij leeg
+// en houdt de 'Kan beginnen'-automatisering de montage uit de planning). 'Planning gedrag' =
+// Vast/Negeren wordt gerespecteerd (handmatige override door het team). Fail-soft per stap.
+async function syncEditStartdates(env, shootTask, bookedDueMs) {
+  const parentId = str((shootTask && shootTask.parent) || (shootTask && shootTask.top_level_parent));
+  if (!parentId) return;
+  const pr = await cu.get(env, `/task/${parentId}?include_subtasks=true`);
+  const subs = (pr.ok && pr.data && Array.isArray(pr.data.subtasks)) ? pr.data.subtasks : [];
+  if (!subs.length) return;
+  const tj = (t) => Number(getCF(t, FIELD.typeJob));
+  const shoots = subs.filter((s) => tj(s) === 6);
+  const edits = subs.filter((s) => tj(s) === 7);
+  if (!shoots.length || !edits.length) return;
+  // due van de zonet geboekte shoot kan nog stale zijn in deze read -> lokaal patchen
+  const dueOf = (s) => (str(s.id) === str(shootTask.id) ? Number(bookedDueMs) || 0 : Number(s.due_date) || 0);
+  for (const ed of edits) {
+    try {
+      const pg = Number(getCF(ed, FIELD.planningGedrag));
+      if (pg === 1 || pg === 2) continue;                       // Vast/Negeren = team beslist zelf
+      const det = await cu.get(env, `/task/${ed.id}`);          // dependencies enkel op de single-GET
+      const deps = ((det.ok && det.data && det.data.dependencies) || [])
+        .filter((d) => str(d.task_id) === str(ed.id))           // deze edit WACHT op depends_on
+        .map((d) => str(d.depends_on));
+      const rel = deps.length ? shoots.filter((s) => deps.includes(str(s.id))) : shoots;
+      if (!rel.length) continue;
+      const dues = rel.map(dueOf);
+      if (dues.some((d) => !d)) continue;                       // nog niet alle relevante shoots ingepland
+      const maxDue = Math.max(...dues);
+      await cu.post(env, `/task/${ed.id}/field/${FIELD.startdatum}`, { value: maxDue, value_options: { time: true } });
+    } catch (e) { /* per-edit fail-soft */ }
+  }
+}
+
 export async function shootSubmit(bedrijfId, body, env) {
   const taskId = cleanId(body && body.task_id);
   if (!taskId) return { status: 400, body: { ok: false, error: 'no_task' } };
@@ -4966,6 +5007,9 @@ export async function shootSubmit(bedrijfId, body, env) {
   C.push('');
   C.push('Controleer de toewijzing in ClickUp en bevestig de afspraak bij de klant.');
   try { await cu.comment(env, taskId, C.join('\n'), true); } catch (e) { /* comment-fout mag de booking niet breken */ }
+
+  // (6) montage-startdatums automatisch laten volgen op de laatste relevante shoot (dependencies-aware)
+  try { await syncEditStartdates(env, task, endMs); } catch (e) { /* automatisering mag de booking niet breken */ }
 
   return { status: 200, body: { ok: true, taskId, assignedTo: pickedHost ? pickedHost.id : null, assignedName: pickedHost ? pickedHost.name : '' } };
 }

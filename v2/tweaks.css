@@ -1059,3 +1059,31 @@ html, body{ touch-action:pan-x pan-y; }
 .ow-contact--stack .ow-cact b{font-family:var(--font-display);font-weight:800;font-size:14px;}
 .ow-contact--stack .ow-cact span{font-size:12.5px;color:var(--ink-3,#6B5B6B);line-height:1.45;}
 .ow-contact--stack .ow-cact.on span{color:inherit;opacity:.85;}
+
+/* === V: video-tak rework — actieteller op kaarten + onderdelen per TYPE JOB === */
+.projflat-card{position:relative;}
+.pf-notif{position:absolute;top:-7px;right:-7px;min-width:22px;height:22px;border-radius:999px;background:var(--s27-blue,#3083DC);color:#fff;font-family:var(--font-display);font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;padding:0 6px;box-shadow:0 2px 8px rgba(48,131,220,.35);}
+.ond-wrap{display:flex;flex-direction:column;gap:0;}
+.ond-kop{margin:18px 0 10px;}
+.ond-kop:first-child{margin-top:2px;}
+.ond-row{padding:0;margin-bottom:9px;overflow:hidden;}
+.ond-head{display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:none;border:none;font:inherit;cursor:default;padding:14px 16px;}
+button.ond-head{cursor:pointer;}
+.ond-naam{font-family:var(--font-display);font-weight:800;font-size:14px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ond-chip{flex:none;font-size:12px;font-weight:700;padding:4px 11px;border-radius:999px;display:inline-flex;align-items:center;gap:5px;}
+.ond-chip-ok{background:#E5F4E9;color:#1F7A37;}
+.ond-chip-todo{background:#FFF1E2;color:#A05A12;}
+.ond-chip-wait{background:#FFF1E2;color:#A05A12;}
+.ond-chip-prog{background:#E9EFF9;color:#2D5FA8;}
+.ond-row .chev{color:var(--ink-4,#9E919E);transition:transform .18s;flex:none;}
+.ond-row.open .chev{transform:rotate(180deg);}
+.ond-info{display:none;padding:2px 16px 14px;border-top:1px dashed var(--line,#E7DFD3);margin:0 0 0;}
+.ond-row.open .ond-info{display:block;padding-top:12px;}
+.ond-info.open-static{display:block;padding-top:12px;}
+.ond-kv{display:flex;gap:14px;font-size:13.5px;padding:4px 0;}
+.ond-kv b{font-family:var(--font-display);font-weight:800;min-width:110px;}
+.ond-locknote{display:flex;gap:7px;align-items:flex-start;font-size:12.5px;color:var(--ink-3,#6B5B6B);margin:10px 0 0;line-height:1.5;}
+.ond-files{display:flex;flex-direction:column;gap:8px;}
+.ond-file{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--line,#E7DFD3);border-radius:11px;background:#fff;font-size:13.5px;text-decoration:none;color:inherit;}
+.ond-file-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;}
+@media(max-width:620px){.ond-head{flex-wrap:wrap;}.ond-head .btn{width:100%;justify-content:center;}}

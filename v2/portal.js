@@ -2021,6 +2021,31 @@ function shootSlotList(ctx){const dur=shootEffDur(ctx),out=[];for(let h=8;h+dur<
 function shootFormatDate(ds){const d=new Date(ds);return d.getDate()+' '+SHOOT_MONTHS[d.getMonth()]+' '+d.getFullYear();}
 function shootStepBar(active){return '<div class="shoot-steps">'+['Wanneer','Details'].map((s,i)=>{const cls=(i+1===active)?'active':((i+1<active)?'done':'');return '<span class="shoot-step '+cls+'"><b>'+(i+1)+'</b> '+s+'</span>';}).join('')+'</div>';}
 
+// Fullscreen-schil rond de shoot-wizard (V): de wizard rendert in #s27-plan-{tid}, wij zetten
+// die host in een schermvullende overlay. Sluiten ververst het projectdetail (verse shoot-data).
+function openShootOverlay(tid){
+  var ov=document.getElementById('shootOv');
+  if(!ov){ ov=document.createElement('div'); ov.id='shootOv'; ov.className='mp-overlay';
+    ov.addEventListener('mousedown',function(e){ ov._downScrim=(e.target===ov); });
+    ov.addEventListener('click',function(e){ if(e.target===ov && ov._downScrim) closeShootOverlay(); });
+    document.body.appendChild(ov); }
+  ov.innerHTML='<div class="mp-modal ow-modal" onclick="event.stopPropagation()">'
+    +'<div class="mp-head"><span class="mp-back-sp"></span><div class="mp-head-c"><span class="mp-head-eyebrow">Shoot inplannen</span><b>Kies een moment dat jou past</b></div>'
+    +'<button class="mp-close" onclick="closeShootOverlay()" aria-label="Sluiten">'+ic('plus',22)+'</button></div>'
+    +'<div class="mp-scroll"><div id="s27-plan-'+String(tid).replace(/[^A-Za-z0-9_-]/g,'')+'"></div></div></div>';
+  ov.classList.add('show'); document.body.classList.add('mp-lock');
+  openShootWizard(tid);
+}
+async function closeShootOverlay(){
+  var ov=document.getElementById('shootOv'); if(ov){ ov.classList.remove('show'); ov.innerHTML=''; }
+  document.body.classList.remove('mp-lock');
+  // detail verversen: een zonet geboekte shoot moet meteen als 'ingepland' verschijnen
+  if(state.viewMode==='project' && state.activeProject && !state.demoMode){
+    var pid=state.activeProject;
+    try{ delete (state.data.details||{})[pid]; }catch(e){}
+    openProject(pid,'auto');
+  }
+}
 async function openShootWizard(tid){
   const box=$id('s27-plan-'+tid); if(!box)return;
   if(state.demoMode){ box.innerHTML='<p class="fs" style="color:var(--ink-3)">In de demo is het inplannen van een shoot uitgeschakeld. In het echte portaal kies je hier een shootdag en vul je de locatie in.</p>'; return; }
