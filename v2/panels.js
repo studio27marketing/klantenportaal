@@ -361,7 +361,7 @@ function _takHoofdcontact(actief){
 }
 function takContactCard(key, T, actief){
   var hc=_takHoofdcontact(actief);
-  var naam=hc?hc.naam:'Ilke Meeusen';
+  var naam=voornaam(hc?hc.naam:'Ilke')||'Ilke';
   var ini=hc?(hc.initialen||'?'):'IM';
   var rol=hc?'Werkt aan jouw '+T.label.toLowerCase()+'-projecten':'Jouw accountmanager';
   return '<div class="takcontact card br-'+T.br+'"><span class="dc-av" style="background:var(--s27-'+T.br+')">'+esc(ini)+'</span>'
@@ -2720,7 +2720,7 @@ function adsToggleAdRow(i){
 function metaCampaignDetail(m,cur){
   var id=state._metaCampaign;
   var c=(m.campaigns||[]).filter(function(x){return String(x.id)===String(id);})[0];
-  var back='<button class="btn btn-ghost btn-sm" onclick="closeMetaCampaign()" style="margin-bottom:14px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M15 18l-6-6 6-6"/></svg> Terug naar overzicht</button>';
+  var back='<div class="detail-closerow"><button class="detail-close detail-close--inline" title="Terug naar overzicht" aria-label="Terug naar overzicht" onclick="closeMetaCampaign()">'+ic('plus',22)+'</button></div>';
   if(!c){ return back+'<div class="card" style="padding:24px;text-align:center;color:var(--ink-3)">Deze campagne heeft geen activiteit in de gekozen periode.</div>'; }
   var obj=adsObjective(c.objective);
   var head='<div class="section-head" style="margin-bottom:8px"><h2 style="display:flex;align-items:center;gap:9px;min-width:0"><span class="pill pill-prog"><span class="pdot"></span>Live</span><span style="overflow:hidden;text-overflow:ellipsis">'+esc(c.name||'Campagne')+'</span></h2>'+(obj?'<span class="count">'+esc(obj)+'</span>':'')+'</div>';
@@ -4005,7 +4005,7 @@ function buildModal(id, from){
       <div style="padding:8px 0 0"><button class="btn btn-ghost btn-sm" style="color:var(--s27-orange-ink)" onclick="dringendeVraag('${esc(p.id)}')">${ic('spark',14)} ${chatClosed?'Nog een vraag over dit project?':'Dringende vraag aan Ilke'}</button></div>
     </div>`;
   return `<div class="detail detail--wide br-${p.br}">
-    <button class="detail-back" onclick="${backTo==='video'?"state._skipVideoAuto=true;":''}goTab('${backTo}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg> Terug naar ${backLabel}</button>
+    <button class="detail-close" title="Terug naar ${backLabel}" aria-label="Terug naar ${backLabel}" onclick="${backTo==='video'?"state._skipVideoAuto=true;":''}goTab('${backTo}')">${ic('plus',22)}</button>
     ${OND?'':`<div class="detail-head">
       <span class="detail-ic">${discMark(p.disc,'detail-stamp')}</span>
       <div class="detail-titles"><h1>${p.name}</h1><div class="detail-sub${saeLine?' sae-line':''}">${saeLine||esc(p.disc)}</div></div>

@@ -2086,13 +2086,14 @@ async function openFotoGalerij(taskId, url){
   }
   state._galFrom=state.activeProject||null;
   state.viewMode='galerij';
+  try{ var _gp=(window.S27DATA&&(S27DATA.projects()||[]).find(function(x){return x.id===state._galFrom;})); var _gt=$id('topbarTitle'); if(_gt&&_gp) _gt.textContent=_gp.name; }catch(e){}
   var page=$id('page'); if(!page) return;
   page.innerHTML='<div class="panel active br-purple"><div class="empty" style="padding:70px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je foto\u2019s worden klaargezet\u2026</p></div></div>';
   var res; try{ res=await api(ENDPOINTS.fotoList,{task_id:taskId,url:url}); }catch(e){ res=null; }
   if(state.viewMode!=='galerij') return;   // gebruiker is intussen weggenavigeerd
   var d=(res&&res.data)?res.data:null;
   if(!d||!d.ok||!(d.fotos||[]).length){
-    page.innerHTML='<div class="panel active br-purple"><div class="empty" style="padding:60px"><div class="em-ic">'+ic('img',56)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">De foto\u2019s kunnen nu niet geladen worden</b><p style="margin:6px 0 14px">'+escapeHtml((d&&d.message)||'Probeer het zo opnieuw.')+'</p><button class="btn btn-branch br-purple" onclick="closeFotoGalerij()">Terug naar je project</button></div></div>';
+    page.innerHTML='<div class="panel active br-purple"><div class="gal-toprow"><button class="gal-close" onclick="closeFotoGalerij()" aria-label="Terug naar het project">'+ic('plus',22)+'</button></div><div class="empty" style="padding:40px 60px"><div class="em-ic">'+ic('img',56)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">De foto\u2019s kunnen nu niet geladen worden</b><p style="margin:6px 0 14px">'+escapeHtml((d&&d.message)||'Probeer het zo opnieuw.')+'</p><button class="btn btn-branch br-purple" onclick="closeFotoGalerij()">Terug naar je project</button></div></div>';
     return;
   }
   var _gw=function(u){ return (u&&u.charAt(0)==='/')?(GATEWAY_BASE+u):(u||''); };
@@ -2168,6 +2169,7 @@ function openShootOverlay(tid){
   state.viewMode='shootplan';
   var page=$id('page'); if(!page) return;
   var pNaam=''; try{ var pp=(window.S27DATA&&(S27DATA.projects()||[]).find(function(x){return x.id===state._shootFrom;})); pNaam=pp?pp.name:''; }catch(e){}
+  if(pNaam){ var _st=$id('topbarTitle'); if(_st) _st.textContent=pNaam; }
   page.innerHTML='<div class="panel active br-purple" data-screen-label="shoot-inplannen"><div class="shootpage">'
     +'<button class="shootpage-close" onclick="closeShootOverlay()" aria-label="Terug naar het project">'+ic('plus',22)+'</button>'
     +'<div class="shootpage-head"><span class="mp-head-eyebrow">Shoot inplannen'+(pNaam?' · '+escapeHtml(pNaam):'')+'</span><h1>Kies een moment dat jou past</h1></div>'

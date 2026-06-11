@@ -1177,3 +1177,15 @@ button.ond-head{cursor:pointer;}
 /* wizard stap 1: brand-stamps op lichte cirkel (geen gekleurde achtergrond achter het stamp-icoon) */
 .ow-tak .ow-stamp{background:var(--paper-2,#FAF7F2)!important;border:1px solid var(--line,#E7DFD3);}
 .ow-tak .ow-stamp img{display:block;}
+
+/* === X: consistentie-ronde — kruisje rechtsboven als universele terug-navigatie === */
+.detail{position:relative;}
+.detail-close{position:absolute;top:0;right:0;width:42px;height:42px;border-radius:50%;border:1px solid var(--line,#E7DFD3);background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transform:rotate(45deg);color:var(--ink-3,#6B5B6B);z-index:6;}
+.detail-close:hover{background:var(--paper-2,#FAF7F2);color:var(--ink,#230F23);}
+.detail-closerow{display:flex;justify-content:flex-end;margin:0 0 10px;}
+.detail-close--inline{position:static;}
+/* oude pijltje-link is vervangen; ruimte bovenaan het detail behouden */
+.detail--wide{padding-top:4px;}
+/* subnav-iconen kleuren mee met de tak (br-X zet --c-ink op de panel/detail-context) */
+.soc-subnav .soc-subtab svg{color:var(--c-ink,var(--ink-3,#6B5B6B));}
+.soc-subnav .soc-subtab.active svg{color:var(--c-ink,var(--ink,#230F23));}
