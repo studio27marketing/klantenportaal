@@ -247,7 +247,8 @@
       '    <div class="vr-title"><span class="vr-badge">▶</span><div><h2 id="vrTitle"></h2><span class="vr-sub" id="vrSub">Feedbackronde</span></div></div>' +
       '    <div class="vr-actions">' +
       '      <a id="vrDownload" class="vr-btn vr-ghost vr-hidden" download><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 19h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="vr-dl-txt">Download</span></a>' +
-      '      <button id="vrSend" class="vr-btn vr-primary">Verzenden <span id="vrCount" class="vr-countbadge vr-hidden">0</span></button>' +
+      '      <button id="vrApprove" class="vr-btn">✓ Video goedkeuren</button>' +
+      '      <button id="vrSend" class="vr-btn vr-primary">Feedback verzenden <span id="vrCount" class="vr-countbadge vr-hidden">0</span></button>' +
       '      <button id="vrClose" class="vr-x" title="Sluiten">×</button>' +
       '    </div>' +
       '  </header>' +
@@ -295,9 +296,10 @@
       '</div>' +
       '<div id="vrSendScrim" class="vr-scrim vr-hidden"></div>' +
       '<div id="vrSendModal" class="vr-modal vr-hidden">' +
-      '  <h3>Feedback verzenden</h3>' +
-      '  <p class="vr-sub" id="vrSendLine"></p>' +
+      '  <div class="vr-sendhead"><span class="vr-sendic">🎬</span><div><b>Feedback doorsturen</b><span>We gaan er meteen mee aan de slag.</span></div></div>' +
+      '  <div class="vr-sendsum" id="vrSendLine"></div>' +
       '  <label class="vr-field"><span>Algemene opmerking <em>(optioneel)</em></span><textarea id="vrSummary" rows="3" placeholder="Feedback die niet aan één punt hangt…"></textarea></label>' +
+      '  <label class="vr-confirm"><input type="checkbox" id="vrSendVolledig"><span>Mijn feedback voor deze video is <b>volledig</b> — Studio 27 mag starten met de verwerking.</span></label>' +
       '  <p id="vrSendErr" class="vr-err vr-hidden"></p>' +
       '  <div class="vr-modalfoot"><button id="vrSendCancel" class="vr-btn vr-ghost">Terug</button><button id="vrSendGo" class="vr-btn vr-primary">Verzenden</button></div>' +
       '</div>';
@@ -306,9 +308,14 @@
     var $ = function (id) { return root.querySelector('#' + id); };
     $('vrTitle').textContent = label;
 
+    // sidebar is zichtbaar naast de review (desktop): een nav-klik sluit de review eerst,
+    // anders navigeert het portaal onzichtbaar achter de overlay.
+    var navClose = function (e) { if (!st.closed && e.target.closest('.sb-item')) close(); };
+    document.addEventListener('click', navClose, true);
     function close() {
       if (st.closed) return;
       st.closed = true;
+      try { document.removeEventListener('click', navClose, true); } catch (e) { }
       try { P.destroy(); } catch (e) { }
       try { document.body.classList.remove('vr-open'); } catch (e) { }
       try { root.remove(); } catch (e) { }
@@ -358,9 +365,14 @@
     }
 
     if (d.video.title) $('vrTitle').textContent = d.video.title;
+    if (d.ronde) $('vrSub').textContent = 'Feedbackronde ' + d.ronde;
+    if (d.is_approved) { $('vrSub').textContent = 'Goedgekeurd ✓'; }
     if (st.locked) {
       var prevL = $('vrPrev');
-      prevL.innerHTML = '🔒 Je feedback op deze versie is <b>definitief doorgestuurd</b>' + (d.last_submitted_at ? ' (' + new Date(d.last_submitted_at).toLocaleDateString('nl-BE') + ')' : '') + '. Hieronder zie je je punten als naslag — het team bezorgt je een nieuwe versie zodra die klaarstaat.' + (st.lockedSummary ? '<br><span class="vr-locksum">💬 Algemene opmerking: ' + st.lockedSummary.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</span>' : '');
+      prevL.innerHTML = (d.is_approved
+        ? 'Deze video is goedgekeurd — mooi zo! Hieronder vind je alles als naslag terug.'
+        : 'Je feedback op deze versie is definitief doorgestuurd' + (d.last_submitted_at ? ' op ' + new Date(d.last_submitted_at).toLocaleDateString('nl-BE') : '') + '. Hieronder zie je de punten als naslag.')
+        + (st.lockedSummary ? '<br><span class="vr-locksum">Algemene opmerking: ' + st.lockedSummary.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</span>' : '');
       prevL.classList.remove('vr-hidden');
       prevL.classList.add('vr-lockbanner');
     } else if (d.last_submitted_at) {
@@ -740,11 +752,44 @@
     }
 
     /* ---- verzenden ---- */
+    $('vrApprove').addEventListener('click', async function () {
+      if (st.locked) { toast('Deze video is al afgerond.', 2800); return; }
+      if (st.annotations.length && !confirm('Je hebt nog niet-verzonden feedbackpunten staan. Toch goedkeuren? (Je punten worden dan niet verstuurd.)')) return;
+      if (!confirm('Keur je deze video definitief goed? Daarna kan ze gedownload worden en sluiten we de feedbackronde af.')) return;
+      var ab = $('vrApprove'); ab.disabled = true; ab.textContent = 'Goedkeuren…';
+      var res = await authedPost('videoReviewApprove', {
+        task_id: st.taskId,
+        klant_naam: (window.S27DATA && S27DATA.bedrijfsnaam) ? S27DATA.bedrijfsnaam() : 'Klant',
+        video: { source: st.video.source, externalId: st.video.externalId, title: st.video.title || '' },
+      });
+      if (res.ok && res.data && res.data.ok) {
+        try { localStorage.removeItem(st.draftKey); } catch (e) { }
+        close();
+        toast(res.data.all_approved
+          ? '🎉 Video goedgekeurd — bedankt! Je kan alles nu ook downloaden.'
+          : '🎉 Video goedgekeurd! Zodra je de overige video\u2019s van dit onderdeel goedkeurt, komen de downloads vrij.', 4600);
+        // detail verversen zodat de status/downloads meteen kloppen
+        try {
+          if (window.state && state.viewMode === 'project' && state.activeProject && typeof openProject === 'function') {
+            delete (state.data.details || {})[state.activeProject];
+            openProject(state.activeProject, 'auto');
+          }
+        } catch (e) { }
+      } else {
+        ab.disabled = false; ab.textContent = '✓ Video goedkeuren';
+        toast('Goedkeuren lukte net niet — probeer zo opnieuw.', 3600);
+      }
+    });
     $('vrSend').addEventListener('click', function () {
       if (st.locked) { toast('Je feedback is al definitief doorgestuurd.', 3200); return; }
       if (!st.annotations.length) { toast('Plaats eerst minstens één feedbackpunt.'); return; }
       var n = st.annotations.length;
-      $('vrSendLine').textContent = 'Je verstuurt ' + n + ' feedbackpunt' + (n === 1 ? '' : 'en') + ' naar het Studio 27-team.';
+      var attN = st.reviewAttachments.filter(function (x) { return x.uploadStatus === 'stored'; }).length
+        + st.annotations.reduce(function (s, a) { return s + (a.attachments || []).length; }, 0);
+      $('vrSendLine').innerHTML = '<span class="vr-sumchip">' + n + ' feedbackpunt' + (n === 1 ? '' : 'en') + '</span>'
+        + (attN ? '<span class="vr-sumchip">' + attN + ' bijlage' + (attN === 1 ? '' : 'n') + '</span>' : '')
+        + (st.video && st.video.title ? '<span class="vr-sumchip">' + String(st.video.title).replace(/&/g, '&amp;').replace(/</g, '&lt;').slice(0, 48) + '</span>' : '');
+      var vk = $('vrSendVolledig'); if (vk) vk.checked = false;
       $('vrSendErr').classList.add('vr-hidden');
       $('vrSendScrim').classList.remove('vr-hidden');
       $('vrSendModal').classList.remove('vr-hidden');
@@ -755,6 +800,12 @@
     $('vrSendGo').addEventListener('click', async function () {
       if (st.uploadsBusy > 0) {
         $('vrSendErr').textContent = 'Nog een upload bezig — even geduld.';
+        $('vrSendErr').classList.remove('vr-hidden');
+        return;
+      }
+      var vol = $('vrSendVolledig');
+      if (vol && !vol.checked) {
+        $('vrSendErr').textContent = 'Vink eerst aan dat je feedback volledig is — dan starten wij met de verwerking.';
         $('vrSendErr').classList.remove('vr-hidden');
         return;
       }
@@ -779,11 +830,16 @@
       closeSend();
       close();
       toast('🎉 Feedback verzonden — het team gaat ermee aan de slag!', 4200);
-      if (opts.sourceEl && opts.sourceEl.isConnected && !opts.sourceEl.parentElement.querySelector('.vr-sentpill')) {
+      if (opts.sourceEl && opts.sourceEl.isConnected && opts.sourceEl.tagName !== 'BUTTON' && !opts.sourceEl.parentElement.querySelector('.vr-sentpill')) {
         var pill = document.createElement('span');
         pill.className = 'vr-sentpill';
         pill.textContent = '✓ Feedback verzonden';
         opts.sourceEl.insertAdjacentElement('afterend', pill);
+      }
+      // bron-knop wordt 'Feedback gegeven' (klik = naslag-weergave via de lock)
+      if (opts.sourceEl && opts.sourceEl.isConnected && opts.sourceEl.tagName === 'BUTTON') {
+        opts.sourceEl.classList.remove('btn-branch'); opts.sourceEl.classList.add('btn-outline');
+        opts.sourceEl.innerHTML = '✓ Feedback gegeven';
       }
     });
 

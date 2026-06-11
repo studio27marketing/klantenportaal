@@ -253,7 +253,7 @@
       var st = DATA.status(p.status);
       var deliv = st.key==='wait' || !!p.feedback_link;
       var lc = p.last_chat ? { tekst:String(p.last_chat.tekst||''), ts:Number(p.last_chat.ts)||0, wacht:!!p.chat_wacht_op_klant } : (p.chat_wacht_op_klant ? { tekst:'', ts:0, wacht:true } : null);
-      return { id:p.task_id, name:p.naam, br:br.br, disc:br.label, discId:p.discipline, labels:mapLabels(p), status:st.key, deliv:deliv, sae:mapSae(p.sae), lastChat:lc, planItems:(p.plan_items||[]), _raw:p };
+      return { id:p.task_id, name:p.naam, br:br.br, disc:br.label, discId:p.discipline, labels:mapLabels(p), status:st.key, deliv:deliv, sae:mapSae(p.sae), lastChat:lc, planItems:(p.plan_items||[]), actiesTodo:Number(p.acties_todo)||0, dateCreated:Number(p.date_created)||0, _raw:p };
     });
   };
 
@@ -323,10 +323,12 @@
     return raw.some(function(p){ var L=(p.labels&&p.labels.length)?p.labels:[p.discipline]; return L.indexOf(discId)>=0; });
   };
 
-  // per-taak bestanden normaliseren: expliciet veld of geparset uit een ruwe URL-tekst
+  // per-taak bestanden normaliseren: expliciet veld of geparset uit een ruwe URL-tekst.
+  // GEEN fallback op t.link/t.url: dat is de ClickUp-taaklink zelf, geen deliverable —
+  // die liet lege taken (bv. een lege pre-productietaak) onterecht 'met bestanden' lijken.
   function taakBestanden(t){
     if(t.bestanden && t.bestanden.length) return t.bestanden.map(function(f){ return { label:f.label||urlLabel(f.url||''), url:f.url||'', type:f.type||urlType(f.url||'') }; });
-    var rawTxt = t.bestanden_raw || t.deliverables_raw || t.link || t.url || '';
+    var rawTxt = t.bestanden_raw || t.deliverables_raw || '';
     return parseDeliverablesRaw(rawTxt);
   }
   // Projectdetail → vorm voor buildModal
@@ -338,7 +340,7 @@
       var heeft = (t.heeft_bestanden===true || t.heeft_bestanden==='true') || best.length>0;
       return { id:t.task_id, naam:t.naam, status:DATA.status(t.status).key, statusRaw:t.status, statusColor:t.status_color,
         datum:t.datum, startDate:t.start_date, typeJob:(t.type_job===''||t.type_job==null)?null:Number(t.type_job),
-        locatie:t.locatie||'', timeEstimate:Number(t.time_estimate)||0,
+        locatie:t.locatie||'', timeEstimate:Number(t.time_estimate)||0, fbRondes:(t.fb_rondes||[]),
         link:t.link||t.url, heeftBestanden:heeft, bestanden:best };
     });
     var delivs = (d.deliverables && d.deliverables.length) ? d.deliverables.map(function(f){ return { label:f.label||urlLabel(f.url||''), url:f.url||'', type:f.type||urlType(f.url||'') }; }) : parseDeliverablesRaw(d.deliverables_raw);

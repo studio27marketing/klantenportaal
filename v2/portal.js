@@ -487,6 +487,15 @@ async function goTab(name){
   (function(){ var nb=document.getElementById('topNewBtn'); if(!nb) return; var br=(typeof TAB_BRANCH!=='undefined'&&TAB_BRANCH[name])||''; nb.className='btn btn-sm '+(br?('btn-branch br-'+br):'btn-primary'); })();
   if(!state.demoMode && needsLoad(name)) renderLoading(name);
   await ensureTabData(name);
+  // video-tak met exact één actief project: meteen op dat project landen (terug-knop uit het
+  // detail zet _skipVideoAuto zodat de klant wél bewust naar de lijst kan)
+  if(name==='video' && !state.demoMode){
+    if(state._skipVideoAuto){ state._skipVideoAuto=false; }
+    else {
+      var _vps=(typeof _takProjects==='function'&&typeof TAK_TABS!=='undefined')?_takProjects(TAK_TABS.video.discIds):[];
+      if(_vps.length===1){ openProject(_vps[0].id,'video'); return; }
+    }
+  }
   renderPanel(name);
   if(name==='advertenties' && typeof adsChatMount==='function') adsChatMount();   // ads-chat koppelen aan de huidige-maand-advertentietaak
   if(name==='socials' && typeof socialChatMount==='function') socialChatMount();   // social-chat koppelen aan de sociale-media-taak
@@ -570,7 +579,7 @@ async function openProject(id, from){
   closeSidebar(); syncUrl();
   if($id('chatList')) startChatPoll(id);   // projectchat staat in de DOM (tenzij afgerond) -> auto-refresh
 }
-function closeModal(){ goTab(state._backTab||'start'); }
+function closeModal(){ if((state._backTab||'')==='video') state._skipVideoAuto=true; goTab(state._backTab||'start'); }
 
 /* =============================================================================
    ECHTE HANDLERS
@@ -2021,30 +2030,99 @@ function shootSlotList(ctx){const dur=shootEffDur(ctx),out=[];for(let h=8;h+dur<
 function shootFormatDate(ds){const d=new Date(ds);return d.getDate()+' '+SHOOT_MONTHS[d.getMonth()]+' '+d.getFullYear();}
 function shootStepBar(active){return '<div class="shoot-steps">'+['Wanneer','Details'].map((s,i)=>{const cls=(i+1===active)?'active':((i+1<active)?'done':'');return '<span class="shoot-step '+cls+'"><b>'+(i+1)+'</b> '+s+'</span>';}).join('')+'</div>';}
 
-// Fullscreen-schil rond de shoot-wizard (V): de wizard rendert in #s27-plan-{tid}, wij zetten
-// die host in een schermvullende overlay. Sluiten ververst het projectdetail (verse shoot-data).
-function openShootOverlay(tid){
-  var ov=document.getElementById('shootOv');
-  if(!ov){ ov=document.createElement('div'); ov.id='shootOv'; ov.className='mp-overlay';
-    ov.addEventListener('mousedown',function(e){ ov._downScrim=(e.target===ov); });
-    ov.addEventListener('click',function(e){ if(e.target===ov && ov._downScrim) closeShootOverlay(); });
-    document.body.appendChild(ov); }
-  ov.innerHTML='<div class="mp-modal ow-modal" onclick="event.stopPropagation()">'
-    +'<div class="mp-head"><span class="mp-back-sp"></span><div class="mp-head-c"><span class="mp-head-eyebrow">Shoot inplannen</span><b>Kies een moment dat jou past</b></div>'
-    +'<button class="mp-close" onclick="closeShootOverlay()" aria-label="Sluiten">'+ic('plus',22)+'</button></div>'
-    +'<div class="mp-scroll"><div id="s27-plan-'+String(tid).replace(/[^A-Za-z0-9_-]/g,'')+'"></div></div></div>';
+/* ---- Fotogalerij (V): Drive-map als gepersonaliseerde galerijpagina ---- */
+async function openFotoGalerij(taskId, url){
+  if(state.demoMode){
+    alert('In je echte portaal opent hier de fotogalerij: alle foto\u2019s uit de gedeelde map, mooi gepresenteerd met download- en goedkeuren-knoppen.');
+    return;
+  }
+  state._galFrom=state.activeProject||null;
+  state.viewMode='galerij';
+  var page=$id('page'); if(!page) return;
+  page.innerHTML='<div class="panel active br-purple"><div class="empty" style="padding:70px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je foto\u2019s worden klaargezet\u2026</p></div></div>';
+  var res; try{ res=await api(ENDPOINTS.fotoList,{task_id:taskId,url:url}); }catch(e){ res=null; }
+  if(state.viewMode!=='galerij') return;   // gebruiker is intussen weggenavigeerd
+  var d=(res&&res.data)?res.data:null;
+  if(!d||!d.ok||!(d.fotos||[]).length){
+    page.innerHTML='<div class="panel active br-purple"><div class="empty" style="padding:60px"><div class="em-ic">'+ic('img',56)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">De foto\u2019s kunnen nu niet geladen worden</b><p style="margin:6px 0 14px">'+escapeHtml((d&&d.message)||'Probeer het zo opnieuw.')+'</p><button class="btn btn-branch br-purple" onclick="closeFotoGalerij()">Terug naar je project</button></div></div>';
+    return;
+  }
+  state._gal={taskId:taskId,fotos:d.fotos,naam:d.taak_naam||'Fotoshoot',folder:d.folder_url||'',goedgekeurd:!!d.goedgekeurd,idx:0,zoom:false};
+  page.innerHTML='<div class="panel active br-purple">'+galerijHTML()+'</div>';
+  window.scrollTo({top:0,behavior:'auto'});
+}
+function closeFotoGalerij(){
+  var pid=state._galFrom||state.activeProject;
+  if(pid) openProject(pid,'auto'); else goTab('video');
+}
+function galerijHTML(){
+  var g=state._gal; if(!g) return '';
+  var hero=g.fotos[0]||{};
+  return '<div class="gal">'
+    +'<div class="gal-hero" style="background-image:url(\''+String(hero.thumb||'').replace(/['"()\\s\\\\]/g,'')+'\')"><div class="gal-hero-scrim"></div>'
+      +'<button class="gal-close" onclick="closeFotoGalerij()" aria-label="Terug naar het project">'+ic('plus',22)+'</button>'
+      +'<div class="gal-hero-acts">'
+        +(g.goedgekeurd?'<span class="gal-okpill">'+ic('check',14)+' Goedgekeurd</span>':'<button class="btn gal-approve" onclick="galApprove(this)">'+ic('check',15)+' Foto\u2019s goedkeuren</button>')
+        +(g.folder?'<a class="btn gal-dlall" href="'+escapeHtml(g.folder)+'" target="_blank" rel="noopener">'+ic('download',15)+' Alles downloaden</a>':'')
+      +'</div>'
+      +'<div class="gal-hero-tx"><h1>'+escapeHtml(g.naam)+'</h1><span>'+g.fotos.length+' foto\u2019s \u00b7 Studio 27</span></div>'
+    +'</div>'
+    +'<div class="gal-grid">'+g.fotos.map(function(f,i){
+      return '<button class="gal-it" onclick="galLight('+i+')"><img src="'+escapeHtml(f.thumb||f.full)+'" alt="'+escapeHtml(f.naam||'')+'" loading="lazy"></button>';
+    }).join('')+'</div>'
+  +'</div>';
+}
+function galLight(i){
+  var g=state._gal; if(!g) return;
+  g.idx=Math.max(0,Math.min(g.fotos.length-1,i)); g.zoom=false;
+  var ov=document.getElementById('galLb');
+  if(!ov){ ov=document.createElement('div'); ov.id='galLb'; document.body.appendChild(ov);
+    ov.addEventListener('click',function(e){ if(e.target===ov) galLbClose(); });
+    document.addEventListener('keydown',function(e){ if(!document.getElementById('galLb')||!document.getElementById('galLb').classList.contains('show')||!state._gal)return; if(e.key==='Escape')galLbClose(); if(e.key==='ArrowRight')galLight(state._gal.idx+1); if(e.key==='ArrowLeft')galLight(state._gal.idx-1); });
+  }
+  var f=g.fotos[g.idx];
+  ov.innerHTML='<button class="gal-lb-x" onclick="galLbClose()">'+ic('plus',24)+'</button>'
+    +(g.idx>0?'<button class="gal-lb-nav gal-lb-prev" onclick="galLight('+(g.idx-1)+')">\u2039</button>':'')
+    +(g.idx<g.fotos.length-1?'<button class="gal-lb-nav gal-lb-next" onclick="galLight('+(g.idx+1)+')">\u203a</button>':'')
+    +'<div class="gal-lb-stage'+(g.zoom?' zoom':'')+'" onclick="galZoom(event)"><img src="'+escapeHtml(f.full||f.thumb)+'" alt=""></div>'
+    +'<div class="gal-lb-bar"><span class="gal-lb-naam">'+escapeHtml(f.naam||'')+'</span><span class="gal-lb-tel">'+(g.idx+1)+' / '+g.fotos.length+'</span>'
+    +'<a class="btn btn-sm gal-lb-dl" href="'+escapeHtml(f.dl||f.full)+'">'+ic('download',14)+' Download</a></div>';
   ov.classList.add('show'); document.body.classList.add('mp-lock');
+}
+function galZoom(e){
+  var g=state._gal; if(!g) return; g.zoom=!g.zoom;
+  var st=e.currentTarget; st.classList.toggle('zoom',g.zoom);
+}
+function galLbClose(){ var ov=document.getElementById('galLb'); if(ov)ov.classList.remove('show'); document.body.classList.remove('mp-lock'); }
+async function galApprove(btn){
+  var g=state._gal; if(!g) return;
+  if(!confirm('Keur je deze fotoreeks definitief goed? Dan ronden wij dit onderdeel af.')) return;
+  btn.disabled=true; btn.innerHTML='Goedkeuren\u2026';
+  var res; try{ res=await api(ENDPOINTS.fotoApprove,{task_id:g.taskId,klant_naam:(window.S27DATA&&S27DATA.bedrijfsnaam)?S27DATA.bedrijfsnaam():''}); }catch(e){ res=null; }
+  if(res&&res.ok&&res.data&&res.data.ok){ g.goedgekeurd=true; if(state.viewMode==='galerij'&&state._gal===g){ var page=$id('page'); if(page)page.innerHTML='<div class="panel active br-purple">'+galerijHTML()+'</div>'; } }
+  else { btn.disabled=false; btn.innerHTML=ic('check',15)+' Foto\u2019s goedkeuren'; alert('Goedkeuren lukte net niet \u2014 probeer zo opnieuw.'); }
+}
+
+// Shoot-inplanner als PAGINA in het portaal (V, Vincent 2026-06-11): sidebar + topbar blijven
+// zichtbaar zodat de klant weet voor welk project hij plant; kruisje rechtsboven = terug.
+function openShootOverlay(tid){
+  var safe=String(tid).replace(/[^A-Za-z0-9_-]/g,'');
+  state._shootFrom=state.activeProject||null;
+  state.viewMode='shootplan';
+  var page=$id('page'); if(!page) return;
+  var pNaam=''; try{ var pp=(window.S27DATA&&(S27DATA.projects()||[]).find(function(x){return x.id===state._shootFrom;})); pNaam=pp?pp.name:''; }catch(e){}
+  page.innerHTML='<div class="panel active br-purple" data-screen-label="shoot-inplannen"><div class="shootpage">'
+    +'<button class="shootpage-close" onclick="closeShootOverlay()" aria-label="Terug naar het project">'+ic('plus',22)+'</button>'
+    +'<div class="shootpage-head"><span class="mp-head-eyebrow">Shoot inplannen'+(pNaam?' · '+escapeHtml(pNaam):'')+'</span><h1>Kies een moment dat jou past</h1></div>'
+    +'<div id="s27-plan-'+safe+'"></div></div></div>';
+  window.scrollTo({top:0,behavior:'auto'});
   openShootWizard(tid);
 }
 async function closeShootOverlay(){
-  var ov=document.getElementById('shootOv'); if(ov){ ov.classList.remove('show'); ov.innerHTML=''; }
-  document.body.classList.remove('mp-lock');
-  // detail verversen: een zonet geboekte shoot moet meteen als 'ingepland' verschijnen
-  if(state.viewMode==='project' && state.activeProject && !state.demoMode){
-    var pid=state.activeProject;
-    try{ delete (state.data.details||{})[pid]; }catch(e){}
-    openProject(pid,'auto');
-  }
+  // terug naar het projectdetail met vers shoot-overzicht (zonet geboekt = meteen 'ingepland')
+  var pid=state._shootFrom||state.activeProject;
+  if(pid){ try{ delete (state.data.details||{})[pid]; }catch(e){} openProject(pid,'auto'); }
+  else goTab('video');
 }
 async function openShootWizard(tid){
   const box=$id('s27-plan-'+tid); if(!box)return;
@@ -2059,7 +2137,7 @@ async function openShootWizard(tid){
   const cc=(state.data.bedrijf&&state.data.bedrijf.contact)||{};
   const now=new Date();
   state.shoot=state.shoot||{};
-  state.shoot[tid]={taskId:tid,timeHours:Number(d.timeHours)||0,aantalCreators:Number(d.aantalCreators)||1,availability:d.availability||{shoots:[],shoots_27m:[],vakantie:[],hosts:SHOOT_HOSTS},viewMonth:now.getMonth(),viewYear:now.getFullYear(),selectedDate:null,selectedTime:null,coords:null,formatted:'',prefill:{voornaam:cc.voornaam||'',email:cc.email||(state.session&&state.session.email)||''}};
+  state.shoot[tid]={taskId:tid,timeHours:Number(d.timeHours)||0,aantalCreators:Number(d.aantalCreators)||1,availability:d.availability||{shoots:[],shoots_27m:[],vakantie:[],hosts:SHOOT_HOSTS},viewMonth:now.getMonth(),viewYear:now.getFullYear(),selectedDate:null,selectedTime:null,coords:null,formatted:'',locatieVast:String(d.locatie_vast||''),prefill:{voornaam:cc.voornaam||'',email:cc.email||(state.session&&state.session.email)||''}};
   shootDrawCal(tid);
 }
 function shootInvalidHTML(reason){
@@ -2107,11 +2185,12 @@ function shootSlotsHTML(tid){
 function shootDrawCal(tid){
   const box=$id('s27-plan-'+tid); const ctx=(state.shoot||{})[tid]; if(!box||!ctx)return;
   box.innerHTML='<div class="shoot-wiz">'+shootStepBar(1)
-    +'<p class="shoot-intro">Paarse dagen = team volledig vrij · gele = nog plek. Boekingen tot een jaar vooruit, ten vroegste over 3 werkdagen.<br>Je plant in: <b>'+escapeHtml(shootTeamLabel(ctx))+'</b>.</p>'
-    +'<div id="shoot-cal-'+tid+'">'+shootCalHTML(tid)+'</div>'
-    +'<div id="shoot-slots-'+tid+'">'+(ctx.selectedDate?shootSlotsHTML(tid):'')+'</div>'
-    +'<div class="shoot-actions"><button class="btn btn-branch br-blue btn-sm" id="shoot-next-'+tid+'" '+((ctx.selectedDate&&ctx.selectedTime)?'':'disabled')+' onclick="shootGoDetails(\''+tid+'\')">Verder →</button></div>'
-    +'</div>';
+    +'<p class="shoot-intro">Paarse dagen = team volledig vrij · gele = nog plek. Boekingen tot een jaar vooruit, ten vroegste over 3 werkdagen. Je plant in: <b>'+escapeHtml(shootTeamLabel(ctx))+'</b>.</p>'
+    +'<div class="shoot-cols">'
+      +'<div class="shoot-col-l"><div id="shoot-cal-'+tid+'">'+shootCalHTML(tid)+'</div></div>'
+      +'<div class="shoot-col-r"><div id="shoot-slots-'+tid+'">'+(ctx.selectedDate?shootSlotsHTML(tid):'<div class="shoot-slotcard shoot-slot-hint"><span class="fs" style="color:var(--ink-4)">Kies links een dag — dan zie je hier meteen de mogelijke starturen.</span></div>')+'</div>'
+      +'<div class="shoot-actions"><button class="btn btn-branch br-purple" id="shoot-next-'+tid+'" '+((ctx.selectedDate&&ctx.selectedTime)?'':'disabled')+' onclick="shootGoDetails(\''+tid+'\')">Verder →</button></div>'
+    +'</div></div>';
 }
 function shootNavMonth(tid,dir){
   const ctx=(state.shoot||{})[tid]; if(!ctx)return;
@@ -2125,6 +2204,7 @@ function shootPickDay(tid,ds){
   const c=$id('shoot-cal-'+tid); if(c)c.innerHTML=shootCalHTML(tid);
   const s=$id('shoot-slots-'+tid); if(s)s.innerHTML=shootSlotsHTML(tid);
   const n=$id('shoot-next-'+tid); if(n)n.disabled=true;
+  if(s && window.innerWidth<880) s.scrollIntoView({behavior:'smooth',block:'start'});
 }
 function shootPickSlot(tid,s){
   const ctx=(state.shoot||{})[tid]; if(!ctx)return;
@@ -2142,28 +2222,60 @@ function shootGoDetails(tid){
     +'<div class="shoot-form">'
       +'<div class="shoot-row"><div class="shoot-field"><label>Voornaam *</label><input type="text" id="shoot-voornaam-'+tid+'" value="'+escapeHtml(pf.voornaam||'')+'" placeholder="Jouw voornaam"></div><div class="shoot-field"><label>E-mailadres *</label><input type="email" id="shoot-email-'+tid+'" value="'+escapeHtml(pf.email||'')+'" placeholder="jij@merk.be"></div></div>'
       +'<label class="ms-label" style="margin-top:14px">Startlocatie van de shoot *</label>'
-      +'<div class="shoot-acwrap" id="shoot-acwrap-'+tid+'"></div>'
-      +'<div class="shoot-row-loc"><input type="text" id="shoot-straat-'+tid+'" placeholder="Straat + nummer" autocomplete="off" oninput="shootClearCoords(\''+tid+'\')"><input type="text" id="shoot-postcode-'+tid+'" placeholder="Postcode" maxlength="4" autocomplete="off" oninput="shootClearCoords(\''+tid+'\')"><input type="text" id="shoot-gemeente-'+tid+'" placeholder="Gemeente" autocomplete="off" oninput="shootClearCoords(\''+tid+'\')"></div>'
+      +(ctx.locatieVast
+        ? '<div class="shoot-locvast">'+ic('check',14)+'<span>'+escapeHtml(ctx.locatieVast)+'</span><em>Door Studio 27 vastgelegd — wijzigen kan via het team.</em></div>'
+        : '<div class="shoot-acwrap" id="shoot-acwrap-'+tid+'"><input type="text" class="shoot-zoek" id="shoot-zoek-'+tid+'" placeholder="Zoek je adres (begin te typen)…" autocomplete="off" oninput="shootSuggest(\''+tid+'\',this.value)"><div class="shoot-sugg" id="shoot-sugg-'+tid+'"></div></div>'
+        +'<div class="shoot-row-loc"><input type="text" id="shoot-straat-'+tid+'" placeholder="Straat + nummer" autocomplete="off" oninput="shootClearCoords(\''+tid+'\')"><input type="text" id="shoot-postcode-'+tid+'" placeholder="Postcode" maxlength="4" autocomplete="off" oninput="shootClearCoords(\''+tid+'\')"><input type="text" id="shoot-gemeente-'+tid+'" placeholder="Gemeente" autocomplete="off" oninput="shootClearCoords(\''+tid+'\')"></div>')
       +'<div class="shoot-row"><div class="shoot-field"><label>Contactpersoon op locatie (indien anders dan jij)</label><input type="text" id="shoot-cnaam-'+tid+'" placeholder="Naam"></div><div class="shoot-field"><label>GSM contactpersoon</label><input type="text" id="shoot-cgsm-'+tid+'" placeholder="04XX XX XX XX"></div></div>'
       +'<div class="shoot-field"><label>Extra info of briefing (optioneel)</label><textarea id="shoot-extra-'+tid+'" placeholder="Bijzonderheden, parkeer-info, briefing, eventuele extra locaties…"></textarea></div>'
       +'<div class="shoot-msg" id="shoot-msg-'+tid+'"></div>'
     +'</div>'
     +'<div class="shoot-actions"><button class="btn btn-ghost btn-sm" onclick="shootBack(\''+tid+'\')">← Terug</button><button class="btn btn-branch br-blue btn-sm" id="shoot-book-'+tid+'" onclick="shootSubmitBooking(\''+tid+'\')">Shoot inplannen</button></div>'
     +'</div>';
-  shootInitAutocomplete(tid);
 }
 function shootBack(tid){ shootDrawCal(tid); }
+/* Adres-suggesties in eigen huisstijl: debounce -> worker (shootPlaces, key server-side) -> dropdown.
+   Selectie vult straat/postcode/gemeente + coördinaten in. Manueel verder typen blijft altijd kunnen. */
+function shootSuggest(tid, q){
+  clearTimeout(state._shootSugT);
+  var host=$id('shoot-sugg-'+tid); if(!host) return;
+  q=String(q||'').trim();
+  if(q.length<3){ host.innerHTML=''; return; }
+  state._shootSugT=setTimeout(async function(){
+    var res; try{ res=await api(ENDPOINTS.shootPlaces,{q:q}); }catch(e){ res=null; }
+    var list=(res&&res.data&&res.data.suggesties)||[];
+    var cur=$id('shoot-zoek-'+tid); if(!cur||cur.value.trim()!==q) return;   // verouderde respons
+    host.innerHTML=list.map(function(s){
+      var pid=String(s.place_id||'').replace(/[^A-Za-z0-9_-]/g,'');
+      return '<button type="button" class="shoot-sugg-it" onclick="shootPickSuggest(\''+tid+'\',\''+pid+'\')">'+escapeHtml(s.tekst||'')+'</button>';
+    }).join('');
+  },260);
+}
+async function shootPickSuggest(tid, placeId){
+  var host=$id('shoot-sugg-'+tid); if(host) host.innerHTML='<div class="shoot-sugg-it" style="cursor:default;color:var(--ink-4)">Adres ophalen…</div>';
+  var res; try{ res=await api(ENDPOINTS.shootPlaces,{place_id:placeId}); }catch(e){ res=null; }
+  var a=(res&&res.data&&res.data.adres)||null;
+  if(host) host.innerHTML='';
+  if(!a) return;
+  var ctx=(state.shoot||{})[tid]||{};
+  var set=function(id,v){ var el=$id(id); if(el) el.value=v||''; };
+  set('shoot-straat-'+tid,a.straat); set('shoot-postcode-'+tid,a.postcode); set('shoot-gemeente-'+tid,a.gemeente);
+  var zk=$id('shoot-zoek-'+tid); if(zk) zk.value=a.formatted||'';
+  if(a.lat!=null&&a.lng!=null){ ctx.coords={lat:a.lat,lng:a.lng}; ctx.formatted=a.formatted||''; }
+}
 function shootToast(tid,msg){const el=$id('shoot-msg-'+tid); if(el){el.textContent=msg;el.style.display='block';} else { alert(msg); }}
 async function shootSubmitBooking(tid){
   const ctx=(state.shoot||{})[tid]; if(!ctx)return;
   const val=id=>{const el=$id(id);return el?el.value.trim():'';};
+  const locVast=!!ctx.locatieVast;
   const voornaam=val('shoot-voornaam-'+tid),email=val('shoot-email-'+tid),straat=val('shoot-straat-'+tid),postcode=val('shoot-postcode-'+tid),gemeente=val('shoot-gemeente-'+tid);
-  if(!voornaam||!email||!straat||!postcode||!gemeente){ shootToast(tid,'Vul minstens je voornaam, e-mail en de startlocatie (straat, postcode, gemeente) in.'); return; }
+  if(!voornaam||!email){ shootToast(tid,'Vul minstens je voornaam en e-mailadres in.'); return; }
+  if(!locVast && (!straat||!postcode||!gemeente)){ shootToast(tid,'Kies je startlocatie via de adres-zoeker (of vul straat, postcode en gemeente in).'); return; }
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ shootToast(tid,'Vul een geldig e-mailadres in.'); return; }
-  if(!/^[1-9][0-9]{3}$/.test(postcode)){ shootToast(tid,'Postcode moet 4 cijfers zijn (bv. 2310).'); return; }
+  if(!locVast && !/^[1-9][0-9]{3}$/.test(postcode)){ shootToast(tid,'Postcode moet 4 cijfers zijn (bv. 2310).'); return; }
   if(ctx._booking)return; ctx._booking=true;
   const btn=$id('shoot-book-'+tid); if(btn){btn.disabled=true;btn.textContent='Even versturen…';}
-  const locatieFormatted=straat+', '+postcode+' '+gemeente+', België';
+  const locatieFormatted=locVast?ctx.locatieVast:(straat+', '+postcode+' '+gemeente+', België');
   const payload={task_id:tid,datum:ctx.selectedDate,datumLeesbaar:shootFormatDate(ctx.selectedDate),startuur:ctx.selectedTime,duur:shootDuurLabel(ctx),timeHours:ctx.timeHours,aantalPersonen:ctx.aantalCreators,klantVoornaam:voornaam,klantEmail:email,locatie:locatieFormatted,locatieStraat:straat,locatiePostcode:postcode,locatieGemeente:gemeente,contactNaam:val('shoot-cnaam-'+tid),contactGsm:val('shoot-cgsm-'+tid),extraInfo:val('shoot-extra-'+tid)};
   if(ctx.coords){ payload.lat=ctx.coords.lat; payload.lng=ctx.coords.lng; if(ctx.formatted)payload.locatie=ctx.formatted; }
   let res; try{ res=await api(ENDPOINTS.shootSubmit,payload); }catch(e){ res=null; }
@@ -2174,7 +2286,7 @@ async function shootSubmitBooking(tid){
 function shootSuccessHTML(already){
   const t=already?'Deze shoot was net al ingepland':'Jullie shoot staat in de planning!';
   const p=already?'Geen zorgen, er is niets dubbel geboekt.':'We kijken alles even na en bevestigen ze snel per mail. Tot binnenkort, wij staan al klaar met de camera’s.';
-  return '<div class="empty" style="padding:24px"><div class="em-ic">'+ic('st_approved',56)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">'+t+'</b><p style="margin:6px 0 0">'+escapeHtml(p)+'</p></div>';
+  return '<div class="empty" style="padding:24px"><div class="em-ic">'+ic('st_approved',56)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">'+t+'</b><p style="margin:6px 0 14px">'+escapeHtml(p)+'</p><button class="btn btn-branch br-purple" onclick="closeShootOverlay()">Terug naar je project</button></div>';
 }
 /* Google Places (NEW API) lazy-loader + adres-autocomplete. Optioneel: faalt het laden,
    dan blijven de manuele velden (straat/postcode/gemeente) werken en geocodet de worker server-side. */
@@ -2217,7 +2329,7 @@ async function shootInitAutocomplete(tid){
 }
 
 function toggleBot(){ const p=$id('botPanel'),f=$id('botFab'); const open=p.classList.toggle('show'); f.style.display=open?'none':'flex'; if(open){ const g=$id('botGreet'); if(g){ var nm=(typeof _greetNaam==='function'?_greetNaam():'')||''; g.innerHTML='Hallo '+escapeHtml(nm||'daar')+'! Ik help je graag op weg. Waarmee kan ik je verder helpen?'; } if(typeof renderBotChips==='function') renderBotChips(); const inp=p.querySelector('.bot-input input'); if(inp)setTimeout(()=>inp.focus(),50); } }
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($id('tourScrim')&&$id('tourScrim').classList.contains('show'))endTour(false); else if(state.viewMode==='project')goTab(state._backTab||'start'); } });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($id('tourScrim')&&$id('tourScrim').classList.contains('show'))endTour(false); else if(state.viewMode==='project'){ if((state._backTab||'')==='video') state._skipVideoAuto=true; goTab(state._backTab||'start'); } } });
 
 /* ---------- Onboarding tour (1x + opt-out) ---------- */
 const TOUR=[

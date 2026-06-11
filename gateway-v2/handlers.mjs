@@ -1436,7 +1436,46 @@ export async function projectDetailV2(bedrijfId, body, env) {
     const desc = descendantsOf(taskId, tree.childrenByParent);
     proces = buildProces(task, desc);
     plan = buildPlan(task, desc);
+    // feedbackrondes (V): per montage-subtaak de FB-Edit-kinderen (type 8) meegeven —
+    // het portaal toont daarmee 'Feedback gegeven' + het rondenummer.
+    for (const tk of taken) {
+      const kids = tree.childrenByParent.get(String(tk.task_id)) || [];
+      const fb = kids.filter((k) => Number(getCF(k, FIELD.typeJob)) === 8);
+      if (fb.length) tk.fb_rondes = fb.map((k) => ({ naam: str(k.name), status: str(k.status && k.status.status) }));
+    }
   } catch (e) { /* proces-overzicht + plan zijn additief; nooit de detail breken */ }
+  // Echte videotitels (V): 'Open in Drive' zegt niets — haal de bestandsnaam op bij Drive
+  // (SA-meta) en de videotitel bij Vimeo (oEmbed). Cap + parallel + fail-soft.
+  try {
+    const jobs = [];
+    for (const tk of taken) {
+      for (const b of (tk.bestanden || [])) {
+        if (jobs.length >= 10) break;
+        const u = str(b.url);
+        const dm = u.match(/drive\.google\.com\/file\/d\/([-\w]{20,})/);
+        const vm = u.match(/vimeo\.com\/(\d{6,})/);
+        if (dm) {
+          jobs.push((async () => {
+            try {
+              const token = await mintGoogleToken(env, str(env.GDRIVE_SUBJECT), DRIVE_SCOPE);
+              const r = await fetch(`https://www.googleapis.com/drive/v3/files/${dm[1]}?supportsAllDrives=true&fields=name`, { headers: { authorization: 'Bearer ' + token }, signal: AbortSignal.timeout(2500) });
+              const d = await r.json().catch(() => ({}));
+              if (r.ok && d.name) b.label = str(d.name).replace(/\.[a-z0-9]{2,4}$/i, '');
+            } catch (e) { /* label blijft generiek */ }
+          })());
+        } else if (vm) {
+          jobs.push((async () => {
+            try {
+              const r = await fetch(`https://vimeo.com/api/oembed.json?url=${encodeURIComponent('https://vimeo.com/' + vm[1])}`, { signal: AbortSignal.timeout(2500) });
+              const d = await r.json().catch(() => ({}));
+              if (r.ok && d.title) b.label = str(d.title);
+            } catch (e) { /* label blijft generiek */ }
+          })());
+        }
+      }
+    }
+    if (jobs.length) await Promise.all(jobs);
+  } catch (e) { /* titels zijn cosmetisch */ }
   const out = {
     ok: true,
     task_id: str(task.id || taskId),
@@ -1736,11 +1775,23 @@ export async function dashboard(bedrijfId, body, env) {
     if (!labels.some((d) => showVisible(d, t.due_date, now))) continue; // ≥1 label zichtbaar deze maand
     if (isAfgerondStatus(t.status) && !_inFactFase) continue; // gefactureerd/terminaal → archief, niet actief
     const st = statusMapper(t.status);
+    // actieteller (V): in te plannen shoots (TYPE JOB 6 zonder datum) + montages klaar voor
+    // review (TYPE JOB 7, status doorgestuurd) — de oranje to-do-badge op de projectkaart.
+    let actiesTodo = 0;
+    for (const c of directChildren) {
+      if (isAfgerondStatus(c.status)) continue;
+      const ctj = Number(getCF(c, FIELD.typeJob));
+      const cst = String((c.status && c.status.status) || '').toLowerCase();
+      if (ctj === 6 && !(Number(c.due_date) > 0)) actiesTodo++;
+      else if (ctj === 7 && cst.includes('doorgestuur')) actiesTodo++;
+    }
     actieve.push({
       task_id: str(t.id),
       naam: str(t.name),
       discipline,
-      labels,                                                 // [discipline,...] -> meerdere chips naast de hoofdtaak
+      labels,
+      acties_todo: actiesTodo,
+      date_created: Number(t.date_created) || 0,                                                 // [discipline,...] -> meerdere chips naast de hoofdtaak
       status: st.key,
       status_label: st.label,
       voortgang_pct: st.pct,
@@ -4855,7 +4906,50 @@ export async function shootContext(bedrijfId, body, env) {
   let availability;
   try { availability = await shootAvailability(env); }
   catch (e) { availability = { shoots: [], shoots_27m: [], vakantie: [], hosts: SHOOT_HOSTS }; }
-  return { status: 200, body: { status: 'ok', task_name: str(task.name), timeHours, aantalCreators, availability } };
+  // Locatie al door het team ingevuld in ClickUp? Dan toont het portaal die read-only
+  // (klant kan ze niet wijzigen) en is locatie-invoer niet nodig.
+  const locValO = getCF(task, FIELD.locatie);
+  const locatieVast = (locValO && (locValO.formatted_address || locValO.address)) || '';
+  return { status: 200, body: { status: 'ok', task_name: str(task.name), timeHours, aantalCreators, locatie_vast: locatieVast, availability } };
+}
+
+/* ---- shootPlaces (READ-proxy) — adres-autocomplete in huisstijl ------------- */
+// Google Places (New) REST via de worker: het portaal toont eigen suggestie-dropdown.
+// body {q} -> {ok, suggesties:[{place_id, tekst}]}; body {place_id} -> {ok, adres:{...}}.
+const SHOOT_PLACES_FALLBACK_KEY = 'AIzaSyA-JNWrIbPwZFppYwBen645-t50A4Ocplo'; // zelfde key als de frontend-widget
+export async function shootPlaces(bedrijfId, body, env) {
+  const key = str(env && env.GOOGLE_GEOCODE_KEY) || SHOOT_PLACES_FALLBACK_KEY;
+  const q = str(body && body.q).slice(0, 120);
+  const placeId = str(body && body.place_id).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 200);
+  try {
+    if (placeId) {
+      const r = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
+        headers: { 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': 'addressComponents,formattedAddress,location' },
+      });
+      const d = await r.json().catch(() => ({}));
+      const comp = (type) => { const c = (d.addressComponents || []).find((x) => (x.types || []).includes(type)); return c ? str(c.longText || c.shortText) : ''; };
+      return { status: 200, body: { ok: r.ok, adres: {
+        straat: [comp('route'), comp('street_number')].filter(Boolean).join(' '),
+        postcode: comp('postal_code'), gemeente: comp('locality') || comp('postal_town'),
+        formatted: str(d.formattedAddress),
+        lat: d.location ? Number(d.location.latitude) : null, lng: d.location ? Number(d.location.longitude) : null,
+      } } };
+    }
+    if (q.length < 3) return { status: 200, body: { ok: true, suggesties: [] } };
+    const r = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': key },
+      body: JSON.stringify({ input: q, includedRegionCodes: ['be', 'nl', 'lu', 'fr', 'de'], includedPrimaryTypes: ['street_address', 'route', 'premise'] }),
+    });
+    const d = await r.json().catch(() => ({}));
+    const suggesties = (d.suggestions || []).slice(0, 5).map((s) => {
+      const pp = s.placePrediction || {};
+      return { place_id: str(pp.placeId), tekst: str(pp.text && pp.text.text) };
+    }).filter((s) => s.place_id && s.tekst);
+    return { status: 200, body: { ok: true, suggesties } };
+  } catch (e) {
+    return { status: 200, body: { ok: false, suggesties: [] } };
+  }
 }
 
 /* ---- shootSubmit (WRITE) - boeking wegschrijven (description + custom fields) -
@@ -4950,6 +5044,10 @@ export async function shootSubmit(bedrijfId, body, env) {
   await cu.post(env, `/task/${taskId}/field/${FIELD.startdatum}`, { value: startMs, value_options: { time: true } });
 
   // (3) Locatie (location custom field): client-coords (autocomplete) -> server-geocode -> anders overslaan.
+  // Staat de locatie al in ClickUp (door het team gezet), dan is die leidend: klant-invoer
+  // wordt genegeerd en het veld blijft onaangeroerd.
+  const bestaandeLoc = getCF(task, FIELD.locatie);
+  const locatieAlGezet = !!(bestaandeLoc && (bestaandeLoc.formatted_address || bestaandeLoc.address || (bestaandeLoc.location && bestaandeLoc.location.lat)));
   let coords = null;
   let formatted = str(body.locatie) || `${straat}, ${postcode} ${gemeente}, België`.replace(/\s+,/g, ',');
   const clat = Number(body.lat), clng = Number(body.lng);
@@ -4967,7 +5065,7 @@ export async function shootSubmit(bedrijfId, body, env) {
       }
     } catch (e) { /* geocode-fout -> geen coords, adres staat in de description */ }
   }
-  if (coords) {
+  if (coords && !locatieAlGezet) {
     await cu.field(env, taskId, FIELD.locatie, { location: { lat: coords.lat, lng: coords.lng }, formatted_address: formatted });
   }
 
@@ -5471,6 +5569,7 @@ export const READ_HANDLERS = {
   googleAds,
   // Shoot-inplannen: validatie + beschikbaarheid (port van de externe widget, geen Make).
   shootContext,
+  shootPlaces,
   // NB: de AI-chatbot loopt (op vraag) weer via Make, niet via de worker. De aiChat-handler
   // hierboven blijft dormant (ongebruikt) staan, klaar mocht de keuze ooit omdraaien.
 };

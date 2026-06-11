@@ -55,8 +55,11 @@ import * as vr from './videoreview.mjs';
 // Video-review (frame-accurate klantfeedback op Bestanden-veld-video's): registratie
 // hier i.p.v. in handlers.mjs zodat de module zelfstandig blijft (zie videoreview.mjs).
 READ_HANDLERS.videoReviewContext = vr.videoReviewContext;
+READ_HANDLERS.fotoList = vr.fotoList;
 WRITE_HANDLERS.videoReviewUpload = vr.videoReviewUpload;
 WRITE_HANDLERS.videoReviewSubmit = vr.videoReviewSubmit;
+WRITE_HANDLERS.videoReviewApprove = vr.videoReviewApprove;
+WRITE_HANDLERS.fotoApprove = vr.fotoApprove;
 
 // Staff-only (is_staff) rijke-rapportage-handlers: gescoped op het acting-as-bedrijf, (bedrijfId, body, env).
 // webTraffic/webSearch = Webprestaties (GA4 + GSC); v1 team-only, later evt. naar READ_HANDLERS voor klanten.
@@ -128,6 +131,7 @@ const MAKE_ENDPOINTS = {
 
 // Strengere limiet voor schrijf-/upload-acties; ruimer voor leesacties.
 const SENSITIVE = new Set([
+  'shootPlaces',
   'uploadProject', 'uploadAlg', 'bedrijfUpload', 'huisstijlUpload', 'huisstijlDelete',
   'chatAttachment', 'chatPost', 'commsChatPost', 'commsChatAttachment', 'directMessage', 'feedbackV2', 'newProjectIntake',
   'facturatieSave', 'projectFacturatieSave', 'bedrijfVoorkeuren', 'bedrijfContact',
@@ -532,6 +536,9 @@ export default {
       // videoReviewContext/-Upload ná Firebase-auth + bedrijf-scope-check.
       if (_pub === 'videostream' && request.method === 'GET') {
         return vr.handleVideoStream(request, env);
+      }
+      if (_pub === 'fotostream' && request.method === 'GET') {
+        return vr.handleFotoStream(request, env);
       }
       if (_pub === 'videofile' && request.method === 'GET') {
         return vr.handleVideoFile(request, env);

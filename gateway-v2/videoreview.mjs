@@ -19,7 +19,7 @@
  *   /videofile?key=&exp=&tok=                   → R2-bijlage (inline beeld/pdf, anders download)
  * Secrets/bindings: GATEWAY_SECRET (HMAC), SA_* + GDRIVE_SUBJECT (Drive), R2 (bucket).
  * ============================================================================= */
-import { cu, scopeCheckTask, mintGoogleToken, DRIVE_SCOPE, isAfgerondStatus, FIELD } from './handlers.mjs';
+import { cu, scopeCheckTask, mintGoogleToken, DRIVE_SCOPE, isAfgerondStatus, FIELD, getCF, parseDeliverables } from './handlers.mjs';
 
 const str = (v) => (v == null ? '' : String(v));
 const cleanId = (v) => str(v).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
@@ -111,7 +111,7 @@ const kvKey = (taskId, vKey) => `vr:${taskId}:${vKey}`;
 /* ---- scope-helper: taak ophalen + bedrijf-eigendom afdwingen (fail-closed) */
 async function guardTask(env, bedrijfId, taskId) {
   if (!taskId) return { ok: false, res: { status: 400, body: { ok: false, error: 'missing_task' } } };
-  const tr = await cu.get(env, `/task/${taskId}`);
+  const tr = await cu.get(env, `/task/${taskId}?include_subtasks=true`);
   const task = tr.ok && tr.data ? tr.data : { custom_fields: [] };
   const sc = scopeCheckTask(task, bedrijfId, true);
   if (!sc.ok) return { ok: false, res: { status: 403, body: { ok: false, error: 'scope_mismatch', message: 'Geen toegang tot deze taak.' } } };
@@ -169,7 +169,15 @@ export async function videoReviewContext(bedrijfId, body, env) {
   // FEEDBACK-LOCK (dakstructuur Q, slice 3): eenmaal definitief doorgestuurd = read-only naslag.
   // Locked zodra (a) er voor deze video al een bundel verzonden is, of (b) de taak voorbij de
   // reviewfase is (goedgekeurd/afgerond). Een nieuwe montageversie = nieuwe link = nieuwe key = open.
-  const isLocked = !!last || isAfgerondStatus(g.task && g.task.status);
+  let videoApproved = false;
+  try { videoApproved = !!(await env.KV.get(kvKey(taskId, videoKey(video.source, video.externalId)) + ':approved')); } catch (e) { /* leeg */ }
+  const taakGoedgekeurd = isAfgerondStatus(g.task && g.task.status);
+  const isLocked = !!last || taakGoedgekeurd || videoApproved;
+  // rondenummer: 1 + het aantal eerder aangemaakte FB-Edit-subtaken onder deze montagetaak
+  const fbRondes = ((g.task && g.task.subtasks) || []).filter((s) => Number((((s.custom_fields || []).find((f) => f.id === FIELD.typeJob) || {}).value)) === 8).length;
+  const ronde = isLocked ? Math.max(1, fbRondes) : fbRondes + 1;
+  // downloaden mag pas na goedkeuring van de video (Vincent: content pas vrij na akkoord)
+  const canDownload = taakGoedgekeurd || videoApproved;
 
   // naslag-bundel voor de read-only weergave: punten + comments + bijlagen met VERSE signed urls
   let lastBundle = null;
@@ -198,7 +206,10 @@ export async function videoReviewContext(bedrijfId, body, env) {
       task_name: str((g.task && g.task.name) || ''),
       video,
       stream_url: streamUrl,
-      download_url: downloadUrl,
+      download_url: canDownload ? downloadUrl : null,
+      can_download: canDownload,
+      is_approved: videoApproved || taakGoedgekeurd,
+      ronde,
       is_read_only: isLocked,
       last_bundle: lastBundle,
       last_submitted_at: last && last.submittedAt ? last.submittedAt : null,
@@ -361,7 +372,7 @@ export async function videoReviewSubmit(bedrijfId, body, env) {
   lines.push(`${bundle.counts.annotations} feedbackpunt${bundle.counts.annotations === 1 ? '' : 'en'}${attCount ? ` · ${attCount} bijlage${attCount === 1 ? '' : 'n'}` : ''} · via het portaal`);
   lines.push('');
   for (const a of bundle.annotations) {
-    lines.push(`#${a.sequenceNumber} · ${fmtTime(a.timestampSec)}${a.hasPin ? ` · positie ${a.xPct}%, ${a.yPct}%` : ''}`);
+    lines.push(`#${a.sequenceNumber} · ${fmtTime(a.timestampSec)}`);
     lines.push(a.comment);
     for (const att of a.attachments) {
       lines.push(`   📎 ${att.filename}`);
@@ -387,9 +398,11 @@ export async function videoReviewSubmit(bedrijfId, body, env) {
     const listId = str(g.task && g.task.list && g.task.list.id);
     if (listId) {
       const subName = `FB - ${str(bundle.video.title || 'montage').slice(0, 60)} - ${klantNaam}`.slice(0, 120);
+      const rootId = str((g.task && g.task.top_level_parent) || (g.task && g.task.parent) || taskId);
+      const portaalLink = `https://portaal.studio27.be/?p=${rootId}`;
       const sub = await cu.post(env, `/list/${listId}/task`, {
         name: subName,
-        description: lines.join('\n'),
+        description: `\ud83d\udd17 Bekijk deze feedbackronde volledig (pins op de video) in het klantenportaal:\n${portaalLink}\n\n` + lines.join('\n'),
         parent: taskId,
         notify_all: false,
         custom_fields: [
@@ -501,4 +514,139 @@ export async function handleVideoFile(request, env) {
   const ct = h.get('content-type') || '';
   h.set('content-disposition', INLINE_TYPES.has(ct) ? 'inline' : 'attachment');
   return new Response(obj.body, { headers: h });
+}
+
+
+/* =============================================================================
+ * videoReviewApprove — klant keurt een video definitief goed (per video-key).
+ * Alle video's op de taak goedgekeurd -> montagetaak op status 'goedgekeurd'.
+ * ============================================================================= */
+export async function videoReviewApprove(bedrijfId, body, env) {
+  const taskId = cleanId(body && body.task_id);
+  const g = await guardTask(env, bedrijfId, taskId);
+  if (!g.ok) return g.res;
+  const vIn = (body && body.video) || {};
+  const source = vIn.source === 'drive' ? 'drive' : 'vimeo';
+  const externalId = cleanId(vIn.externalId);
+  if (!externalId) return { status: 400, body: { ok: false, message: 'Video-referentie ontbreekt.' } };
+  const vKey = videoKey(source, externalId);
+  const klantNaam = str(body && body.klant_naam) || 'Klant';
+
+  try { await env.KV.put(kvKey(taskId, vKey) + ':approved', JSON.stringify({ at: nowISO(), door: klantNaam })); } catch (e) { /* status-write hieronder is leidend bij allApproved */ }
+
+  // alle video-deliverables van de taak langs: pas als élke video is goedgekeurd,
+  // gaat de montagetaak zelf naar 'goedgekeurd'.
+  const delivs = parseDeliverables(getCF(g.task, FIELD.deliverablesRaw));
+  const keys = [];
+  for (const d of delivs) {
+    const v = parseVimeoUrl(d.url); const dr = v ? null : parseDriveUrl(d.url);
+    if (v) keys.push(videoKey('vimeo', v.id));
+    else if (dr) keys.push(videoKey('drive', dr.id));
+  }
+  let allApproved = keys.length > 0;
+  for (const k of keys) {
+    if (k === vKey) continue;
+    let ok = false;
+    try { ok = !!(await env.KV.get(kvKey(taskId, k) + ':approved')); } catch (e) { ok = false; }
+    if (!ok) { allApproved = false; break; }
+  }
+  if (allApproved) {
+    try { await cu.put(env, `/task/${taskId}`, { status: 'goedgekeurd' }); } catch (e) { /* comment blijft */ }
+  }
+  const titel = str(vIn.title || '');
+  try {
+    await cu.comment(env, taskId,
+      `\u2705 ${klantNaam} keurde ${titel ? `de video "${titel}"` : 'deze video'} goed via het portaal.` +
+      (allApproved ? `\nAlle video's van deze taak zijn goedgekeurd \u2014 status staat op Goedgekeurd.` : ''), true);
+  } catch (e) { /* best-effort */ }
+  return { status: 200, body: { ok: true, all_approved: allApproved } };
+}
+
+/* =============================================================================
+ * FOTOGALERIJ (V) — Drive-map als galerij in het portaal.
+ * fotoList: bestanden van de map (enkel mappen die écht op de taak staan);
+ * /fotostream: signed full-res proxy; fotoApprove: set goedkeuren.
+ * ============================================================================= */
+function parseDriveFolderUrl(raw) {
+  const m = str(raw).match(/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/([-\w]{15,})/);
+  return m ? { id: m[1] } : null;
+}
+async function signedFotoUrl(env, fileId, dl) {
+  // korte TTL: de galerij her-signeert bij elke fotoList-call; een gedeelde link sterft snel
+  const exp = Math.floor(Date.now() / 1000) + STREAM_TTL_SEC;
+  const tok = await signTok(env, `fs|${fileId}|${exp}`);
+  return `/fotostream?file=${encodeURIComponent(fileId)}&exp=${exp}&tok=${tok}` + (dl ? '&dl=1' : '');
+}
+export async function fotoList(bedrijfId, body, env) {
+  const taskId = cleanId(body && body.task_id);
+  const g = await guardTask(env, bedrijfId, taskId);
+  if (!g.ok) return g.res;
+  // anti-abuse: enkel mappen die effectief als deliverable op DEZE taak staan
+  const want = parseDriveFolderUrl(body && body.url);
+  if (!want) return { status: 400, body: { ok: false, message: 'Geen geldige Drive-maplink.' } };
+  const delivs = parseDeliverables(getCF(g.task, FIELD.deliverablesRaw));
+  const opTaak = delivs.some((d) => { const f = parseDriveFolderUrl(d.url); return f && f.id === want.id; });
+  if (!opTaak) return { status: 403, body: { ok: false, message: 'Deze map hoort niet bij deze taak.' } };
+
+  let files = [];
+  try {
+    const token = await mintGoogleToken(env, str(env.GDRIVE_SUBJECT), DRIVE_SCOPE);
+    const q = encodeURIComponent(`'${want.id}' in parents and trashed = false and mimeType contains 'image/'`);
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&orderBy=createdTime&pageSize=200&supportsAllDrives=true&includeItemsFromAllDrives=true&corpora=allDrives&fields=files(id,name,mimeType,thumbnailLink,createdTime,size)`,
+      { headers: { authorization: 'Bearer ' + token } });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) return { status: 200, body: { ok: false, message: 'De fotomap kan niet gelezen worden. Staat ze op de gedeelde S27-Drive?' } };
+    files = Array.isArray(d.files) ? d.files : [];
+  } catch (e) {
+    return { status: 200, body: { ok: false, message: 'De fotomap kan nu niet geladen worden.' } };
+  }
+  const items = [];
+  for (const f of files.slice(0, 200)) {
+    // thumbnailLink is een tijdelijke lh3-link; size-parameter opschalen voor scherpe grid-weergave
+    const thumb = f.thumbnailLink ? str(f.thumbnailLink).replace(/=s\d+(-c)?$/, '=s900') : '';
+    items.push({
+      id: str(f.id),
+      naam: str(f.name).replace(/\.[a-z0-9]{2,4}$/i, ''),
+      thumb,
+      full: await signedFotoUrl(env, f.id, false),
+      dl: await signedFotoUrl(env, f.id, true),
+    });
+  }
+  const goedgekeurd = isAfgerondStatus(g.task && g.task.status);
+  return { status: 200, body: { ok: true, taak_naam: str(g.task && g.task.name), folder_url: `https://drive.google.com/drive/folders/${want.id}`, goedgekeurd, fotos: items } };
+}
+export async function fotoApprove(bedrijfId, body, env) {
+  const taskId = cleanId(body && body.task_id);
+  const g = await guardTask(env, bedrijfId, taskId);
+  if (!g.ok) return g.res;
+  const klantNaam = str(body && body.klant_naam) || 'Klant';
+  try { await cu.put(env, `/task/${taskId}`, { status: 'goedgekeurd' }); }
+  catch (e) { return { status: 502, body: { ok: false, message: 'Goedkeuren lukte net niet \u2014 probeer zo opnieuw.' } }; }
+  try { await cu.comment(env, taskId, `\ud83d\udcf8 ${klantNaam} keurde de foto's goed via het portaal.`, true); } catch (e) { /* best-effort */ }
+  return { status: 200, body: { ok: true } };
+}
+export async function handleFotoStream(request, env) {
+  const u = new URL(request.url);
+  const fileId = str(u.searchParams.get('file')).replace(/[^-\w]/g, '');
+  const exp = str(u.searchParams.get('exp'));
+  const tok = str(u.searchParams.get('tok'));
+  const dl = u.searchParams.get('dl') === '1';
+  if (!fileId) return new Response('Ongeldig bestand', { status: 400 });
+  if (!(await tokOk(env, `fs|${fileId}|${exp}`, tok, exp))) {
+    return new Response('Link verlopen \u2014 herlaad het portaal.', { status: 403 });
+  }
+  let token;
+  try { token = await mintGoogleToken(env, str(env.GDRIVE_SUBJECT), DRIVE_SCOPE); }
+  catch (e) { return new Response('Drive niet beschikbaar', { status: 502 }); }
+  const meta = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?supportsAllDrives=true&fields=name,mimeType`, { headers: { authorization: 'Bearer ' + token } });
+  const md = await meta.json().catch(() => ({}));
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`, { headers: { authorization: 'Bearer ' + token } });
+  if (!r.ok) return new Response('Niet gevonden', { status: 404 });
+  const h = new Headers();
+  h.set('content-type', str(md.mimeType) || 'image/jpeg');
+  if (r.headers.get('content-length')) h.set('content-length', r.headers.get('content-length'));
+  h.set('cache-control', 'private, max-age=3600');
+  h.set('x-content-type-options', 'nosniff');
+  h.set('content-disposition', (dl ? 'attachment' : 'inline') + (md.name ? `; filename="${str(md.name).replace(/[^\w. -]/g, '')}"` : ''));
+  return new Response(r.body, { headers: h });
 }

@@ -312,6 +312,18 @@ function projDienst(list, fromTab, incDone){
   if(rest.length){ _n++; html+=projCluster({key:'overig', statuses:[], title:'Overige projecten', sub:'Lopende trajecten bij Studio 27.', br:'blue'}, rest, _n, fromTab); }
   return `<div class="projclusters">${html}</div>`;
 }
+// video-tak projectrij: naam + voornaam hoofdverantwoordelijke + oranje to-do-teller + Open-knop
+function videoProjRij(p){
+  var n=(p.actiesTodo!=null&&p.actiesTodo>0)?p.actiesTodo:projActieTeller(p);
+  var wie=(p.sae&&p.sae[0]&&p.sae[0].naam)?String(p.sae[0].naam).split(/\s+/)[0]:'';
+  var st=STATUS_LABEL[p.status]||STATUS_LABEL.prog;
+  var cid=String(p.id||'').replace(/[^A-Za-z0-9_-]/g,'');
+  return '<button class="vrij-row card br-'+p.br+'" onclick="openProject(\''+cid+'\',\'video\')">'
+    +(n?'<span class="vrij-todo" title="'+n+' actie'+(n===1?'':'s')+' voor jou">'+n+'</span>':'')
+    +'<span class="vrij-main"><b>'+esc(p.name)+'</b>'
+    +'<span class="vrij-sub">'+(wie?ic('user',12)+' '+esc(wie)+' · ':'')+esc(st[0])+'</span></span>'
+    +'<span class="btn btn-branch br-'+p.br+' btn-sm vrij-open">Open project '+ic('arrow',14)+'</span></button>';
+}
 // actieteller per project: feedback die wacht + in te plannen shoots/meetings + chat-wacht.
 function projActieTeller(p){
   var n=0;
@@ -373,7 +385,12 @@ function panelTak(key){
   const zicht=isVideo?all:all.filter(p=>p.status!=='done');
   const leeg='<div class="empty"><div class="em-ic">'+(T.stamp?'<img src="assets/'+T.stamp+'" width="56" height="56" alt="">':ic('doc',56))+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog geen '+esc(T.label.toLowerCase())+'-projecten</b><p style="margin:6px 0 14px">Zin om hier samen iets op te starten?</p><button class="btn btn-branch br-'+T.br+'" onclick="openOfferteWizard(\''+(key==='video'?'video':key)+'\')">'+ic('plus',15)+' Start een aanvraag</button></div>';
   if(isVideo){
-    return zicht.length ? projDienst(all, key, true) : leeg;
+    if(!zicht.length) return leeg;
+    // vlakke, chronologische lijst (Vincent 2026-06-11): geen actiepunt-clusters, gewoon
+    // alle lopende projecten onder elkaar in volgorde van aanmaak.
+    var rows=zicht.slice().sort(function(a,b){ return (a.dateCreated||0)-(b.dateCreated||0); })
+      .map(function(p){ return videoProjRij(p); }).join('');
+    return '<div class="vrij-lijst">'+rows+'</div>';
   }
   const lopend=zicht.length ? projDienst(all, key) : leeg;
   return takContactCard(key, T, zicht)+lopend+takArchiefSectie(key, T);
@@ -3789,11 +3806,16 @@ function _ondShootRij(s, br){
 }
 function _ondEditRij(s, br){
   var isNab=/nabewerk/i.test(s.naam||'');
-  var files=s.bestanden||[];
+  var alle=s.bestanden||[];
+  var fotoMaps=alle.filter(function(f){ return /drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\//.test(f.url||''); });
+  var files=alle.filter(function(f){ return fotoMaps.indexOf(f)<0; });
+  var gegeven=(s.fbRondes&&s.fbRondes.length)?true:false;
   var inner='';
   if(s.status==='wait'||s.status==='sent'){
     if(files.length===1){
-      inner='<button class="btn btn-branch br-'+br+' btn-sm" onclick="openVideoFeedback(\''+esc(s.id)+'\',\''+esc(files[0].url)+'\',\''+esc(files[0].label||s.naam)+'\',this)">'+ic('st_feedback',14)+' Feedback geven</button>';
+      inner=gegeven
+        ? '<button class="btn btn-outline btn-sm" onclick="openVideoFeedback(\''+esc(s.id)+'\',\''+esc(files[0].url)+'\',\''+esc(files[0].label||s.naam)+'\',this)">'+ic('check',13)+' Feedback gegeven</button>'
+        : '<button class="btn btn-branch br-'+br+' btn-sm" onclick="openVideoFeedback(\''+esc(s.id)+'\',\''+esc(files[0].url)+'\',\''+esc(files[0].label||s.naam)+'\',this)">'+ic('st_feedback',14)+' Feedback geven</button>';
     } else if(files.length>1){
       inner='<button class="btn btn-branch br-'+br+' btn-sm" onclick="ondToggleInfo(this)">'+ic('doc',14)+' Alle bestanden bekijken ('+files.length+')</button>';
     } else {
@@ -3819,8 +3841,16 @@ function _ondEditRij(s, br){
       return '<a class="deliv-file ond-file" data-label="'+esc(f.label||'Bestand')+'" href="'+esc(f.url)+'" target="_blank" rel="noopener"><span class="df-ic">'+ic(f.type==='video'?'video':f.type==='img'?'img':'doc',16)+'</span><span class="ond-file-nm">'+esc(f.label||'Bestand')+'</span>'+ic('download',14)+'</a>';
     }).join('')+'</div></div>';
   }
+  // gedeelde Drive-fotomap(pen): altijd bekijkbaar als galerij in het portaal
+  var fotoBtns='';
+  if(fotoMaps.length){
+    fotoBtns='<div class="ond-info open-static"><div class="ond-files">'+fotoMaps.map(function(f){
+      return '<div class="ond-file"><span class="df-ic">'+ic('img',16)+'</span><span class="ond-file-nm">'+esc((f.label&&f.label!=='Open in Drive')?f.label:'Beeldmateriaal')+'</span>'
+        +'<button class="btn btn-branch br-'+br+' btn-sm" onclick="openFotoGalerij(\''+esc(s.id)+'\',\''+esc(f.url)+'\')">'+ic('img',14)+' Bekijk de foto\u2019s</button></div>';
+    }).join('')+'</div></div>';
+  }
   return '<div class="ond-row ond-edit card br-'+br+'"><div class="ond-head">'+ic(isNab?'img':'video',16)
-    +'<span class="ond-naam">'+esc(s.naam)+'</span>'+inner+'</div>'+lijst+dls+'</div>';
+    +'<span class="ond-naam">'+esc(s.naam)+'</span>'+inner+'</div>'+lijst+dls+fotoBtns+'</div>';
 }
 function onderdelenBlok(det, p){
   var subs=(det&&det.subtasks)||[];
@@ -3838,8 +3868,8 @@ function onderdelenBlok(det, p){
     h+=kop('Pre-productie',pre.length);
     h+=pre.map(function(s){
       return '<div class="ond-row card br-'+br+'"><div class="ond-head">'+ic('doc',16)+'<span class="ond-naam">'+esc(s.naam)+'</span></div>'
-        +'<div class="ond-info open-static"><div class="ond-files">'+(s.bestanden||[]).map(function(f){
-          return '<a class="deliv-file ond-file" data-label="'+esc(f.label||'Document')+'" href="'+esc(f.url)+'" target="_blank" rel="noopener"><span class="df-ic">'+ic('doc',16)+'</span><span class="ond-file-nm">'+esc(f.label||'Document')+'</span>'+ic('download',14)+'</a>';
+        +'<div class="ond-info open-static"><div class="subtask-files">'+(s.bestanden||[]).map(function(f){
+          return deliverFileRow(f,{br:br,done:s.status==='done'});
         }).join('')+'</div></div></div>';
     }).join('');
   }
@@ -3862,7 +3892,7 @@ function demoVideoDet(){
     { id:'d-sh1', naam:'Shoot 1 — kantoor & team', status:'prog', typeJob:6, startDate:String(nu+5*86400000), datum:String(nu+5*86400000+4*3600000), locatie:'Industrieweg 27, 2320 Hoogstraten', heeftBestanden:false, bestanden:[] },
     { id:'d-sh2', naam:'Shoot 2 — klantcases on-site', status:'todo', typeJob:6, startDate:'', datum:'', locatie:'', heeftBestanden:false, bestanden:[] },
     { id:'d-ed1', naam:'Montage bedrijfsfilm', status:'wait', typeJob:7, heeftBestanden:true, bestanden:[{label:'Montage v1 — bedrijfsfilm', url:'https://vimeo.com/76979871', type:'video'}] },
-    { id:'d-nab', naam:'Nabewerking foto\u2019s', status:'prog', typeJob:7, heeftBestanden:false, bestanden:[] }
+    { id:'d-nab', naam:'Nabewerking foto\u2019s', status:'prog', typeJob:7, heeftBestanden:true, bestanden:[{label:'Fotoshoot najaarscollectie', url:'https://drive.google.com/drive/folders/demo-fotomap', type:'img'}] }
   ] };
 }
 function buildModal(id, from){
@@ -3974,12 +4004,12 @@ function buildModal(id, from){
       <div style="padding:8px 0 0"><button class="btn btn-ghost btn-sm" style="color:var(--s27-orange-ink)" onclick="dringendeVraag('${esc(p.id)}')">${ic('spark',14)} ${chatClosed?'Nog een vraag over dit project?':'Dringende vraag aan Ilke'}</button></div>
     </div>`;
   return `<div class="detail detail--wide br-${p.br}">
-    <button class="detail-back" onclick="goTab('${backTo}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg> Terug naar ${backLabel}</button>
-    <div class="detail-head">
+    <button class="detail-back" onclick="${backTo==='video'?"state._skipVideoAuto=true;":''}goTab('${backTo}')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg> Terug naar ${backLabel}</button>
+    ${OND?'':`<div class="detail-head">
       <span class="detail-ic">${discMark(p.disc,'detail-stamp')}</span>
       <div class="detail-titles"><h1>${p.name}</h1><div class="detail-sub${saeLine?' sae-line':''}">${saeLine||esc(p.disc)}</div></div>
       ${spill(p.status)}
-    </div>
+    </div>`}
     <div class="soc-subnav detail-subnav">
       <button class="snav-btn${startTab==='overzicht'?' active':''}" data-mt="overzicht" onclick="switchModalTab('overzicht')">${ic('doc',15)} Overzicht</button>
       <button class="snav-btn${startTab==='chat'?' active':''}" data-mt="chat" onclick="switchModalTab('chat')">${ic('msg',15)} Chat${chatWacht?'<span class="snav-dot"></span>':''}</button>

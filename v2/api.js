@@ -132,6 +132,9 @@ const ENDPOINTS = {
   shootContext:      GATEWAY_BASE + '/shootContext',
   // shootSubmit: { task_id, datum, startuur, timeHours, aantalPersonen, klant*, locatie*, contact*, extraInfo, lat?, lng? } -> { ok, taskId, assignedTo, assignedName }.
   shootSubmit:       GATEWAY_BASE + '/shootSubmit',
+  shootPlaces:       GATEWAY_BASE + '/shootPlaces',   // adres-suggesties in huisstijl (key server-side)
+  fotoList:          GATEWAY_BASE + '/fotoList',      // fotogalerij: bestanden van de gedeelde Drive-map
+  fotoApprove:       GATEWAY_BASE + '/fotoApprove',   // fotoreeks goedkeuren
   // Meeting-tunnel: taskloze Google-Calendar-boeking + invite (Algemene meeting/Projectmeeting/Nieuw project).
   // { host_email, host_naam, start, eind, start_ms, online, titel, beschrijving, locatie, client_email, client_naam, project_task_id?, project_naam?, intake?, when_label? }
   //   -> { ok, event_id, meet_link, html_link }. Muteert GEEN project-due_date; host moet @studio27.be zijn.
