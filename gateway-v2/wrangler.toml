@@ -32,7 +32,7 @@ bucket_name = "s27-portal-files"
 # en roept de scheduled()-handler in worker.js aan -> adsSnapshotWrite() per bedrijf,
 # zodat de Meta/Google maandtotalen in KV bewaard blijven (overleven het API-retentievenster).
 [triggers]
-crons = ["0 3 1 * *"]
+crons = ["0 3 1 * *", "0 7 * * *"]   # maandelijkse ads-snapshot + dagelijkse reminder-engine (07:00 UTC ≈ 09:00 Brussel)
 
 # Statische portaal-frontend (de v2-bestanden) rechtstreeks vanaf de worker serveren.
 # GET-bestandsverzoeken (/, /index.html, /api.js, ...) -> assets; al het andere (POST API) -> de worker.

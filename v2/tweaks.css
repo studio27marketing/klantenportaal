@@ -1189,3 +1189,20 @@ button.ond-head{cursor:pointer;}
 /* subnav-iconen kleuren mee met de tak (br-X zet --c-ink op de panel/detail-context) */
 .soc-subnav .soc-subtab svg{color:var(--c-ink,var(--ink-3,#6B5B6B));}
 .soc-subnav .soc-subtab.active svg{color:var(--c-ink,var(--ink,#230F23));}
+
+/* === Z (masterplan G1): support-opvolglijst + ticket-tweekeuze === */
+.wt-keuze{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:4px 0 18px;}
+@media(max-width:640px){.wt-keuze{grid-template-columns:1fr;}}
+.sup-lijst{display:flex;flex-direction:column;gap:10px;}
+.sup-row{display:flex;align-items:center;gap:13px;padding:15px 17px;}
+.sup-dot{width:11px;height:11px;border-radius:50%;flex:none;background:var(--ink-4,#9E919E);}
+.sup-dot.pill-todo{background:var(--s27-blue,#3083DC);}
+.sup-dot.pill-prog{background:var(--s27-orange,#F66131);}
+.sup-dot.pill-wait{background:var(--s27-yellow,#F8C028);}
+.sup-dot.pill-done{background:var(--s27-green,#12AC4E);}
+.sup-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;align-items:flex-start;}
+.sup-main b{font-family:var(--font-display);font-weight:800;font-size:14px;}
+.sup-snippet{font-size:12.5px;color:var(--ink-3,#6B5B6B);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;}
+.sup-link{display:inline-flex;align-items:center;gap:6px;background:none;border:none;font:700 13px var(--font-display);color:var(--ink-3,#6B5B6B);cursor:pointer;padding:4px 0;margin:14px 0 6px;}
+.sup-link:hover{color:var(--ink,#230F23);}
+@media(max-width:560px){.sup-row{flex-wrap:wrap;}.sup-row .btn{width:100%;justify-content:center;}}

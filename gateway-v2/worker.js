@@ -51,6 +51,7 @@ import {
 import { handlePush, handlePushNotify } from './push.mjs';
 import { handleClickupHook } from './clickup-push.mjs';
 import * as vr from './videoreview.mjs';
+import * as rem from './reminders.mjs';
 
 // Video-review (frame-accurate klantfeedback op Bestanden-veld-video's): registratie
 // hier i.p.v. in handlers.mjs zodat de module zelfstandig blijft (zie videoreview.mjs).
@@ -131,7 +132,7 @@ const MAKE_ENDPOINTS = {
 
 // Strengere limiet voor schrijf-/upload-acties; ruimer voor leesacties.
 const SENSITIVE = new Set([
-  'shootPlaces', 'contactVraag',
+  'shootPlaces', 'contactVraag', 'bugReport', 'facturatieNotitie',
   'uploadProject', 'uploadAlg', 'bedrijfUpload', 'huisstijlUpload', 'huisstijlDelete',
   'chatAttachment', 'chatPost', 'commsChatPost', 'commsChatAttachment', 'directMessage', 'feedbackV2', 'newProjectIntake',
   'facturatieSave', 'projectFacturatieSave', 'bedrijfVoorkeuren', 'bedrijfContact',
@@ -458,7 +459,7 @@ async function tryHandle(path, bedrijfId, body, claims, env, ctx, ch, noCache) {
   if (WRITE_HANDLERS[path]) {
     // ticket-paden: server-side identiteit injecteren (overschrijft client-input) zodat de handler
     // het ticket aan de juiste contactpersoon kan koppelen; claims is hier al geverifieerd.
-    if (path === 'ticketCreate' || path === 'ticketAttach' || path === 'contactVraag') {
+    if (path === 'ticketCreate' || path === 'ticketAttach' || path === 'contactVraag' || path === 'bugReport') {
       body.account_email = String((claims && claims.email) || '').trim().toLowerCase();
     }
     // staff-vlag ALTIJD server-side zetten (overschrijft elke client-waarde — niet spoofbaar):
@@ -771,6 +772,13 @@ export default {
    * leveren een snapshot op. Verwerkt in batches van 5 (concurrency-cap) en wrapt
    * alles in try/catch zodat één fout de hele run niet breekt. */
   async scheduled(event, env, ctx) {
+    // dagelijkse reminder-cron (07:00 UTC) -> reminder-engine (SLAPEND tot KV reminders:enabled='1'
+    // + de ClickUp-velden bestaan; zie reminders.mjs). De maandelijkse tak blijft de ads-snapshot.
+    if (event && event.cron === '0 7 * * *') {
+      const runRem = async () => { try { await rem.reminderEngine(env, ctx); } catch (e) { /* fail-soft */ } };
+      if (ctx && ctx.waitUntil) ctx.waitUntil(runRem()); else await runRem();
+      return;
+    }
     const run = async () => {
       if (!env || !env.KV || !env.CLICKUP_TOKEN) return;
       let companies = [];

@@ -313,6 +313,7 @@ function updateAdminViewToggle(){
    zoek-overlay (openAdminPicker) zodat een admin tussen ALLE klanten kan springen.
    ============================================================================= */
 async function enterAdminMode(){
+  (function(){ var b=$id('bugBtn'); if(b) b.style.display=''; })();
   // INSTANT: bedrijvenlijst uit de lokale cache (10 min) -> kiezer staat er meteen,
   // de verse lijst wordt stil op de achtergrond opgehaald (zoekquery blijft staan).
   var cached=null;
@@ -1154,7 +1155,7 @@ async function removeContact(id, btn){
 var _wtFileSeq=0;
 function wtEl(){ var el=$id('webTicket'); if(!el){ el=document.createElement('div'); el.id='webTicket'; el.className='mp-overlay'; el.addEventListener('mousedown',function(e){ el._downScrim=(e.target===el); }); el.addEventListener('click',function(e){ if(e.target===el && el._downScrim) closeWebTicket(); }); document.body.appendChild(el); } return el; }
 function wtEsc(e){ if(e.key==='Escape') closeWebTicket(); }
-function closeWebTicket(){ var el=$id('webTicket'); if(el){ el.classList.remove('show'); el.innerHTML=''; } document.removeEventListener('keydown',wtEsc); document.body.classList.remove('mp-lock'); state._wtFiles=[]; }
+function closeWebTicket(){ var el=$id('webTicket'); if(el){ el.classList.remove('show'); el.innerHTML=''; } document.removeEventListener('keydown',wtEsc); document.body.classList.remove('mp-lock'); state._wtFiles=[]; state._wtStep=null; }
 function openWebTicket(){ state._wtFiles=[]; var el=wtEl(); el.classList.add('show'); document.body.classList.add('mp-lock'); document.addEventListener('keydown',wtEsc); wtRender(); var s=$id('wtSubj'); if(s)s.focus(); }
 function _wtChipsHTML(){
   var st=(state._wtFiles||[]); if(!st.length) return '';
@@ -1187,6 +1188,17 @@ function wtStageFiles(input){
 function wtUnstage(id){ state._wtFiles=(state._wtFiles||[]).filter(function(f){return f.id!==id;}); _wtRenderTray(); }
 function wtRender(){
   var el=$id('webTicket'); if(!el) return;
+  // WS-2 sales-reflex: eerst de juiste rail kiezen — defect = gratis support, iets
+  // nieuws/prijs = offerte-flow (geen gratis support voor saleswerk).
+  if(state._wtStep!=='form'){
+    el.innerHTML='<div class="mp-modal" onclick="event.stopPropagation()">'
+      +'<div class="mp-head"><span class="mp-back-sp"></span><div class="mp-head-c"><span class="mp-head-eyebrow">Website-support</span><b>Waarmee kunnen we je helpen?</b></div><button class="mp-close" onclick="closeWebTicket()" aria-label="Sluiten">'+ic('plus',22)+'</button></div>'
+      +'<div class="mp-scroll"><div class="wt-keuze">'
+        +'<button class="contact-card br-green" onclick="state._wtStep=\'form\';wtRender()"><span class="cc-ic">'+ic('st_feedback',24)+'</span><b>Er is iets stuk of werkt niet</b><span>Een fout, kapotte pagina of formulier dat niet doet wat het moet — wij fixen het.</span><span class="cc-go">Meld het probleem '+ic('arrow',14)+'</span></button>'
+        +'<button class="contact-card br-blue" onclick="closeWebTicket();setTimeout(function(){openOfferteWizard(\'website\');},150)"><span class="cc-ic">'+ic('plus',24)+'</span><b>Ik wil iets nieuws of een prijs</b><span>Een extra pagina, uitbreiding of vernieuwing? Dan stellen we graag een offerte op.</span><span class="cc-go">Naar de aanvraag '+ic('arrow',14)+'</span></button>'
+      +'</div></div></div>';
+    return;
+  }
   el.innerHTML='<div class="mp-modal" onclick="event.stopPropagation()">'
     +'<div class="mp-head"><span class="mp-back-sp"></span><div class="mp-head-c"><span class="mp-head-eyebrow">Website-support</span><b>Ticket aanvragen</b></div><button class="mp-close" onclick="closeWebTicket()" aria-label="Sluiten">'+ic('plus',22)+'</button></div>'
     +'<div class="mp-scroll">'
@@ -2081,6 +2093,91 @@ async function pushPortalVersion(btn){
   alert(d.message||((res&&res.ok)?'Versie gepusht.':'Pushen lukte niet \u2014 probeer zo opnieuw.'));
 }
 
+/* ---- 🐞 Portaal-feedback (WS-3b, team-only) ---- */
+function openBugReport(){
+  var el=$id('bugOv');
+  if(!el){ el=document.createElement('div'); el.id='bugOv'; el.className='mp-overlay';
+    el.addEventListener('mousedown',function(e){ el._ds=(e.target===el); });
+    el.addEventListener('click',function(e){ if(e.target===el&&el._ds) closeBugReport(); });
+    document.body.appendChild(el); }
+  el.innerHTML='<div class="mp-modal" onclick="event.stopPropagation()">'
+    +'<div class="mp-head"><span class="mp-back-sp"></span><div class="mp-head-c"><span class="mp-head-eyebrow">Team</span><b>\ud83d\udc1e Portaal-feedback</b></div><button class="mp-close" onclick="closeBugReport()" aria-label="Sluiten">'+ic('plus',22)+'</button></div>'
+    +'<div class="mp-scroll">'
+      +'<label class="ms-label">Titel</label>'
+      +'<input type="text" id="bugTitel" class="shoot-zoek" style="margin:4px 0 12px" maxlength="140" placeholder="Korte omschrijving van de bug of het idee">'
+      +'<label class="ms-label">Wat zie je / wat verwacht je?</label>'
+      +'<textarea id="bugBody" class="mp-note" rows="5" placeholder="Stappen, scherm, verwachting\u2026"></textarea>'
+      +'<label class="btn btn-outline btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin-top:10px">'+ic('upload',14)+' Screenshot toevoegen<input type="file" accept="image/*" style="display:none" onchange="state._bugFile=this.files[0]||null;var n=this.parentNode.querySelector(\'i\');if(n)n.remove();if(this.files[0]){var i=document.createElement(\'i\');i.textContent=\' \u2713 \'+this.files[0].name;this.parentNode.appendChild(i);}"></label>'
+      +'<div class="shoot-msg" id="bugMsg"></div>'
+      +'<div style="margin:14px 0 6px"><button class="btn btn-primary" onclick="bugVerstuur(this)">'+ic('send',15)+' Versturen</button></div>'
+    +'</div></div>';
+  el.classList.add('show'); document.body.classList.add('mp-lock');
+  state._bugFile=null;
+  var t=$id('bugTitel'); if(t) t.focus();
+}
+function closeBugReport(){ var el=$id('bugOv'); if(el){ el.classList.remove('show'); el.innerHTML=''; } document.body.classList.remove('mp-lock'); state._bugFile=null; }
+async function bugVerstuur(btn){
+  var titel=($id('bugTitel')||{}).value||'', body=($id('bugBody')||{}).value||'';
+  var msg=$id('bugMsg');
+  if(!String(titel).trim()&&!String(body).trim()){ if(msg){msg.textContent='Beschrijf eerst even de bug of het idee.';msg.style.display='block';} return; }
+  btn.disabled=true; btn.innerHTML='Versturen\u2026';
+  var payload={titel:String(titel).trim(),omschrijving:String(body).trim(),context:location.href+' \u00b7 '+(state.activeBedrijf||'')};
+  if(state._bugFile&&state._bugFile.size<=22*1024*1024){
+    try{
+      var b64=await new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){res(String(r.result).split(',')[1]||'');}; r.onerror=rej; r.readAsDataURL(state._bugFile); });
+      payload.filename=state._bugFile.name; payload.file_data=b64;
+    }catch(e){}
+  }
+  var res; try{ res=await api(ENDPOINTS.bugReport,payload); }catch(e){ res=null; }
+  if(res&&res.ok&&res.data&&res.data.ok){ closeBugReport(); alert('\u2705 Bedankt! Je melding staat in de bugs-lijst.'); }
+  else { btn.disabled=false; btn.innerHTML=ic('send',15)+' Opnieuw proberen'; if(msg){msg.textContent='Versturen lukte niet \u2014 probeer zo opnieuw.';msg.style.display='block';} }
+}
+
+/* ---- Facturatie-notitie voor Celien (WS-7, team-only) ---- */
+async function factNoteLaad(){
+  var el=$id('factNote'); if(!el) return;
+  var res; try{ res=await api(ENDPOINTS.facturatieNotitie,{actie:'get'}); }catch(e){ res=null; }
+  if(res&&res.data&&res.data.ok!==false){ el.value=res.data.notitie||''; el.placeholder='Bv. factuur splitsen over 2 vennootschappen\u2026'; }
+}
+async function factNoteSave(btn){
+  var el=$id('factNote'); if(!el) return;
+  btn.disabled=true; btn.textContent='Opslaan\u2026';
+  var res; try{ res=await api(ENDPOINTS.facturatieNotitie,{actie:'set',notitie:el.value||''}); }catch(e){ res=null; }
+  btn.disabled=false; btn.innerHTML=ic('check',14)+' Opslaan';
+  var ok=res&&res.data&&res.data.ok;
+  btn.insertAdjacentHTML('afterend','<i class="fact-ok" style="margin-left:8px;font-size:12.5px;color:'+(ok?'var(--s27-green)':'var(--s27-orange)')+'">'+(ok?'Opgeslagen \u2713':'Mislukt \u2014 probeer opnieuw')+'</i>');
+  setTimeout(function(){ var i=document.querySelector('.fact-ok'); if(i)i.remove(); },2600);
+}
+
+/* ---- Support-opvolglijst (WS-1): status + chat per vraag, op één plek ---- */
+var SUPPORT_LABELS={todo:['Ontvangen','pill-todo'],prog:['In behandeling','pill-prog'],wait:['Wacht op jou','pill-wait'],sent:['Wacht op jou','pill-wait'],done:['Opgelost','pill-done']};
+function goSupport(){
+  state.viewMode='support';
+  var page=$id('page'); if(!page) return;
+  var tt=$id('topbarTitle'); if(tt) tt.textContent='Support';
+  var alle=((window.S27DATA&&S27DATA.projects&&S27DATA.projects())||[]).filter(function(p){return p.discId==='support';});
+  if(state.demoMode&&!alle.length&&typeof PROJECTS!=='undefined') alle=PROJECTS.filter(function(p){return p.discId==='support';});
+  var open=alle.filter(function(p){return p.status!=='done';}), dicht=alle.filter(function(p){return p.status==='done';});
+  var rij=function(p){
+    var sl=SUPPORT_LABELS[p.status]||SUPPORT_LABELS.prog;
+    var lc=p.lastChat&&p.lastChat.tekst?('<span class="sup-snippet">'+esc(p.lastChat.tekst)+'</span>'):'';
+    var cid=String(p.id||'').replace(/[^A-Za-z0-9_-]/g,'');
+    return '<div class="card sup-row br-indigo"><span class="sup-dot '+sl[1]+'"></span>'
+      +'<span class="sup-main"><b>'+esc(p.name)+'</b><span class="pill '+sl[1]+'" style="position:static">'+sl[0]+'</span>'+lc+'</span>'
+      +'<button class="btn btn-branch br-indigo btn-sm" onclick="openProjectChat(\''+cid+'\')">'+ic('msg',14)+' Open chat</button></div>';
+  };
+  page.innerHTML='<div class="panel active br-indigo" data-screen-label="support"><div class="contactpage">'
+    +'<div class="gal-toprow"><button class="gal-close" onclick="goContact()" aria-label="Terug naar Contact">'+ic('plus',22)+'</button></div>'
+    +'<h1>Je supportvragen</h1>'
+    +'<p class="sdesc" style="margin:4px 0 18px">Volg hier de status van je vragen en chat rechtstreeks met het team.</p>'
+    +(open.length?('<div class="section-head"><h2>Lopend</h2><span class="count">'+open.length+'</span></div><div class="sup-lijst">'+open.map(rij).join('')+'</div>'):'')
+    +(dicht.length?('<div class="section-head" style="margin-top:24px"><h2>Opgelost</h2><span class="count">'+dicht.length+'</span></div><div class="sup-lijst">'+dicht.map(rij).join('')+'</div>'):'')
+    +((!open.length&&!dicht.length)?'<div class="empty" style="padding:40px"><div class="em-ic">'+ic('st_approved',52)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Geen openstaande vragen</b><p style="margin:6px 0 16px">Loop je ergens tegenaan? Maak gerust een ticket aan.</p><button class="btn btn-branch br-green" onclick="openWebTicket()">'+ic('doc',15)+' Nieuw ticket</button></div>':'')
+  +'</div></div>';
+  window.scrollTo({top:0,behavior:'auto'});
+  closeSidebar();
+}
+
 /* ---- Contact (W): één blauwe knop, drie ingangen ---- */
 function goContact(){
   state.viewMode='contact';
@@ -2094,6 +2191,7 @@ function goContact(){
       +'<button class="contact-card br-pink" onclick="contactVraagForm()"><span class="cc-ic">'+ic('msg',24)+'</span><b>Algemene vraag</b><span>Vragen over je samenwerking, facturatie of iets anders? Ilke helpt je verder.</span><span class="cc-go">Stel je vraag '+ic('arrow',14)+'</span></button>'
       +'<button class="contact-card br-green" onclick="openWebTicket()"><span class="cc-ic">'+ic('doc',24)+'</span><b>Website support</b><span>Een bug, aanpassing of vraag over je site? Maak een ticket met bijlagen.</span><span class="cc-go">Ticket aanmaken '+ic('arrow',14)+'</span></button>'
     +'</div>'
+    +'<button class="sup-link" onclick="goSupport()">'+ic('msg',14)+' Lopende supportvragen bekijken '+ic('arrow',13)+'</button>'
     +'<div id="contactVraagHost"></div>'
   +'</div></div>';
   window.scrollTo({top:0,behavior:'auto'});

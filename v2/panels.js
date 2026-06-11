@@ -191,6 +191,7 @@ function svcCard(s){
 }
 function buildSvcCards(){ return SERVICES.map(svcCard).join(''); }
 const _COCKPIT_MOCK = [
+  { br:'indigo', cat:'Support', nid:'sup-open', title:'1 open supportvraag', ctx:'Volg de status of chat rechtstreeks met het team.', cta:'Bekijk je vragen', action:"goSupport()", urgent:false, icon:'msg' },
   {br:'purple',cat:'Video- en fotografie',title:'Review nodig',ctx:'De eerste montage van je bedrijfsfilm <b>"Onder één dak"</b> staat klaar. Geef je akkoord of je feedback.',cta:'Bekijk montage',action:"openProject('p1')",tag:'vandaag',urgent:true,icon:'st_feedback'},
   {br:'blue',cat:'Strategie',title:'Feedback gevraagd',ctx:'We willen je input op de <b>positionering</b> voor 2026 voor we verder bouwen.',cta:'Geef feedback',action:"openProject('p4')",tag:'deze week',urgent:false,icon:'st_feedback'},
   {br:'orange',cat:'Online adverteren',title:'Rapport inplannen',ctx:'Tijd om de <b>resultaten van je campagnes</b> samen te bekijken. Prik een moment dat jou past.',cta:'Plan in',action:"goTab('meetings')",tag:'mei',urgent:false,icon:'st_plan'},
@@ -3538,6 +3539,12 @@ function panelInstellingen(){
       +'<h2 style="font-family:var(--font-display);font-size:15px;margin:0 0 4px">Team \u00b7 versiebeheer</h2>'
       +'<p class="sdesc" style="margin:0 0 12px">Duwt de versie van dit scherm als minimum naar \u00e1lle klanten en teamleden \u2014 ook ge\u00efnstalleerde apps herladen automatisch (binnen \u00b15 minuten of meteen bij openen).</p>'
       +'<button class="btn btn-primary btn-sm" onclick="pushPortalVersion(this)">'+ic('send',14)+' Push versie '+(window.APP_VERSION||'?')+' naar iedereen</button>'
+      +'<div style="border-top:1px dashed var(--line);margin:16px 0 12px"></div>'
+      +'<h2 style="font-family:var(--font-display);font-size:15px;margin:0 0 4px">Team \u00b7 facturatie-notitie</h2>'
+      +'<p class="sdesc" style="margin:0 0 10px">Interne notitie voor Celien over dit bedrijf \u2014 nooit zichtbaar voor de klant.</p>'
+      +'<textarea id="factNote" class="mp-note" rows="3" placeholder="Laden\u2026" onfocus="if(!this._l){this._l=1;}"></textarea>'
+      +'<div style="margin-top:8px"><button class="btn btn-outline btn-sm" onclick="factNoteSave(this)">'+ic('check',14)+' Opslaan</button></div>'
+      +(setTimeout(function(){ if(typeof factNoteLaad==='function') factNoteLaad(); },150),'')
       +'</section>'
     : '';
   const t=(window.S27DATA && S27DATA.team())||{};

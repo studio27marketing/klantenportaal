@@ -94,6 +94,18 @@
     return (S().bedrijfsnaam) || 'je bedrijf';
   };
 
+  /* ---- taaknaam-normalisatie (WS-6): interne ruis weg uit klant-zichtbare namen.
+     CONSERVATIEF: enkel duidelijke interne markeringen; ClickUp-namen blijven onaangetast. ---- */
+  function cleanTaakNaam(raw){
+    var s=String(raw||'');
+    s=s.replace(/^\s*INTERN:\s*/i,'');                          // 'INTERN: ...'-prefix
+    s=s.replace(/^\s*\[[^\]]{1,24}\]\s*/,'');                // '[code] ...'-prefix
+    s=s.replace(/\s*[-–·]\s*feedback\s*ronde\s*\d+\s*$/i,''); // '- feedback ronde 2'-suffix
+    s=s.replace(/\s{2,}/g,' ').trim();
+    return s||String(raw||'');
+  }
+  DATA.cleanTaakNaam=cleanTaakNaam;
+
   /* ---- deliverables_raw → [{label,url,type}] (regex-URLs, zoals dashboard.js) ---- */
   function urlType(u){
     if(/youtu|vimeo/.test(u)) return 'video';
@@ -255,7 +267,7 @@
       var st = DATA.status(p.status);
       var deliv = st.key==='wait' || !!p.feedback_link;
       var lc = p.last_chat ? { tekst:String(p.last_chat.tekst||''), ts:Number(p.last_chat.ts)||0, wacht:!!p.chat_wacht_op_klant } : (p.chat_wacht_op_klant ? { tekst:'', ts:0, wacht:true } : null);
-      return { id:p.task_id, name:p.naam, br:br.br, disc:br.label, discId:p.discipline, labels:mapLabels(p), status:st.key, deliv:deliv, sae:mapSae(p.sae), lastChat:lc, planItems:(p.plan_items||[]), actiesTodo:Number(p.acties_todo)||0, dateCreated:Number(p.date_created)||0, _raw:p };
+      return { id:p.task_id, name:cleanTaakNaam(p.naam), br:br.br, disc:br.label, discId:p.discipline, labels:mapLabels(p), status:st.key, deliv:deliv, sae:mapSae(p.sae), lastChat:lc, planItems:(p.plan_items||[]), actiesTodo:Number(p.acties_todo)||0, dateCreated:Number(p.date_created)||0, _raw:p };
     });
   };
 
@@ -263,6 +275,14 @@
   DATA.cockpit = function(){
     var raw = projList(); if(!raw) return null;
     var out=[];
+    // WS-1: open supportvragen bovenaan zichtbaar maken (1 kaart met teller)
+    var supOpen=raw.filter(function(p){ return p.discipline==='support' && !isAfgerond(p.status); }).length;
+    if(supOpen){
+      out.push({ br:'indigo', cat:'Support', nid:'sup-open',
+        title: supOpen===1?'1 open supportvraag':(supOpen+' open supportvragen'),
+        ctx:'Volg de status of chat rechtstreeks met het team.',
+        cta:'Bekijk je vragen', action:"goSupport()", urgent:false, icon:'msg' });
+    }
     raw.forEach(function(p){
       var isAds=(p.discipline==='ads');
       // Ads: enkel een actiepunt tonen als er écht iets van de klant gevraagd wordt (rapport/meeting inplannen
@@ -340,7 +360,7 @@
     var subs = (d.taken||[]).map(function(t){
       var best = taakBestanden(t);
       var heeft = (t.heeft_bestanden===true || t.heeft_bestanden==='true') || best.length>0;
-      return { id:t.task_id, naam:t.naam, status:DATA.status(t.status).key, statusRaw:t.status, statusColor:t.status_color,
+      return { id:t.task_id, naam:cleanTaakNaam(t.naam), status:DATA.status(t.status).key, statusRaw:t.status, statusColor:t.status_color,
         datum:t.datum, startDate:t.start_date, typeJob:(t.type_job===''||t.type_job==null)?null:Number(t.type_job),
         locatie:t.locatie||'', timeEstimate:Number(t.time_estimate)||0, fbRondes:(t.fb_rondes||[]),
         link:t.link||t.url, heeftBestanden:heeft, bestanden:best };

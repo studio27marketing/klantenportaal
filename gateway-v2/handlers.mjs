@@ -944,6 +944,7 @@ export function buildProces(rootTask, descendants) {
       task_id: str(s.id),
       naam: str(s.name),
       discipline: disciplineOf(s),
+      type_job: (function(){ const n = Number(getCF(s, FIELD.typeJob)); return Number.isFinite(n) ? n : null; })(),
       staat,
       status_label: st.label,
       pct: st.pct,
@@ -1797,6 +1798,7 @@ export async function dashboard(bedrijfId, body, env) {
       discipline,
       labels,
       acties_todo: actiesTodo,
+      is_ticket: str((t.list && t.list.id) || '') === TICKET_LIST,
       date_created: Number(t.date_created) || 0,                                                 // [discipline,...] -> meerdere chips naast de hoofdtaak
       status: st.key,
       status_label: st.label,
@@ -2171,7 +2173,11 @@ export async function chatPost(bedrijfId, body, env) {
     return { status: 403, body: { ok: false, error: 'scope_mismatch', message: 'Geen toegang tot deze taak.' } };
   }
   const commentBody = `💬 [Klant: ${klantNaam}]\n\n${commentText}`;
-  const r = await cu.comment(env, taskId, commentBody, true);
+  // WS-3a: comment gericht toewijzen aan wie de taak uitvoert (eerste assignee) zodat het
+  // bericht nooit in een algemene mailbox verdwijnt; geen assignee -> notify_all als vangnet.
+  const _as = (Array.isArray(task.assignees) ? task.assignees : []).filter(Boolean);
+  const _assignee = _as.length ? Number(_as[0].id) : null;
+  const r = await cu.comment(env, taskId, commentBody, !_assignee, _assignee);
   if (!r.ok) {
     return { status: 500, body: { ok: false, message: 'Bericht kon niet geplaatst worden - probeer het opnieuw.' } };
   }
@@ -2314,6 +2320,74 @@ export async function directMessage(bedrijfId, body, env) {
   };
 }
 
+/* ---- bugReport (WRITE, team-only): portaal-bugs/feedback van het team -> bugs-lijst --- */
+export const BUGS_LIST = '901523867681';   // 'Portaal — Bugs & Feedback' (geen bedrijf-relatie = klant-onzichtbaar)
+export async function bugReport(bedrijfId, body, env) {
+  if (!(body && body.__staff === true)) {
+    return { status: 403, body: { ok: false, message: 'Alleen voor het Studio 27-team.' } };
+  }
+  const titel = str(body && body.titel).trim().slice(0, 140);
+  const omschrijving = str(body && body.omschrijving).trim().slice(0, 6000);
+  const context = str(body && body.context).slice(0, 300);
+  const melder = str(body && body.account_email);
+  if (!titel && !omschrijving) return { status: 400, body: { ok: false, message: 'Beschrijf eerst even de bug of feedback.' } };
+  let created;
+  try {
+    created = await cu.post(env, `/list/${BUGS_LIST}/task`, {
+      name: `🐞 ${titel || omschrijving.slice(0, 80)}`,
+      description: [
+        'PORTAAL-FEEDBACK (via de 🐞-knop in de team-weergave)', '',
+        melder ? `Gemeld door: ${melder}` : '',
+        context ? `Pagina/context: ${context}` : '',
+        '', omschrijving || '(geen omschrijving)',
+      ].filter((x) => x !== '').join('\n'),
+      notify_all: false,
+    });
+  } catch (e) { created = null; }
+  if (!created || !created.ok || !created.data || !created.data.id) {
+    return { status: 502, body: { ok: false, message: 'De melding kon niet opgeslagen worden — probeer zo opnieuw.' } };
+  }
+  const bugId = str(created.data.id);
+  // optionele screenshot/bijlage (zelfde caps als tickets)
+  let attached = false;
+  if (body && body.file_data && str(body.filename)) {
+    const fname = str(body.filename).replace(/[^\w. ()-]/g, '').slice(0, 140);
+    const b64 = str(body.file_data);
+    if (b64.length <= 31 * 1024 * 1024) {
+      try {
+        const bin = atob(b64.replace(/^data:[^;]+;base64,/, '').replace(/\s+/g, ''));
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        if (bytes.length && bytes.length <= 22 * 1024 * 1024) {
+          const up = await cu.uploadAttachment(env, bugId, bytes, fname || 'screenshot.png');
+          attached = !!(up && up.ok);
+        }
+      } catch (e) { /* bijlage best-effort */ }
+    }
+  }
+  return { status: 200, body: { ok: true, bug_id: bugId, attached } };
+}
+
+/* ---- facturatieNotitie (team-only): interne notitie voor Celien op de bedrijf-taak --- */
+// Gebruikt het bestaande interne veld 'Facturatie opmerking' (42a0fd8e, hide_from_guests)
+// op BEDRIJFS-niveau. Nooit in een klant-payload — enkel via dit staff-endpoint.
+export async function facturatieNotitie(bedrijfId, body, env) {
+  if (!(body && body.__staff === true)) {
+    return { status: 403, body: { ok: false, message: 'Alleen voor het Studio 27-team.' } };
+  }
+  const bid = cleanId(bedrijfId);
+  if (!bid) return { status: 400, body: { ok: false } };
+  if (str(body && body.actie) === 'set') {
+    const note = str(body && body.notitie).slice(0, 2000);
+    const w = await cu.field(env, bid, FIELD.factuurNote, note).catch(() => ({ ok: false }));
+    if (!w || !w.ok) return { status: 502, body: { ok: false, message: 'Opslaan lukte niet — probeer zo opnieuw.' } };
+    return { status: 200, body: { ok: true, notitie: note } };
+  }
+  const br = await cu.get(env, `/task/${bid}`);
+  const note = (br.ok && br.data) ? str(getCF(br.data, FIELD.factuurNote)) : '';
+  return { status: 200, body: { ok: true, notitie: note } };
+}
+
 /* ---- portalVersionPush (WRITE, team-only): forceer de portaal-versie bij iedereen --- */
 // Zet het serverbrede versienummer; elke client (ook PWA) checkt dit bij openen/focus en
 // elke 5 minuten, en herlaadt zichzelf hard (caches leeg) zodra het hoger is dan zijn eigen
@@ -2406,8 +2480,12 @@ export async function feedbackV2(bedrijfId, body, env) {
     'het portaal';
   const opmerkingen = (deliverables.map((d) => str(d && d.opmerking)).join(' • ').trim()) || algemene_opmerking || '';
 
-  const tr = await cu.get(env, `/task/${taskId}?include_subtasks=false`);
+  const tr = await cu.get(env, `/task/${taskId}?include_subtasks=true`);
   const task = tr.ok && tr.data ? tr.data : { list: { id: '' }, custom_fields: [] };
+  // rondenummer = hoogste bestaande ronde + 1 (was hardcoded 'ronde 1'; max() i.p.v. count
+  // zodat een ooit-ontbrekende gesloten subtaak nooit tot een hergebruikt nummer leidt)
+  const _ronde = (Array.isArray(task.subtasks) ? task.subtasks : [])
+    .reduce((hi, s) => { const m = str(s && s.name).match(/^Feedback ronde (\d+)/i); return m ? Math.max(hi, Number(m[1])) : hi; }, 0) + 1;
   const sc = scopeCheckTask(task, bedrijfId, SCOPE_FAIL_CLOSED.write);
   if (!sc.ok) {
     return { status: 403, body: { ok: false, error: 'scope_mismatch', message: 'Geen toegang tot deze taak.' } };
@@ -2418,7 +2496,7 @@ export async function feedbackV2(bedrijfId, body, env) {
   const listId = task.list && task.list.id;
   if (feedback > 0 && listId) {
     writes.push(cu.post(env, `/list/${listId}/task`, {
-      name: `Feedback ronde 1 - ${klant_naam}`,
+      name: `Feedback ronde ${_ronde} - ${klant_naam}`,
       content:
         `Feedbackronde ingediend via klantportaal.\n\nGoedgekeurd: ${approved}/${total}\nFeedback: ${feedback}/${total}` +
         (feedbackSummary ? `\n\nDeliverables met feedback: ${feedbackSummary}` : '') +
@@ -2434,7 +2512,7 @@ export async function feedbackV2(bedrijfId, body, env) {
   }
   // (c) altijd een klant-comment
   const comment =
-    `💬 [Klant: ${klant_naam}]\n\nFeedback ronde 1 ingediend via klantportaal.\n\n` +
+    `💬 [Klant: ${klant_naam}]\n\nFeedback ronde ${_ronde} ingediend via klantportaal.\n\n` +
     `Goedgekeurd: ${approved}/${total}\nFeedback: ${feedback}/${total}\n\n` +
     (allApproved
       ? '✅ Alles goedgekeurd - status automatisch op goedgekeurd gezet.'
@@ -5429,6 +5507,17 @@ export async function ticketCreate(bedrijfId, body, env) {
     }
   }
 
+  // WS-2 sales-reflex: een supportvraag die naar verkoop ruikt, krijgt een zichtbaar
+  // signaal + gerichte Arne-ping. Nooit blokkeren of automatisch converteren.
+  try {
+    const salesTekst = (onderwerp + ' ' + omschrijving).toLowerCase();
+    if (/\b(prijs|prijzen|offerte|wat kost|hoeveel kost|kostprijs|nieuwe? (website|webshop|site|pagina)|extra pagina'?s?|uitbreiding|uitbreiden|vernieuwen|redesign|herwerken)\b/.test(salesTekst)) {
+      await cu.comment(env, taskId,
+        `[INTERN] 🔎 → mogelijk verkoop: deze supportvraag lijkt een offerte-/salesvraag. Arne, kijk even mee — mogelijk hoort dit in de offerte-flow i.p.v. gratis support.`,
+        false, Number(DM_ONTVANGERS.arne.id));
+    }
+  } catch (e) { /* signaal is best-effort */ }
+
   // (4) briefing als KLANT-chatbericht ('💬 ['-prefix = klant-bubble in de projectdetail-chat,
   //     zelfde formaat als chatPost) + gerichte assignee-notificatie voor Klaas (Inbox + push).
   //     Eén comment, geen apart team-bericht — anders zou chat_wacht_op_klant meteen true zijn.
@@ -5687,6 +5776,8 @@ export const WRITE_HANDLERS = {
   ticketCreate,
   contactVraag,
   portalVersionPush,
+  bugReport,
+  facturatieNotitie,
   // Extra bijlage(n) op een supportticket (1 bestand per call; scope = Tickets-lijst + eigen bedrijf).
   ticketAttach,
 };
