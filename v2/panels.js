@@ -3532,6 +3532,14 @@ function contactFormHTML(c){
 }
 function panelInstellingen(){
   const demo=!_live();
+  // team-beheer (alleen Studio 27): nieuwe portaal-versie hard doorduwen naar alle clients
+  const beheer=(state&&state.adminMode)
+    ? '<section class="card" style="padding:18px 20px;margin-bottom:18px;border-left:4px solid var(--s27-blue)">'
+      +'<h2 style="font-family:var(--font-display);font-size:15px;margin:0 0 4px">Team \u00b7 versiebeheer</h2>'
+      +'<p class="sdesc" style="margin:0 0 12px">Duwt de versie van dit scherm als minimum naar \u00e1lle klanten en teamleden \u2014 ook ge\u00efnstalleerde apps herladen automatisch (binnen \u00b15 minuten of meteen bij openen).</p>'
+      +'<button class="btn btn-primary btn-sm" onclick="pushPortalVersion(this)">'+ic('send',14)+' Push versie '+(window.APP_VERSION||'?')+' naar iedereen</button>'
+      +'</section>'
+    : '';
   const t=(window.S27DATA && S27DATA.team())||{};
   let contacts=(t.contactpersonen||[]).slice();
   const demoContacts=[{voornaam:'Sarah',achternaam:'Janssens',rol:'Marketing · hoofdcontact',gsm:'+32 478 12 34 56',email:'sarah@testclient.be',voorkeur:'WhatsApp',kanalen:['whatsapp','push'],id:'demo1'},{voornaam:'Tom',achternaam:'De Cock',rol:'Zaakvoerder',email:'tom@testclient.be',kanalen:['email'],id:'demo2'}];
@@ -3543,7 +3551,7 @@ function panelInstellingen(){
   if(me){ contacts=[me].concat(contacts.filter(function(x){return x!==me;})); }
   const prof = demo ? (contacts[0]||{}) : (me||{}); const vk = prof.voorkeur||'Geen';  // enkel het ingelogde contact, geen terugval op een willekeurig contact
   const contactsHTML = contacts.length ? contacts.map(function(x){return contactRow(x, x===me);}).join('') : '<div class="fs" style="color:var(--ink-4)">Nog geen contactpersonen toegevoegd, voeg je eerste collega toe.</div>';
-  return `<div class="setsec">
+  return beheer+`<div class="setsec">
       <h3>Mijn profiel &amp; notificaties</h3><p class="sdesc">Je eigen gegevens, wijzigingen synchroniseren meteen met je contactfiche bij Studio&nbsp;27.</p>
       <input type="hidden" id="npProfileId" value="${esc(prof.id||'')}">
       <div class="set-grid">

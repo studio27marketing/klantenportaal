@@ -2028,6 +2028,59 @@ function shootSlotList(ctx){const dur=shootEffDur(ctx),out=[];for(let h=8;h+dur<
 function shootFormatDate(ds){const d=new Date(ds);return d.getDate()+' '+SHOOT_MONTHS[d.getMonth()]+' '+d.getFullYear();}
 function shootStepBar(active){return '<div class="shoot-steps">'+['Wanneer','Details'].map((s,i)=>{const cls=(i+1===active)?'active':((i+1<active)?'done':'');return '<span class="shoot-step '+cls+'"><b>'+(i+1)+'</b> '+s+'</span>';}).join('')+'</div>';}
 
+/* ---- Versie-bewaking (Y): gegarandeerd iedereen op de nieuwste versie ---- */
+// Eigen versie zelf-detecterend uit de portal.js-script-tag (?v=N) — geen extra bump-plek.
+var APP_VERSION = (function(){
+  try{
+    var s=document.querySelector('script[src*="portal.js?v="]');
+    var m=s&&s.src.match(/[?&]v=(\d+)/);
+    return m?Number(m[1]):0;
+  }catch(e){ return 0; }
+})();
+// Check bij boot, bij terugkeer naar de app (PWA!) en elke 5 minuten. Hoger servernummer =
+// caches leeg + harde herlaad. Loop-guard: max één poging per gepushte versie per sessie
+// (anders zou een te vroege push — vóór de Pages-deploy — eindeloos herladen).
+async function checkPortalVersion(){
+  if(!APP_VERSION) return;
+  var now=Date.now();
+  if(state._verLastCheck && (now-state._verLastCheck)<45000) return;   // throttle
+  state._verLastCheck=now;
+  var v=0;
+  try{
+    var r=await fetch(GATEWAY_BASE+'/portalversion',{cache:'no-store'});
+    var d=await r.json(); v=Number(d&&d.v)||0;
+  }catch(e){ return; }
+  if(v>APP_VERSION) forcePortalUpdate(v);
+}
+async function forcePortalUpdate(target){
+  // dubbele loop-guard: sessionStorage + in-memory (private-mode/PWA kan storage weigeren)
+  window._verTried=window._verTried||{};
+  if(window._verTried[target]) return;
+  window._verTried[target]=1;
+  var k='s27_verupd_'+target;
+  try{ if(sessionStorage.getItem(k)) return; sessionStorage.setItem(k,'1'); }catch(e){}
+  try{ if(navigator.serviceWorker&&navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage({type:'FLUSH'}); }catch(e){}
+  try{ var keys=await caches.keys(); await Promise.all(keys.map(function(x){return caches.delete(x);})); }catch(e){}
+  try{ var reg=await navigator.serviceWorker.getRegistration(); if(reg) await reg.update(); }catch(e){}
+  setTimeout(function(){ location.reload(); }, 350);
+}
+function startVersionWatch(){
+  setTimeout(checkPortalVersion, 4000);                                 // na de boot, niet blokkerend
+  setInterval(checkPortalVersion, 300000);                              // elke 5 minuten
+  document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible') checkPortalVersion(); });
+}
+startVersionWatch();
+// Team-knop (Instellingen): duw de versie van DEZE client als minimum naar iedereen.
+async function pushPortalVersion(btn){
+  if(!APP_VERSION){ alert('Versienummer niet detecteerbaar.'); return; }
+  if(!confirm('Versie '+APP_VERSION+' nu hard doorduwen naar alle klanten en teamleden? Iedereen herlaadt automatisch (open formulieren kunnen daarbij verloren gaan).')) return;
+  btn.disabled=true; btn.textContent='Pushen\u2026';
+  var res; try{ res=await api(ENDPOINTS.portalVersionPush,{version:APP_VERSION}); }catch(e){ res=null; }
+  var d=(res&&res.data)||{};
+  btn.disabled=false; btn.innerHTML=ic('send',14)+' Push versie '+APP_VERSION+' naar iedereen';
+  alert(d.message||((res&&res.ok)?'Versie gepusht.':'Pushen lukte niet \u2014 probeer zo opnieuw.'));
+}
+
 /* ---- Contact (W): één blauwe knop, drie ingangen ---- */
 function goContact(){
   state.viewMode='contact';

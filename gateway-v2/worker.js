@@ -539,6 +539,15 @@ export default {
       if (_pub === 'videostream' && request.method === 'GET') {
         return vr.handleVideoStream(request, env);
       }
+      if (_pub === 'portalversion' && request.method === 'GET') {
+        // publiek: enkel een versienummer (geen data) — clients pollen dit om een door het
+        // team gepushte versie geforceerd op te halen, ook in geïnstalleerde PWA's.
+        let v = 0;
+        try { v = Number(await env.KV.get('portal:version')) || 0; } catch (e) { v = 0; }
+        return new Response(JSON.stringify({ v }), {
+          headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*' },
+        });
+      }
       if (_pub === 'fotostream' && request.method === 'GET') {
         return vr.handleFotoStream(request, env);
       }

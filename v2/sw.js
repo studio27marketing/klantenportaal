@@ -6,12 +6,14 @@
    - Alleen GET + same-origin. API (POST naar de worker) en Firebase/cross-origin gaan
      ongemoeid naar het netwerk, zodat auth en live data nooit door de SW worden geraakt.
    Cachenaam draagt de frontend-versie; bump dit bij een nieuwe release (samen met ?v=). */
-var CACHE = 's27-portaal-v77';
+var CACHE = 's27-portaal-v78';
+// SHELL volgt automatisch de CACHE-versie (geen aparte bump-plek meer)
+var V = (CACHE.split('-v')[1] || '0');
 var SHELL = [
   '/', '/index.html', '/manifest.json',
-  '/styles.css?v=69', '/glass.css?v=69', '/tweaks.css?v=69', '/video-review.css?v=69',
-  '/api.js?v=69', '/data.js?v=69', '/assets-data.js?v=69', '/catalog-data.js?v=69',
-  '/panels.js?v=69', '/portal.js?v=69', '/tweaks.js?v=69', '/video-review.js?v=69', '/auth.js',
+  '/styles.css?v=' + V, '/glass.css?v=' + V, '/tweaks.css?v=' + V, '/video-review.css?v=' + V,
+  '/api.js?v=' + V, '/data.js?v=' + V, '/assets-data.js?v=' + V, '/catalog-data.js?v=' + V,
+  '/panels.js?v=' + V, '/portal.js?v=' + V, '/tweaks.js?v=' + V, '/video-review.js?v=' + V, '/auth.js',
   '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png'
 ];
 
@@ -93,4 +95,15 @@ self.addEventListener('notificationclick', function (e) {
       if (self.clients.openWindow) return self.clients.openWindow(url);
     })
   );
+});
+
+
+// Geforceerde versie-push: het portaal stuurt FLUSH bij een hogere serverversie -> alle
+// caches weg, zodat de eerstvolgende load gegarandeerd vers van het netwerk komt.
+self.addEventListener('message', function (e) {
+  if (e.data && e.data.type === 'FLUSH') {
+    e.waitUntil(caches.keys().then(function (keys) {
+      return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+    }));
+  }
 });

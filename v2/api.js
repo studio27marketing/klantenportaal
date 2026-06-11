@@ -136,6 +136,7 @@ const ENDPOINTS = {
   fotoList:          GATEWAY_BASE + '/fotoList',      // fotogalerij: bestanden van de gedeelde Drive-map
   fotoApprove:       GATEWAY_BASE + '/fotoApprove',   // fotoreeks goedkeuren
   contactVraag:      GATEWAY_BASE + '/contactVraag',  // algemene vraag -> mail/taak naar Ilke
+  portalVersionPush: GATEWAY_BASE + '/portalVersionPush', // team: versie hard doorduwen naar alle clients
   // Meeting-tunnel: taskloze Google-Calendar-boeking + invite (Algemene meeting/Projectmeeting/Nieuw project).
   // { host_email, host_naam, start, eind, start_ms, online, titel, beschrijving, locatie, client_email, client_naam, project_task_id?, project_naam?, intake?, when_label? }
   //   -> { ok, event_id, meet_link, html_link }. Muteert GEEN project-due_date; host moet @studio27.be zijn.

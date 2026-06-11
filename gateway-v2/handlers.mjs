@@ -2314,6 +2314,24 @@ export async function directMessage(bedrijfId, body, env) {
   };
 }
 
+/* ---- portalVersionPush (WRITE, team-only): forceer de portaal-versie bij iedereen --- */
+// Zet het serverbrede versienummer; elke client (ook PWA) checkt dit bij openen/focus en
+// elke 5 minuten, en herlaadt zichzelf hard (caches leeg) zodra het hoger is dan zijn eigen
+// versie. Enkel team (server-side __staff-vlag) mag pushen; nooit omlaag.
+export async function portalVersionPush(bedrijfId, body, env) {
+  if (!(body && body.__staff === true)) {
+    return { status: 403, body: { ok: false, message: 'Alleen het Studio 27-team kan een versie pushen.' } };
+  }
+  const v = Math.round(Number(body && body.version)) || 0;
+  if (!v || v < 1 || v > 100000) return { status: 400, body: { ok: false, message: 'Ongeldig versienummer.' } };
+  let cur = 0;
+  try { cur = Number(await env.KV.get('portal:version')) || 0; } catch (e) { cur = 0; }
+  if (v < cur) return { status: 200, body: { ok: false, message: `Er staat al een nieuwere versie (v${cur}) gepusht.` , huidige: cur } };
+  try { await env.KV.put('portal:version', String(v)); }
+  catch (e) { return { status: 502, body: { ok: false, message: 'Opslaan lukte niet — probeer zo opnieuw.' } }; }
+  return { status: 200, body: { ok: true, versie: v, message: `Versie ${v} wordt nu bij iedereen doorgeduwd (binnen ~5 minuten, of meteen bij het openen van de app).` } };
+}
+
 /* ---- contactVraag (WRITE): algemene vraag uit de Contact-pagina ----------- */
 // Probeert een e-mail naar ilke@studio27.be te sturen via de service account (DWD,
 // subject marketing@studio27.be, scope gmail.send). Is die scope (nog) niet
@@ -5668,6 +5686,7 @@ export const WRITE_HANDLERS = {
   // Website-supportticket: taak in TICKET_LIST (Klaas) + Bedrijf/Contact-relatie + TYPE JOB Support.
   ticketCreate,
   contactVraag,
+  portalVersionPush,
   // Extra bijlage(n) op een supportticket (1 bestand per call; scope = Tickets-lijst + eigen bedrijf).
   ticketAttach,
 };
