@@ -1387,6 +1387,9 @@ export function bustCache(env, ctx, bedrijfId) {
 
 /* ---- projectDetailV2 ----------------------------------------------------- */
 export async function projectDetailV2(bedrijfId, body, env) {
+  // perf (W): de bedrijfsboom alvast parallel met de taak-GET ophalen — scope-check gebeurt
+  // op de taak vóór de boom gebruikt wordt, dus dit lekt niets bij een geweigerde aanvraag.
+  const _treeP = fetchBedrijfTree(env, bedrijfId).catch(() => null);
   const taskId = cleanId(body && body.task_id);
   if (!taskId) {
     // geen task_id -> skeleton (200, 1:1 Make Resume-stijl), nooit 5xx
@@ -1432,7 +1435,8 @@ export async function projectDetailV2(bedrijfId, body, env) {
   let proces = { aantal_stappen: 0, opgeleverd: [], wacht_feedback: [], in_productie: [], te_doen: [], loopt: { aantal: 0, disciplines: [] }, links: [], meeting: { gepland: false, naam: '', task_id: '' }, acties: [] };
   let plan = { items: [] };
   try {
-    const tree = await fetchBedrijfTree(env, bedrijfId);
+    const tree = await _treeP;
+    if (!tree) throw new Error('tree_unavailable');
     const desc = descendantsOf(taskId, tree.childrenByParent);
     proces = buildProces(task, desc);
     plan = buildPlan(task, desc);
@@ -2308,6 +2312,62 @@ export async function directMessage(bedrijfId, body, env) {
       sent_at: nowISO(),
     },
   };
+}
+
+/* ---- contactVraag (WRITE): algemene vraag uit de Contact-pagina ----------- */
+// Probeert een e-mail naar ilke@studio27.be te sturen via de service account (DWD,
+// subject marketing@studio27.be, scope gmail.send). Is die scope (nog) niet
+// geautoriseerd in de Google-Admin-console, dan valt hij geruisloos terug op een
+// ClickUp-taak aan Ilke (bewezen kanaal: push + inbox). Respons meldt de route.
+const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
+const GMAIL_SUBJECT = 'marketing@studio27.be';
+const CONTACT_TO = 'ilke@studio27.be';
+export async function contactVraag(bedrijfId, body, env) {
+  const onderwerp = str(body && body.onderwerp).trim().slice(0, 140);
+  const bericht = str(body && body.bericht).trim().slice(0, 4000);
+  const klantNaam = str(body && body.klant_naam).trim().slice(0, 120);
+  const accountEmail = str(body && body.account_email);   // server-side geïnjecteerd (worker.js)
+  if (!bericht) return { status: 400, body: { ok: false, message: 'Schrijf eerst even je vraag.' } };
+
+  // (1) e-mail-poging
+  let mailOk = false;
+  try {
+    const token = await mintGoogleToken(env, GMAIL_SUBJECT, GMAIL_SCOPE);
+    const subj = `[Portaal] ${klantNaam || 'Klant'}: ${onderwerp || 'Algemene vraag'}`;
+    // RFC2047-encoding voor niet-ASCII in de subject-regel
+    const encSubj = `=?UTF-8?B?${btoa(unescape(encodeURIComponent(subj)))}?=`;
+    const raw = [
+      `To: ${CONTACT_TO}`,
+      accountEmail ? `Reply-To: ${accountEmail}` : '',
+      `Subject: ${encSubj}`,
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      `Vraag via het klantenportaal`,
+      `Van: ${klantNaam || 'onbekend'}${accountEmail ? ` (${accountEmail})` : ''}`,
+      `Bedrijf-taak: https://app.clickup.com/t/${bedrijfId}`,
+      '',
+      bericht,
+    ].filter((l) => l !== '').join('\r\n');
+    const b64 = btoa(unescape(encodeURIComponent(raw))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const r = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw: b64 }),
+    });
+    mailOk = r.ok;
+  } catch (e) { mailOk = false; }
+
+  // (2) vangnet (of bewuste dubbel-bezorging uit) — bij mail-falen: ClickUp-taak aan Ilke
+  if (!mailOk) {
+    const res = await directMessage(bedrijfId, {
+      klant_naam: klantNaam, onderwerp: onderwerp || 'Algemene vraag via Contact',
+      bericht: bericht + (accountEmail ? `\n\nAntwoorden kan naar: ${accountEmail}` : ''),
+      type: 'vraag', ontvanger: 'ilke',
+    }, env);
+    const ok = res && res.body && res.body.ok;
+    return { status: ok ? 200 : 502, body: { ok: !!ok, via: 'clickup', message: ok ? 'Je vraag is bezorgd — Ilke neemt ze snel op.' : 'Versturen lukte net niet, probeer zo opnieuw.' } };
+  }
+  return { status: 200, body: { ok: true, via: 'mail', message: 'Je vraag is gemaild naar Ilke — je hoort snel van ons.' } };
 }
 
 /* ---- feedbackV2 (GET scope + tot 3 voorwaardelijke best-effort writes) --- */
@@ -5607,6 +5667,7 @@ export const WRITE_HANDLERS = {
   meetingBook,
   // Website-supportticket: taak in TICKET_LIST (Klaas) + Bedrijf/Contact-relatie + TYPE JOB Support.
   ticketCreate,
+  contactVraag,
   // Extra bijlage(n) op een supportticket (1 bestand per call; scope = Tickets-lijst + eigen bedrijf).
   ticketAttach,
 };

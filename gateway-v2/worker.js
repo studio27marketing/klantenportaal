@@ -131,7 +131,7 @@ const MAKE_ENDPOINTS = {
 
 // Strengere limiet voor schrijf-/upload-acties; ruimer voor leesacties.
 const SENSITIVE = new Set([
-  'shootPlaces',
+  'shootPlaces', 'contactVraag',
   'uploadProject', 'uploadAlg', 'bedrijfUpload', 'huisstijlUpload', 'huisstijlDelete',
   'chatAttachment', 'chatPost', 'commsChatPost', 'commsChatAttachment', 'directMessage', 'feedbackV2', 'newProjectIntake',
   'facturatieSave', 'projectFacturatieSave', 'bedrijfVoorkeuren', 'bedrijfContact',
@@ -418,15 +418,17 @@ async function handlePerfReport(request, env) {
 /* ---- ROUTER-SHIM: directe ClickUp-handlers vóór de Make-forward ---------- */
 // Geeft een Response terug als het pad geport is; anders null (→ val door naar Make).
 async function tryHandle(path, bedrijfId, body, claims, env, ctx, ch, noCache) {
-  // TEAM (staff/acting-as): stale-while-revalidate toegestaan -> klant-wissel voelt instant,
-  // data kan tot 5 min achterlopen (alleen voor het team; klanten blijven vers laden).
-  const swr = !!(claims && claims.is_staff === true);
+  // SWR voor IEDEREEN (Vincent 2026-06-11: laadsnelheid = hoogste prioriteit, team én klant):
+  // <60s = vers uit cache, 60s-5min = direct serveren + stil op de achtergrond verversen.
+  const swr = true;
   // READS (met KV-cache voor dashboard/bedrijfContent)
   if (READ_HANDLERS[path]) {
-    const cacheable = (path === 'dashboard' || path === 'bedrijfContent' || path === 'metricoolPostStats');
+    const cacheable = (path === 'dashboard' || path === 'bedrijfContent' || path === 'metricoolPostStats' || path === 'projectDetailV2');
     const run = () => READ_HANDLERS[path](bedrijfId, body, env);
+    // detail-cache per project: task_id in de cache-key (anders delen alle projecten één entry)
+    const ckey = (path === 'projectDetailV2') ? (path + ':' + String((body && body.task_id) || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32)) : path;
     const res = cacheable
-      ? await withCache(env, ctx, path, bedrijfId, noCache, run, swr)
+      ? await withCache(env, ctx, ckey, bedrijfId, noCache, run, swr)
       : await run();
     return json(res.body, res.status, ch);
   }
@@ -456,7 +458,7 @@ async function tryHandle(path, bedrijfId, body, claims, env, ctx, ch, noCache) {
   if (WRITE_HANDLERS[path]) {
     // ticket-paden: server-side identiteit injecteren (overschrijft client-input) zodat de handler
     // het ticket aan de juiste contactpersoon kan koppelen; claims is hier al geverifieerd.
-    if (path === 'ticketCreate' || path === 'ticketAttach') {
+    if (path === 'ticketCreate' || path === 'ticketAttach' || path === 'contactVraag') {
       body.account_email = String((claims && claims.email) || '').trim().toLowerCase();
     }
     // staff-vlag ALTIJD server-side zetten (overschrijft elke client-waarde — niet spoofbaar):

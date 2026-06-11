@@ -777,6 +777,7 @@
         try {
           if (window.state && state.viewMode === 'project' && state.activeProject && typeof openProject === 'function') {
             delete (state.data.details || {})[state.activeProject];
+            state._bustDetail = state.activeProject;
             openProject(state.activeProject, 'auto');
           }
         } catch (e) { }

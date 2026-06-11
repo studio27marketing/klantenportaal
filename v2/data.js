@@ -157,8 +157,9 @@
     return false;
   };
   DATA.loadDetail = async function(taskId){
+    var bust = (state._bustDetail && state._bustDetail===taskId); if(bust) state._bustDetail=null;
     if(!live()) return null;
-    var res = await api(ENDPOINTS.projectDetailV2, base({ task_id:taskId }));
+    var res = await api(ENDPOINTS.projectDetailV2, base({ task_id:taskId }), bust?{noCache:true}:undefined);
     var d = (res && res.ok && res.data) ? res.data : null;
     if(d && d.ok !== false){ state.data.details[taskId] = d; }
     return state.data.details[taskId] || null;

@@ -135,17 +135,28 @@ export async function videoReviewContext(bedrijfId, body, env) {
   }
 
   let video, streamUrl = null, downloadUrl = null;
+  // meta-cache (perf W): vimeo/drive-meta 7 dagen in KV — herhaald openen = geen externe roundtrip
+  const metaKey = `vrmeta:${vimeo ? 'v' + vimeo.id : 'd' + drive.id}`;
+  let cachedMeta = null;
+  try { cachedMeta = await env.KV.get(metaKey, 'json'); } catch (e) { /* leeg */ }
   if (vimeo) {
     const canonical = vimeo.hash ? `https://vimeo.com/${vimeo.id}/${vimeo.hash}` : `https://vimeo.com/${vimeo.id}`;
-    let meta = {};
-    try {
-      const oe = await fetch(`https://vimeo.com/api/oembed.json?url=${encodeURIComponent(canonical)}`, { signal: AbortSignal.timeout(5000) });
-      if (oe.ok) { const d = await oe.json(); meta = { title: d.title || null, durationSec: d.duration || null, videoWidth: d.width || null, videoHeight: d.height || null }; }
-    } catch (e) { /* speler haalt titel/duur zelf ook op */ }
+    let meta = cachedMeta || {};
+    if (!cachedMeta) {
+      try {
+        const oe = await fetch(`https://vimeo.com/api/oembed.json?url=${encodeURIComponent(canonical)}`, { signal: AbortSignal.timeout(5000) });
+        if (oe.ok) { const d = await oe.json(); meta = { title: d.title || null, durationSec: d.duration || null, videoWidth: d.width || null, videoHeight: d.height || null }; }
+        if (meta.title) await env.KV.put(metaKey, JSON.stringify(meta), { expirationTtl: 604800 }).catch(() => {});
+      } catch (e) { /* speler haalt titel/duur zelf ook op */ }
+    }
     video = { source: 'vimeo', externalId: vimeo.id, hash: vimeo.hash, url: canonical, ...meta };
   } else {
     let meta;
-    try { meta = await driveFileMeta(env, drive.id); } catch (e) { meta = { ok: false, status: 0 }; }
+    if (cachedMeta) { meta = cachedMeta; }
+    else {
+      try { meta = await driveFileMeta(env, drive.id); } catch (e) { meta = { ok: false, status: 0 }; }
+      if (meta && meta.ok) await env.KV.put(metaKey, JSON.stringify(meta), { expirationTtl: 604800 }).catch(() => {});
+    }
     if (!meta.ok) {
       return { status: 200, body: { ok: false, error: 'drive_no_access', open_url: url, message: 'Het portaal kan dit Drive-bestand niet lezen. Zet het op de gedeelde S27-Drive of deel het met portal-admin@studio27-cloud.iam.gserviceaccount.com.' } };
     }

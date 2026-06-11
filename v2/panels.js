@@ -3233,12 +3233,12 @@ function goOffertes(){ state._offTab='overzicht'; if(typeof goTab==='function') 
    (PandaDoc blijft server-side uit zolang PANDADOC_CREATE_ENABLED != 'true').
    ============================================================================= */
 const OW_TAKKEN=[
-  {key:'strategie',label:'Strategie',br:'blue',icon:'strategie',groups:['Strategie','Opleidingen'],sub:'Strategiesessies & opleidingen'},
-  {key:'branding',label:'Branding',br:'pink',icon:'branding',groups:['Branding & grafisch','Overig'],sub:'Logo, huisstijl & drukwerk'},
-  {key:'video',label:'Video- en fotografie',br:'purple',icon:'video',groups:['Content & video','Fotografie','Audio'],sub:'Shoots, montage, foto & audio'},
-  {key:'website',label:'Website en SEO',br:'green',icon:'website',groups:['Webdesign'],sub:'Website, CMS & vindbaarheid'},
-  {key:'ads',label:'Online adverteren',br:'orange',icon:'ads',groups:['Adverteren'],sub:'Meta & Google campagnes'},
-  {key:'social',label:'Social media',br:'yellow',icon:'social',groups:['Social media'],sub:'Beheer & content'},
+  {key:'strategie',label:'Strategie',br:'blue',stamp:'icon-strategie.svg',groups:['Strategie','Opleidingen'],sub:'Strategiesessies & opleidingen'},
+  {key:'branding',label:'Branding',br:'pink',stamp:'icon-branding-heart.svg',groups:['Branding & grafisch','Overig'],sub:'Logo, huisstijl & drukwerk'},
+  {key:'video',label:'Video- en fotografie',br:'purple',stamp:'icon-video-fotografie.svg',groups:['Content & video','Fotografie','Audio'],sub:'Shoots, montage, foto & audio'},
+  {key:'website',label:'Website en SEO',br:'green',stamp:'icon-webdesign.svg',groups:['Webdesign'],sub:'Website, CMS & vindbaarheid'},
+  {key:'ads',label:'Online adverteren',br:'orange',stamp:'icon-adverteren.svg',groups:['Adverteren'],sub:'Meta & Google campagnes'},
+  {key:'social',label:'Social media',br:'yellow',stamp:'icon-socialmedia.svg',groups:['Social media'],sub:'Beheer & content'},
 ];
 function owTak(){ var k=state.ow&&state.ow.takKey; for(var i=0;i<OW_TAKKEN.length;i++){ if(OW_TAKKEN[i].key===k) return OW_TAKKEN[i]; } return null; }
 function owEl(){
@@ -3279,7 +3279,7 @@ function owPickTak(k){ if(!state.ow) return; state.ow.takKey=k; state.ow.step=2;
 function owStep1(){
   return '<p class="mp-intro">Kies de tak waarin je iets wil opstarten. Daarna stel je zelf samen wat je nodig hebt — wij werken het persoonlijk uit.</p>'
     +'<div class="ow-takgrid">'+OW_TAKKEN.map(function(t){
-      return '<button class="ow-tak br-'+t.br+'" onclick="owPickTak(\''+t.key+'\')"><span class="mp-host-av" style="background:var(--s27-'+t.br+')">'+ic(t.icon,20)+'</span><span class="mp-host-tx"><b>'+esc(t.label)+'</b><span class="mp-host-tag">'+esc(t.sub)+'</span></span>'+ic('arrow',16)+'</button>';
+      return '<button class="ow-tak br-'+t.br+'" onclick="owPickTak(\''+t.key+'\')"><span class="mp-host-av ow-stamp"><img src="assets/'+t.stamp+'" width="24" height="24" alt=""></span><span class="mp-host-tx"><b>'+esc(t.label)+'</b><span class="mp-host-tag">'+esc(t.sub)+'</span></span>'+ic('arrow',16)+'</button>';
     }).join('')+'</div>';
 }
 function owProductRow(p, showGroup){

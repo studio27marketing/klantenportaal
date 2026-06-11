@@ -135,6 +135,7 @@ const ENDPOINTS = {
   shootPlaces:       GATEWAY_BASE + '/shootPlaces',   // adres-suggesties in huisstijl (key server-side)
   fotoList:          GATEWAY_BASE + '/fotoList',      // fotogalerij: bestanden van de gedeelde Drive-map
   fotoApprove:       GATEWAY_BASE + '/fotoApprove',   // fotoreeks goedkeuren
+  contactVraag:      GATEWAY_BASE + '/contactVraag',  // algemene vraag -> mail/taak naar Ilke
   // Meeting-tunnel: taskloze Google-Calendar-boeking + invite (Algemene meeting/Projectmeeting/Nieuw project).
   // { host_email, host_naam, start, eind, start_ms, online, titel, beschrijving, locatie, client_email, client_naam, project_task_id?, project_naam?, intake?, when_label? }
   //   -> { ok, event_id, meet_link, html_link }. Muteert GEEN project-due_date; host moet @studio27.be zijn.
@@ -182,8 +183,8 @@ const AUTH_JS_URL = (function(){
 /* =============================================================================
    api() / apiV2(), elke call gaat in live via de gateway (bedrijf_id server-side)
    ============================================================================= */
-async function api(url, payload){
-  if (AUTH_V2) return apiV2(url, payload);
+async function api(url, payload, opts){
+  if (AUTH_V2) return apiV2(url, payload, opts);
   try {
     const r = await fetch(url, {
       method:'POST',
@@ -213,15 +214,17 @@ function _v2Headers(token){
 
 // AUTH v2: route elke call via de Cloudflare-gateway met het Firebase ID-token.
 // bedrijf_id wordt server-side door de gateway gezet; meegestuurde session_token wordt genegeerd.
-async function apiV2(url, payload){
+async function apiV2(url, payload, opts){
   try {
     const key = ENDPOINT_KEYS[url];
     if(!key) return { ok:false, status:0, error:'onbekend endpoint: ' + url };
     const token = window.S27Auth ? await window.S27Auth.token() : null;
     if(!token){ if(state && state.session) handleSessionExpired('Niet ingelogd.'); return { ok:false, status:401 }; }
+    const h0 = _v2Headers(token);
+    if (opts && opts.noCache) h0['X-No-Cache'] = '1';   // éénmalige verse read na een write
     const r = await fetch(GATEWAY_BASE + '/' + key, {
       method:'POST',
-      headers: _v2Headers(token),
+      headers: h0,
       body: JSON.stringify(payload || {})
     });
     const t = await r.text();

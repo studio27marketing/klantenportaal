@@ -483,8 +483,6 @@ async function goTab(name){
   stopChatPoll();   // tab-wissel/modal-sluiten -> chat-poller stoppen (berichten herstart 'm hieronder)
   currentTab=name; state.viewMode='tab'; state.activeProject=null; state._metaCampaign=null; state._chatStaged=[];
   setActiveNav(name);
-  // toevoegknop in de topbar kleurt mee met de actieve tak
-  (function(){ var nb=document.getElementById('topNewBtn'); if(!nb) return; var br=(typeof TAB_BRANCH!=='undefined'&&TAB_BRANCH[name])||''; nb.className='btn btn-sm '+(br?('btn-branch br-'+br):'btn-primary'); })();
   if(!state.demoMode && needsLoad(name)) renderLoading(name);
   await ensureTabData(name);
   // video-tak met exact één actief project: meteen op dat project landen (terug-knop uit het
@@ -2030,6 +2028,56 @@ function shootSlotList(ctx){const dur=shootEffDur(ctx),out=[];for(let h=8;h+dur<
 function shootFormatDate(ds){const d=new Date(ds);return d.getDate()+' '+SHOOT_MONTHS[d.getMonth()]+' '+d.getFullYear();}
 function shootStepBar(active){return '<div class="shoot-steps">'+['Wanneer','Details'].map((s,i)=>{const cls=(i+1===active)?'active':((i+1<active)?'done':'');return '<span class="shoot-step '+cls+'"><b>'+(i+1)+'</b> '+s+'</span>';}).join('')+'</div>';}
 
+/* ---- Contact (W): één blauwe knop, drie ingangen ---- */
+function goContact(){
+  state.viewMode='contact';
+  var page=$id('page'); if(!page) return;
+  var tt=$id('topbarTitle'); if(tt) tt.textContent='Contact';
+  page.innerHTML='<div class="panel active br-blue" data-screen-label="contact"><div class="contactpage">'
+    +'<h1>Waarmee kunnen we je helpen?</h1>'
+    +'<p class="sdesc" style="margin:4px 0 22px">Kies hieronder — dan komt je vraag meteen bij de juiste persoon terecht.</p>'
+    +'<div class="contact-grid">'
+      +'<button class="contact-card br-blue" onclick="openOfferteWizard()"><span class="cc-ic">'+ic('plus',24)+'</span><b>Nieuw project</b><span>Stel zelf je project samen — wij werken de offerte persoonlijk uit.</span><span class="cc-go">Start een aanvraag '+ic('arrow',14)+'</span></button>'
+      +'<button class="contact-card br-pink" onclick="contactVraagForm()"><span class="cc-ic">'+ic('msg',24)+'</span><b>Algemene vraag</b><span>Vragen over je samenwerking, facturatie of iets anders? Ilke helpt je verder.</span><span class="cc-go">Stel je vraag '+ic('arrow',14)+'</span></button>'
+      +'<button class="contact-card br-green" onclick="openWebTicket()"><span class="cc-ic">'+ic('doc',24)+'</span><b>Website support</b><span>Een bug, aanpassing of vraag over je site? Maak een ticket met bijlagen.</span><span class="cc-go">Ticket aanmaken '+ic('arrow',14)+'</span></button>'
+    +'</div>'
+    +'<div id="contactVraagHost"></div>'
+  +'</div></div>';
+  window.scrollTo({top:0,behavior:'auto'});
+  closeSidebar(); syncUrl();
+}
+function contactVraagForm(){
+  var host=$id('contactVraagHost'); if(!host) return;
+  host.innerHTML='<div class="card contact-form">'
+    +'<h2 style="font-family:var(--font-display);font-size:17px;margin:0 0 4px">Je vraag voor Ilke</h2>'
+    +'<p class="sdesc" style="margin:0 0 14px">We bezorgen ze rechtstreeks — antwoord komt op het e-mailadres waarmee je bent ingelogd.</p>'
+    +'<label class="ms-label">Onderwerp</label>'
+    +'<input type="text" id="cvOnderwerp" class="shoot-zoek" style="margin:4px 0 12px" maxlength="140" placeholder="Waar gaat het over?">'
+    +'<label class="ms-label">Je vraag</label>'
+    +'<textarea id="cvBericht" class="mp-note" rows="5" placeholder="Vertel het ons\u2026"></textarea>'
+    +'<div class="shoot-msg" id="cvMsg"></div>'
+    +'<div style="margin-top:14px"><button class="btn btn-primary" id="cvVerstuur" onclick="contactVraagVerstuur(this)">'+ic('send',15)+' Verstuur naar Ilke</button></div>'
+  +'</div>';
+  host.scrollIntoView({behavior:'smooth',block:'start'});
+  var s=$id('cvOnderwerp'); if(s) s.focus();
+}
+async function contactVraagVerstuur(btn){
+  var ond=($id('cvOnderwerp')||{}).value||'', ber=($id('cvBericht')||{}).value||'';
+  var msg=$id('cvMsg');
+  if(!String(ber).trim()){ if(msg){msg.textContent='Schrijf eerst even je vraag.';msg.style.display='block';} return; }
+  if(state.demoMode){ var h=$id('contactVraagHost'); if(h) h.innerHTML='<div class="card contact-form" style="text-align:center"><div class="em-ic">'+ic('st_approved',46)+'</div><b style="font-family:var(--font-display)">Dit is de voorbeeldweergave</b><p class="sdesc">In je echte portaal komt je vraag rechtstreeks bij Ilke terecht.</p></div>'; return; }
+  btn.disabled=true; btn.innerHTML='Versturen\u2026';
+  var res; try{ res=await api(ENDPOINTS.contactVraag,{onderwerp:String(ond).trim(),bericht:String(ber).trim(),klant_naam:(window.S27DATA&&S27DATA.bedrijfsnaam)?S27DATA.bedrijfsnaam():''}); }catch(e){ res=null; }
+  var d=(res&&res.data)||null;
+  if(d&&d.ok){
+    var h2=$id('contactVraagHost');
+    if(h2) h2.innerHTML='<div class="card contact-form" style="text-align:center"><div class="em-ic">'+ic('st_approved',46)+'</div><b style="font-family:var(--font-display);font-size:16px">Verstuurd!</b><p class="sdesc" style="margin:6px 0 0">'+escapeHtml(d.message||'Ilke neemt je vraag snel op.')+'</p></div>';
+  } else {
+    btn.disabled=false; btn.innerHTML=ic('send',15)+' Opnieuw proberen';
+    if(msg){msg.textContent='Versturen lukte net niet \u2014 probeer zo opnieuw.';msg.style.display='block';}
+  }
+}
+
 /* ---- Fotogalerij (V): Drive-map als gepersonaliseerde galerijpagina ---- */
 async function openFotoGalerij(taskId, url){
   if(state.demoMode){
@@ -2130,7 +2178,7 @@ function openShootOverlay(tid){
 async function closeShootOverlay(){
   // terug naar het projectdetail met vers shoot-overzicht (zonet geboekt = meteen 'ingepland')
   var pid=state._shootFrom||state.activeProject;
-  if(pid){ try{ delete (state.data.details||{})[pid]; }catch(e){} openProject(pid,'auto'); }
+  if(pid){ try{ delete (state.data.details||{})[pid]; }catch(e){} state._bustDetail=pid; openProject(pid,'auto'); }
   else goTab('video');
 }
 async function openShootWizard(tid){
