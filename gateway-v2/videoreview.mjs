@@ -605,10 +605,12 @@ export async function fotoList(bedrijfId, body, env) {
   for (const f of files.slice(0, 200)) {
     // thumbnailLink is een tijdelijke lh3-link; size-parameter opschalen voor scherpe grid-weergave
     const thumb = f.thumbnailLink ? str(f.thumbnailLink).replace(/=s\d+(-c)?$/, '=s640') : '';
+    const web = f.thumbnailLink ? str(f.thumbnailLink).replace(/=s\d+(-c)?$/, '=s1600') : '';   // lightbox: snelle webresolutie via Google-CDN
     items.push({
       id: str(f.id),
       naam: str(f.name).replace(/\.[a-z0-9]{2,4}$/i, ''),
       thumb,
+      web,
       full: await signedFotoUrl(env, f.id, false),
       dl: await signedFotoUrl(env, f.id, true),
     });

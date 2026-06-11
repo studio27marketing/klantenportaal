@@ -2061,18 +2061,24 @@ function galerijHTML(){
   var g=state._gal; if(!g) return '';
   var hero=g.fotos[0]||{};
   return '<div class="gal">'
-    +'<div class="gal-toprow"><button class="gal-close" onclick="closeFotoGalerij()" aria-label="Terug naar het project">'+ic('plus',22)+'</button></div>'
+    +'<div class="gal-toprow">'
+      +(g.goedgekeurd?'<span class="gal-okpill">'+ic('check',14)+' Goedgekeurd</span>':'<button class="btn gal-approve" onclick="galApprove(this)">'+ic('check',15)+' Foto\u2019s goedkeuren</button>')
+      +(g.zip?'<a class="btn gal-dlall" href="'+escapeHtml(g.zip)+'" target="_blank" rel="noopener">'+ic('download',15)+' Alles downloaden</a>':(g.folder?'<a class="btn gal-dlall" href="'+escapeHtml(g.folder)+'" target="_blank" rel="noopener">'+ic('download',15)+' Alles downloaden</a>':''))
+      +'<button class="gal-close" onclick="closeFotoGalerij()" aria-label="Terug naar het project">'+ic('plus',22)+'</button></div>'
     +'<div class="gal-hero" style="background-image:url(\''+String(hero.thumb||hero.full||'').replace(/['"()\s\\]/g,'')+'\')"><div class="gal-hero-scrim"></div>'
-      +'<div class="gal-hero-acts">'
-        +(g.goedgekeurd?'<span class="gal-okpill">'+ic('check',14)+' Goedgekeurd</span>':'<button class="btn gal-approve" onclick="galApprove(this)">'+ic('check',15)+' Foto\u2019s goedkeuren</button>')
-        +(g.zip?'<a class="btn gal-dlall" href="'+escapeHtml(g.zip)+'" target="_blank" rel="noopener">'+ic('download',15)+' Alles downloaden</a>':(g.folder?'<a class="btn gal-dlall" href="'+escapeHtml(g.folder)+'" target="_blank" rel="noopener">'+ic('download',15)+' Alles downloaden</a>':''))
-      +'</div>'
       +'<div class="gal-hero-tx"><h1>'+escapeHtml(g.naam)+'</h1><span>'+g.fotos.length+' foto\u2019s</span></div>'
     +'</div>'
     +'<div class="gal-grid">'+g.fotos.map(function(f,i){
       return '<button class="gal-it" onclick="galLight('+i+')"><img src="'+escapeHtml(f.thumb||f.full)+'" alt="'+escapeHtml(f.naam||'')+'" loading="lazy"></button>';
     }).join('')+'</div>'
   +'</div>';
+}
+function galPreload(rond){
+  var g=state._gal; if(!g) return;
+  [rond+1,rond+2,rond+3,rond-1].forEach(function(j){
+    var f=g.fotos[j];
+    if(f&&!f._pre){ f._pre=1; var im=new Image(); im.src=f.web||f.full; }
+  });
 }
 function galLight(i){
   var g=state._gal; if(!g) return;
@@ -2086,10 +2092,11 @@ function galLight(i){
   ov.innerHTML='<button class="gal-lb-x" onclick="galLbClose()">'+ic('plus',24)+'</button>'
     +(g.idx>0?'<button class="gal-lb-nav gal-lb-prev" onclick="galLight('+(g.idx-1)+')">\u2039</button>':'')
     +(g.idx<g.fotos.length-1?'<button class="gal-lb-nav gal-lb-next" onclick="galLight('+(g.idx+1)+')">\u203a</button>':'')
-    +'<div class="gal-lb-stage'+(g.zoom?' zoom':'')+'" onclick="galZoom(event)"><img src="'+escapeHtml(f.full||f.thumb)+'" alt=""></div>'
+    +'<div class="gal-lb-stage'+(g.zoom?' zoom':'')+'" onclick="galZoom(event)"><img src="'+escapeHtml(f.web||f.full||f.thumb)+'" alt=""></div>'
     +'<div class="gal-lb-bar"><span class="gal-lb-naam">'+escapeHtml(f.naam||'')+'</span><span class="gal-lb-tel">'+(g.idx+1)+' / '+g.fotos.length+'</span>'
     +'<a class="btn btn-sm gal-lb-dl" href="'+escapeHtml(f.dl||f.full)+'">'+ic('download',14)+' Download</a></div>';
   ov.classList.add('show'); document.body.classList.add('mp-lock');
+  galPreload(g.idx);
 }
 function galZoom(e){
   var g=state._gal; if(!g) return; g.zoom=!g.zoom;
