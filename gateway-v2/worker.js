@@ -540,6 +540,9 @@ export default {
       if (_pub === 'fotostream' && request.method === 'GET') {
         return vr.handleFotoStream(request, env);
       }
+      if (_pub === 'fotozip' && request.method === 'GET') {
+        return vr.handleFotoZip(request, env, ctx);
+      }
       if (_pub === 'videofile' && request.method === 'GET') {
         return vr.handleVideoFile(request, env);
       }

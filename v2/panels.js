@@ -143,9 +143,10 @@ function _socProject(){ return _projects().filter(_isSocialProject)[0] || null; 
 function _greetNaam(){ var n=(window.S27DATA && S27DATA.klantNaam && S27DATA.klantNaam())||''; if(n && n!=='daar') return n; return _live()?'daar':'Sarah'; }
 function _bedrijf(){ return (window.S27DATA && S27DATA.bedrijfsnaam && S27DATA.bedrijfsnaam()) || 'TEST CLIENT BV'; }
 /* SA&E-namen kort tonen (geen foto-iconen). Geeft "" terug als er geen toegewezen teamleden zijn. */
+function voornaam(n){ return String(n||'').trim().split(/\s+/)[0]||''; }
 function saeNames(sae){
   if(!sae || !sae.length) return '';
-  const names=sae.map(function(s){ return esc(s.naam||''); }).filter(Boolean);
+  const names=sae.map(function(s){ return esc(voornaam(s.naam)); }).filter(Boolean);
   if(!names.length) return '';
   return `${ic('person',12)}<span>${names.join(', ')}</span>`;
 }
@@ -154,7 +155,7 @@ function saeChatWho(sae, closed){
   if(closed) return '<span class="dc-sub">afgerond</span>';
   if(sae && sae.length){
     const s=sae[0]; const extra=sae.length>1?(' +'+(sae.length-1)):'';
-    return `<span class="dc-who"><span class="dc-av">${esc(s.initialen||'S2')}</span><span class="dc-sub">met ${esc(s.naam)}${extra}</span></span>`;
+    return `<span class="dc-who"><span class="dc-av">${esc(s.initialen||'S2')}</span><span class="dc-sub">met ${esc(voornaam(s.naam))}${extra}</span></span>`;
   }
   return '<span class="dc-sub">met je team</span>';
 }
@@ -3576,7 +3577,7 @@ function chatHTML(taskId, readOnly){
   const listHTML = `<div class="chat-list" id="chatList">
     ${msgs.length?msgs.map(m=>`<div class="msg ${m[5]?'me':''}">
       ${m[5]?'':`<span class="av" style="background:var(--s27-${m[2]})">${m[0]}</span>`}
-      <div class="bubble"><div class="who">${m[1]}</div><div class="tx">${m[3]}</div><div class="tm">${m[4]}</div></div>
+      <div class="bubble"><div class="who">${m[1]==='Jij'?'Jij':esc(voornaam(m[1]))}</div><div class="tx">${m[3]}</div><div class="tm">${m[4]}</div></div>
     </div>`).join(''):`<div class="empty" style="padding:30px 10px"><p>${readOnly?'Geen chatgeschiedenis voor dit project.':'Nog geen berichten, stuur ons gerust iets!'}</p></div>`}
   </div>`;
   if(readOnly) return listHTML+`<div class="chat-readonly">${ic('check',14)} Dit project is afgerond. De chatgeschiedenis blijft hier zichtbaar.</div>`;
@@ -3824,7 +3825,7 @@ function _ondEditRij(s, br){
   } else if(s.status==='done'){
     inner='<span class="ond-chip ond-chip-ok">'+ic('check',12)+' Goedgekeurd</span>';
   } else {
-    inner='<span class="ond-chip ond-chip-prog">'+esc((s.statusRaw==='to do')?'Nog te starten':'In productie')+'</span>';
+    inner='<span class="ond-chip ond-chip-prog">'+esc(/to.?do/i.test(s.statusRaw||'')?'Te starten':'Aan het werken')+'</span>';
   }
   var lijst='';
   if(files.length>1 && (s.status==='wait'||s.status==='sent')){
@@ -3857,7 +3858,7 @@ function onderdelenBlok(det, p){
   var typed=subs.filter(function(s){ return s.typeJob!=null && s.typeJob!==''; });
   if(!typed.length) return null;   // geen TYPE JOB-data -> klassieke detailweergave
   var br=p.br||'purple';
-  var pre=typed.filter(function(s){ return s.typeJob===4 && s.heeftBestanden; });
+  var pre=typed.filter(function(s){ return s.typeJob===4 && (s.bestanden||[]).length>0; });
   var shoots=typed.filter(function(s){ return s.typeJob===6; });
   var edits=typed.filter(function(s){ return s.typeJob===7 && !/nabewerk/i.test(s.naam||''); });
   var nab=typed.filter(function(s){ return s.typeJob===7 && /nabewerk/i.test(s.naam||''); });
@@ -4011,8 +4012,8 @@ function buildModal(id, from){
       ${spill(p.status)}
     </div>`}
     <div class="soc-subnav detail-subnav">
-      <button class="snav-btn${startTab==='overzicht'?' active':''}" data-mt="overzicht" onclick="switchModalTab('overzicht')">${ic('doc',15)} Overzicht</button>
-      <button class="snav-btn${startTab==='chat'?' active':''}" data-mt="chat" onclick="switchModalTab('chat')">${ic('msg',15)} Chat${chatWacht?'<span class="snav-dot"></span>':''}</button>
+      <button class="soc-subtab${startTab==='overzicht'?' active':''}" data-mt="overzicht" onclick="switchModalTab('overzicht')">${ic('doc',15)} Overzicht</button>
+      <button class="soc-subtab${startTab==='chat'?' active':''}" data-mt="chat" onclick="switchModalTab('chat')">${ic('msg',15)} Chat${chatWacht?'<span class="snav-dot"></span>':''}</button>
     </div>
     <div class="detail-body">${overviewPane}${toonAccordions?deliverables.replace('class="mpane"','class="mpane mpane-sub'+(startTab==='overzicht'?' active':'')+'"'):''}${chatPane}</div>
   </div>`;

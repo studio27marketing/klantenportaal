@@ -244,7 +244,7 @@
     root.innerHTML =
       '<div class="vr-shell" role="dialog" aria-label="Video-feedback">' +
       '  <header class="vr-top">' +
-      '    <div class="vr-title"><span class="vr-badge">▶</span><div><h2 id="vrTitle"></h2><span class="vr-sub" id="vrSub">Feedbackronde</span></div></div>' +
+      '    <div class="vr-title"><div><h2 id="vrTitle"></h2><span class="vr-sub" id="vrSub">Feedbackronde</span></div></div>' +
       '    <div class="vr-actions">' +
       '      <a id="vrDownload" class="vr-btn vr-ghost vr-hidden" download><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 19h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="vr-dl-txt">Download</span></a>' +
       '      <button id="vrApprove" class="vr-btn">✓ Video goedkeuren</button>' +
@@ -312,9 +312,11 @@
     // anders navigeert het portaal onzichtbaar achter de overlay.
     var navClose = function (e) { if (!st.closed && e.target.closest('.sb-item')) close(); };
     document.addEventListener('click', navClose, true);
+    var vrLift = function (on) { try { document.body.classList.toggle('vr-lift', !!on); } catch (e) { } };
     function close() {
       if (st.closed) return;
       st.closed = true;
+      vrLift(false);
       try { document.removeEventListener('click', navClose, true); } catch (e) { }
       try { P.destroy(); } catch (e) { }
       try { document.body.classList.remove('vr-open'); } catch (e) { }
@@ -423,9 +425,10 @@
       if (req) {
         var pr = null;
         try { pr = req.call(stage); } catch (err) { pr = null; }
-        if (pr && pr.catch) pr.catch(function () { stage.classList.toggle('vr-max'); });
+        if (pr && pr.catch) pr.catch(function () { stage.classList.toggle('vr-max'); vrLift(stage.classList.contains('vr-max')); });
       } else {
         stage.classList.toggle('vr-max'); // oudere iOS: maximaliseer binnen de viewport
+        vrLift(stage.classList.contains('vr-max'));
       }
       setTimeout(layoutPins, 350);
     });
@@ -553,6 +556,7 @@
       $('vrCompTime').textContent = fmtTime(st.pendingPin.timestampSec);
       $('vrCompText').value = preset || '';
       renderCompAtts();
+      vrLift(true);
       $('vrCompScrim').classList.remove('vr-hidden');
       var c = $('vrComposer');
       c.classList.remove('vr-hidden');
@@ -572,6 +576,7 @@
       $('vrCompText').focus(); // synchroon binnen de tap-gesture (iOS-toetsenbord)
     }
     function closeComposer(cancelled) {
+      vrLift(false);
       $('vrComposer').classList.add('vr-hidden');
       $('vrCompScrim').classList.add('vr-hidden');
       if (cancelled) { st.pendingPin = null; st.editingId = null; st.composerAtts = []; }
@@ -791,10 +796,11 @@
         + (st.video && st.video.title ? '<span class="vr-sumchip">' + String(st.video.title).replace(/&/g, '&amp;').replace(/</g, '&lt;').slice(0, 48) + '</span>' : '');
       var vk = $('vrSendVolledig'); if (vk) vk.checked = false;
       $('vrSendErr').classList.add('vr-hidden');
+      vrLift(true);
       $('vrSendScrim').classList.remove('vr-hidden');
       $('vrSendModal').classList.remove('vr-hidden');
     });
-    function closeSend() { $('vrSendScrim').classList.add('vr-hidden'); $('vrSendModal').classList.add('vr-hidden'); }
+    function closeSend() { vrLift(false); $('vrSendScrim').classList.add('vr-hidden'); $('vrSendModal').classList.add('vr-hidden'); }
     $('vrSendCancel').addEventListener('click', closeSend);
     $('vrSendScrim').addEventListener('mousedown', closeSend);
     $('vrSendGo').addEventListener('click', async function () {

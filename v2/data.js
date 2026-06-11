@@ -173,7 +173,8 @@
     var ms = parseInt(c.datum||c.date||0,10); var tm='';
     if(ms){ var d=new Date(ms); if(!isNaN(d.getTime())) tm=('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
     var ini=(String(naam).split(/\s+/).map(function(x){return x?x[0]:'';}).join('').slice(0,2)||'S2').toUpperCase();
-    return { av:ini, who:(me?'Jij':naam), color:'blue', tx:esc(t).replace(/\n/g,'<br>'), tm:tm, me:me, attachments:c.attachments||[] };
+    var vn = me ? 'Jij' : (String(naam||'').trim().split(/\s+/)[0] || naam);
+    return { av:ini, who:vn, color:'blue', tx:esc(t).replace(/\n/g,'<br>'), tm:tm, me:me, attachments:c.attachments||[] };
   }
   DATA.loadChat = async function(taskId){
     if(!live()) return [];

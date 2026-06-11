@@ -981,7 +981,7 @@ function switchModalTab(name){
   // sub-blok) of 'chat' (schermvullend). Knoppen dragen data-mt, panes data-mpane.
   state._mtab=(name==='chat')?'chat':'overzicht'; name=state._mtab;
   const c=document.querySelector('.detail'); if(!c)return;
-  c.querySelectorAll('.detail-subnav .snav-btn').forEach(b=>b.classList.toggle('active', b.getAttribute('data-mt')===name));
+  c.querySelectorAll('.detail-subnav button').forEach(b=>b.classList.toggle('active', b.getAttribute('data-mt')===name));
   c.querySelectorAll('.detail-body .mpane').forEach(p=>p.classList.remove('active'));
   if(name==='overzicht'){
     const ov=c.querySelector('.mpane[data-mpane="overzicht"]'); if(ov)ov.classList.add('active');
@@ -2047,7 +2047,9 @@ async function openFotoGalerij(taskId, url){
     page.innerHTML='<div class="panel active br-purple"><div class="empty" style="padding:60px"><div class="em-ic">'+ic('img',56)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">De foto\u2019s kunnen nu niet geladen worden</b><p style="margin:6px 0 14px">'+escapeHtml((d&&d.message)||'Probeer het zo opnieuw.')+'</p><button class="btn btn-branch br-purple" onclick="closeFotoGalerij()">Terug naar je project</button></div></div>';
     return;
   }
-  state._gal={taskId:taskId,fotos:d.fotos,naam:d.taak_naam||'Fotoshoot',folder:d.folder_url||'',goedgekeurd:!!d.goedgekeurd,idx:0,zoom:false};
+  var _gw=function(u){ return (u&&u.charAt(0)==='/')?(GATEWAY_BASE+u):(u||''); };
+  d.fotos.forEach(function(f){ f.full=_gw(f.full); f.dl=_gw(f.dl); });
+  state._gal={taskId:taskId,fotos:d.fotos,naam:d.taak_naam||'Fotoshoot',zip:_gw(d.zip_url||''),folder:d.folder_url||'',goedgekeurd:!!d.goedgekeurd,idx:0,zoom:false};
   page.innerHTML='<div class="panel active br-purple">'+galerijHTML()+'</div>';
   window.scrollTo({top:0,behavior:'auto'});
 }
@@ -2059,13 +2061,13 @@ function galerijHTML(){
   var g=state._gal; if(!g) return '';
   var hero=g.fotos[0]||{};
   return '<div class="gal">'
-    +'<div class="gal-hero" style="background-image:url(\''+String(hero.thumb||'').replace(/['"()\\s\\\\]/g,'')+'\')"><div class="gal-hero-scrim"></div>'
-      +'<button class="gal-close" onclick="closeFotoGalerij()" aria-label="Terug naar het project">'+ic('plus',22)+'</button>'
+    +'<div class="gal-toprow"><button class="gal-close" onclick="closeFotoGalerij()" aria-label="Terug naar het project">'+ic('plus',22)+'</button></div>'
+    +'<div class="gal-hero" style="background-image:url(\''+String(hero.thumb||hero.full||'').replace(/['"()\s\\]/g,'')+'\')"><div class="gal-hero-scrim"></div>'
       +'<div class="gal-hero-acts">'
         +(g.goedgekeurd?'<span class="gal-okpill">'+ic('check',14)+' Goedgekeurd</span>':'<button class="btn gal-approve" onclick="galApprove(this)">'+ic('check',15)+' Foto\u2019s goedkeuren</button>')
-        +(g.folder?'<a class="btn gal-dlall" href="'+escapeHtml(g.folder)+'" target="_blank" rel="noopener">'+ic('download',15)+' Alles downloaden</a>':'')
+        +(g.zip?'<a class="btn gal-dlall" href="'+escapeHtml(g.zip)+'" target="_blank" rel="noopener">'+ic('download',15)+' Alles downloaden</a>':(g.folder?'<a class="btn gal-dlall" href="'+escapeHtml(g.folder)+'" target="_blank" rel="noopener">'+ic('download',15)+' Alles downloaden</a>':''))
       +'</div>'
-      +'<div class="gal-hero-tx"><h1>'+escapeHtml(g.naam)+'</h1><span>'+g.fotos.length+' foto\u2019s \u00b7 Studio 27</span></div>'
+      +'<div class="gal-hero-tx"><h1>'+escapeHtml(g.naam)+'</h1><span>'+g.fotos.length+' foto\u2019s</span></div>'
     +'</div>'
     +'<div class="gal-grid">'+g.fotos.map(function(f,i){
       return '<button class="gal-it" onclick="galLight('+i+')"><img src="'+escapeHtml(f.thumb||f.full)+'" alt="'+escapeHtml(f.naam||'')+'" loading="lazy"></button>';

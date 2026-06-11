@@ -1454,24 +1454,26 @@ export async function projectDetailV2(bedrijfId, body, env) {
         const u = str(b.url);
         const dm = u.match(/drive\.google\.com\/file\/d\/([-\w]{20,})/);
         const vm = u.match(/vimeo\.com\/(\d{6,})/);
-        if (dm) {
-          jobs.push((async () => {
-            try {
+        if (!dm && !vm) continue;                                     // geen drive/vimeo-bestand -> label blijft
+        const tkey = dm ? `vt:d:${dm[1]}` : `vt:v:${vm[1]}`;
+        jobs.push((async () => {
+          try {
+            const hit = await env.KV.get(tkey);                       // titel-cache (7d): herhaalbezoek = 0 externe calls
+            if (hit) { b.label = hit; return; }
+            let titel = '';
+            if (dm) {
               const token = await mintGoogleToken(env, str(env.GDRIVE_SUBJECT), DRIVE_SCOPE);
               const r = await fetch(`https://www.googleapis.com/drive/v3/files/${dm[1]}?supportsAllDrives=true&fields=name`, { headers: { authorization: 'Bearer ' + token }, signal: AbortSignal.timeout(2500) });
               const d = await r.json().catch(() => ({}));
-              if (r.ok && d.name) b.label = str(d.name).replace(/\.[a-z0-9]{2,4}$/i, '');
-            } catch (e) { /* label blijft generiek */ }
-          })());
-        } else if (vm) {
-          jobs.push((async () => {
-            try {
+              if (r.ok && d.name) titel = str(d.name).replace(/\.[a-z0-9]{2,4}$/i, '');
+            } else {
               const r = await fetch(`https://vimeo.com/api/oembed.json?url=${encodeURIComponent('https://vimeo.com/' + vm[1])}`, { signal: AbortSignal.timeout(2500) });
               const d = await r.json().catch(() => ({}));
-              if (r.ok && d.title) b.label = str(d.title);
-            } catch (e) { /* label blijft generiek */ }
-          })());
-        }
+              if (r.ok && d.title) titel = str(d.title);
+            }
+            if (titel) { b.label = titel; await env.KV.put(tkey, titel, { expirationTtl: 604800 }).catch(() => {}); }
+          } catch (e) { /* label blijft generiek */ }
+        })());
       }
     }
     if (jobs.length) await Promise.all(jobs);

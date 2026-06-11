@@ -8,8 +8,9 @@
 body.vr-open{overflow:hidden}
 
 /* ---- overlay-shell ---- */
-.vr-root{position:fixed;inset:0;z-index:900;background:var(--glass-grad,linear-gradient(150deg,#FBF8F3,#F3ECF6 52%,#E9F1FC));overflow-y:auto;-webkit-overflow-scrolling:touch}
-.vr-shell{min-height:100dvh;display:flex;flex-direction:column}
+body.vr-lift .vr-root{z-index:960;}   /* modal/composer/fullscreen open -> boven de topbar */
+.vr-root{position:fixed;inset:60px 0 0 0;z-index:45;background:var(--glass-grad,linear-gradient(150deg,#FBF8F3,#F3ECF6 52%,#E9F1FC));overflow-y:auto;-webkit-overflow-scrolling:touch}
+.vr-shell{min-height:100%;display:flex;flex-direction:column}
 .vr-top{position:sticky;top:0;z-index:40;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px;background:rgba(255,255,255,.6);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--glass-border,rgba(255,255,255,.85))}
 .vr-title{display:flex;align-items:center;gap:12px;min-width:0}
 .vr-title h2{font-family:var(--font-display);font-size:1.05rem;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:44vw}
@@ -72,7 +73,7 @@ body.vr-open{overflow:hidden}
 .vr-hint{margin:11px 2px 0;font-size:13px;font-weight:700;color:var(--s27-purple-ink,#7A2BC0)}
 
 /* ---- feedback-paneel ---- */
-.vr-panel{background:var(--glass-fill,rgba(255,255,255,.6));border:1px solid var(--glass-border,rgba(255,255,255,.85));box-shadow:var(--glass-sh,0 8px 24px rgba(60,40,80,.09));border-radius:20px;display:flex;flex-direction:column;max-height:calc(100dvh - 110px);position:sticky;top:76px}
+.vr-panel{background:var(--glass-fill,rgba(255,255,255,.6));border:1px solid var(--glass-border,rgba(255,255,255,.85));box-shadow:var(--glass-sh,0 8px 24px rgba(60,40,80,.09));border-radius:20px;display:flex;flex-direction:column;max-height:calc(100dvh - 170px);position:sticky;top:76px}
 .vr-panelhead{display:flex;align-items:center;justify-content:space-between;padding:15px 17px 9px}
 .vr-panelhead h3{font-family:var(--font-display);font-size:.92rem;margin:0}
 .vr-chip{font-family:var(--font-display);font-weight:800;font-size:11.5px;background:var(--s27-purple,#9441DB);color:#fff;border-radius:999px;padding:2px 10px}

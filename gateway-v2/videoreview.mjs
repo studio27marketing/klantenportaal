@@ -20,6 +20,7 @@
  * Secrets/bindings: GATEWAY_SECRET (HMAC), SA_* + GDRIVE_SUBJECT (Drive), R2 (bucket).
  * ============================================================================= */
 import { cu, scopeCheckTask, mintGoogleToken, DRIVE_SCOPE, isAfgerondStatus, FIELD, getCF, parseDeliverables } from './handlers.mjs';
+import { zipStream } from './zipstream.mjs';
 
 const str = (v) => (v == null ? '' : String(v));
 const cleanId = (v) => str(v).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
@@ -603,7 +604,7 @@ export async function fotoList(bedrijfId, body, env) {
   const items = [];
   for (const f of files.slice(0, 200)) {
     // thumbnailLink is een tijdelijke lh3-link; size-parameter opschalen voor scherpe grid-weergave
-    const thumb = f.thumbnailLink ? str(f.thumbnailLink).replace(/=s\d+(-c)?$/, '=s900') : '';
+    const thumb = f.thumbnailLink ? str(f.thumbnailLink).replace(/=s\d+(-c)?$/, '=s640') : '';
     items.push({
       id: str(f.id),
       naam: str(f.name).replace(/\.[a-z0-9]{2,4}$/i, ''),
@@ -613,7 +614,11 @@ export async function fotoList(bedrijfId, body, env) {
     });
   }
   const goedgekeurd = isAfgerondStatus(g.task && g.task.status);
-  return { status: 200, body: { ok: true, taak_naam: str(g.task && g.task.name), folder_url: `https://drive.google.com/drive/folders/${want.id}`, goedgekeurd, fotos: items } };
+  // alles-in-één-download: signed zip-route (folder is hierboven al op de taak geverifieerd)
+  const zexp = Math.floor(Date.now() / 1000) + STREAM_TTL_SEC;
+  const ztok = await signTok(env, `fz|${want.id}|${zexp}`);
+  const zipUrl = `/fotozip?folder=${encodeURIComponent(want.id)}&exp=${zexp}&tok=${ztok}&name=${encodeURIComponent(str(g.task && g.task.name).replace(/[^\w. -]/g, '').slice(0, 60) || 'fotos')}`;
+  return { status: 200, body: { ok: true, taak_naam: str(g.task && g.task.name), folder_url: `https://drive.google.com/drive/folders/${want.id}`, zip_url: zipUrl, goedgekeurd, fotos: items } };
 }
 export async function fotoApprove(bedrijfId, body, env) {
   const taskId = cleanId(body && body.task_id);
@@ -649,4 +654,82 @@ export async function handleFotoStream(request, env) {
   h.set('x-content-type-options', 'nosniff');
   h.set('content-disposition', (dl ? 'attachment' : 'inline') + (md.name ? `; filename="${str(md.name).replace(/[^\w. -]/g, '')}"` : ''));
   return new Response(r.body, { headers: h });
+}
+
+
+/* /fotozip — alle foto's van de (taak-geverifieerde) map als één streaming ZIP (STORE, geen
+ * buffering: elke foto wordt van Drive doorgestreamd; CRC/sizes via data descriptors). */
+export async function handleFotoZip(request, env, ctx) {
+  const u = new URL(request.url);
+  const folderId = str(u.searchParams.get('folder')).replace(/[^-\w]/g, '');
+  const exp = str(u.searchParams.get('exp'));
+  const tok = str(u.searchParams.get('tok'));
+  const naam = str(u.searchParams.get('name')).replace(/[^\w. -]/g, '').slice(0, 60) || 'fotos';
+  if (!folderId) return new Response('Ongeldige map', { status: 400 });
+  if (!(await tokOk(env, `fz|${folderId}|${exp}`, tok, exp))) {
+    return new Response('Link verlopen \u2014 herlaad het portaal en probeer opnieuw.', { status: 403 });
+  }
+  let token;
+  try { token = await mintGoogleToken(env, str(env.GDRIVE_SUBJECT), DRIVE_SCOPE); }
+  catch (e) { return new Response('Drive niet beschikbaar', { status: 502 }); }
+  const q = encodeURIComponent(`'${folderId}' in parents and trashed = false and mimeType contains 'image/'`);
+  const lr = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&orderBy=createdTime&pageSize=200&supportsAllDrives=true&includeItemsFromAllDrives=true&corpora=allDrives&fields=files(id,name,size)`,
+    { headers: { authorization: 'Bearer ' + token } });
+  const ld = await lr.json().catch(() => ({}));
+  const files = (lr.ok && Array.isArray(ld.files)) ? ld.files.slice(0, 200) : [];
+  if (!files.length) return new Response('Geen foto\u2019s gevonden', { status: 404 });
+  // elke foto lazy van Drive streamen op het moment dat de zipper eraan toe is
+  const entries = files.map((f, i) => ({
+    name: (str(f.name) || ('foto-' + (i + 1) + '.jpg')).replace(/[\/\\]/g, '_'),
+    sizeHint: Number(f.size) || 0,
+    stream: {
+      // lazy ReadableStream: pas fetchen bij start (zipStream leest sequentieel)
+      getReader() {
+        let inner = null;
+        return {
+          async read() {
+            if (!inner) {
+              const r = await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media&supportsAllDrives=true`,
+                { headers: { authorization: 'Bearer ' + token } });
+              // mislukte foto = zip zichtbaar laten falen (geen stille 0-byte-bestanden)
+              if (!r.ok || !r.body) throw new Error('drive_fetch_failed:' + f.id);
+              inner = r.body.getReader();
+            }
+            return inner.read();
+          },
+          releaseLock() { if (inner) try { inner.releaseLock(); } catch (e) { } },
+          async cancel(reason) { if (inner) try { await inner.cancel(reason); } catch (e) { } },
+        };
+      },
+    },
+  }));
+  let zs;
+  try { zs = zipStream(entries); }
+  catch (e) { return new Response('Deze reeks is te groot om als zip te downloaden.', { status: 413 }); }
+  // backpressure: de zip-bron pompt door een IdentityTransformStream — writer.write() wacht op
+  // de lezende client (workerd), dus geen onbegrensde buffer bij trage downloads (OOM-guard).
+  const { readable, writable } = new IdentityTransformStream();
+  const pump = (async () => {
+    const writer = writable.getWriter();
+    const zr = zs.getReader();
+    try {
+      for (;;) {
+        const { done, value } = await zr.read();
+        if (done) break;
+        await writer.write(value);
+      }
+      await writer.close();
+    } catch (e) {
+      try { await writer.abort(e); } catch (e2) { /* client weg */ }
+    }
+  })();
+  if (ctx && ctx.waitUntil) ctx.waitUntil(pump);
+  return new Response(readable, {
+    headers: {
+      'content-type': 'application/zip',
+      'content-disposition': `attachment; filename="${naam}.zip"`,
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+    },
+  });
 }
