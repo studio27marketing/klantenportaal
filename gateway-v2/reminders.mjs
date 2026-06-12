@@ -4,9 +4,8 @@
  * -----------------------------------------------------------------------------
  * STATUS: PILOT (Vincent 12-06): KV `reminders:enabled`='1' staat AAN, maar de engine is
  * begrensd tot PILOT_BEDRIJVEN (enkel Studio 27). Veld-ID door Vincent aangeleverd —
- * LET OP: op 12-06 was dat ID met Vincent's eigen token nergens in de workspace vindbaar
- * (vermoedelijk verkeerd gekopieerd of veld nog niet aan de Planning-folder gekoppeld);
- * zolang geen enkele taak het veld draagt, doet de engine gewoon niets (fail-soft).
+ * Veld 'Auto-reminder' (37766dfb) staat op de PLANNING-FOLDER en is live geverifieerd
+ * op alle 10 onderliggende lijsten (incl. Tickets).
  * Per taak: het team vinkt 'Auto-reminder' aan (opt-in per taak; default stilte).
  * Interval VAST op 3 dagen (Vincent 12-06: geen interval-veld per bedrijf gewenst).
  * Versturen: web-push eerst (PILOT-poort — bereikt nu enkel vincent@studio27.be; go-live
@@ -24,7 +23,7 @@ const str = (v) => (v == null ? '' : String(v));
 // PLANNING-FOLDER (propageert naar alle planninglijsten incl. Tickets). Opt-in per taak:
 // het team vinkt 'Auto-reminder' aan op precies de taken waar de klant aan zet is; een
 // shoot die pas over 3 maanden speelt, krijgt het vinkje gewoon niet.
-const REMINDER_FIELD_TAAK = '8ee6b5b2-d502-4128-addb-6fedea26677e'; // checkbox 'Auto-reminder' (Vincent 12-06)
+const REMINDER_FIELD_TAAK = '37766dfb-d243-4ae9-98e5-994ef642a272'; // checkbox 'Auto-reminder' op Planning-folder (geverifieerd 12-06: aanwezig op alle 10 lijsten)
 const DEFAULT_INTERVAL_DAGEN = 3;     // VAST (Vincent 12-06: geen per-bedrijf-interval)
 // PILOT: enkel deze bedrijven meenemen tot Vincent groen licht geeft (leeg = alle bedrijven)
 const PILOT_BEDRIJVEN = ['86c8cz2uu']; // Studio 27
