@@ -2369,17 +2369,20 @@ export async function bugReport(bedrijfId, body, env) {
   return { status: 200, body: { ok: true, bug_id: bugId, attached } };
 }
 
-/* ---- teamLeden (team-only): assignee-bare workspace-leden voor de bug-melder-dropdown --- */
-// Bron = ClickUp GET /team (workspace-members); guests uitgefilterd (klant-guests horen niet
-// in de melder-lijst). KV-cache 6 u: een nieuw teamlid verschijnt dus binnen 6 u vanzelf, en
-// wie uit ClickUp verdwijnt, valt even automatisch weg (Vincent 12-06: lijst = exact wie in
-// ClickUp assignee kan zijn — geen hardgecodeerde namen meer in de frontend).
+/* ---- teamLeden (team-only): ALLE workspace-leden voor de bug-melder-dropdown --- */
+// Bron = ClickUp GET /team (workspace-members), INCLUSIEF guests (Vincent 12-06: het gros
+// van het team — Klaas, Griet, Ines, Viktor, … — werkt op een guest-seat, role 4; live
+// geverifieerd: 13 van de 17 leden zijn guest, dus een guest-filter zou bijna iedereen
+// wegknippen). Klanten zijn géén ClickUp-users, dus dit blijft een puur team-lijstje;
+// komt er ooit een externe guest bij, dan verschijnt die mee — dat is de afspraak
+// ("iedereen die in ClickUp staat"). KV-cache 6 u: nieuw teamlid verschijnt vanzelf,
+// wie uit ClickUp verdwijnt, valt even automatisch weg.
 export async function teamLeden(bedrijfId, body, env) {
   if (!(body && body.__staff === true)) {
     return { status: 403, body: { ok: false, message: 'Alleen voor het Studio 27-team.' } };
   }
   try {
-    const hit = await env.KV.get('team:leden', 'json');
+    const hit = await env.KV.get('team:leden:v2', 'json');
     if (hit && Array.isArray(hit.leden) && hit.leden.length) return { status: 200, body: hit };
   } catch (e) { /* cache-miss */ }
   let leden = [];
@@ -2389,7 +2392,7 @@ export async function teamLeden(bedrijfId, body, env) {
     const team = teams.find((t) => str(t && t.id) === TEAM_ID) || teams[0];
     leden = ((team && team.members) || [])
       .map((m) => m && m.user)
-      .filter((u) => u && u.id && u.role != null && Number(u.role) !== 4 && str(u.username || u.email).trim())
+      .filter((u) => u && u.id && str(u.username || u.email).trim())
       .map((u) => ({
         id: Number(u.id),
         naam: (str(u.username).trim() || str(u.email).split('@')[0]).slice(0, 60),
@@ -2399,7 +2402,7 @@ export async function teamLeden(bedrijfId, body, env) {
   } catch (e) { leden = []; }
   if (!leden.length) return { status: 502, body: { ok: false, message: 'Teamleden konden niet opgehaald worden.' } };
   const out = { ok: true, leden };
-  try { await env.KV.put('team:leden', JSON.stringify(out), { expirationTtl: 21600 }); } catch (e) { /* cache best-effort */ }
+  try { await env.KV.put('team:leden:v2', JSON.stringify(out), { expirationTtl: 21600 }); } catch (e) { /* cache best-effort */ }
   return { status: 200, body: out };
 }
 
