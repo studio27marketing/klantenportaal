@@ -324,12 +324,16 @@ async function cuPlanningBlocks(env, assigneeIds, van, tot) {
   qs += '&subtasks=true&include_closed=false';
   const tr = await cu.get(env, `/team/${TEAM_ID}/task?${qs}`);
   const tasks = tr.ok && tr.data && Array.isArray(tr.data.tasks) ? tr.data.tasks : [];
-  return tasks.map((t) => ({
-    start: Number(t.start_date) || 0,
-    due: Number(t.due_date) || 0,
-    est: Number(t.time_estimate) || 0,
-    afwezig: str(t.list && t.list.id) === PAYROLL_LIST,
-  }));
+  return tasks
+    // Payroll met status 'aanvraag' = nog niet goedgekeurd verlof -> blokkeert NIET
+    // (Vincent 2026-06-12: zolang het niet is goedgekeurd moet een klant kunnen boeken).
+    .filter((t) => !(str(t.list && t.list.id) === PAYROLL_LIST && str(t.status && t.status.status).toLowerCase().includes('aanvraag')))
+    .map((t) => ({
+      start: Number(t.start_date) || 0,
+      due: Number(t.due_date) || 0,
+      est: Number(t.time_estimate) || 0,
+      afwezig: str(t.list && t.list.id) === PAYROLL_LIST,
+    }));
 }
 
 // Google-Agenda busy-intervallen voor een set e-mails: ÉÉN freeBusy-call (items = alle
@@ -4975,31 +4979,44 @@ export async function buildAiContext(env, bedrijfId) {
 }
 
 /* =============================================================================
-   SHOOT-INPLANNEN (port van studio27.be/shoot-inplannen, VOLLEDIG zonder Make)
+   SHOOT-INPLANNEN + SHOOT-ENGINE V2 (agenda-bewust, gevalideerd via /shoot-lab)
    -----------------------------------------------------------------------------
-   1:1 met de Make-scenario's [CONT] Booking widget: availability (5662991) +
-   submit (5663001). De klant kiest in het portaal een shootdag + startuur uit de
-   shootkalender en vult locatie/contact in. shootContext levert validatie +
-   beschikbaarheid; shootSubmit schrijft de booking weg op de shoot-taak:
-   start_date/due_date (+ -_time), assignee (random vrij poollid), de custom fields
-   Startdatum (date) + Locatie (location, lat/lng + adres), de VOLLEDIGE booking in
-   de task-description, plus een interne ClickUp-comment voor het content-team.
+   De klant kiest in het portaal een shootdag + startuur uit de shootkalender en
+   vult locatie/contact in. shootContext levert validatie + beschikbaarheid;
+   shootSubmit schrijft de booking weg op de shoot-taak (start/due, assignee =
+   vrij poollid, Startdatum/Locatie-velden, booking in description + comment).
+
+   ENGINE V2 vervangt de oude availability (die enkel 2 shoot-lijsten + payroll
+   las, waarvan lijst 901522906153 DOOD bleek). Per cameraman tellen nu 4 bronnen:
+     1. SHOOTS    - lijst 901520180316, TYPE JOB=Shoot. Meerdaags = elke dag.
+                    Onderbezette shoots (creators-veld > assignees) leggen een
+                    POOL-CLAIM op de dag-capaciteit.
+     2. MEETINGS  - lijst 901520180293 (CRM) met een poollid als assignee.
+     3. PAYROLL   - lijst 901520180360. Status 'aanvraag' telt NIET (Vincent
+                    2026-06-12: zolang verlof niet is goedgekeurd moet een klant
+                    gewoon kunnen boeken).
+     4. AGENDA    - persoonlijke @studio27.be-agenda via events.list (DWD,
+                    impersonatie van de host zelf). ClickUp-syncs ("🔄"/"synced
+                    from ClickUp") worden GENEGEERD - anders blokkeren gesyncte
+                    edits/stale taken via de achterdeur. Titels blijven server-
+                    side (privacy). freeBusy is enkel vangnet per host.
+   Edits/montage (TYPE JOB≠Shoot) blokkeren bewust NIET: die schuiven liever een
+   dag op dan dat een shoot wordt misgelopen. Gevalideerd 2026-06-12: 37 unit-
+   tests + onafhankelijke ClickUp-reconstructie + agenda-kruiscontrole (lab).
    ============================================================================= */
-// Hosts = content-creators-pool (ClickUp user-ids), 1:1 met de externe widget/VIDEO_POOL.
-const SHOOT_HOSTS = [
-  { id: 36583476, name: 'Bjorn' },
-  { id: 36583478, name: 'Guus' },
-  { id: 82624365, name: 'Viktor' },
-  { id: 54339680, name: 'Ines' },
-];
-// Planning-lijsten die de beschikbaarheid voeden (1:1 met availability-scenario 5662991).
-const SHOOT_AVAIL_LISTS = {
-  shoots:     '901520180316', // Video-en fotografie
-  shoots_27m: '901522906153', // 27M video-planning
-  vakantie:   '901520180360', // Payroll/afwezigheid (= PAYROLL_LIST)
-};
-// TYPE JOB dropdown-optie 'Shoot' (UUID) - filter op de twee shoot-lijsten.
+// Hosts = content-creators-pool, 1:1 met VIDEO_POOL (+ display-naam voor output).
+const SHOOT_HOSTS = VIDEO_POOL.map((m) => ({ id: Number(m.id), name: m.naam, email: m.email }));
+// TYPE JOB dropdown-optie 'Shoot' (UUID-filter op de planning-lijst).
 const SHOOT_TYPE_OPTION = 'ceaa5d14-b8c6-42ca-8509-3050eba99f9e';
+// Payroll 'HR Field' (afwezigheidstype) - enkel voor leesbare labels in het lab.
+const SHOOT_HR_FIELD = 'e4f701e4-5aa4-42e0-a61a-0a36a01ba549';
+const SHOOT_HR_TYPES = ['Vakantie', 'Jeugdvakantie', 'Feestdag', 'Ziekte', 'Recup', 'Toegestane afwezigheid', 'Klein verlet', 'Ouderschapsverlof', 'Sollicitatieverlof'];
+// taaknaam-heuristiek: vermoedelijk fout-getagde shoots (montage/placeholder) - ze
+// blokkeren WEL (conservatief) maar dragen een suspect-vlag voor de lab-weergave.
+const SHOOT_SUSPECT_RE = /montage|placeholder|nabewerking|edit /i;
+// werkdagvenster (Brussels) waarbinnen een getimed blok als bezet telt.
+const SHOOT_WORK_START_MIN = 8 * 60;
+const SHOOT_WORK_END_MIN = 18 * 60;
 
 // Europe/Brussels-helpers (DST-correct via Intl, geen tz-library nodig).
 function brusselsOffsetMin(ms) {
@@ -5026,46 +5043,345 @@ function msToBrusselsHm(ms) {
   return new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Brussels', hour12: false, hour: '2-digit', minute: '2-digit' }).format(new Date(n)); // 'HH:mm'
 }
 
-// Eén shoot/vakantie-taak -> {dateStart, dateEnd (YYYY-MM-DD, Brussels), assignees:[ids]}.
-function shootAvailNorm(t) {
-  const startYmd = msToBrusselsYmd(t.start_date) || msToBrusselsYmd(t.due_date);
-  const endYmd = msToBrusselsYmd(t.due_date) || startYmd;
-  const assignees = (Array.isArray(t.assignees) ? t.assignees : [])
-    .map((a) => (a && typeof a === 'object') ? a.id : a).filter((x) => x != null);
-  return { dateStart: startYmd, dateEnd: endYmd, assignees };
+/* ---- ENGINE V2: tijd-/bereik-helpers (puur, unit-getest via _shootEngineTest) */
+// weekdag uit YMD (0=zo..6=za), via UTC-middag-anker (DST-veilig).
+function ymdWeekdayV2(ymd) { const d = new Date(ymd + 'T12:00:00Z'); return d.getUTCDay(); }
+function addDaysYmdV2(ymd, n) { const d = new Date(ymd + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return msToBrusselsYmd(d.getTime()); }
+// alle Brusselse kalenderdagen die [startMs,endMs] raakt, geclipt op [clipStart,clipEnd].
+function ymdRangeV2(startMs, endMs, clipStartYmd, clipEndYmd, cap) {
+  let cur = msToBrusselsYmd(startMs); const end = msToBrusselsYmd(endMs) || cur;
+  if (!cur) return [];
+  const out = []; let guard = 0;
+  while (cur && guard < (cap || 400)) {
+    if ((!clipStartYmd || cur >= clipStartYmd) && (!clipEndYmd || cur <= clipEndYmd)) out.push(cur);
+    if (cur === end || (clipEndYmd && cur > clipEndYmd)) break;
+    cur = addDaysYmdV2(cur, 1); guard++;
+  }
+  return out;
+}
+// Telt een blok als "raakt de werkdag (08-18u Brussels)"? All-day blokken altijd.
+function blockHitsWorkdayV2(b) {
+  if (b.allDay) return true;
+  if (b._s != null && b._e != null) {
+    const ws = brusselsWallToMs(b.ymd, msMin(SHOOT_WORK_START_MIN));
+    const we = brusselsWallToMs(b.ymd, msMin(SHOOT_WORK_END_MIN));
+    return b._s < we && b._e > ws;
+  }
+  if (!b.van || !b.tot) return true; // enkel een aanvangstijd bekend -> conservatief: telt
+  const hm2min = (hm) => { const m = /^(\d{1,2}):(\d{2})$/.exec(str(hm)); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+  const sm = hm2min(b.van), em = hm2min(b.tot);
+  if (sm == null || em == null) return true;
+  return sm < SHOOT_WORK_END_MIN && em > SHOOT_WORK_START_MIN;
+}
+// brusselsWallToMs verwacht "HH:mm" — kleine adapter voor minuten-van-de-dag.
+function msMin(min) { return String(Math.floor(min / 60)).padStart(2, '0') + ':' + String(min % 60).padStart(2, '0'); }
+
+/* ---- ENGINE V2: Google-agenda (events.list + syncfilter, freeBusy-vangnet) -- */
+function isClickupSyncEvent(ev) {
+  return /\u{1F504}/u.test(str(ev && ev.summary)) || /synced from ClickUp/i.test(str(ev && ev.description));
+}
+// event -> busy-interval [s,e] in ms, of null (cancelled / vrij-gemarkeerd / vormloos).
+function gcalEventToInterval(ev) {
+  if (!ev || str(ev.status) === 'cancelled') return null;
+  if (str(ev.transparency) === 'transparent') return null; // "vrij" telt niet (freeBusy-semantiek)
+  const st = ev.start || {}, en = ev.end || {};
+  if (st.dateTime) {
+    const s = Date.parse(st.dateTime) || 0, e = Date.parse(en.dateTime) || 0;
+    return e > s ? [s, e] : null;
+  }
+  if (st.date) { // all-day: [00:00 startdag, 00:00 einddag) Brussels; end.date is exclusief
+    const s = brusselsWallToMs(st.date, '00:00');
+    const e = en.date ? brusselsWallToMs(en.date, '00:00') : (s + 86400000);
+    return e > s ? [s, e] : null;
+  }
+  return null;
+}
+// events.list van één host (DWD-impersonatie van de host ZELF; gepagineerd).
+async function gcalEventsForHost(env, email, van, tot) {
+  const token = await mintGoogleToken(env, email, GCAL_SCOPE_READONLY);
+  const items = [];
+  let pageToken = '';
+  for (let p = 0; p < 5; p++) {
+    const qs = new URLSearchParams({
+      timeMin: gcalTime(van), timeMax: gcalTime(tot), singleEvents: 'true', maxResults: '250',
+      fields: 'items(summary,description,start,end,transparency,status,eventType),nextPageToken',
+    });
+    if (pageToken) qs.set('pageToken', pageToken);
+    const r = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?' + qs.toString(), {
+      headers: { Authorization: 'Bearer ' + token },
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error('events_http_' + r.status);
+    items.push(...(Array.isArray(data.items) ? data.items : []));
+    pageToken = str(data.nextPageToken);
+    if (!pageToken) break;
+  }
+  return items;
+}
+// freeBusy-vangnet met status per kalender (fouten NIET verzwijgen). Venster gecapt
+// op 60d (lange freeBusy-windows zijn onbetrouwbaar; events.list is het primaire pad).
+async function shootGcalFreeBusy(env, emails, van, tot) {
+  const busy = new Map(); const status = new Map();
+  const uniq = [...new Set((emails || []).map((e) => str(e).trim().toLowerCase()).filter(Boolean))];
+  for (const e of uniq) { busy.set(e, []); status.set(e, 'ok'); }
+  if (!uniq.length) return { busy, status, global: null };
+  if (!env || !env.SA_CLIENT_EMAIL || !env.SA_PRIVATE_KEY) {
+    for (const e of uniq) status.set(e, 'sa_niet_geconfigureerd');
+    return { busy, status, global: 'service-account ontbreekt' };
+  }
+  const fbTot = Math.min(Number(tot) || 0, (Number(van) || Date.now()) + 60 * 86400000);
+  let token;
+  try { token = await mintGoogleToken(env, str(env.GCAL_SUBJECT), GCAL_SCOPE_READONLY); }
+  catch (e) { for (const x of uniq) status.set(x, 'token_fout'); return { busy, status, global: 'token-fout' }; }
+  try {
+    const r = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ timeMin: gcalTime(van), timeMax: gcalTime(fbTot), items: uniq.map((id) => ({ id })) }),
+    });
+    const data = await r.json().catch(() => ({}));
+    const cals = (r.ok && data && data.calendars) ? data.calendars : {};
+    for (const e of uniq) {
+      const c = cals[e];
+      if (!c) { status.set(e, 'niet_in_respons'); continue; }
+      if (Array.isArray(c.errors) && c.errors.length) { status.set(e, str(c.errors[0].reason || 'fout')); continue; }
+      busy.set(e, (Array.isArray(c.busy) ? c.busy : [])
+        .map((b) => [Date.parse(b.start) || 0, Date.parse(b.end) || 0]).filter((iv) => iv[1] > iv[0]));
+    }
+    return { busy, status, global: null };
+  } catch (e) {
+    for (const x of uniq) status.set(x, 'netwerk_fout');
+    return { busy, status, global: 'netwerk-fout' };
+  }
+}
+// agenda-orkestratie: events-modus (syncfilter) per host, freeBusy als vangnet.
+async function shootGcalCombined(env, emails, van, tot, syncFilter) {
+  const fb = await shootGcalFreeBusy(env, emails, van, tot);
+  if (!syncFilter) {
+    for (const [e, st] of fb.status) if (st === 'ok') fb.status.set(e, 'ok · freebusy (syncs tellen mee)');
+    return fb;
+  }
+  if (!env || !env.SA_CLIENT_EMAIL || !env.SA_PRIVATE_KEY) return fb;
+  await Promise.all((emails || []).map(async (email) => {
+    const key = str(email).toLowerCase();
+    try {
+      const items = await gcalEventsForHost(env, key, van, tot);
+      let skipped = 0;
+      const iv = [];
+      for (const ev of items) {
+        if (isClickupSyncEvent(ev)) { if (gcalEventToInterval(ev)) skipped++; continue; }
+        const x = gcalEventToInterval(ev);
+        if (x) iv.push(x);
+      }
+      fb.busy.set(key, iv);
+      fb.status.set(key, 'ok · ' + skipped + ' ClickUp-sync' + (skipped === 1 ? '' : 's') + ' genegeerd');
+    } catch (e) {
+      if (fb.status.get(key) === 'ok') fb.status.set(key, 'ok · freebusy-vangnet (' + str(e && e.message).slice(0, 40) + ')');
+    }
+  }));
+  return fb;
 }
 
-// Beschikbaarheid: 3 planning-lijsten over [now-1d, now+365d]. Venster dekt exact het
-// klikbare bereik van de frontend-kalender (SHOOT_WINDOW_DAYS=365), zodat dagen 361-365 niet
-// vals als 'vrij' tonen door ontbrekende data. Fail-open (lege lijsten bij fout).
-async function shootAvailability(env) {
-  const van = Date.now() - 1 * 86400000;
-  const tot = Date.now() + 365 * 86400000;
+/* ---- ENGINE V2: bron-fetchers ---------------------------------------------- */
+const shootHostAssignees = (task) => (Array.isArray(task.assignees) ? task.assignees : [])
+  .map((a) => SHOOT_HOSTS.find((h) => h.id === Number(a && a.id) || h.email === str(a && a.email).toLowerCase()))
+  .filter(Boolean);
+
+// Shoots: host-blokken (per dag in [start,due]) + pool-claims voor onderbezette shoots.
+async function engineFetchShoots(env, van, tot, clipStart, clipEnd) {
   const filter = encodeURIComponent(JSON.stringify([{ field_id: FIELD.typeJob, operator: '=', value: SHOOT_TYPE_OPTION }]));
-  const build = (id, withFilter) => (page) =>
-    `/list/${id}/task?subtasks=true&include_closed=true&due_date_gt=${van}&due_date_lt=${tot}&page=${page}` + (withFilter ? `&custom_fields=${filter}` : '');
-  const [shoots, shoots27m, vakantie] = await Promise.all([
-    pageAll(env, build(SHOOT_AVAIL_LISTS.shoots, true)),
-    pageAll(env, build(SHOOT_AVAIL_LISTS.shoots_27m, true)),
-    pageAll(env, build(SHOOT_AVAIL_LISTS.vakantie, false)),
+  // due_date_lt ruim voorbij het venster: een meerdaagse shoot die over de rand loopt
+  // (start binnen, due erbuiten) zou anders volledig wegvallen.
+  const lt = Number(tot) + 30 * 86400000;
+  const tasks = await pageAll(env, (p) =>
+    `/list/${VIDEO_LIST}/task?subtasks=true&include_closed=true&due_date_gt=${van}&due_date_lt=${lt}&page=${p}&custom_fields=${filter}`);
+  const blocks = []; const claims = [];
+  for (const t of tasks) {
+    const allAssignees = Array.isArray(t.assignees) ? t.assignees : [];
+    const hosts = shootHostAssignees(t);
+    const s = Number(t.start_date) || Number(t.due_date) || 0;
+    const d = Number(t.due_date) || s;
+    if (!s) continue;
+    const startYmd = msToBrusselsYmd(s);
+    const dagen = ymdRangeV2(s, Math.max(s, d), clipStart, clipEnd, 14); // >14d span = data-fout
+    if (!dagen.length) continue;
+    const sameDayTimed = (d > s) && (msToBrusselsYmd(d) === startYmd);
+    const label = str(t.name) || 'Shoot';
+    const suspect = SHOOT_SUSPECT_RE.test(label);
+    for (const ymd of dagen) {
+      for (const h of hosts) {
+        blocks.push({ hostId: h.id, ymd, bron: 'shoot', label,
+          van: sameDayTimed ? msToBrusselsHm(s) : null, tot: sameDayTimed ? msToBrusselsHm(d) : null,
+          allDay: true /* cameradag = volledige dag */, suspect, oldCounts: ymd === startYmd });
+      }
+      // pool-claim: 'Aantal content creators' (orderindex+1) vs effectief toegewezen mensen.
+      const cRaw = getCF(t, FIELD.contentCreators);
+      const nodig = (cRaw != null && cRaw !== '') ? (parseInt(cRaw, 10) + 1) : Math.max(1, allAssignees.length);
+      const claim = Math.max(0, nodig - allAssignees.length);
+      if (claim > 0) claims.push({ ymd, label, nodig, toegewezen: allAssignees.length, claim, suspect });
+    }
+  }
+  return { blocks, claims };
+}
+
+async function engineFetchMeetings(env, van, tot, clipStart, clipEnd) {
+  const lt = Number(tot) + 2 * 86400000; // meetings zijn 1-daags; kleine marge volstaat
+  const tasks = await pageAll(env, (p) =>
+    `/list/${LIST.meetings}/task?subtasks=true&include_closed=false&due_date_gt=${van}&due_date_lt=${lt}&page=${p}`);
+  const blocks = [];
+  for (const t of tasks) {
+    const hosts = shootHostAssignees(t);
+    if (!hosts.length) continue;
+    const s = Number(t.start_date) || 0;
+    const d = Number(t.due_date) || s;
+    const anchor = s || d; if (!anchor) continue;
+    const ymd = msToBrusselsYmd(anchor); if (!ymd) continue;
+    if ((clipStart && ymd < clipStart) || (clipEnd && ymd > clipEnd)) continue;
+    const timed = s && d && (d > s) && (msToBrusselsYmd(d) === ymd);
+    const dueHm = msToBrusselsHm(d);
+    for (const h of hosts) {
+      blocks.push({ hostId: h.id, ymd, bron: 'meeting', label: str(t.name) || 'Meeting',
+        van: timed ? msToBrusselsHm(s) : (dueHm !== '00:00' ? dueHm : null), tot: timed ? msToBrusselsHm(d) : null,
+        allDay: !timed });
+    }
+  }
+  return blocks;
+}
+
+// Payroll: afwezigheid per dag over [start,due]. Status 'aanvraag' = nog niet
+// goedgekeurd -> telt standaard NIET mee (Vincent 2026-06-12); includeAanvraag
+// bestaat enkel voor de lab-vergelijking.
+async function engineFetchPayroll(env, van, tot, includeAanvraag, clipStart, clipEnd) {
+  // verlof kan maanden beslaan: due kan ver voorbij het venster liggen terwijl het
+  // blok NU al loopt -> bovengrens +370d (payroll-lijst is klein).
+  const lt = Number(tot) + 370 * 86400000;
+  const tasks = await pageAll(env, (p) =>
+    `/list/${PAYROLL_LIST}/task?subtasks=true&include_closed=true&due_date_gt=${van}&due_date_lt=${lt}&page=${p}`);
+  const blocks = [];
+  for (const t of tasks) {
+    const hosts = shootHostAssignees(t);
+    if (!hosts.length) continue;
+    const statusNaam = str(t.status && t.status.status).toLowerCase();
+    const isAanvraag = statusNaam.includes('aanvraag');
+    if (isAanvraag && !includeAanvraag) continue;
+    const hrIdx = parseInt(getCF(t, SHOOT_HR_FIELD), 10);
+    const type = (hrIdx >= 0 && SHOOT_HR_TYPES[hrIdx]) ? SHOOT_HR_TYPES[hrIdx] : (str(t.name) || 'Afwezig');
+    const s = Number(t.start_date) || Number(t.due_date) || 0;
+    const d = Number(t.due_date) || s;
+    if (!s) continue;
+    for (const ymd of ymdRangeV2(s, Math.max(s, d), clipStart, clipEnd, 400)) {
+      for (const h of hosts) blocks.push({ hostId: h.id, ymd, bron: 'payroll', label: type + (isAanvraag ? ' (aanvraag)' : ''), van: null, tot: null, allDay: true, aanvraag: isAanvraag, oldCounts: true });
+    }
+  }
+  return blocks;
+}
+
+// Agenda busy-intervallen -> per-dag-geclipte blokken (meerdaags raakt elke dag).
+function engineAgendaBlocks(busyMap, clipStart, clipEnd) {
+  const blocks = [];
+  for (const h of SHOOT_HOSTS) {
+    const ivs = busyMap.get(h.email) || [];
+    for (const [s, e] of ivs) {
+      for (const ymd of ymdRangeV2(s, e - 1, clipStart, clipEnd, 60)) {
+        const dayStart = brusselsWallToMs(ymd, '00:00');
+        const dayEnd = dayStart + 86400000 + 3600000; // ruime bovengrens; clip hieronder
+        const cs = Math.max(s, dayStart), ce = Math.min(e, brusselsWallToMs(addDaysYmdV2(ymd, 1), '00:00') || dayEnd);
+        if (ce <= cs) continue;
+        const wholeDay = (cs <= dayStart) && (ce >= (brusselsWallToMs(addDaysYmdV2(ymd, 1), '00:00') || dayEnd));
+        blocks.push({ hostId: h.id, ymd, bron: 'agenda', label: 'Agenda (privé — geen titel)',
+          van: wholeDay ? null : msToBrusselsHm(cs), tot: wholeDay ? null : msToBrusselsHm(ce), allDay: wholeDay, _s: cs, _e: ce });
+      }
+    }
+  }
+  return blocks;
+}
+
+/* ---- ENGINE V2: dag-raster --------------------------------------------------
+ * shootEngineDayMap(env, opts) -> {
+ *   total, hosts:[{id,name,gcal}], gcal_global,
+ *   days:[{ date, weekend, free_raw, free_ids:[id..], claims:[..], claim_total,
+ *           free (= boekbaar, na claim-aftrek), hosts? (detail) }] }
+ * PRODUCTIE-DEFAULTS: includeAanvraag=false, syncFilter=true, horizonDays=365
+ * (= het klikbare frontend-venster). detail=true enkel voor het lab. */
+export async function shootEngineDayMap(env, opts) {
+  const o = opts || {};
+  const horizonDays = Math.max(7, Math.min(366, Number(o.horizonDays) || 365));
+  const includeAanvraag = o.includeAanvraag === true;       // default false (Vincent-regel)
+  const syncFilter = o.syncFilter !== false;                 // default true
+  const detail = o.detail === true;
+  const now = Date.now();
+  const van = now - 7 * 86400000;                            // vangt lopende meerdaagse blokken
+  const tot = now + (horizonDays + 1) * 86400000;
+  const todayYmd = msToBrusselsYmd(now);
+  const lastYmd = addDaysYmdV2(todayYmd, horizonDays - 1);
+
+  const [shootsRes, meetings, payroll, gcal] = await Promise.all([
+    engineFetchShoots(env, van, tot, todayYmd, lastYmd).catch(() => ({ blocks: [], claims: [] })),
+    engineFetchMeetings(env, van, tot, todayYmd, lastYmd).catch(() => []),
+    engineFetchPayroll(env, van, tot, includeAanvraag, todayYmd, lastYmd).catch(() => []),
+    shootGcalCombined(env, SHOOT_HOSTS.map((h) => h.email), now, now + horizonDays * 86400000, syncFilter)
+      .catch(() => ({ busy: new Map(), status: new Map(SHOOT_HOSTS.map((h) => [h.email, 'fout'])), global: 'fout' })),
   ]);
+  const agenda = engineAgendaBlocks(gcal.busy, todayYmd, lastYmd);
+  const all = [...shootsRes.blocks, ...meetings, ...payroll, ...agenda];
+
+  const idx = new Map(); // ymd -> hostId -> [blocks]
+  for (const b of all) {
+    if (!blockHitsWorkdayV2(b)) continue;
+    if (!idx.has(b.ymd)) idx.set(b.ymd, new Map());
+    const m = idx.get(b.ymd);
+    if (!m.has(b.hostId)) m.set(b.hostId, []);
+    m.get(b.hostId).push(b);
+  }
+  const claimsByDay = new Map();
+  for (const c of shootsRes.claims) {
+    if (!claimsByDay.has(c.ymd)) claimsByDay.set(c.ymd, []);
+    claimsByDay.get(c.ymd).push(c);
+  }
+
+  const days = [];
+  for (let i = 0; i < horizonDays; i++) {
+    const ymd = addDaysYmdV2(todayYmd, i);
+    const wd = ymdWeekdayV2(ymd);
+    const perHost = idx.get(ymd) || new Map();
+    const hostStatus = SHOOT_HOSTS.map((h) => {
+      const raw = perHost.get(h.id) || [];
+      const blocks = raw.map((b) => ({ bron: b.bron, label: b.label, van: b.van, tot: b.tot, allDay: !!b.allDay, suspect: !!b.suspect }));
+      const order = { shoot: 0, payroll: 1, meeting: 2, agenda: 3 };
+      blocks.sort((a, b) => (order[a.bron] - order[b.bron]) || str(a.van).localeCompare(str(b.van)));
+      const oudBezet = raw.some((b) => (b.bron === 'shoot' || b.bron === 'payroll') && b.oldCounts !== false);
+      return { id: h.id, naam: h.name, vrij: blocks.length === 0, blocks, oudVrij: !oudBezet };
+    });
+    const dayClaims = (claimsByDay.get(ymd) || []).map((c) => ({ label: c.label, nodig: c.nodig, toegewezen: c.toegewezen, claim: c.claim, suspect: !!c.suspect }));
+    const claimTotal = dayClaims.reduce((a, c) => a + c.claim, 0);
+    const freeIds = hostStatus.filter((s) => s.vrij).map((s) => s.id);
+    const day = {
+      date: ymd,
+      weekend: (wd === 0 || wd === 6),
+      free_raw: freeIds.length,
+      free_ids: freeIds,
+      claims: dayClaims,
+      claim_total: claimTotal,
+      free: Math.max(0, freeIds.length - claimTotal),
+      free_old: hostStatus.filter((s) => s.oudVrij).length,
+    };
+    if (detail) day.hosts = hostStatus;
+    days.push(day);
+  }
+
   return {
-    shoots: shoots.map(shootAvailNorm),
-    shoots_27m: shoots27m.map(shootAvailNorm),
-    vakantie: vakantie.map(shootAvailNorm),
-    hosts: SHOOT_HOSTS,
+    total: SHOOT_HOSTS.length,
+    hosts: SHOOT_HOSTS.map((h) => ({ id: h.id, name: h.name, gcal: gcal.status.get(h.email) || 'onbekend' })),
+    gcal_active: !!(env && env.SA_CLIENT_EMAIL && env.SA_PRIVATE_KEY),
+    gcal_global: gcal.global || null,
+    include_aanvraag: includeAanvraag,
+    sync_filter: syncFilter,
+    days,
   };
 }
 
-// Server-side: vrije host-ids op een YYYY-MM-DD (Brussels). Zelfde regel als de widget:
-// shoot -> bezet op dateStart; vakantie -> bezet als datum in [dateStart,dateEnd].
-function freeHostIdsOnDate(avail, dateStr) {
-  const busy = new Set();
-  (avail.shoots || []).forEach((s) => { if (s.dateStart === dateStr) (s.assignees || []).forEach((a) => busy.add(Number(a))); });
-  (avail.shoots_27m || []).forEach((s) => { if (s.dateStart === dateStr) (s.assignees || []).forEach((a) => busy.add(Number(a))); });
-  (avail.vakantie || []).forEach((v) => { if (v.dateStart && dateStr >= v.dateStart && dateStr <= (v.dateEnd || v.dateStart)) (v.assignees || []).forEach((a) => busy.add(Number(a))); });
-  return SHOOT_HOSTS.map((h) => h.id).filter((id) => !busy.has(Number(id)));
-}
+// pure helpers exporteren voor de unit-test-harness (geen netwerk).
+export const _shootEngineTest = { ymdRangeV2, addDaysYmdV2, blockHitsWorkdayV2, isClickupSyncEvent, gcalEventToInterval, msToBrusselsYmd, msToBrusselsHm, brusselsWallToMs, engineAgendaBlocks, SHOOT_HOSTS };
 
 /* ---- publicShootAvailability (PUBLIEK, geen auth, geen klant-scope) ----------
  * Geaggregeerde shoot-capaciteit per dag voor de publieke beschikbaarheidspagina
@@ -5077,21 +5393,13 @@ function freeHostIdsOnDate(avail, dateStr) {
  * booking-widget. opts: { days } (default 120, cap 366). Fail-open -> lege dagen.
  */
 export async function publicShootAvailability(env, opts) {
-  const days = Math.max(1, Math.min(366, (opts && Number(opts.days)) || 120));
-  let avail;
-  try { avail = await shootAvailability(env); }
-  catch (e) { avail = { shoots: [], shoots_27m: [], vakantie: [], hosts: SHOOT_HOSTS }; }
-  const total = SHOOT_HOSTS.length;
-  // Anker op 12:00 UTC per dag -> altijd dezelfde Brusselse kalenderdag (DST-veilig).
-  const now = new Date();
-  const base = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0);
-  const out = [];
-  for (let i = 0; i < days; i++) {
-    const ymd = msToBrusselsYmd(base + i * 86400000);
-    if (!ymd) continue;
-    out.push({ date: ymd, free: freeHostIdsOnDate(avail, ymd).length });
-  }
-  return { ok: true, total, days: out };
+  const days = Math.max(7, Math.min(366, (opts && Number(opts.days)) || 120));
+  // ENGINE V2: zelfde shape als voorheen ({date, free}); 'free' is nu het effectief
+  // boekbare aantal (agenda-bewust, na pool-claims, zonder niet-goedgekeurd verlof).
+  let map;
+  try { map = await shootEngineDayMap(env, { horizonDays: days }); }
+  catch (e) { return { ok: true, total: SHOOT_HOSTS.length, days: [] }; }
+  return { ok: true, total: map.total, days: map.days.map((d) => ({ date: d.date, free: d.free })) };
 }
 
 /* ---- shootContext (READ) - validatie + beschikbaarheid in één call ----------
@@ -5126,9 +5434,26 @@ export async function shootContext(bedrijfId, body, env) {
   const aRaw = getCF(task, FIELD.contentCreators);
   const aantalCreators = (aRaw != null && aRaw !== '') ? (parseInt(aRaw, 10) + 1) : null;
   if (!timeHours || !aantalCreators) return { status: 200, body: { status: 'incomplete_metadata' } };
-  let availability;
-  try { availability = await shootAvailability(env); }
-  catch (e) { availability = { shoots: [], shoots_27m: [], vakantie: [], hosts: SHOOT_HOSTS }; }
+  // ENGINE V2 over het volledige klikbare venster (SHOOT_WINDOW_DAYS=365 in de frontend).
+  // Output: 'dagvrij' {ymd -> effectief boekbare plekken} voor de nieuwe frontend, plus
+  // een compat-laag (vakantie-array, 120d) zodat een nog-gecachte oude portal.js tijdens
+  // de versie-overgang met dezelfde engine-data rekent i.p.v. alles vrij te tonen.
+  let availability = { shoots: [], shoots_27m: [], vakantie: [], hosts: SHOOT_HOSTS.map((h) => ({ id: h.id, name: h.name })), dagvrij: {}, total: SHOOT_HOSTS.length };
+  try {
+    const map = await shootEngineDayMap(env, { horizonDays: 365 });
+    const dagvrij = {};
+    const compat = [];
+    const compatEnd = addDaysYmdV2(map.days.length ? map.days[0].date : msToBrusselsYmd(Date.now()), 120);
+    for (const d of map.days) {
+      dagvrij[d.date] = d.free;
+      if (d.date <= compatEnd) {
+        // compat: per niet-vrije host één 1-dags 'vakantie'-item (oude busy-regel pakt ranges)
+        const freeSet = new Set(d.free_ids);
+        for (const h of SHOOT_HOSTS) if (!freeSet.has(h.id)) compat.push({ dateStart: d.date, dateEnd: d.date, assignees: [h.id] });
+      }
+    }
+    availability = { shoots: [], shoots_27m: [], vakantie: compat, hosts: SHOOT_HOSTS.map((h) => ({ id: h.id, name: h.name })), dagvrij, total: map.total };
+  } catch (e) { /* fail-open: lege availability -> kalender toont alles vrij (oud gedrag) */ }
   // Locatie al door het team ingevuld in ClickUp? Dan toont het portaal die read-only
   // (klant kan ze niet wijzigen) en is locatie-invoer niet nodig.
   const locValO = getCF(task, FIELD.locatie);
@@ -5247,11 +5572,15 @@ export async function shootSubmit(bedrijfId, body, env) {
   const effHours = aantalPersonen > 0 ? Math.ceil((timeHours / aantalPersonen) * 2) / 2 : timeHours;
   const endMs = startMs + Math.max(1, Math.round(effHours * 3600000));
 
-  // Host-keuze: verse server-side beschikbaarheid -> random vrij poollid op die dag.
+  // Host-keuze: verse server-side beschikbaarheid (ENGINE V2: incl. meetings + eigen
+  // Google-agenda, zonder niet-goedgekeurd verlof) -> random vrij poollid op die dag.
   let pickedHost = null;
   try {
-    const avail = await shootAvailability(env);
-    const free = freeHostIdsOnDate(avail, datum);
+    const todayYmd = msToBrusselsYmd(Date.now());
+    const span = Math.round((brusselsWallToMs(datum, '12:00') - brusselsWallToMs(todayYmd, '12:00')) / 86400000) + 1;
+    const map = await shootEngineDayMap(env, { horizonDays: Math.max(7, Math.min(366, span)) });
+    const day = map.days.find((d) => d.date === datum);
+    const free = (day && Array.isArray(day.free_ids)) ? day.free_ids : [];
     if (free.length) {
       const pid = free[Math.floor(Math.random() * free.length)];
       pickedHost = SHOOT_HOSTS.find((h) => Number(h.id) === Number(pid)) || { id: pid, name: '' };

@@ -52,6 +52,7 @@ import { handlePush, handlePushNotify } from './push.mjs';
 import { handleClickupHook } from './clickup-push.mjs';
 import * as vr from './videoreview.mjs';
 import * as rem from './reminders.mjs';
+import { handleShootLab } from './shootlab.mjs';
 
 // Video-review (frame-accurate klantfeedback op Bestanden-veld-video's): registratie
 // hier i.p.v. in handlers.mjs zodat de module zelfstandig blijft (zie videoreview.mjs).
@@ -488,7 +489,8 @@ async function handlePublicShoot(request, env, ctx) {
     return new Response(null, { status: 204, headers: { ...cors, 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' } });
   if (request.method !== 'GET') return json({ ok: false, error: 'method_not_allowed' }, 405, cors);
   if (!env.CLICKUP_TOKEN) return json({ ok: false, error: 'gateway_misconfigured' }, 500, cors);
-  const CK = 'pubshoot:v1';
+  // v2: ENGINE V2 (agenda-bewust); key-bump zodat oude gecachte cijfers meteen vervallen.
+  const CK = 'pubshoot:v2';
   if (env.KV) {
     try { const hit = await env.KV.get(CK); if (hit) return new Response(hit, { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300', 'X-Cache': 'hit', ...cors } }); } catch (e) {}
   }
@@ -528,6 +530,12 @@ export default {
       const _pub = new URL(request.url).pathname.replace(/^\/+|\/+$/g, '');
       if (_pub === 'public/shoot-beschikbaarheid' || _pub === 'shoot-capaciteit') {
         return handlePublicShoot(request, env, ctx);
+      }
+      // SHOOT-LAB: read-only sandbox om de nieuwe beschikbaarheidsengine (shoots +
+      // meetings + payroll + Google-agenda) te valideren. Schrijft niets weg, raakt
+      // geen productie-handler. Open CORS; optioneel te vergrendelen via env.SHOOTLAB_KEY.
+      if (_pub === 'shoot-lab' || _pub === 'shoot-lab/api') {
+        return handleShootLab(request, env, ctx);
       }
       // Publieke media-serve (klant-geüploade post-visuals) zodat Metricool ze kan ophalen.
       // GET-only, onraadbare sleutel, vaste content-type + nosniff (geen HTML/JS-uitvoering).

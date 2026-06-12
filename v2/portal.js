@@ -2032,7 +2032,13 @@ function shootDayState(ctx,date){
   if(shootIsWeekend(date))return 'past';
   const ds=shootYmd(date);
   if(SHOOT_HOLIDAYS.has(ds))return 'full';
-  const free=shootFreeHosts(ctx,ds).length;
+  // ENGINE V2: de server levert een kant-en-klare dagvrij-map (shoots + meetings +
+  // goedgekeurde payroll + Google-agenda, na pool-claims). Oude shape blijft als
+  // fallback voor de cache-overgang (oude worker-respons of gecachte data).
+  const av=ctx.availability||{};
+  let free;
+  if(av.dagvrij&&typeof av.dagvrij==='object'){ const v=av.dagvrij[ds]; free=(v==null?SHOOT_HOSTS.length:Number(v)); }
+  else free=shootFreeHosts(ctx,ds).length;
   if(free>=ctx.aantalCreators)return free===SHOOT_HOSTS.length?'free':'partial';
   return 'full';
 }
