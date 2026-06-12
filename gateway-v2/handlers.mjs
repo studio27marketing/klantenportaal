@@ -2329,6 +2329,7 @@ export async function bugReport(bedrijfId, body, env) {
   const titel = str(body && body.titel).trim().slice(0, 140);
   const omschrijving = str(body && body.omschrijving).trim().slice(0, 6000);
   const context = str(body && body.context).slice(0, 300);
+  const melderNaam = str(body && body.melder_naam).replace(/[^\w \u00c0-\u017f-]/g, '').slice(0, 40);
   const melder = str(body && body.account_email);
   if (!titel && !omschrijving) return { status: 400, body: { ok: false, message: 'Beschrijf eerst even de bug of feedback.' } };
   let created;
@@ -2337,7 +2338,7 @@ export async function bugReport(bedrijfId, body, env) {
       name: `🐞 ${titel || omschrijving.slice(0, 80)}`,
       description: [
         'PORTAAL-FEEDBACK (via de 🐞-knop in de team-weergave)', '',
-        melder ? `Gemeld door: ${melder}` : '',
+        (melderNaam || melder) ? `Gemeld door: ${[melderNaam, melder ? `(${melder})` : ''].filter(Boolean).join(' ')}` : '',
         context ? `Pagina/context: ${context}` : '',
         '', omschrijving || '(geen omschrijving)',
       ].filter((x) => x !== '').join('\n'),
@@ -2430,6 +2431,10 @@ export async function contactVraag(bedrijfId, body, env) {
     const encSubj = `=?UTF-8?B?${btoa(unescape(encodeURIComponent(subj)))}?=`;
     const raw = [
       `To: ${CONTACT_TO}`,
+      // afzender = no-reply (Vincent 11-06): vereist dat no-reply@studio27.be als
+      // send-as-alias op de geïmpersoneerde mailbox staat — anders herschrijft Gmail
+      // stilletjes naar het primaire adres (bekende alias-les uit de 27M-flow).
+      `From: "Studio 27" <no-reply@studio27.be>`,
       accountEmail ? `Reply-To: ${accountEmail}` : '',
       `Subject: ${encSubj}`,
       'Content-Type: text/plain; charset=utf-8',

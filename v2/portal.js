@@ -2093,35 +2093,54 @@ async function pushPortalVersion(btn){
   alert(d.message||((res&&res.ok)?'Versie gepusht.':'Pushen lukte niet \u2014 probeer zo opnieuw.'));
 }
 
-/* ---- 🐞 Portaal-feedback (WS-3b, team-only) ---- */
+/* ---- 🐞 Portaal-feedback (WS-3b, team-only): schermvullende pagina ---- */
+var BUG_TEAM=['Vincent','Ilke','Arne','Klaas','Guus','Danique','Ines','Bjorn','Celien'];
 function openBugReport(){
-  var el=$id('bugOv');
-  if(!el){ el=document.createElement('div'); el.id='bugOv'; el.className='mp-overlay';
-    el.addEventListener('mousedown',function(e){ el._ds=(e.target===el); });
-    el.addEventListener('click',function(e){ if(e.target===el&&el._ds) closeBugReport(); });
-    document.body.appendChild(el); }
-  el.innerHTML='<div class="mp-modal" onclick="event.stopPropagation()">'
-    +'<div class="mp-head"><span class="mp-back-sp"></span><div class="mp-head-c"><span class="mp-head-eyebrow">Team</span><b>\ud83d\udc1e Portaal-feedback</b></div><button class="mp-close" onclick="closeBugReport()" aria-label="Sluiten">'+ic('plus',22)+'</button></div>'
-    +'<div class="mp-scroll">'
+  state._bugFrom={mode:state.viewMode, tab:currentTab, project:state.activeProject};
+  state.viewMode='bugreport'; state._bugFile=null;
+  // melder vooraf selecteren op het ingelogde e-mailadres
+  var em=String((state.session&&state.session.email)||'').toLowerCase();
+  state._bugWie=BUG_TEAM.find(function(n){ return em.indexOf(n.toLowerCase())===0||em.indexOf(n.toLowerCase()+'@')>=0; })||'';
+  var page=$id('page'); if(!page) return;
+  var tt=$id('topbarTitle'); if(tt) tt.textContent='Portaal-feedback';
+  page.innerHTML='<div class="panel active br-blue" data-screen-label="bugreport"><div class="contactpage">'
+    +'<div class="gal-toprow"><button class="gal-close" onclick="closeBugReport()" aria-label="Terug">'+ic('plus',22)+'</button></div>'
+    +'<h1>\ud83d\udc1e Portaal-feedback</h1>'
+    +'<p class="sdesc" style="margin:4px 0 20px">Bug gezien of een idee voor het portaal? Drop het hier \u2014 het komt rechtstreeks in de bugs-lijst terecht.</p>'
+    +'<div class="card contact-form" style="max-width:680px">'
+      +'<label class="ms-label">Wie meldt dit?</label>'
+      +'<div class="kanaal-pick bug-wie" style="margin:6px 0 16px">'+BUG_TEAM.map(function(n){
+        return '<button type="button" class="kanaal-pill'+(state._bugWie===n?' on':'')+'" onclick="bugPickWie(this,\''+n+'\')">'+n+'</button>';
+      }).join('')+'</div>'
       +'<label class="ms-label">Titel</label>'
-      +'<input type="text" id="bugTitel" class="shoot-zoek" style="margin:4px 0 12px" maxlength="140" placeholder="Korte omschrijving van de bug of het idee">'
+      +'<input type="text" id="bugTitel" class="shoot-zoek" style="margin:4px 0 14px" maxlength="140" placeholder="Korte omschrijving van de bug of het idee">'
       +'<label class="ms-label">Wat zie je / wat verwacht je?</label>'
-      +'<textarea id="bugBody" class="mp-note" rows="5" placeholder="Stappen, scherm, verwachting\u2026"></textarea>'
-      +'<label class="btn btn-outline btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin-top:10px">'+ic('upload',14)+' Screenshot toevoegen<input type="file" accept="image/*" style="display:none" onchange="state._bugFile=this.files[0]||null;var n=this.parentNode.querySelector(\'i\');if(n)n.remove();if(this.files[0]){var i=document.createElement(\'i\');i.textContent=\' \u2713 \'+this.files[0].name;this.parentNode.appendChild(i);}"></label>'
+      +'<textarea id="bugBody" class="mp-note" rows="6" placeholder="Stappen om te reproduceren, welk scherm, wat je verwachtte\u2026"></textarea>'
+      +'<div style="margin-top:12px"><label class="btn btn-outline btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">'+ic('upload',14)+' Screenshot toevoegen<input type="file" accept="image/*" style="display:none" onchange="bugPickFile(this)"></label><span id="bugFileChip" class="fs" style="margin-left:10px;color:var(--ink-3)"></span></div>'
       +'<div class="shoot-msg" id="bugMsg"></div>'
-      +'<div style="margin:14px 0 6px"><button class="btn btn-primary" onclick="bugVerstuur(this)">'+ic('send',15)+' Versturen</button></div>'
-    +'</div></div>';
-  el.classList.add('show'); document.body.classList.add('mp-lock');
-  state._bugFile=null;
+      +'<div style="margin-top:18px"><button class="btn btn-primary" onclick="bugVerstuur(this)">'+ic('send',15)+' Versturen</button></div>'
+    +'</div>'
+  +'</div></div>';
+  window.scrollTo({top:0,behavior:'auto'});
   var t=$id('bugTitel'); if(t) t.focus();
 }
-function closeBugReport(){ var el=$id('bugOv'); if(el){ el.classList.remove('show'); el.innerHTML=''; } document.body.classList.remove('mp-lock'); state._bugFile=null; }
+function bugPickWie(btn,n){ state._bugWie=n; document.querySelectorAll('.bug-wie .kanaal-pill').forEach(function(b){ b.classList.toggle('on', b.textContent===n); }); }
+function bugPickFile(inp){
+  state._bugFile=(inp.files&&inp.files[0])||null;
+  var c=$id('bugFileChip'); if(c) c.textContent=state._bugFile?('\u2713 '+state._bugFile.name):'';
+}
+function closeBugReport(){
+  var f=state._bugFrom||{}; state._bugFile=null;
+  if(f.mode==='project'&&f.project) openProject(f.project,'auto');
+  else goTab(f.tab||'start');
+}
 async function bugVerstuur(btn){
   var titel=($id('bugTitel')||{}).value||'', body=($id('bugBody')||{}).value||'';
   var msg=$id('bugMsg');
   if(!String(titel).trim()&&!String(body).trim()){ if(msg){msg.textContent='Beschrijf eerst even de bug of het idee.';msg.style.display='block';} return; }
+  if(!state._bugWie){ if(msg){msg.textContent='Selecteer even wie dit meldt.';msg.style.display='block';} return; }
   btn.disabled=true; btn.innerHTML='Versturen\u2026';
-  var payload={titel:String(titel).trim(),omschrijving:String(body).trim(),context:location.href+' \u00b7 '+(state.activeBedrijf||'')};
+  var payload={titel:String(titel).trim(),omschrijving:String(body).trim(),melder_naam:state._bugWie,context:location.href+' \u00b7 '+(state.activeBedrijf||'')};
   if(state._bugFile&&state._bugFile.size<=22*1024*1024){
     try{
       var b64=await new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){res(String(r.result).split(',')[1]||'');}; r.onerror=rej; r.readAsDataURL(state._bugFile); });
@@ -2129,7 +2148,10 @@ async function bugVerstuur(btn){
     }catch(e){}
   }
   var res; try{ res=await api(ENDPOINTS.bugReport,payload); }catch(e){ res=null; }
-  if(res&&res.ok&&res.data&&res.data.ok){ closeBugReport(); alert('\u2705 Bedankt! Je melding staat in de bugs-lijst.'); }
+  if(res&&res.ok&&res.data&&res.data.ok){
+    var page=$id('page');
+    if(page) page.innerHTML='<div class="panel active br-blue"><div class="contactpage"><div class="empty" style="padding:60px"><div class="em-ic">'+ic('st_approved',52)+'</div><b style="font-family:var(--font-display);font-size:17px;color:var(--ink-2)">Bedankt, '+escapeHtml(state._bugWie)+'!</b><p style="margin:6px 0 18px">Je melding staat in de bugs-lijst.</p><button class="btn btn-primary" onclick="closeBugReport()">Terug</button> <button class="btn btn-outline" onclick="openBugReport()">Nog een melding</button></div></div></div>';
+  }
   else { btn.disabled=false; btn.innerHTML=ic('send',15)+' Opnieuw proberen'; if(msg){msg.textContent='Versturen lukte niet \u2014 probeer zo opnieuw.';msg.style.display='block';} }
 }
 
