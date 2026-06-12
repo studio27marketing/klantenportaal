@@ -432,6 +432,14 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;}
   border-radius:var(--r-sm);background:var(--paper);color:var(--ink);outline:none;transition:box-shadow 150ms;}
 .field input:focus,.field select:focus{box-shadow:var(--focus);border-color:var(--s27-blue);}
 
+/* bug-melder dropdown (team, bug-pagina) */
+.bug-wie-select{font-family:var(--font-body);font-size:14px;padding:11px 14px;border:1px solid var(--line);
+  border-radius:var(--r-sm);background:var(--paper);color:var(--ink);outline:none;transition:box-shadow 150ms;
+  width:100%;max-width:340px;display:block;margin:6px 0 16px;cursor:pointer;}
+.bug-wie-select:focus{box-shadow:var(--focus);border-color:var(--s27-blue);}
+/* bug-omschrijving: standaard groot tekstveld (Vincent 12-06) */
+#bugBody{min-height:280px;font-size:14px;line-height:1.55;}
+
 /* notif preference cards */
 .optcards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
 .optcard{border:1.5px solid var(--line);border-radius:var(--r-md);padding:16px;text-align:center;background:var(--paper);transition:all 160ms var(--ease-out);}

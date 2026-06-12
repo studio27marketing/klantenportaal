@@ -2094,13 +2094,41 @@ async function pushPortalVersion(btn){
 }
 
 /* ---- 🐞 Portaal-feedback (WS-3b, team-only): schermvullende pagina ---- */
-var BUG_TEAM=['Vincent','Ilke','Arne','Klaas','Guus','Danique','Ines','Bjorn','Celien'];
+// Melder-dropdown = LIVE ClickUp-workspace-leden via het teamLeden-endpoint (Vincent 12-06:
+// exact wie in ClickUp assignee kan zijn; wie er niet in zit — zoals Celien nu — staat er
+// dus ook niet tussen). Fallback-snapshot wordt enkel gebruikt tot/tenzij de fetch er (niet) is.
+var BUG_TEAM_FALLBACK=['Anouk de Hoon','Arne Goetschalckx','Bjorn Borgers','Danique Bosch','Eline Meyvis','Eva Goetschalckx','Griet Beyens','Guus Van den Heuvel','Ilke Meeusen','Ines Permentiers','Johanna Augustyns','Klaas Vanhove','Lara Hooyberghs','Viktor Hendrickx','Vincent Verleije','Ward Frijters','Wout Goos'];
+function _bugTeamNamen(){ return (state._bugTeam&&state._bugTeam.length)?state._bugTeam.map(function(l){return String(l.naam||'');}):BUG_TEAM_FALLBACK.slice(); }
+function _bugWieDefault(){
+  var em=String((state.session&&state.session.email)||'').toLowerCase();
+  var leden=state._bugTeam||[];
+  for(var i=0;i<leden.length;i++){ if(leden[i].email&&leden[i].email===em) return String(leden[i].naam||''); }
+  // fallback: voornaam uit het e-mailadres (ClickUp-mail kan afwijken van de portaal-login)
+  var vn=em.split('@')[0].split('.')[0];
+  if(vn){ var namen=_bugTeamNamen(); for(var j=0;j<namen.length;j++){ if(namen[j].toLowerCase().indexOf(vn)===0) return namen[j]; } }
+  return '';
+}
+function _bugWieOptions(){
+  var sel=state._bugWie||'';
+  return '<option value="" disabled'+(sel?'':' selected')+'>Kies je naam…</option>'+_bugTeamNamen().map(function(n){
+    return '<option value="'+escapeHtml(n)+'"'+(sel===n?' selected':'')+'>'+escapeHtml(n)+'</option>';
+  }).join('');
+}
+async function loadBugTeam(){
+  if(state._bugTeam&&state._bugTeam.length) return;
+  var res; try{ res=await api(ENDPOINTS.teamLeden,{}); }catch(e){ res=null; }
+  var leden=(res&&res.data&&res.data.ok&&Array.isArray(res.data.leden))?res.data.leden:[];
+  if(!leden.length) return; // fetch faalt -> fallback-snapshot blijft bruikbaar
+  state._bugTeam=leden;
+  var sel=$id('bugWie');
+  if(sel){ if(!state._bugWie) state._bugWie=_bugWieDefault(); sel.innerHTML=_bugWieOptions(); }
+}
 function openBugReport(){
   state._bugFrom={mode:state.viewMode, tab:currentTab, project:state.activeProject};
   state.viewMode='bugreport'; state._bugFile=null;
-  // melder vooraf selecteren op het ingelogde e-mailadres
-  var em=String((state.session&&state.session.email)||'').toLowerCase();
-  state._bugWie=BUG_TEAM.find(function(n){ return em.indexOf(n.toLowerCase())===0||em.indexOf(n.toLowerCase()+'@')>=0; })||'';
+  // melder vooraf selecteren op het ingelogde e-mailadres + live ledenlijst (async) ophalen
+  state._bugWie=_bugWieDefault();
+  loadBugTeam();
   var page=$id('page'); if(!page) return;
   var tt=$id('topbarTitle'); if(tt) tt.textContent='Portaal-feedback';
   page.innerHTML='<div class="panel active br-blue" data-screen-label="bugreport"><div class="contactpage">'
@@ -2109,13 +2137,11 @@ function openBugReport(){
     +'<p class="sdesc" style="margin:4px 0 20px">Bug gezien of een idee voor het portaal? Drop het hier \u2014 het komt rechtstreeks in de bugs-lijst terecht.</p>'
     +'<div class="card contact-form" style="max-width:680px">'
       +'<label class="ms-label">Wie meldt dit?</label>'
-      +'<div class="kanaal-pick bug-wie" style="margin:6px 0 16px">'+BUG_TEAM.map(function(n){
-        return '<button type="button" class="kanaal-pill'+(state._bugWie===n?' on':'')+'" onclick="bugPickWie(this,\''+n+'\')">'+n+'</button>';
-      }).join('')+'</div>'
+      +'<select id="bugWie" class="bug-wie-select" onchange="bugPickWie(this.value)">'+_bugWieOptions()+'</select>'
       +'<label class="ms-label">Titel</label>'
       +'<input type="text" id="bugTitel" class="shoot-zoek" style="margin:4px 0 14px" maxlength="140" placeholder="Korte omschrijving van de bug of het idee">'
       +'<label class="ms-label">Wat zie je / wat verwacht je?</label>'
-      +'<textarea id="bugBody" class="mp-note" rows="6" placeholder="Stappen om te reproduceren, welk scherm, wat je verwachtte\u2026"></textarea>'
+      +'<textarea id="bugBody" class="mp-note" rows="12" placeholder="Stappen om te reproduceren, welk scherm, wat je verwachtte\u2026"></textarea>'
       +'<div style="margin-top:12px"><label class="btn btn-outline btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">'+ic('upload',14)+' Screenshot toevoegen<input type="file" accept="image/*" style="display:none" onchange="bugPickFile(this)"></label><span id="bugFileChip" class="fs" style="margin-left:10px;color:var(--ink-3)"></span></div>'
       +'<div class="shoot-msg" id="bugMsg"></div>'
       +'<div style="margin-top:18px"><button class="btn btn-primary" onclick="bugVerstuur(this)">'+ic('send',15)+' Versturen</button></div>'
@@ -2124,7 +2150,7 @@ function openBugReport(){
   window.scrollTo({top:0,behavior:'auto'});
   var t=$id('bugTitel'); if(t) t.focus();
 }
-function bugPickWie(btn,n){ state._bugWie=n; document.querySelectorAll('.bug-wie .kanaal-pill').forEach(function(b){ b.classList.toggle('on', b.textContent===n); }); }
+function bugPickWie(n){ state._bugWie=String(n||''); }
 function bugPickFile(inp){
   state._bugFile=(inp.files&&inp.files[0])||null;
   var c=$id('bugFileChip'); if(c) c.textContent=state._bugFile?('\u2713 '+state._bugFile.name):'';
@@ -2138,6 +2164,7 @@ async function bugVerstuur(btn){
   var titel=($id('bugTitel')||{}).value||'', body=($id('bugBody')||{}).value||'';
   var msg=$id('bugMsg');
   if(!String(titel).trim()&&!String(body).trim()){ if(msg){msg.textContent='Beschrijf eerst even de bug of het idee.';msg.style.display='block';} return; }
+  var selEl=$id('bugWie'); if(selEl&&selEl.value) state._bugWie=selEl.value;
   if(!state._bugWie){ if(msg){msg.textContent='Selecteer even wie dit meldt.';msg.style.display='block';} return; }
   btn.disabled=true; btn.innerHTML='Versturen\u2026';
   var payload={titel:String(titel).trim(),omschrijving:String(body).trim(),melder_naam:state._bugWie,context:location.href+' \u00b7 '+(state.activeBedrijf||'')};
@@ -2150,7 +2177,7 @@ async function bugVerstuur(btn){
   var res; try{ res=await api(ENDPOINTS.bugReport,payload); }catch(e){ res=null; }
   if(res&&res.ok&&res.data&&res.data.ok){
     var page=$id('page');
-    if(page) page.innerHTML='<div class="panel active br-blue"><div class="contactpage"><div class="empty" style="padding:60px"><div class="em-ic">'+ic('st_approved',52)+'</div><b style="font-family:var(--font-display);font-size:17px;color:var(--ink-2)">Bedankt, '+escapeHtml(state._bugWie)+'!</b><p style="margin:6px 0 18px">Je melding staat in de bugs-lijst.</p><button class="btn btn-primary" onclick="closeBugReport()">Terug</button> <button class="btn btn-outline" onclick="openBugReport()">Nog een melding</button></div></div></div>';
+    if(page) page.innerHTML='<div class="panel active br-blue"><div class="contactpage"><div class="empty" style="padding:60px"><div class="em-ic">'+ic('st_approved',52)+'</div><b style="font-family:var(--font-display);font-size:17px;color:var(--ink-2)">Bedankt, '+escapeHtml(String(state._bugWie).split(' ')[0])+'!</b><p style="margin:6px 0 18px">Je melding staat in de bugs-lijst.</p><button class="btn btn-primary" onclick="closeBugReport()">Terug</button> <button class="btn btn-outline" onclick="openBugReport()">Nog een melding</button></div></div></div>';
   }
   else { btn.disabled=false; btn.innerHTML=ic('send',15)+' Opnieuw proberen'; if(msg){msg.textContent='Versturen lukte niet \u2014 probeer zo opnieuw.';msg.style.display='block';} }
 }

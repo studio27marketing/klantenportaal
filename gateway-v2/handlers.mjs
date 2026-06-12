@@ -2369,6 +2369,40 @@ export async function bugReport(bedrijfId, body, env) {
   return { status: 200, body: { ok: true, bug_id: bugId, attached } };
 }
 
+/* ---- teamLeden (team-only): assignee-bare workspace-leden voor de bug-melder-dropdown --- */
+// Bron = ClickUp GET /team (workspace-members); guests uitgefilterd (klant-guests horen niet
+// in de melder-lijst). KV-cache 6 u: een nieuw teamlid verschijnt dus binnen 6 u vanzelf, en
+// wie uit ClickUp verdwijnt, valt even automatisch weg (Vincent 12-06: lijst = exact wie in
+// ClickUp assignee kan zijn — geen hardgecodeerde namen meer in de frontend).
+export async function teamLeden(bedrijfId, body, env) {
+  if (!(body && body.__staff === true)) {
+    return { status: 403, body: { ok: false, message: 'Alleen voor het Studio 27-team.' } };
+  }
+  try {
+    const hit = await env.KV.get('team:leden', 'json');
+    if (hit && Array.isArray(hit.leden) && hit.leden.length) return { status: 200, body: hit };
+  } catch (e) { /* cache-miss */ }
+  let leden = [];
+  try {
+    const r = await cu.get(env, '/team');
+    const teams = (r.ok && r.data && Array.isArray(r.data.teams)) ? r.data.teams : [];
+    const team = teams.find((t) => str(t && t.id) === TEAM_ID) || teams[0];
+    leden = ((team && team.members) || [])
+      .map((m) => m && m.user)
+      .filter((u) => u && u.id && u.role != null && Number(u.role) !== 4 && str(u.username || u.email).trim())
+      .map((u) => ({
+        id: Number(u.id),
+        naam: (str(u.username).trim() || str(u.email).split('@')[0]).slice(0, 60),
+        email: str(u.email).trim().toLowerCase(),
+      }))
+      .sort((a, b) => a.naam.localeCompare(b.naam, 'nl'));
+  } catch (e) { leden = []; }
+  if (!leden.length) return { status: 502, body: { ok: false, message: 'Teamleden konden niet opgehaald worden.' } };
+  const out = { ok: true, leden };
+  try { await env.KV.put('team:leden', JSON.stringify(out), { expirationTtl: 21600 }); } catch (e) { /* cache best-effort */ }
+  return { status: 200, body: out };
+}
+
 /* ---- facturatieNotitie (team-only): interne notitie voor Celien op de bedrijf-taak --- */
 // Gebruikt het bestaande interne veld 'Facturatie opmerking' (42a0fd8e, hide_from_guests)
 // op BEDRIJFS-niveau. Nooit in een klant-payload — enkel via dit staff-endpoint.
@@ -5782,6 +5816,7 @@ export const WRITE_HANDLERS = {
   contactVraag,
   portalVersionPush,
   bugReport,
+  teamLeden,
   facturatieNotitie,
   // Extra bijlage(n) op een supportticket (1 bestand per call; scope = Tickets-lijst + eigen bedrijf).
   ticketAttach,

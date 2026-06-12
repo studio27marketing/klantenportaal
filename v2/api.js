@@ -138,6 +138,7 @@ const ENDPOINTS = {
   contactVraag:      GATEWAY_BASE + '/contactVraag',  // algemene vraag -> mail/taak naar Ilke
   portalVersionPush: GATEWAY_BASE + '/portalVersionPush', // team: versie hard doorduwen naar alle clients
   bugReport:         GATEWAY_BASE + '/bugReport',         // team: portaal-bug/feedback -> bugs-lijst
+  teamLeden:         GATEWAY_BASE + '/teamLeden',         // team: assignee-bare ClickUp-leden (melder-dropdown)
   facturatieNotitie: GATEWAY_BASE + '/facturatieNotitie', // team: interne notitie voor Celien (bedrijf-taak)
   // Meeting-tunnel: taskloze Google-Calendar-boeking + invite (Algemene meeting/Projectmeeting/Nieuw project).
   // { host_email, host_naam, start, eind, start_ms, online, titel, beschrijving, locatie, client_email, client_naam, project_task_id?, project_naam?, intake?, when_label? }
