@@ -3463,9 +3463,11 @@ export async function metricool(bedrijfId, body, env) {
   const data = await r.json().catch(() => null);
   const arr = data && Array.isArray(data.data) ? data.data
     : (Array.isArray(data) ? data : (data && Array.isArray(data.posts) ? data.posts : []));
-  // Het volledige venster ophalen (4 mnd terug + vooruit), maar concepten/drafts blijven UIT de
-  // klant-weergave (op vraag). De editor werkt dus enkel op niet-draft posts.
-  let posts = (arr || []).filter((p) => p && p.id != null).map(mcMapPost).filter((p) => !p.draft);
+  // Drafts/concepten komen MEE in de weergave (bug 86ca83gp0, Danique 12-06): zo ziet de klant
+  // ook posts die nog in voorbereiding staan (bv. wachten op beeldmateriaal/input), maar hij kan
+  // er niets aan wijzigen — de UI toont ze read-only en de write-handlers weigeren drafts server-side
+  // (metricoolUpdate: draft_not_editable; metricoolApprove: draft_not_approvable).
+  let posts = (arr || []).filter((p) => p && p.id != null).map(mcMapPost);
   // Klant-goedkeuringen uit KV mergen (portaal-eigen, los van Metricool's interne reviewer-flow).
   if (env.KV && posts.length) {
     try {
@@ -4635,7 +4637,8 @@ async function mcPostBelongsToBlog(env, blogId, postId) {
     const r = await fetch(`${METRICOOL_BASE}/scheduler/posts?${q.toString()}`, { headers: mcHeaders(env) });
     const d = await r.json().catch(() => null);
     const arr = d && Array.isArray(d.data) ? d.data : (Array.isArray(d) ? d : []);
-    return (arr || []).some((p) => String(p && p.id) === String(postId));
+    // geeft de RUWE post terug (truthy) zodat callers extra velden (zoals .draft) kunnen checken
+    return (arr || []).find((p) => String(p && p.id) === String(postId)) || false;
   } catch (e) { return false; }
 }
 
@@ -4655,8 +4658,13 @@ export async function metricoolApprove(bedrijfId, body, env) {
     return { status: 403, body: { ok: false, error: 'not_linked', message: 'Geen Metricool-koppeling voor dit bedrijf.' } };
   }
   // SEC-4: post moet tot DEZE klant z'n blogId horen (anti-IDOR).
-  if (!(await mcPostBelongsToBlog(env, blogId, postId))) {
+  const rawPost = await mcPostBelongsToBlog(env, blogId, postId);
+  if (!rawPost) {
     return { status: 404, body: { ok: false, error: 'post_not_found' } };
+  }
+  // drafts zijn nog niet af: zichtbaar in het portaal, maar niet goed te keuren (bug 86ca83gp0)
+  if (rawPost.draft) {
+    return { status: 200, body: { ok: false, error: 'draft_not_approvable', message: 'Deze post is nog in voorbereiding en kan nog niet goedgekeurd worden.' } };
   }
   // De klant is geen Metricool-reviewer: we bewaren de goedkeuring portaal-eigen in KV
   // (zodat de social-kalender 'goedgekeurd' toont) en melden het team via de ClickUp-inbox.
