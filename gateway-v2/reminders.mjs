@@ -2,12 +2,13 @@
  * AUTO-REMINDERS (WS-4, masterplan G2) — dagelijkse cron die klanten herinnert aan
  * openstaande KLANT-acties (feedback geven, input leveren, shoot inplannen).
  * -----------------------------------------------------------------------------
- * STATUS: SLAPEND OPGELEVERD. De engine draait pas wanneer ALLE drie waar zijn:
- *   1. KV-noodrem:  `reminders:enabled` = '1'   (nu: niet gezet → engine stopt direct)
- *   2. Het taak-veld bestaat: checkbox 'Auto-reminder' op de PLANNING-FOLDER (Vincent
- *      maakt aan — velden kunnen niet via de API; ID invullen in REMINDER_FIELD_TAAK).
- *   3. Per taak: het team vinkt 'Auto-reminder' aan (opt-in per taak; default stilte).
- * Interval per bedrijf via optioneel veld (REMINDER_FIELD_INTERVAL), anders 4 dagen.
+ * STATUS: PILOT (Vincent 12-06): KV `reminders:enabled`='1' staat AAN, maar de engine is
+ * begrensd tot PILOT_BEDRIJVEN (enkel Studio 27). Veld-ID door Vincent aangeleverd —
+ * LET OP: op 12-06 was dat ID met Vincent's eigen token nergens in de workspace vindbaar
+ * (vermoedelijk verkeerd gekopieerd of veld nog niet aan de Planning-folder gekoppeld);
+ * zolang geen enkele taak het veld draagt, doet de engine gewoon niets (fail-soft).
+ * Per taak: het team vinkt 'Auto-reminder' aan (opt-in per taak; default stilte).
+ * Interval VAST op 3 dagen (Vincent 12-06: geen interval-veld per bedrijf gewenst).
  * Versturen: web-push eerst (PILOT-poort — bereikt nu enkel vincent@studio27.be; go-live
  * = §7.2-beslissing), daarna e-mail-fallback vanuit "Studio 27" <no-reply@studio27.be>
  * (gmail.send-scope staat sinds 11-06; no-reply moet als send-as-alias bestaan).
@@ -22,11 +23,11 @@ const str = (v) => (v == null ? '' : String(v));
 // MODEL (Vincent 11-06): reminders worden PER TAAK aangezet — checkbox-veld op de
 // PLANNING-FOLDER (propageert naar alle planninglijsten incl. Tickets). Opt-in per taak:
 // het team vinkt 'Auto-reminder' aan op precies de taken waar de klant aan zet is; een
-// shoot die pas over 3 maanden speelt, krijgt het vinkje gewoon niet. Het interval blijft
-// per bedrijf instelbaar (optioneel veld op de Bedrijven-lijst; ontbreekt het, dan 4 dagen).
-const REMINDER_FIELD_TAAK = '';       // checkbox 'Auto-reminder' op de Planning-FOLDER (Vincent maakt aan → ID hier)
-const REMINDER_FIELD_INTERVAL = '';   // optioneel: number 'Reminder-interval (dagen)' op Bedrijven-lijst
-const DEFAULT_INTERVAL_DAGEN = 4;
+// shoot die pas over 3 maanden speelt, krijgt het vinkje gewoon niet.
+const REMINDER_FIELD_TAAK = '8ee6b5b2-d502-4128-addb-6fedea26677e'; // checkbox 'Auto-reminder' (Vincent 12-06)
+const DEFAULT_INTERVAL_DAGEN = 3;     // VAST (Vincent 12-06: geen per-bedrijf-interval)
+// PILOT: enkel deze bedrijven meenemen tot Vincent groen licht geeft (leeg = alle bedrijven)
+const PILOT_BEDRIJVEN = ['86c8cz2uu']; // Studio 27
 
 // Welke open taken vragen een klant-actie?
 function klantActie(t) {
@@ -45,13 +46,7 @@ const COPY = {
   shoot: { title: 'Shoot inplannen 📅', body: (n) => `"${n}" wacht op een datum — plan je shoot in een paar klikken in.` },
 };
 
-function bedrijfInterval(bedrijfTaak) {
-  let interval = REMINDER_FIELD_INTERVAL
-    ? (Math.round(Number(getCF(bedrijfTaak, REMINDER_FIELD_INTERVAL))) || DEFAULT_INTERVAL_DAGEN)
-    : DEFAULT_INTERVAL_DAGEN;
-  if (interval < 1) interval = 1; if (interval > 30) interval = 30;
-  return interval * 86400000;
-}
+const INTERVAL_MS = DEFAULT_INTERVAL_DAGEN * 86400000;
 function taakReminderAan(t) {
   const v = getCF(t, REMINDER_FIELD_TAAK);
   return v === true || str(v) === 'true';
@@ -113,6 +108,8 @@ export async function reminderEngine(env, ctx) {
     const r = await adminCompanies(env);
     companies = (r && r.body && Array.isArray(r.body.companies)) ? r.body.companies : [];
   } catch (e) { return { skipped: 'companies_failed' }; }
+  // pilot-poort: tijdens de testfase enkel de pilot-bedrijven (Studio 27) verwerken
+  if (PILOT_BEDRIJVEN.length) companies = companies.filter((c) => PILOT_BEDRIJVEN.includes(str(c && c.id)));
 
   const now = Date.now();
   let verstuurd = 0;
@@ -123,7 +120,7 @@ export async function reminderEngine(env, ctx) {
         const br = await cu.get(env, `/task/${c.id}`);
         const bedrijfTaak = br.ok && br.data ? br.data : null;
         if (!bedrijfTaak) return;
-        const intervalMs = bedrijfInterval(bedrijfTaak);
+        const intervalMs = INTERVAL_MS;
         const tree = await fetchBedrijfTree(env, c.id);
         // opt-in PER TAAK: enkel taken waar het team 'Auto-reminder' aanvinkte
         const kandidaten = tree.all.filter(taakReminderAan);

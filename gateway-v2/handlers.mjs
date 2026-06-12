@@ -2332,6 +2332,17 @@ export async function bugReport(bedrijfId, body, env) {
   const melderNaam = str(body && body.melder_naam).replace(/[^\w \u00c0-\u017f-]/g, '').slice(0, 40);
   const melder = str(body && body.account_email);
   if (!titel && !omschrijving) return { status: 400, body: { ok: false, message: 'Beschrijf eerst even de bug of feedback.' } };
+  // melder -> ClickUp-assignee (Vincent 12-06: snel zien wie het indiende) — naam-match op
+  // de workspace-ledenlijst (zelfde bron als de dropdown), e-mail-match als vangnet. Best-effort.
+  let melderId = 0;
+  try {
+    const tl = await teamLeden(bedrijfId, { __staff: true }, env);
+    const leden = (tl && tl.body && Array.isArray(tl.body.leden)) ? tl.body.leden : [];
+    const nm = melderNaam.trim().toLowerCase();
+    const hit = (nm && leden.find((l) => str(l.naam).trim().toLowerCase() === nm))
+      || (melder && leden.find((l) => l.email && l.email === melder)) || null;
+    melderId = hit ? Number(hit.id) : 0;
+  } catch (e) { melderId = 0; }
   let created;
   try {
     created = await cu.post(env, `/list/${BUGS_LIST}/task`, {
@@ -2342,6 +2353,10 @@ export async function bugReport(bedrijfId, body, env) {
         context ? `Pagina/context: ${context}` : '',
         '', omschrijving || '(geen omschrijving)',
       ].filter((x) => x !== '').join('\n'),
+      // due date = verzendmoment (Vincent 12-06) + melder als assignee indien gematcht
+      due_date: Date.now(),
+      due_date_time: true,
+      ...(melderId ? { assignees: [melderId] } : {}),
       notify_all: false,
     });
   } catch (e) { created = null; }
