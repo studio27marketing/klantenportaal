@@ -1,0 +1,507 @@
+/* ============================================================
+   Studio 27 Klantenportaal, SOFT GLASS theme layer
+   Loaded AFTER styles.css. Frosted surfaces over a soft
+   gradient canvas. Translucent fills (cheap) on the many
+   cards; real backdrop-blur only on the few big chrome panels.
+   ============================================================ */
+:root{
+  --glass-grad:linear-gradient(150deg,#FBF8F3 0%,#F3ECF6 52%,#E9F1FC 100%);
+  --glass-fill:rgba(255,255,255,.60);
+  --glass-fill-strong:rgba(255,255,255,.78);
+  --glass-border:rgba(255,255,255,.85);
+  --glass-line:rgba(150,120,150,.16);
+  --glass-sh:0 8px 24px rgba(60,40,80,.09);
+  --glass-sh-lg:0 18px 44px rgba(60,40,80,.16);
+  --grad-bp:linear-gradient(120deg,var(--s27-blue),var(--s27-purple));
+  --ease:var(--ease-out);
+}
+
+/* ---- canvas ---- */
+body{background:var(--glass-grad);background-attachment:fixed;}
+#login{background:var(--glass-grad);}
+#loader{background:var(--glass-grad);}
+
+/* ---- chrome: real frosted blur (few elements) ---- */
+.sidebar{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);border-right:1px solid var(--glass-border);}
+.topbar{background:rgba(255,255,255,.55)!important;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--glass-border);}
+.sb-foot{border-top:1px solid var(--glass-line);}
+.sb-client,.sb-contact{background:var(--glass-fill);border:1px solid var(--glass-border);}
+.sb-client:hover{background:var(--glass-fill-strong);}
+.switch-menu{background:var(--glass-fill-strong);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid var(--glass-border);box-shadow:var(--glass-sh-lg);}
+
+/* ---- liquid-glass nav-highlight: glijdende pill achter het actieve/gehoverde zijbalk-item (initSbGlass) ---- */
+.sb-nav{position:relative;}
+.sb-nav .sb-item{position:relative;z-index:1;}
+.sb-glass{position:absolute;left:12px;right:12px;top:0;height:0;border-radius:var(--r-md);background:var(--glass-fill);border:1px solid var(--glass-border);box-shadow:var(--glass-sh),inset 0 1px 0 rgba(255,255,255,.55);opacity:0;pointer-events:none;z-index:0;transition:top .22s var(--ease),height .22s var(--ease),opacity .18s var(--ease);}
+
+/* ---- generic card surfaces: translucent, no blur (cheap) ---- */
+.card,.action-card,.svc-card,.kpi,.chart-card,.accordion,.meeting-row,
+.setsec,.filecard,.contact-card,.optcard,.qopt,.richtprijs,.deliv-item,
+.swatch-card,.proj-row,.run-row,.done-row,.mini-card,.date-block,
+.fpill,.slot,.calday,.chat-input,.bot-chip{
+  background:var(--glass-fill);
+  border-color:var(--glass-border);
+  box-shadow:var(--glass-sh);
+}
+.card,.action-card,.svc-card,.kpi,.chart-card,.setsec,.contact-card,
+.proj-row,.run-row,.deliv-item,.meeting-row{box-shadow:var(--glass-sh);}
+.hero-lead,.section-head .sub{color:var(--ink-3);}
+
+/* soft rounding bump for the glass look */
+.card,.action-card,.svc-card,.kpi,.chart-card,.setsec,.contact-card,
+.proj-row,.run-row,.done-row,.meeting-row,.deliv-item{border-radius:20px;}
+
+/* keep branch accent bars/dots crisp on glass */
+.svc-card.locked{background:rgba(255,255,255,.42);}
+.fb-banner{background:rgba(248,192,40,.20);border:1px solid rgba(248,192,40,.45);}
+.eyebrow{background:rgba(255,255,255,.66);}
+.action-card.urgent{box-shadow:0 0 0 1px color-mix(in oklab,var(--c) 30%,transparent),var(--glass-sh);}
+
+/* inputs / dropzones */
+.field input,.field select,.field textarea{background:var(--glass-fill);border-color:var(--glass-border);}
+.dropzone{background:rgba(255,255,255,.4);border-color:rgba(150,120,150,.35);}
+.swatch-card .hex{background:rgba(255,255,255,.6);border-color:var(--glass-border);}
+
+/* progress tracks a touch lighter */
+.rp-bar,.prog,.mini-card .prog{background:rgba(150,120,150,.18);}
+
+/* ---- gradient primary CTA + accents ---- */
+.btn-primary{background:var(--grad-bp);box-shadow:0 6px 18px rgba(94,80,200,.30);}
+.btn-primary:hover{background:linear-gradient(120deg,var(--s27-blue-ink),var(--s27-purple-ink));box-shadow:0 10px 24px rgba(94,80,200,.36);}
+.oauth-btn{background:var(--glass-fill);border-color:var(--glass-border);}
+.chat-send{background:var(--grad-bp);}
+
+/* hero accent: always Studio 27 blue (Vincent) */
+.hero-h1 .accent{background:none!important;-webkit-text-fill-color:var(--s27-blue)!important;color:var(--s27-blue)!important;}
+.hero-h1 .accent .squig{-webkit-text-fill-color:initial;color:var(--s27-blue);}
+
+/* ---- login + loader cards ---- */
+.login-card{background:var(--glass-fill-strong);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border:1px solid var(--glass-border);box-shadow:var(--glass-sh-lg);}
+.loader-badge{background:var(--grad-bp);}
+.loader-bar i{background:var(--grad-bp);}
+
+/* ---- modal: frosted but readable over dark scrim ---- */
+.scrim{background:rgba(40,25,55,.42);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);}
+.modal{background:rgba(252,250,247,.92);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border:1px solid var(--glass-border);}
+.modal-head,.modal-tabs{background:rgba(255,255,255,.5);border-bottom:1px solid var(--glass-line);}
+.deliv-thumb{background:rgba(150,120,150,.12);}
+
+/* ---- notifications ---- */
+.notif-panel{background:rgba(255,255,255,.72);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);border:1px solid var(--glass-border);box-shadow:var(--glass-sh-lg);}
+.notif:hover{background:rgba(255,255,255,.6);}
+
+/* ============================================================
+   GLASS AI CONSOLE  (the opened chatbot)
+   ============================================================ */
+.bot-panel{background:linear-gradient(160deg,rgba(255,255,255,.74),rgba(241,236,247,.74));
+  -webkit-backdrop-filter:blur(22px);backdrop-filter:blur(22px);
+  border:1px solid var(--glass-border);box-shadow:var(--glass-sh-lg);}
+.bot-head{background:rgba(255,255,255,.42);color:var(--ink);border-bottom:1px solid var(--glass-border);position:relative;overflow:hidden;}
+.bot-head::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(220px circle at 0% 0%,rgba(48,131,220,.16),transparent 60%),radial-gradient(220px circle at 100% 120%,rgba(148,65,219,.18),transparent 60%);}
+.bot-head h3{color:var(--ink);position:relative;}
+.bot-head .st{color:var(--ink-3);position:relative;}
+.bot-head .ba{position:relative;background:radial-gradient(circle at 30% 30%,#a9c9f5,var(--s27-blue) 68%);
+  box-shadow:0 0 0 5px rgba(48,131,220,.14),0 8px 18px rgba(148,65,219,.34);}
+.bot-head .ba::after{content:"";position:absolute;inset:9px;border-radius:50%;background:rgba(255,255,255,.55);filter:blur(1px);}
+.bot-head .ba svg{display:none;}
+.bot-head .bclose{color:var(--ink-3);}
+.bot-head .bclose:hover{background:rgba(150,120,150,.16);}
+.bot-msgs{background:transparent;}
+.bmsg.bot{background:rgba(255,255,255,.78);border:1px solid var(--glass-border);box-shadow:0 4px 12px rgba(60,40,80,.06);}
+.bmsg.user{background:var(--grad-bp);box-shadow:0 6px 16px rgba(94,80,200,.30);}
+.typing{background:rgba(255,255,255,.78);border:1px solid var(--glass-border);}
+.typing i{background:var(--s27-purple);}
+.bot-chips{background:rgba(255,255,255,.4);border-top:1px solid var(--glass-border);}
+.bot-chip{background:rgba(255,255,255,.7);border:1px solid var(--glass-border);color:var(--s27-purple-ink);}
+.bot-chip:hover{background:var(--grad-bp);color:#fff;border-color:transparent;}
+.bot-input{background:rgba(255,255,255,.42);border-top:1px solid var(--glass-border);}
+.bot-input input{background:var(--glass-fill);border-color:var(--glass-border);}
+
+/* keep the FAB exactly as approved (no change) */
+
+/* ---- topbar current-page title ---- */
+.topbar-title{font-family:var(--font-display);font-weight:800;font-size:17px;letter-spacing:-0.02em;color:var(--ink);margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw;}
+.topbar .top-right{margin-left:auto;}
+@media(max-width:520px){.topbar-title{font-size:15px;max-width:38vw;}}
+
+/* ---- proj-filter as a calm glass dropdown ---- */
+.proj-filter{display:flex;justify-content:flex-end;margin-bottom:22px;}
+
+/* ---- white frames: drop the coloured left edges (Vincent) ---- */
+.action-card::before{display:none!important;}
+.action-card{padding-left:20px!important;}
+.run-row{border-left:1px solid var(--line)!important;}
+.kan-card{border-left:1px solid var(--glass-border)!important;}
+.proj-row .bar,.modal-head .bar,.detail-head .bar{display:none!important;}
+.action-card.urgent{animation:none!important;box-shadow:var(--glass-sh),inset 0 1px 0 rgba(255,255,255,.55)!important;}
+
+/* ---- Studio blue (strategie) on primary buttons + step (Vincent) ---- */
+.btn-primary,.np-step.on{background:var(--s27-blue)!important;}
+.btn-primary:hover{background:var(--s27-blue-ink)!important;}
+.np-step.on{box-shadow:0 4px 12px rgba(48,131,220,.32)!important;}
+
+/* ---- lighter project-row title (less heavy) ---- */
+.proj-row .pr-name,.run-name{font-weight:600!important;}
+
+/* ---- simplified meeting-type buttons ---- */
+.mtype{justify-content:center;text-align:center;padding:13px;}
+.mtype .mt-tx b{font-size:14px;}
+
+/* ---- berichten: subtle per-tak colour cue ---- */
+.ber-dot{width:9px;height:9px;border-radius:50%;flex:none;align-self:center;}
+.ber-disc{display:block;font-family:var(--font-display);font-weight:700;font-size:10px;letter-spacing:.05em;text-transform:uppercase;margin-bottom:2px;}
+
+/* ---- topbar active page = circled icon ---- */
+.t-quick-wrap{}
+.icon-btn.topnav-on{background:#fff;color:var(--ink);box-shadow:var(--glass-sh),inset 0 1px 0 rgba(255,255,255,.9);}
+.icon-btn.topnav-on:hover{background:#fff;transform:none;}
+.pf-select{position:relative;display:inline-flex;align-items:center;gap:9px;padding:0 14px;border-radius:999px;color:var(--ink-2);
+  background:var(--glass-fill);border:1px solid var(--glass-border);box-shadow:var(--glass-sh),inset 0 1px 0 rgba(255,255,255,.55);}
+.pf-select > svg:first-child{color:var(--s27-blue-ink);flex:none;}
+.pf-select select{appearance:none;-webkit-appearance:none;border:none;background:none;outline:none;cursor:pointer;
+  font-family:var(--font-display);font-weight:700;font-size:13.5px;color:var(--ink);padding:11px 24px 11px 0;}
+.pf-select .pf-chev{position:absolute;right:13px;color:var(--ink-4);pointer-events:none;}
+
+/* ============================================================
+   VINCENT FEEDBACK, liquid glass accents, status icons,
+   standalone detail pages, refined loader/login/settings
+   ============================================================ */
+
+/* ---- pills now carry a status icon ---- */
+.pill{gap:5px;}
+.pill svg{width:13px;height:13px;flex:none;}
+
+/* ---- sleek glass underline (replaces hand-drawn squiggle) ---- */
+.hero-h1 .accent,.login-card .accent{position:relative;display:inline-block;padding-bottom:.06em;}
+.accent-underline{position:absolute;left:2%;right:2%;bottom:0;height:.13em;border-radius:999px;
+  background:linear-gradient(90deg,var(--s27-blue),var(--s27-purple));
+  box-shadow:0 2px 12px rgba(94,80,200,.5);-webkit-text-fill-color:initial;
+  transform-origin:left center;animation:underdraw .75s var(--ease) .2s both;}
+@keyframes underdraw{from{transform:scaleX(0);opacity:0;}to{transform:scaleX(1);opacity:1;}}
+.login-card .accent{background:var(--grad-bp);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+
+/* ---- liquid-glass eyebrow with a slow specular sweep ---- */
+.eyebrow{position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.75);
+  background:linear-gradient(135deg,rgba(255,255,255,.82),rgba(255,255,255,.46));
+  box-shadow:0 2px 10px rgba(60,40,80,.08),inset 0 1px 0 rgba(255,255,255,.95);
+  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);}
+.eyebrow::after{content:"";position:absolute;top:0;left:-65%;width:45%;height:100%;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.7),transparent);transform:skewX(-18deg);
+  animation:sheen 6s var(--ease) 1s infinite;}
+@keyframes sheen{0%,74%{left:-65%;}88%{left:130%;}100%{left:130%;}}
+@media(prefers-reduced-motion:reduce){.eyebrow::after,.accent-underline{animation:none;}}
+
+/* ---- specular highlight + lift on glass cards ---- */
+.action-card,.svc-card,.card,.kpi,.proj-row,.run-row,.contact-row,.setsec,.meeting-row,.chart-card{
+  box-shadow:var(--glass-sh),inset 0 1px 0 rgba(255,255,255,.55);}
+.action-card,.svc-card,.proj-row,.run-row{transition:transform .22s var(--ease),box-shadow .22s var(--ease);}
+.proj-row:hover{transform:translateY(-2px);box-shadow:var(--glass-sh-lg),inset 0 1px 0 rgba(255,255,255,.6);}
+
+/* ---- gradient primary button with a sheen on hover ---- */
+.btn-primary{position:relative;overflow:hidden;}
+.btn-primary::after{content:"";position:absolute;top:0;left:-80%;width:55%;height:100%;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.4),transparent);transform:skewX(-18deg);transition:left .55s var(--ease);}
+.btn-primary:hover::after{left:135%;}
+
+/* ---- project rows: discipline icon tile (type at a glance) ---- */
+.proj-row .pr-ic{width:42px;height:42px;border-radius:13px;background:var(--c-soft);color:var(--c-ink);
+  display:flex;align-items:center;justify-content:center;flex:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.6);}
+.proj-row .pr-name{display:block;}
+.proj-row .pr-disc{display:block;margin-top:1px;}
+
+/* ---- breadcrumb (project detail) ---- */
+.crumb-link{color:var(--ink-3);cursor:pointer;border:none;background:none;font:inherit;}
+.crumb-link:hover{color:var(--s27-blue-ink);}
+.crumb-mid{margin:0 8px;color:var(--ink-4);font-weight:700;}
+
+/* ---- standalone project-detail page ---- */
+.detail{max-width:880px;animation:slideUp .3s var(--ease);}
+.detail-back{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-display);font-weight:700;font-size:13px;
+  color:var(--ink-3);padding:6px 0;margin-bottom:10px;transition:gap .16s var(--ease),color .16s;}
+.detail-back:hover{gap:11px;color:var(--ink);}
+.detail-head{display:flex;align-items:center;gap:16px;margin-bottom:20px;}
+.detail-ic{width:56px;height:56px;border-radius:16px;background:var(--c-soft);color:var(--c-ink);display:flex;align-items:center;justify-content:center;flex:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 6px 16px color-mix(in oklab,var(--c) 22%,transparent);}
+.detail-titles{flex:1;min-width:0;}
+.detail-titles h1{font-family:var(--font-display);font-weight:800;font-size:26px;letter-spacing:-0.03em;margin:0;}
+.detail-sub{font-family:var(--font-display);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-4);margin-top:4px;}
+.detail-tabs{display:flex;gap:4px;border-bottom:1px solid var(--glass-line);margin-bottom:24px;}
+
+/* ---- compact settings ---- */
+.set-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:600px;}
+@media(max-width:640px){.set-grid{grid-template-columns:1fr;}}
+.contact-list{display:flex;flex-direction:column;gap:8px;max-width:600px;}
+.contact-row{display:flex;align-items:center;gap:13px;background:var(--glass-fill);border:1px solid var(--glass-border);border-radius:14px;padding:11px 14px;}
+.cr-av{width:38px;height:38px;border-radius:50%;color:#fff;font-family:var(--font-display);font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;flex:none;}
+.cr-tx{flex:1;min-width:0;line-height:1.25;}
+.cr-tx b{font-family:var(--font-display);font-size:14px;display:block;}
+.cr-tx span{font-size:12px;color:var(--ink-4);}
+
+/* ---- refined login alignment ---- */
+.login-card{padding:40px 38px 32px;}
+.login-card h1{margin:0 0 22px;}
+.login-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px;}
+.login-foot .remember{margin:0;font-size:13px;}
+.login-foot a{color:var(--s27-blue-ink);font-weight:700;font-size:13px;border:none;}
+.divider-or{font-size:11px;letter-spacing:.04em;}
+
+/* ---- elegant loader: thin gradient arc + glass disc with the real "27" ---- */
+#loader{gap:26px;}
+.loader-stage{width:96px;height:96px;}
+.loader-ring{position:absolute;inset:-6px;border-radius:50%;z-index:0;
+  background:conic-gradient(from 0deg,var(--s27-blue),var(--s27-purple),var(--s27-pink),var(--s27-blue),var(--s27-blue-ink),var(--s27-blue));
+  filter:blur(8px);opacity:.72;animation:spin 4.5s linear infinite;}
+.loader-badge{position:absolute;inset:0;z-index:1;border-radius:50%;
+  background:radial-gradient(circle at 32% 28%,#52a0ee,var(--s27-blue) 58%,var(--s27-blue-ink));
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 12px 30px rgba(48,131,220,.45);animation:fabHalo 2.6s var(--ease-out) infinite;}
+.loader-27{width:42px;height:auto;display:block;filter:drop-shadow(0 1px 3px rgba(0,0,0,.22));}
+.loader-27 path{fill:#fff;}
+
+/* entrance animations must not leave content invisible when paused (print/preview/reduced-motion) */
+.login-card{animation:loginIn .5s var(--ease) both;}
+@keyframes loginIn{from{transform:translateY(12px);}to{transform:none;}}
+.mpane.active{animation:slideUp .26s var(--ease);}
+@media(prefers-reduced-motion:reduce){.login-card{animation:none;}}
+
+/* ============================================================
+   ROUND 2, bot orb, brand stamps, kanban, subtasks,
+   centered login, lighter sidebar, mobile polish
+   ============================================================ */
+
+/* AI orb stays identical to the FAB on open (sparkle visible) */
+.bot-head .ba::after{content:none;display:none;}
+.bot-head .ba svg{display:block;width:20px;height:20px;color:#fff;position:relative;z-index:2;}
+
+/* discipline = our own brand stamps */
+.proj-row .pr-ic{background:rgba(255,255,255,.7);box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 2px 8px rgba(60,40,80,.06);}
+.pr-ic .disc-stamp{width:30px;height:30px;display:block;}
+.detail-ic{background:rgba(255,255,255,.72);}
+.detail-ic .detail-stamp{width:40px;height:40px;display:block;}
+
+/* segmented view toggle */
+.seg{display:inline-flex;gap:4px;background:var(--glass-fill);border:1px solid var(--glass-border);border-radius:999px;padding:4px;margin-bottom:24px;box-shadow:var(--glass-sh);}
+.seg-btn{font-family:var(--font-display);font-weight:700;font-size:13px;color:var(--ink-3);padding:9px 18px;border-radius:999px;transition:background .2s var(--ease),color .2s var(--ease);}
+.seg-btn.active{background:var(--grad-bp);color:#fff;box-shadow:0 4px 12px rgba(94,80,200,.3);}
+
+/* kanban overview */
+.kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:start;}
+.kan-col{display:flex;flex-direction:column;gap:10px;}
+.kan-head{display:flex;align-items:center;gap:8px;}
+.kan-head .pill{flex:1;justify-content:flex-start;}
+.kan-n{font-family:var(--font-display);font-weight:800;font-size:13px;color:var(--ink-4);}
+.kan-list{display:flex;flex-direction:column;gap:10px;min-height:40px;}
+.kan-card{width:100%;text-align:left;background:var(--glass-fill);border:1px solid var(--glass-border);border-left:4px solid var(--c);border-radius:16px;padding:13px;display:flex;flex-direction:column;gap:9px;box-shadow:var(--glass-sh),inset 0 1px 0 rgba(255,255,255,.55);transition:transform .2s var(--ease),box-shadow .2s var(--ease);}
+.kan-card:hover{transform:translateY(-3px);box-shadow:var(--glass-sh-lg);}
+.kan-top{display:flex;align-items:center;gap:9px;}
+.kan-top .pr-ic{width:34px;height:34px;border-radius:10px;}
+.kan-top .pr-ic .disc-stamp{width:26px;height:26px;}
+.kan-disc{font-family:var(--font-display);font-weight:700;font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-4);}
+.kan-name{font-family:var(--font-display);font-weight:800;font-size:14px;letter-spacing:-0.01em;line-height:1.25;}
+.kan-deliv{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-display);font-weight:700;font-size:11px;color:var(--s27-green-ink);background:var(--s27-green-soft);padding:4px 9px;border-radius:999px;align-self:flex-start;}
+.kan-empty{font-size:12px;color:var(--ink-4);padding:16px;text-align:center;border:1px dashed var(--glass-border);border-radius:14px;}
+
+/* per-dienst groups */
+.dienst-group{margin-bottom:26px;}
+.dienst-head{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
+.dienst-ic{width:42px;height:42px;border-radius:13px;background:rgba(255,255,255,.72);display:flex;align-items:center;justify-content:center;flex:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 2px 8px rgba(60,40,80,.06);}
+.dienst-ic .disc-stamp{width:30px;height:30px;}
+.dienst-head h3{font-family:var(--font-display);font-weight:800;font-size:17px;letter-spacing:-0.02em;margin:0;}
+.dienst-n{margin-left:auto;font-family:var(--font-display);font-weight:700;font-size:12px;color:var(--ink-4);}
+
+/* subtask deliverables */
+.deliv-intro{font-size:13.5px;color:var(--ink-3);margin:0 0 14px;}
+.subtask{margin-bottom:10px;}
+.subtask-head{display:flex;align-items:center;gap:11px;}
+.subtask-ic{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex:none;}
+.subtask-ic.is-wait{background:var(--s27-orange-soft);color:var(--s27-orange-ink);}
+.subtask-ic.is-done{background:var(--s27-green-soft);color:var(--s27-green-ink);}
+.subtask-t{font-family:var(--font-display);font-weight:800;font-size:14.5px;}
+.subtask-meta{margin-left:auto;font-family:var(--font-display);font-weight:700;font-size:12px;color:var(--ink-4);}
+.subtask-files{display:flex;flex-direction:column;gap:8px;padding:4px 14px 14px;}
+.deliv-file{display:flex;align-items:center;gap:12px;background:var(--glass-fill);border:1px solid var(--glass-border);border-radius:12px;padding:10px 12px;}
+.df-ic{width:36px;height:36px;border-radius:9px;background:rgba(150,120,150,.12);display:flex;align-items:center;justify-content:center;color:var(--ink-3);flex:none;}
+.df-tx{flex:1;min-width:0;}
+.df-tx b{font-family:var(--font-display);font-size:13.5px;display:block;}
+.df-tx span{font-size:11.5px;color:var(--ink-4);}
+.df-act{display:flex;gap:6px;align-items:center;flex:none;}
+
+/* approved tasks list */
+.approved-list{display:flex;flex-direction:column;gap:8px;}
+.approved-row{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-weight:700;font-size:13.5px;color:var(--ink-2);}
+
+/* lighter glass sidebar (Vincent: nav was too dark) */
+.sidebar{background:rgba(255,255,255,.72);}
+
+/* centered, website-style login */
+.login-card{text-align:center;}
+.login-card .lwordmark{display:block;margin:2px auto 24px;height:40px;}
+.login-welkom{font-family:var(--font-display);font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-4);text-align:center;margin-bottom:10px;}
+.login-card h1{font-size:clamp(1.75rem,5vw,2.05rem);font-weight:800;letter-spacing:-0.035em;line-height:1.05;margin:0 0 22px;}
+.login-card .field,.login-card .login-foot{text-align:left;}
+
+/* ---- mobile polish ---- */
+@media(max-width:980px){
+  .sidebar{background:rgba(255,255,255,.95);}
+  .kanban{grid-template-columns:1fr 1fr;}
+}
+@media(max-width:640px){
+  .kanban{grid-template-columns:1fr;}
+  .seg{display:flex;width:100%;}
+  .seg-btn{flex:1;text-align:center;padding:10px 8px;}
+  .crumb-home,.crumb-sep{display:none;}
+  .detail-head{flex-wrap:wrap;gap:10px;}
+  .detail-titles h1{font-size:22px;}
+  .df-act{flex-wrap:wrap;}
+  .dienst-head h3{font-size:15px;}
+  .bot-panel{height:82vh;}
+}
+
+/* ---- Meetings recolored to blue (Vincent) ---- */
+.date-block{background:var(--s27-blue-soft);}
+.date-block .d,.date-block .m{color:var(--s27-blue-ink);}
+.calday:hover{border-color:var(--s27-blue);}
+.calday.sel{background:var(--s27-blue);border-color:var(--s27-blue);}
+.slot:hover{border-color:var(--s27-blue);color:var(--s27-blue-ink);}
+.slot.sel{background:var(--s27-blue);border-color:var(--s27-blue);}
+
+/* ---- Nieuw project: dynamic multi-step form ---- */
+.npform{max-width:680px;padding:30px;display:flex;flex-direction:column;gap:18px;}
+.np-steps{display:flex;align-items:center;gap:8px;margin-bottom:4px;}
+.np-step{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:800;font-size:13px;background:var(--glass-fill);border:1px solid var(--glass-border);color:var(--ink-4);transition:background .25s var(--ease),color .25s var(--ease),box-shadow .25s var(--ease);}
+.np-step.on{background:var(--grad-bp);color:#fff;border-color:transparent;box-shadow:0 4px 12px rgba(94,80,200,.3);}
+.np-bar{flex:1;height:2px;background:var(--glass-border);border-radius:2px;max-width:64px;}
+.np-hidden{display:none;}
+.npform .field{gap:7px;}
+.npform .field select{font-size:15px;padding:12px 14px;}
+.rp-lab{font-family:var(--font-display);font-weight:700;font-size:13px;color:var(--ink-4);text-transform:uppercase;letter-spacing:.05em;}
+.np-actions{display:flex;gap:10px;flex-wrap:wrap;}
+
+/* ---- Project detail: persistent chat column on desktop ---- */
+.detail{max-width:1160px;}
+.detail-grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:22px;align-items:start;}
+.detail-main{min-width:0;}
+.detail-chat{position:sticky;top:78px;display:flex;flex-direction:column;max-height:calc(100vh - 96px);
+  background:var(--glass-fill);border:1px solid var(--glass-border);border-radius:18px;box-shadow:var(--glass-sh),inset 0 1px 0 rgba(255,255,255,.55);overflow:hidden;}
+.dc-head{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--glass-border);font-family:var(--font-display);font-weight:800;font-size:14px;}
+.dc-head .dc-sub{margin-left:auto;font-weight:600;font-size:11px;color:var(--ink-4);}
+.dc-body{padding:14px;overflow-y:auto;}
+.dc-body .chat-list{margin-bottom:14px;}
+.detail-tabs .mtab-chat{display:none;}
+
+/* ---- loader === AI FAB: identical, clearly-rotating conic gradient ---- */
+.loader-ring,.bot-fab::before{
+  background:conic-gradient(from 0deg,var(--s27-blue),var(--s27-purple),var(--s27-pink),var(--s27-blue),var(--s27-blue-ink),var(--s27-blue))!important;
+  filter:blur(2px)!important;opacity:.95!important;animation:spin 3s linear infinite!important;border-radius:50%!important;}
+.loader-ring{inset:-7px!important;}
+.bot-fab::before{inset:-6px!important;}
+.loader-badge{box-shadow:0 8px 22px rgba(48,131,220,.35)!important;}
+
+/* ---- rounded segmented detail tabs ---- */
+.detail-tabs{display:inline-flex;gap:4px;border-bottom:none!important;background:var(--glass-fill);border:1px solid var(--glass-border);border-radius:14px;padding:4px;box-shadow:var(--glass-sh);}
+.detail-tabs .mtab{border-bottom:none!important;border-radius:10px;padding:9px 16px;}
+.detail-tabs .mtab.active{background:var(--c);color:#fff;}
+
+/* ---- smaller detail icon for more whitespace ---- */
+.detail-ic .detail-stamp{width:32px!important;}
+@media(max-width:980px){
+  .detail-grid{grid-template-columns:1fr;}
+  .detail-chat{position:static;max-height:none;}
+  .detail-tabs .mtab-chat{display:block;}
+  .detail.show-chat .detail-body{display:none;}
+  .detail:not(.show-chat) .detail-chat{display:none;}
+}
+
+/* ---- Compacter KPI cards (Vincent: te bold) ---- */
+.kpi{padding:0 18px 15px;border-radius:16px;}
+.kpi .kbar{height:5px;margin:0 -18px 13px;}
+.kpi .klab{font-size:10.5px;}
+.kpi .knum{font-size:26px;margin:3px 0 7px;}
+
+/* ---- Meetings: lists prominent, scheduler compact (Vincent) ---- */
+.meet-wrap{display:grid;grid-template-columns:1.55fr 1fr;gap:20px;align-items:start;}
+.meet-list{display:flex;flex-direction:column;gap:12px;}
+.meeting-row.big{padding:18px 22px;}
+.meeting-row .mr-tx{flex:1;min-width:0;}
+.mr-type{font-family:var(--font-display);font-weight:700;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--c-ink,var(--ink-4));}
+.meeting-row .mr-tx b{font-family:var(--font-display);font-size:16.5px;display:block;margin:2px 0 5px;letter-spacing:-0.01em;}
+.mr-meta{font-size:13px;color:var(--ink-3);display:flex;gap:6px;align-items:center;}
+.meet-side{padding:20px;min-width:0;position:sticky;top:78px;}
+@media(max-width:860px){.meet-side{position:static;}}
+.ms-title{font-family:var(--font-display);font-weight:800;font-size:18px;letter-spacing:-0.02em;margin:0 0 6px;color:var(--ink);}
+
+/* ---- topbar buttons: liquid-glass hover (Apple-style) ---- */
+.top-right .icon-btn{transition:background .25s var(--ease),box-shadow .25s var(--ease),transform .35s var(--bounce);}
+.top-right .icon-btn:hover{background:rgba(255,255,255,.72);box-shadow:0 6px 16px rgba(60,40,80,.13),inset 0 1px 0 rgba(255,255,255,.95);transform:translateY(-2px) scale(1.07);}
+.top-right .icon-btn:active{transform:translateY(0) scale(.95);}
+.top-right .icon-btn svg{transition:transform .35s var(--bounce);}
+.top-right .icon-btn:hover svg{transform:scale(1.08);}
+.top-right .btn-primary{transition:transform .35s var(--bounce),box-shadow .25s var(--ease),background .2s var(--ease);}
+.top-right .btn-primary:hover{transform:translateY(-2px) scale(1.03);}
+.meet-side .eyebrow{margin-bottom:4px;}
+.ms-label{display:block;font-family:var(--font-display);font-weight:700;font-size:12px;color:var(--ink-3);margin:16px 0 8px;}
+.meet-side .calstrip{gap:6px;min-width:0;}
+.meet-side .calday{width:52px;padding:8px 0;}
+.meet-side .calday .dnum{font-size:17px;}
+.meet-side .slot{padding:9px 0;font-size:13px;min-height:38px;}
+.mtype-grid{display:flex;flex-direction:column;gap:8px;}
+.mtype{display:flex;align-items:center;gap:11px;width:100%;text-align:left;padding:10px 12px;border:1.5px solid var(--glass-border);border-radius:13px;background:var(--glass-fill);transition:border-color .15s var(--ease),box-shadow .15s var(--ease);}
+.mtype.sel{border-color:var(--s27-blue);box-shadow:var(--focus);}
+.mtype .av{width:34px;height:34px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:800;font-size:12px;flex:none;}
+.mt-tx b{font-family:var(--font-display);font-size:13.5px;display:block;}
+.mt-tx span{font-size:11px;color:var(--ink-4);display:block;}
+.meet-who{display:flex;align-items:center;gap:10px;background:var(--s27-blue-soft);border-radius:12px;padding:10px 13px;margin:16px 0 2px;}
+.mw-av{width:32px;height:32px;border-radius:50%;color:#fff;font-family:var(--font-display);font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;flex:none;}
+.mw-tx{font-family:var(--font-display);font-weight:700;font-size:10.5px;color:var(--ink-4);text-transform:uppercase;letter-spacing:.05em;line-height:1.35;}
+.mw-tx b{display:block;font-size:14px;color:var(--ink);text-transform:none;letter-spacing:-0.01em;}
+
+/* ---- discipline filter banner on Projecten ---- */
+.dienst-filter{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-weight:700;font-size:13.5px;color:var(--ink-2);background:var(--glass-fill);border:1px solid var(--glass-border);border-radius:14px;padding:11px 16px;margin-bottom:18px;}
+.dienst-filter b{color:var(--s27-blue-ink);}
+.df-clear{margin-left:auto;font-family:var(--font-display);font-weight:700;font-size:12.5px;color:var(--s27-blue-ink);background:var(--s27-blue-soft);border-radius:999px;padding:6px 13px;}
+.df-clear:hover{background:var(--s27-blue);color:#fff;}
+/* ---- Projecten tak-filter chips ---- */
+.proj-filter{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px;}
+.fchip{font-family:var(--font-display);font-weight:700;font-size:13px;padding:8px 15px;border-radius:999px;background:var(--glass-fill);border:1px solid var(--glass-border);color:var(--ink-3);min-height:38px;transition:background .15s var(--ease),color .15s var(--ease),border-color .15s var(--ease);}
+.fchip:hover{border-color:var(--c,var(--ink-4));color:var(--ink);}
+.fchip.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+
+/* ---- accordion content must not clip when open (Vincent) ---- */
+.acc-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .3s var(--ease-out);}
+.acc-body.open{grid-template-rows:1fr;}
+.acc-body > div{overflow:hidden;min-height:0;}
+.acc-body.open > div{overflow:visible;}
+.subtask-files{padding-bottom:14px;}
+
+/* ---- breadcrumb in hero header (moved out of topbar) ---- */
+.hero-crumb{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-family:var(--font-display);font-weight:700;font-size:11.5px;margin-bottom:12px;}
+.hero-crumb .hc{color:var(--ink-4);text-transform:uppercase;letter-spacing:.07em;}
+.hero-crumb .hc-cur{color:var(--ink);text-transform:uppercase;letter-spacing:.07em;}
+.hero-crumb .hc-link{cursor:pointer;background:none;border:none;padding:0;font-family:var(--font-display);font-weight:700;font-size:11.5px;color:var(--ink-4);text-transform:uppercase;letter-spacing:.07em;transition:color .15s var(--ease);}
+.hero-crumb .hc-link:hover{color:var(--s27-blue-ink);}
+.hero-crumb .hc-sep{color:var(--ink-4);font-weight:800;}
+.detail .hero-crumb{margin-bottom:8px;}
+
+/* ---- bot icon = brand "27" (matches loader) ---- */
+.bot-fab svg.logo27{width:21px;height:auto;animation:none;}
+
+/* ---- responsive hardening ---- */
+@media(max-width:640px){
+  .topbar .icon-btn[onclick*="openTour"],.topbar [data-topnav]{display:none;}
+  .topbar-title{max-width:40vw;}
+  .berichten-wrap{grid-template-columns:1fr!important;}
+  .meet-wrap{grid-template-columns:1fr!important;}
+  .meet-side{position:static!important;}
+}
+@media(max-width:520px){
+  .topbar .btn-primary.btn-sm{padding:9px 12px;}
+  .topbar .btn-primary.btn-sm svg{margin:0;}
+}
+.bot-head .ba svg.logo27{display:block;width:24px;height:auto;}
+
+/* ---- onboarding tour: clearer footer + brighter spotlight ---- */
+.tour-dialog{padding:22px 22px 16px;}
+.tour-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.tour-nav{display:flex;gap:8px;flex:none;}
+.tour-dialog .tour-skip{display:block;width:100%;text-align:center;margin-top:14px;padding-top:13px;border-top:1px solid var(--glass-border);font-family:var(--font-display);font-weight:700;font-size:12px;color:var(--ink-4);}
+.tour-dialog .tour-skip:hover{color:var(--ink-2);}

@@ -16,11 +16,11 @@
  * ============================================================================= */
 
 import {
-  cu, pageAll, getCF, getRelationIds, statusMapper, disciplineOf, teamLeden,
+  cu, pageAll, getCF, getRelationIds, statusMapper, disciplineOf, buildSae, teamLeden,
   FIELD, LIST, PLANNING_LISTS, PAYROLL_LIST, TEAM_ID, VIDEO_POOL, _teamHelpers,
 } from './handlers.mjs';
 
-const { isDoneTask, kanBeginnenGezet, heeftDueDate, planTypeOf, msToBrusselsYmd } = _teamHelpers;
+const { isDoneTask, kanBeginnenGezet, heeftDueDate, planTypeOf, msToBrusselsYmd, brusselsWallToMs } = _teamHelpers;
 
 const str = (v) => (v == null ? '' : String(v));
 
@@ -181,8 +181,202 @@ export async function teamTaken(_b, body, env) {
   };
 }
 
+/* ===========================================================================
+ * PROJECTDETAIL + STATUS + CHAT — alles wat een teamlid nodig heeft om een
+ * project zelfstandig af te ronden zonder PM-tussenkomst.
+ * =========================================================================== */
+function cleanTaskId(v) { const s = str(v).trim(); return /^[A-Za-z0-9_-]{1,40}$/.test(s) ? s : ''; }
+
+// links uit een vrije-tekst-veld (Bestanden) halen.
+function linksUit(txt) {
+  const out = [];
+  const re = /(https?:\/\/[^\s)<>"']+)/g; let m;
+  while ((m = re.exec(str(txt))) && out.length < 40) out.push(m[1]);
+  return out;
+}
+function linkLabel(u) {
+  try {
+    if (/drive\.google|docs\.google/.test(u)) return 'Google Drive';
+    if (/vimeo\.com/.test(u)) return 'Vimeo';
+    if (/youtu/.test(u)) return 'YouTube';
+    if (/pandadoc/.test(u)) return 'PandaDoc';
+    if (/figma/.test(u)) return 'Figma';
+    if (/webflow|\.studio27|wetransfer|dropbox/.test(u)) return 'Webflow / link';
+    const h = new URL(u).hostname.replace(/^www\./, '');
+    return h.length > 28 ? h.slice(0, 28) : h;
+  } catch (e) { return 'Link'; }
+}
+
+// comments -> chat-shape (klant '💬 [' / intern '[INTERN]' / team).
+function parseComments(comments) {
+  return (Array.isArray(comments) ? comments : []).map((c) => {
+    let txt = '';
+    if (c.comment_text != null) txt = str(c.comment_text);
+    else if (Array.isArray(c.comment)) txt = c.comment.map((x) => str(x.text)).join('');
+    const isKlant = txt.indexOf('💬 [') === 0;
+    const isIntern = txt.indexOf('[INTERN]') === 0;
+    const tekst = txt.replace(/^💬 \[Klant:[^\]]*\]\s*/, '').replace(/^\[INTERN\]\s*/, '').trim();
+    return { id: str(c.id), auteur: str(c.user && c.user.username) || 'Studio 27', is_klant: isKlant, is_intern: isIntern, tekst, datum: str(c.date) };
+  }).filter((c) => c.tekst);
+}
+
+// teamProject: rijke detail van één taak/project — briefing, klant, deadline,
+// bestanden, subtaken, teamleden, status. Schrijft niets.
+export async function teamProject(_b, body, env) {
+  if (!okStaff(body)) return { status: 403, body: { ok: false } };
+  const taskId = cleanTaskId(body.task_id);
+  if (!taskId) return { status: 400, body: { ok: false, error: 'no_task' } };
+  const tr = await cu.get(env, `/task/${taskId}?include_subtasks=true`);
+  if (!tr.ok || !tr.data) return { status: 200, body: { ok: false, error: 'not_found' } };
+  const t = tr.data;
+  const [naamMap] = await Promise.all([bedrijvenNaamMap(env)]);
+  const bid = (getRelationIds(t, FIELD.bedrijf)[0]) || '';
+  const bestanden = [];
+  const seen = new Set();
+  const pushLinks = (raw) => { for (const u of linksUit(raw)) { if (!seen.has(u)) { seen.add(u); bestanden.push({ url: u, label: linkLabel(u) }); } } };
+  pushLinks(getCF(t, FIELD.deliverablesRaw));
+  const drive = str(getCF(t, FIELD.driveFolder)); if (drive) pushLinks(drive);
+  const fb = str(getCF(t, FIELD.feedbackLink)); if (fb) pushLinks(fb);
+  const subtaken = (Array.isArray(t.subtasks) ? t.subtasks : []).map((s) => ({
+    id: str(s.id), naam: str(s.name), status: statusMapper(s.status),
+    assignees: buildSae(s), due: Number(s.due_date) || 0, due_ymd: s.due_date ? msToBrusselsYmd(Number(s.due_date)) : '',
+  }));
+  const due = Number(t.due_date) || 0;
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      project: {
+        id: str(t.id), naam: str(t.name),
+        status: statusMapper(t.status), status_raw: str(t.status && t.status.status),
+        discipline: disciplineOf(t),
+        bedrijf_id: bid, bedrijf: naamMap[bid] || '',
+        brief: str(t.description || t.text_content || ''),
+        deadline: due, deadline_ymd: due ? msToBrusselsYmd(due) : '',
+        assignees: buildSae(t),
+        prioriteit: (t.priority && t.priority.priority) ? str(t.priority.priority) : '',
+        parent: str(t.parent || ''), url: str(t.url),
+      },
+      bestanden,
+      subtaken,
+    },
+  };
+}
+
+// statussen die een teamlid zelf mag zetten om werk vooruit te duwen.
+export const TEAM_STATUSSEN = [
+  { key: 'to do', label: 'Te doen' },
+  { key: 'in progress', label: 'In productie' },
+  { key: 'on hold', label: 'On hold' },
+  { key: 'doorgestuurd', label: 'Klaar voor review' },
+];
+const TEAM_STATUS_SET = new Set(TEAM_STATUSSEN.map((s) => s.key));
+
+// teamStatus: zet de status van een taak (workflow vooruit). Staff-write.
+export async function teamStatus(_b, body, env) {
+  if (!okStaff(body)) return { status: 403, body: { ok: false } };
+  const taskId = cleanTaskId(body.task_id);
+  const status = str(body.status).toLowerCase().trim();
+  if (!taskId) return { status: 400, body: { ok: false, error: 'no_task' } };
+  if (!TEAM_STATUS_SET.has(status)) return { status: 400, body: { ok: false, error: 'bad_status' } };
+  const r = await cu.put(env, `/task/${taskId}`, { status });
+  if (!r.ok) return { status: 200, body: { ok: false, error: 'update_failed', detail: (r.data && r.data.err) || '' } };
+  return { status: 200, body: { ok: true, status: statusMapper(r.data && r.data.status) } };
+}
+
+// teamProjectChat: lees de communicatie op een taak (klant + team + interne notities).
+export async function teamProjectChat(_b, body, env) {
+  if (!okStaff(body)) return { status: 403, body: { ok: false } };
+  const taskId = cleanTaskId(body.task_id);
+  if (!taskId) return { status: 400, body: { ok: false, error: 'no_task' } };
+  const r = await cu.get(env, `/task/${taskId}/comment`);
+  const comments = (r.ok && r.data && Array.isArray(r.data.comments)) ? r.data.comments : [];
+  return { status: 200, body: { ok: true, comments: parseComments(comments) } };
+}
+
+// teamProjectChatPost: plaats een bericht — naar de klant (zichtbaar) of een
+// interne notitie ([INTERN], nooit klant-zichtbaar). Staff-write.
+export async function teamProjectChatPost(_b, body, env) {
+  if (!okStaff(body)) return { status: 403, body: { ok: false } };
+  const taskId = cleanTaskId(body.task_id);
+  const tekst = str(body.tekst).trim().slice(0, 4000);
+  if (!taskId || !tekst) return { status: 400, body: { ok: false, error: 'leeg' } };
+  const intern = body.intern === true;
+  const out = intern ? ('[INTERN] ' + tekst) : tekst;
+  const r = await cu.comment(env, taskId, out, true);
+  if (!r.ok) return { status: 200, body: { ok: false, error: 'post_failed' } };
+  return { status: 200, body: { ok: true } };
+}
+
+/* ===========================================================================
+ * VERLOF / PAYROLL — zelf aanvragen + bekijken (zonder PM).
+ * =========================================================================== */
+const HR_FIELD = 'e4f701e4-5aa4-42e0-a61a-0a36a01ba549';
+const HR_TYPES = [
+  { uuid: 'c5613bc3-ccb8-4b6e-be8c-d43ddf8bee7e', label: 'Vakantie' },
+  { uuid: 'e9411405-3a5b-4e1b-a19a-983c553cb8ee', label: 'Jeugdvakantie' },
+  { uuid: '51f69dd8-a836-4353-b4c2-da78ae000bc9', label: 'Feestdag' },
+  { uuid: '27b97780-5807-40e1-b27b-69157c285892', label: 'Ziekte' },
+  { uuid: 'e137e073-a9d4-4f21-a5df-df3b5e003efa', label: 'Recup' },
+  { uuid: 'fc76b458-ded7-4580-8c71-0ab2af4ac975', label: 'Toegestane afwezigheid' },
+  { uuid: '62761e6c-7079-45c6-aa7a-f92f00794ac5', label: 'Klein verlet' },
+  { uuid: '486a5452-a3ec-44e2-b524-c9d4e0df31db', label: 'Ouderschapsverlof' },
+  { uuid: '9759e0a0-c1be-4269-b271-e5d0defe953a', label: 'Sollicitatieverlof' },
+];
+
+// teamVerlof: mijn verlof (aangevraagd + goedgekeurd).
+export async function teamVerlof(_b, body, env) {
+  if (!okStaff(body)) return { status: 403, body: { ok: false } };
+  const leden = await ledenLijst(env);
+  const me = resolveMember(str(body.account_email), leden);
+  if (!me) return { status: 200, body: { ok: false, error: 'no_member' } };
+  let tasks = [];
+  try {
+    tasks = await pageAll(env, (p) => `/list/${PAYROLL_LIST}/task?assignees%5B%5D=${encodeURIComponent(me.id)}&include_closed=true&subtasks=true&page=${p}`);
+  } catch (e) { tasks = []; }
+  const items = tasks.map((t) => {
+    const idx = parseInt(getCF(t, HR_FIELD), 10);
+    const type = (idx >= 0 && HR_TYPES[idx]) ? HR_TYPES[idx].label : (str(t.name) || 'Afwezig');
+    const s = Number(t.start_date) || Number(t.due_date) || 0;
+    const d = Number(t.due_date) || s;
+    const statusNaam = str(t.status && t.status.status).toLowerCase();
+    return { id: str(t.id), type, van: s, tot: d, van_ymd: s ? msToBrusselsYmd(s) : '', tot_ymd: d ? msToBrusselsYmd(d) : '', goedgekeurd: statusNaam.includes('goedgekeur') };
+  }).sort((a, b) => (b.van || 0) - (a.van || 0));
+  return { status: 200, body: { ok: true, items, types: HR_TYPES.map((h) => h.label) } };
+}
+
+// teamVerlofAanvraag: nieuwe verlofaanvraag (status 'aanvraag', telt NIET als geblokkeerd).
+export async function teamVerlofAanvraag(_b, body, env) {
+  if (!okStaff(body)) return { status: 403, body: { ok: false } };
+  const leden = await ledenLijst(env);
+  const me = resolveMember(str(body.account_email), leden);
+  if (!me) return { status: 200, body: { ok: false, error: 'no_member' } };
+  const typeLabel = str(body.type).trim();
+  const hr = HR_TYPES.find((h) => h.label.toLowerCase() === typeLabel.toLowerCase());
+  if (!hr) return { status: 400, body: { ok: false, error: 'bad_type' } };
+  const vanYmd = str(body.van); const totYmd = str(body.tot) || vanYmd;
+  const vanMs = brusselsWallToMs(vanYmd, '09:00');
+  const totMs = brusselsWallToMs(totYmd, '17:00');
+  if (!vanMs || !totMs || totMs < vanMs) return { status: 400, body: { ok: false, error: 'bad_dates' } };
+  // 1) taak aanmaken
+  const cr = await cu.post(env, `/list/${PAYROLL_LIST}/task`, {
+    name: hr.label, assignees: [Number(me.id)], status: 'aanvraag',
+    start_date: vanMs, start_date_time: false, due_date: totMs, due_date_time: false,
+  });
+  if (!cr.ok || !cr.data || !cr.data.id) return { status: 200, body: { ok: false, error: 'create_failed' } };
+  // 2) HR-type via los field-endpoint (custom_fields persist-gotcha)
+  try { await cu.field(env, str(cr.data.id), HR_FIELD, hr.uuid); } catch (e) { /* type best-effort */ }
+  return { status: 200, body: { ok: true, id: str(cr.data.id) } };
+}
+
 /* ---- dispatch-tabel (worker.js gate't op is_staff) ------------------------ */
 export const TEAM_HANDLERS = {
   teamMe,
   teamTaken,
+  teamProject,
+  teamStatus,
+  teamProjectChat,
+  teamProjectChatPost,
+  teamVerlof,
+  teamVerlofAanvraag,
 };
