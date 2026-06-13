@@ -5388,7 +5388,7 @@ export const _shootEngineTest = { ymdRangeV2, addDaysYmdV2, blockHitsWorkdayV2, 
 export const _teamHelpers = {
   cuPlanningBlocks, isDoneTask, kanBeginnenGezet, heeftDueDate, planTypeOf,
   brusselsWallToMs, msToBrusselsYmd, msToBrusselsHm,
-  gcalEventsForHost, isClickupSyncEvent, gcalEventToInterval,
+  gcalEventsForHost, isClickupSyncEvent, gcalEventToInterval, aiComplete,
 };
 
 /* ---- publicShootAvailability (PUBLIEK, geen auth, geen klant-scope) ----------

@@ -168,3 +168,7 @@
 
 @media(max-width:1100px){ .tstats{grid-template-columns:repeat(2,1fr);} }
 @media(max-width:640px){ .tstats,.vl-grid,.pj-edit-grid{grid-template-columns:1fr;} .acc-head .acc-meta{display:none;} .cbar-l,.uren-row .un{width:90px;} }
+
+/* AI-dagplanning */
+.ai-plan{font-size:14.5px;line-height:1.85;color:var(--ink-2);}
+.ai-plan b{font-family:var(--font-display);font-weight:800;color:var(--ink);font-size:15px;display:inline-block;margin-top:6px;}

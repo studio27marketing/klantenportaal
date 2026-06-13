@@ -57,12 +57,12 @@
   /* ---- nav (rol-afhankelijk) ---- */
   function navGroups() {
     var p = state.perms || {};
-    var g = [{ label: 'Overzicht', items: [{ k: 'home', br: 'br-blue', label: 'Home', ic: IC.home }, { k: 'planning', br: 'br-purple', label: 'Mijn planning', ic: IC.cal }] }];
+    var g = [{ label: 'Overzicht', items: [{ k: 'home', br: 'br-blue', label: 'Home', ic: IC.home }, { k: 'planning', br: 'br-purple', label: 'Mijn planning', ic: IC.cal }, { k: 'ai', br: 'br-indigo', label: 'AI-dagplanning', ic: IC.spark }] }];
     if (p.account) g.push({ label: 'Accountbeheer', items: [{ k: 'account', br: 'br-pink', label: 'Alle projecten', ic: IC.grid }] });
     if (p.finance) g.push({ label: 'Directie', items: [{ k: 'cijfers', br: 'br-green', label: 'Cijfers & omzet', ic: IC.euro }] });
     g.push({ label: 'Team', items: [{ k: 'collega', br: 'br-blue', label: "Collega's", ic: IC.team }] });
     g.push({ label: 'Persoonlijk', items: [{ k: 'verlof', br: 'br-green', label: 'Verlof', ic: IC.palm }] });
-    g.push({ label: 'Binnenkort', items: [{ k: 'aanvragen', br: 'br-orange', label: 'Aanvragen', ic: IC.bolt, soon: 1 }, { k: 'berichten', br: 'br-pink', label: 'Berichten', ic: IC.chat, soon: 1 }, { k: 'ai', br: 'br-indigo', label: 'AI-planning', ic: IC.spark, soon: 1 }] });
+    g.push({ label: 'Binnenkort', items: [{ k: 'aanvragen', br: 'br-orange', label: 'Aanvragen', ic: IC.bolt, soon: 1 }, { k: 'berichten', br: 'br-pink', label: 'Berichten', ic: IC.chat, soon: 1 }] });
     return g;
   }
   function routeExists(k) { return navGroups().some(function (g) { return g.items.some(function (n) { return n.k === k; }); }); }
@@ -84,11 +84,12 @@
   function go(route) { state.route = route; state.viewMember = null; if (location.hash !== '#' + route) location.hash = route; renderNav(); render(); }
 
   function render() {
-    var titles = { home: 'Home', planning: 'Mijn planning', account: 'Alle projecten', cijfers: 'Cijfers & omzet', collega: "Collega's", verlof: 'Verlof', aanvragen: 'Aanvragen', berichten: 'Berichten', ai: 'AI-planning' };
+    var titles = { home: 'Home', planning: 'Mijn planning', ai: 'AI-dagplanning', account: 'Alle projecten', cijfers: 'Cijfers & omzet', collega: "Collega's", verlof: 'Verlof', aanvragen: 'Aanvragen', berichten: 'Berichten' };
     $('crumb').textContent = titles[state.route] || 'Teamportaal';
     var page = $('page'); page.scrollTop = 0;
     if (state.route === 'home') return renderHome(page);
     if (state.route === 'planning') return renderPlanning(page, null);
+    if (state.route === 'ai') return renderAi(page);
     if (state.route === 'account') return renderAccount(page);
     if (state.route === 'cijfers') return renderCijfers(page);
     if (state.route === 'collega') return renderCollega(page);
@@ -419,6 +420,22 @@
     };
   }
 
+  /* ---- AI-DAGPLANNING ---- */
+  function aiFmt(t) { return esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>').replace(/\n/g, '<br>'); }
+  function renderAi(page) {
+    page.innerHTML = '<div class="panel active"><div class="t-hero"><h1>AI-dagplanning ✨</h1><div class="sub">Eén klik en de AI stelt de meest logische volgorde voor je dag voor — op basis van je deadlines en tijdsinschattingen.</div></div>' +
+      '<button class="btn btn-primary" id="ai-go"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + IC.spark + '</svg> Stel mijn dag voor</button>' +
+      '<div id="ai-out" style="margin-top:18px"></div></div>';
+    $('ai-go').onclick = async function () {
+      this.disabled = true; this.innerHTML = 'Aan het denken…';
+      var out = $('ai-out'); out.innerHTML = '<div class="empty"><p>De AI bekijkt je openstaande taken en deadlines…</p></div>';
+      var r; try { r = await api('teamAiPlan', {}); } catch (e) { r = null; }
+      var b = $('ai-go'); if (b) { b.disabled = false; b.innerHTML = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + IC.spark + '</svg> Opnieuw'; }
+      if (!r || !r.ok) { out.innerHTML = '<div class="empty"><p>' + (r && r.error && r.error !== 'no_member' ? 'De AI is even niet bereikbaar — probeer zo opnieuw.' : 'Kon geen planning maken.') + '</p></div>'; return; }
+      out.innerHTML = '<div class="fincard"><div class="ai-plan">' + aiFmt(r.plan) + '</div><p class="micro" style="margin-top:14px;color:var(--ink-4)">Voorstel op basis van ' + r.aantal + ' openstaande taken. Het blijft jouw planning — pas gerust aan.</p></div>';
+    };
+  }
+
   /* ---- binnenkort ---- */
   function renderSoon(page, route) {
     var info = {
@@ -464,5 +481,5 @@
     window.S27TeamAuth.init({ gatewayBase: GATEWAY });
   });
 
-  if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js?v=4').catch(function () { }); }); }
+  if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js?v=5').catch(function () { }); }); }
 })();

@@ -20,7 +20,9 @@ import {
   FIELD, LIST, PLANNING_LISTS, PAYROLL_LIST, TEAM_ID, VIDEO_POOL, _teamHelpers,
 } from './handlers.mjs';
 
-const { isDoneTask, kanBeginnenGezet, heeftDueDate, planTypeOf, msToBrusselsYmd, brusselsWallToMs } = _teamHelpers;
+const { isDoneTask, kanBeginnenGezet, heeftDueDate, planTypeOf, msToBrusselsYmd, brusselsWallToMs, aiComplete } = _teamHelpers;
+// Dit Anthropic-account heeft enkel Claude 4-toegang (3.5/3.7/haiku → not_found).
+const AI_MODEL = 'claude-sonnet-4-20250514';
 
 const str = (v) => (v == null ? '' : String(v));
 
@@ -671,6 +673,33 @@ export async function teamFeatureRequest(_b, body, env) {
   return { status: 200, body: { ok: true, id: str(created.data.id), portalen: PORTALEN } };
 }
 
+/* ===========================================================================
+ * AI-DAGPLANNING — Claude stelt op basis van de open taken (deadline + geschatte
+ * tijd) een logische dag-/weekindeling voor. Verzint niets buiten de takenlijst.
+ * =========================================================================== */
+export async function teamAiPlan(_b, body, env) {
+  if (!okStaff(body)) return { status: 403, body: { ok: false } };
+  const leden = await ledenLijst(env);
+  const me = resolveMember(str(body.account_email), leden);
+  if (!me) return { status: 200, body: { ok: false, error: 'no_member' } };
+  const [raw, naamMap] = await Promise.all([tasksForMember(env, me.id), bedrijvenNaamMap(env)]);
+  const taken = raw.filter((t) => !isDoneTask(t)).map((t) => shapeTask(t, naamMap));
+  if (!taken.length) return { status: 200, body: { ok: true, plan: 'Je hebt momenteel geen openstaande taken. 🎉', aantal: 0 } };
+  const today = msToBrusselsYmd(Date.now());
+  const laat = (t) => (t.due_ymd && t.due_ymd < today) ? 0 : 1;
+  const sorted = taken.slice().sort((a, b) => (laat(a) - laat(b)) || ((a.due || Infinity) - (b.due || Infinity)));
+  const lines = sorted.slice(0, 35).map((t, i) => {
+    const uren = t.est ? (Math.round(t.est / 3600000 * 10) / 10) + 'u' : '? u';
+    const dl = t.due_ymd ? (t.due_ymd < today ? ('TE LAAT (deadline ' + t.due_ymd + ')') : ('deadline ' + t.due_ymd)) : 'geen deadline';
+    return (i + 1) + '. ' + t.naam + ' — klant ' + (t.bedrijf || 'intern') + ', ' + (t.discipline || 'overig') + ', ' + dl + ', geschat ' + uren + ', status ' + t.status.label;
+  });
+  const system = 'Je bent de persoonlijke planningassistent van Studio 27. Maak voor dit teamlid een concrete, logische werkplanning voor VANDAAG en MORGEN op basis van de openstaande taken. Regels: werk binnen 08:00–18:00 op weekdagen; plan te-late taken en taken met de vroegste deadline eerst; gebruik de geschatte tijd als blokduur; verzin GEEN taken die niet in de lijst staan; als er te veel werk is voor twee dagen, zeg dat eerlijk en zet de rest onder "Later deze week". Antwoord in het Nederlands, beknopt, met per dag een lijst tijdsblokken in het formaat "09:00–11:00 — Taaknaam (klant)". Begin direct met "**Vandaag**", geen inleiding.';
+  const user = 'Teamlid: ' + me.naam + '\nVandaag is ' + today + '.\n\nOpenstaande taken:\n' + lines.join('\n') + '\n\nGeef de dagplanning voor vandaag en morgen.';
+  const res = await aiComplete(env, AI_MODEL, system, user);
+  if (!res || res.err || !res.text) return { status: 200, body: { ok: false, error: (res && res.err) || 'ai_fout', aantal: taken.length } };
+  return { status: 200, body: { ok: true, plan: res.text, aantal: taken.length, gegenereerd: Date.now() } };
+}
+
 /* ---- dispatch-tabel (worker.js gate't op is_staff) ------------------------ */
 export const TEAM_HANDLERS = {
   teamMe,
@@ -687,4 +716,5 @@ export const TEAM_HANDLERS = {
   teamTaskUpdate,
   teamTaskAttach,
   teamFeatureRequest,
+  teamAiPlan,
 };
