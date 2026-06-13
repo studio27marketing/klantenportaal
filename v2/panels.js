@@ -4288,15 +4288,27 @@ function webBuildTrendChart(trend){
       scales:{ y:{ beginAtZero:true, ticks:{ font:{family:'Montserrat',size:10}, color:'#9E919E', precision:0 }, grid:{ color:'rgba(231,223,211,.55)' } },
         x:{ ticks:{ font:{family:'Montserrat',size:10}, color:'#9E919E', maxRotation:0, autoSkip:true, maxTicksLimit:10 }, grid:{ display:false } } } } });
 }
+// Heeft dit bedrijf een gekoppelde statistiekenbron (Vincent 2026-06-13)? which = 'socials'|'ads'|'web'.
+// Demo + team (adminMode) zien alles; een payload zonder koppelingen (oud/cache) verbergt niets (veilig).
+function _statTabLinked(which){
+  if(state.demoMode || state.adminMode) return true;
+  var d=state.data&&state.data.dashboard;
+  var k=d&&d.koppelingen;
+  if(!k) return true;
+  return !!k[which];
+}
 function webTakTab(){
-  if(state._webTakTab) return state._webTakTab;
+  if(state._webTakTab && (state._webTakTab!=='stats' || _statTabLinked('web'))) return state._webTakTab;
+  if(!_statTabLinked('web')) return 'projecten';   // geen webstatistieken -> altijd op Projecten
   return _takProjects(TAK_WEBSITE.discIds).some(function(p){return p.status!=='done';}) ? 'projecten' : 'stats';
 }
-function webSetTakTab(t){ state._webTakTab=t; renderPanel('webprestaties'); }
+function webSetTakTab(t){ if(t==='stats' && !_statTabLinked('web')) return; state._webTakTab=t; renderPanel('webprestaties'); }
 function webTakSubnav(){
   var t=webTakTab();
   var mk=function(key,label,icn){ return '<button class="soc-subtab'+(t===key?' active':'')+'" onclick="webSetTakTab(\''+key+'\')">'+ic(icn,17)+'<span>'+label+'</span></button>'; };
-  return '<div class="soc-subnav" id="webTakNav">'+mk('projecten','Projecten','doc')+mk('stats','Statistieken','st_progress')+'</div>';
+  // Statistieken-sub-tab enkel als er webstatistieken gekoppeld zijn (anders: geen lege statistiekenpagina)
+  var stats=_statTabLinked('web') ? mk('stats','Statistieken','st_progress') : '';
+  return '<div class="soc-subnav" id="webTakNav">'+mk('projecten','Projecten','doc')+stats+'</div>';
 }
 function panelWebprestaties(){
   webEnsureStyles();

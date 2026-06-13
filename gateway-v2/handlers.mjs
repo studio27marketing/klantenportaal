@@ -1873,6 +1873,18 @@ export async function dashboard(bedrijfId, body, env) {
         socials_bewerkbaar: mods.includes(RIGHT_UUIDS.socialsBewerkbaar),
       };
     })(),
+    // Koppelingen (Vincent 2026-06-13): per statistieken-tab of er een platform-account gekoppeld is.
+    // De frontend verbergt de tab (Socials/Adverteren) of de sub-tab (Website > Statistieken) als er
+    // geen koppeling is, zodat een klant zonder gekoppelde data geen lege statistiekenpagina ziet.
+    // Bron = de coupling-velden op de bedrijf-taak (zelfde GET als de modules — geen extra RTT).
+    koppelingen: (function () {
+      const gv = (id) => str(cr.ok && cr.data ? getCF(cr.data, id) : '').trim();
+      return {
+        socials: !!gv(FIELD.metricoolId),
+        ads: !!(gv(FIELD.metaAdsId) || gv(FIELD.googleAdsId)),
+        web: !!(gv(FIELD.ga4PropertyId) || gv(FIELD.gscSiteUrl)),
+      };
+    })(),
   };
   return { status: 200, body: out };
 }

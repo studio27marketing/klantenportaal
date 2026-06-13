@@ -197,11 +197,12 @@ async function loadAndEnter(skipLink){
   // een switch al het NIEUWE bedrijf (switchCompany zette het via provisionFetch).
   var cached = (skipLink && state.activeBedrijf && state._dataByBedrijf) ? state._dataByBedrijf[state.activeBedrijf] : null;
   if(cached && cached.dashboard){
-    state.data = cached; state.perfUrl = null;
+    state.data = cached; state.perfUrl = null; state._webTakTab = null;
     try { await applyRoute(); afterEnter(); renderCompanySwitcher(); updateNavBadges(); } catch(e){}
     hideLoader();
     try {
       await Promise.all([ S27DATA.loadDashboard(), S27DATA.loadBedrijf().catch(function(){ return false; }) ]);
+      applyTakVisibility();   // verse koppelingen na de stille refresh kunnen de tab-zichtbaarheid wijzigen (review v86)
       if(typeof renderPanel==='function' && currentTab && state.viewMode==='tab') renderPanel(currentTab);
       updateNavBadges();
     } catch(e){}
@@ -209,6 +210,7 @@ async function loadAndEnter(skipLink){
   }
   // CRUCIAAL bij bedrijf-switch: wis alle gecachete data van het vorige bedrijf, anders blijven team/meetings/huisstijl/offertes/metricool/ads/facturatie hangen
   state.data = { dashboard:null, details:{}, chats:{}, meetings:null, bedrijf:null, team:null, huisstijl:null, offertes:null, metricool:null, metricoolStats:null, metricoolPostStats:null, ads:null };
+  state._webTakTab = null;   // Website-sub-tab niet laten overhangen naar een ander bedrijf (review v86)
   state.perfUrl = null;
   try {
     loaderStep(14,'Inloggen gecontroleerd…');
@@ -490,6 +492,9 @@ function renderLoading(name){
 }
 async function goTab(name){
   if(!PANELS[name]) return;
+  // statistieken-tab zonder gekoppelde data is verborgen -> nooit erheen navigeren (Vincent 2026-06-13)
+  if((name==='socials'||name==='advertenties') && typeof _statTabLinked==='function'
+     && !_statTabLinked(name==='socials'?'socials':'ads')){ name='start'; }
   stopChatPoll();   // tab-wissel/modal-sluiten -> chat-poller stoppen (berichten herstart 'm hieronder)
   currentTab=name; state.viewMode='tab'; state.activeProject=null; state._metaCampaign=null; state._chatStaged=[];
   setActiveNav(name);
@@ -565,6 +570,16 @@ function applyTakVisibility(){
   const d=state.data.dashboard;
   const pf=document.querySelector('.sb-item[data-tab="performance"]');
   if(pf) pf.style.display = (d && d.modules && d.modules.performance===false) ? 'none' : '';
+  // Statistieken-tabs verbergen zonder gekoppelde data (Vincent 2026-06-13): Socials = Metricool,
+  // Adverteren = Meta/Google Ads. Team (adminMode) ziet ze altijd (om koppelingen op te zetten);
+  // de Website > Statistieken-sub-tab wordt apart gegate in webTakSubnav.
+  var socLinked=(typeof _statTabLinked==='function')?_statTabLinked('socials'):true;
+  var adsLinked=(typeof _statTabLinked==='function')?_statTabLinked('ads'):true;
+  var setVis=function(tab,linked){ var el=document.querySelector('.sb-item[data-tab="'+tab+'"]'); if(el) el.style.display=linked?'':'none'; };
+  setVis('socials', socLinked);
+  setVis('advertenties', adsLinked);
+  // staat de klant net op een verborgen tab (deeplink/oude state)? -> terug naar Start
+  if((currentTab==='socials'&&!socLinked)||(currentTab==='advertenties'&&!adsLinked)) goTab('start');
 }
 
 /* =============================================================================
