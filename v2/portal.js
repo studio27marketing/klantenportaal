@@ -314,6 +314,15 @@ function updateAdminViewToggle(){
    ============================================================================= */
 async function enterAdminMode(){
   (function(){ var b=$id('bugBtn'); if(b) b.style.display=''; })();
+  // DEEP-LINK vanuit het teamportaal (?klant=<bedrijfId>): spring meteen naar die klant
+  // i.p.v. de bedrijvenkiezer te tonen. Zo verifieert een teamlid in 1 klik hoe de klant
+  // z'n portaal ziet. Enkel staff bereikt enterAdminMode, dus geen klant-impact.
+  var _jumpKlant=''; try{ _jumpKlant=qsp().get('klant')||''; }catch(e){}
+  if(_jumpKlant && /^[A-Za-z0-9_-]{1,64}$/.test(_jumpKlant)){
+    try{ history.replaceState(null,'',location.pathname); }catch(e){}
+    if(!state.adminCompanies || !state.adminCompanies.length){ try{ state.adminCompanies = await S27DATA.loadAdminCompanies(); }catch(e){ state.adminCompanies=[]; } }
+    if(typeof adminEnterCompany==='function'){ adminEnterCompany(_jumpKlant); return; }
+  }
   // INSTANT: bedrijvenlijst uit de lokale cache (10 min) -> kiezer staat er meteen,
   // de verse lijst wordt stil op de achtergrond opgehaald (zoekquery blijft staan).
   var cached=null;

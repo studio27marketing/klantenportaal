@@ -5,6 +5,7 @@
 (function () {
   'use strict';
   var GATEWAY = 'https://s27-portal-gateway-v2.studio27marketing.workers.dev';
+  var KLANTPORTAAL = 'https://portaal.studio27.be';
   var $ = function (id) { return document.getElementById(id); };
   var state = { me: null, roster: [], email: '', route: 'home', taken: null, viewMember: null, modal: null };
 
@@ -290,43 +291,80 @@
     $('modal').innerHTML = head + tabs + body;
     $('mclose').onclick = closeModal;
     Array.prototype.forEach.call($('modal').querySelectorAll('.mtab'), function (b) { b.onclick = function () { renderModal(curProject, b.getAttribute('data-t')); }; });
-    if (tab === 'overzicht') wireStatus(d);
+    if (tab === 'overzicht') wireOverzicht(d);
+    if (tab === 'bestanden') wireBestanden(d);
     if (tab === 'chat') wireChat(d);
   }
   function paneOverzicht(d) {
     var p = d.project;
-    var meta = [];
-    meta.push('<span>Status: ' + pillHtml(p.status) + '</span>');
-    if (p.deadline_ymd) meta.push('<span><b>Deadline:</b> ' + dueLabel(p.deadline_ymd) + '</span>');
-    if (p.bedrijf) meta.push('<span><b>Klant:</b> ' + esc(p.bedrijf) + '</span>');
-    if (p.prioriteit === 'urgent' || p.prioriteit === 'high') meta.push('<span><b>Prioriteit:</b> ' + (p.prioriteit === 'urgent' ? 'urgent' : 'hoog') + '</span>');
-    var avs = (p.assignees && p.assignees.length) ? '<div class="pj-block"><h4>Wie werkt eraan</h4><div class="pj-avs">' + p.assignees.map(function (a) { return '<span class="av" title="' + esc(a.naam) + '">' + esc(a.initialen || initialen(a.naam)) + '</span>'; }).join('') + '</div></div>' : '';
+    var klantLink = p.bedrijf_id ? '<a class="klant-jump" href="' + KLANTPORTAAL + '/?klant=' + esc(p.bedrijf_id) + '" target="_blank" rel="noopener" title="Bekijk dit als de klant in z\'n portaal">Bekijk klantportaal ↗</a>' : '';
+    var meta = '<div class="pj-meta"><span>Status: ' + pillHtml(p.status) + '</span>' + (p.bedrijf ? '<span><b>Klant:</b> ' + esc(p.bedrijf) + '</span>' : '') + (p.prioriteit === 'urgent' || p.prioriteit === 'high' ? '<span><b>Prioriteit:</b> ' + (p.prioriteit === 'urgent' ? 'urgent' : 'hoog') + '</span>' : '') + (klantLink ? '<span>' + klantLink + '</span>' : '') + '</div>';
     var statusBtns = '<div class="pj-block"><h4>Status doorzetten</h4><div class="status-actions">' + STATUSSEN.map(function (s) {
       var on = (p.status_raw || '').toLowerCase() === s.k; return '<button class="st-btn' + (on ? ' on' : '') + '" data-st="' + s.k + '"' + (on ? ' disabled' : '') + '>' + s.l + '</button>';
     }).join('') + '</div></div>';
-    var brief = '<div class="pj-block"><h4>Briefing</h4><div class="pj-brief' + (p.brief ? '' : ' leeg') + '">' + (p.brief ? esc(p.brief) : 'Geen briefing ingevuld op deze taak.') + '</div></div>';
+    var editRow = '<div class="pj-block"><div class="pj-edit-grid">' +
+      '<div class="field"><label>Tijdsinschatting (uren)</label><input type="number" min="0" step="0.5" id="ed-uren" value="' + (p.est_uren || '') + '"></div>' +
+      '<div class="field"><label>Deadline</label><input type="date" id="ed-due" value="' + esc(p.deadline_ymd || '') + '"></div></div></div>';
+    var avail = (state.roster || []).filter(function (m) { return p.assignee_ids.indexOf(m.id) < 0; });
+    var chips = p.assignees.map(function (a, i) { var id = p.assignee_ids[i]; return '<span class="as-chip"><span class="av">' + esc(a.initialen || initialen(a.naam)) + '</span>' + esc(voornaam(a.naam)) + '<button class="as-x" data-rem="' + id + '" title="Verwijderen">×</button></span>'; }).join('');
+    var addSel = '<select id="ed-add" class="as-add"><option value="">+ teamlid toevoegen…</option>' + avail.map(function (m) { return '<option value="' + m.id + '">' + esc(m.naam) + (m.pool ? ' 📷' : '') + '</option>'; }).join('') + '</select>';
+    var assignBlock = '<div class="pj-block"><h4>Wie werkt eraan</h4><div class="as-wrap">' + (chips || '<span class="micro" style="color:var(--ink-4)">Nog niemand toegewezen</span>') + addSel + '</div></div>';
+    var brief = '<div class="pj-block"><h4>Briefing</h4><textarea id="ed-brief" class="pj-brieftext" placeholder="Voeg de opdracht / briefing toe…">' + esc(p.brief) + '</textarea><button class="btn btn-outline btn-sm" id="ed-brief-save" style="margin-top:8px" disabled>Briefing opslaan</button></div>';
     var subs = d.subtaken.length ? '<div class="pj-block"><h4>Onderdelen (' + d.subtaken.length + ')</h4>' + d.subtaken.map(function (s) {
       return '<div class="sub-row"><span class="sb-bar" style="background:var(--c)"></span><span class="sb-nm">' + esc(s.naam) + '</span>' + pillHtml(s.status) + '</div>';
     }).join('') + '</div>' : '';
-    var open = '<a class="btn btn-outline btn-sm" href="' + esc(p.url) + '" target="_blank" rel="noopener" style="margin-top:6px">Open in ClickUp ↗</a>';
-    return '<div class="pj-meta">' + meta.join('') + '</div>' + statusBtns + avs + brief + subs + open;
+    var open = '<a class="btn btn-outline btn-sm" href="' + esc(p.url) + '" target="_blank" rel="noopener">Open in ClickUp ↗</a>';
+    return meta + statusBtns + editRow + assignBlock + brief + subs + open;
   }
-  function wireStatus(d) {
+  async function saveField(d, patch, after) {
+    var r; try { r = await api('teamTaskUpdate', Object.assign({ task_id: d.project.id }, patch)); } catch (e) { r = null; }
+    if (r && r.ok) { if (r.est_uren != null) d.project.est_uren = r.est_uren; if (patch.due !== undefined) d.project.deadline_ymd = r.due_ymd; state.taken = null; state.account = null; toast('Opgeslagen ✓'); if (after) after(); }
+    else toast('Opslaan mislukt');
+  }
+  async function saveAssignee(d, patch) {
+    var r; try { r = await api('teamTaskUpdate', Object.assign({ task_id: d.project.id }, patch)); } catch (e) { r = null; }
+    if (r && r.ok) { d.project.assignees = r.assignees; d.project.assignee_ids = r.assignee_ids; state.taken = null; state.account = null; toast('Team bijgewerkt ✓'); renderModal(d, 'overzicht'); }
+    else toast('Bijwerken mislukt');
+  }
+  function wireOverzicht(d) {
     Array.prototype.forEach.call($('modal').querySelectorAll('.st-btn'), function (b) {
       b.onclick = async function () {
         if (b.disabled) return; var st = b.getAttribute('data-st');
         Array.prototype.forEach.call($('modal').querySelectorAll('.st-btn'), function (x) { x.disabled = true; });
         var r; try { r = await api('teamStatus', { task_id: d.project.id, status: st }); } catch (e) { r = null; }
-        if (r && r.ok) { d.project.status = r.status; d.project.status_raw = st; state.taken = null; toast('Status bijgewerkt ✓'); renderModal(d, 'overzicht'); }
-        else { toast('Bijwerken mislukt'); renderModal(d, 'overzicht'); }
+        if (r && r.ok) { d.project.status = r.status; d.project.status_raw = st; state.taken = null; state.account = null; toast('Status bijgewerkt ✓'); }
+        else toast('Bijwerken mislukt');
+        renderModal(d, 'overzicht');
       };
     });
+    var u = $('ed-uren'); if (u) u.onchange = function () { saveField(d, { uren: u.value }); };
+    var dd = $('ed-due'); if (dd) dd.onchange = function () { saveField(d, { due: dd.value }); };
+    var as = $('ed-add'); if (as) as.onchange = function () { if (as.value) saveAssignee(d, { add_assignee: as.value }); };
+    Array.prototype.forEach.call($('modal').querySelectorAll('.as-x'), function (x) { x.onclick = function () { saveAssignee(d, { rem_assignee: x.getAttribute('data-rem') }); }; });
+    var bt = $('ed-brief'), bs = $('ed-brief-save');
+    if (bt && bs) { var orig = d.project.brief || ''; bt.oninput = function () { bs.disabled = (bt.value === orig); }; bs.onclick = function () { bs.disabled = true; saveField(d, { brief: bt.value }, function () { d.project.brief = bt.value; }); }; }
   }
   function paneBestanden(d) {
-    if (!d.bestanden.length) return '<div class="empty"><p>Nog geen bestanden of opleverlinks op dit project.</p></div>';
-    return d.bestanden.map(function (f) {
-      return '<a class="linkcard" href="' + esc(f.url) + '" target="_blank" rel="noopener"><span class="li"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></span><div style="min-width:0"><div class="ll">' + esc(f.label) + '</div><div class="lu">' + esc(f.url) + '</div></div></a>';
-    }).join('');
+    var list = (d.bestanden && d.bestanden.length) ? d.bestanden.map(function (f) {
+      return '<a class="linkcard" href="' + esc(f.url) + '" target="_blank" rel="noopener" download><span class="li"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></span><div style="min-width:0"><div class="ll">' + esc(f.label) + '</div><div class="lu">' + esc(f.url) + '</div></div></a>';
+    }).join('') : '<div class="empty" style="padding:24px"><p>Nog geen bestanden of opleverlinks op dit project.</p></div>';
+    return list + '<label class="btn btn-outline btn-sm" id="ed-file-lbl" style="margin-top:10px;cursor:pointer;display:inline-flex">+ Bestand toevoegen<input type="file" id="ed-file" hidden></label>';
+  }
+  function wireBestanden(d) {
+    var f = $('ed-file'), lbl = $('ed-file-lbl'); if (!f) return;
+    f.onchange = function () {
+      var file = f.files && f.files[0]; if (!file) return;
+      if (file.size > 20 * 1024 * 1024) { toast('Bestand te groot (max 20 MB)'); return; }
+      if (lbl) lbl.textContent = 'Uploaden…';
+      var rd = new FileReader();
+      rd.onload = async function () {
+        var data = String(rd.result); var b64 = data.indexOf(',') >= 0 ? data.split(',')[1] : data;
+        var r; try { r = await api('teamTaskAttach', { task_id: d.project.id, filename: file.name, file_data: b64 }); } catch (e) { r = null; }
+        if (r && r.ok) { d.bestanden = d.bestanden || []; d.bestanden.push({ url: r.url, label: r.filename }); toast('Bestand toegevoegd ✓'); renderModal(d, 'bestanden'); }
+        else { toast('Upload mislukt' + (r && r.error === 'te_groot' ? ' (te groot)' : '')); if (lbl) lbl.textContent = '+ Bestand toevoegen'; }
+      };
+      rd.readAsDataURL(file);
+    };
   }
   function paneChat(d) {
     var msgs = (d.chat || []).map(function (c) {
@@ -357,6 +395,29 @@
     origRenderModal(d, tab);
   };
   function closeModal() { $('scrim').classList.remove('show'); document.body.style.overflow = ''; curProject = null; if (state.route === 'home' || state.route === 'planning') { state.taken = null; } }
+
+  /* ---- FEATURE REQUEST (in ieders portaal, → ClickUp feature-lijst) ---- */
+  function openFeature() {
+    curProject = null;
+    var portalen = ['Teamportaal', 'Klantenportaal', 'Shoot-planner', 'Anders'];
+    $('modal').innerHTML = '<div class="modal-head br-purple"><span class="bar"></span><div style="flex:1;min-width:0"><div class="sub">Feature request</div><h2>💡 Een idee voor de portalen</h2></div><button class="modal-close" id="mclose"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>' +
+      '<div class="modal-body">' +
+      '<div class="vl-grid"><div class="field"><label>Welk portaal?</label><select id="ft-portaal">' + portalen.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') + '</select></div>' +
+      '<div class="field"><label>Onderdeel (optioneel)</label><input type="text" id="ft-ond" placeholder="bv. Cijfers, Planning…"></div></div>' +
+      '<div class="field" style="margin-top:12px"><label>Titel</label><input type="text" id="ft-titel" placeholder="Korte titel van je idee"></div>' +
+      '<div class="field" style="margin-top:12px"><label>Omschrijving</label><textarea id="ft-oms" class="pj-brieftext" placeholder="Wat zou je willen kunnen, en waarom?"></textarea></div>' +
+      '<button class="btn btn-primary" id="ft-send" style="margin-top:14px">Versturen</button>' +
+      '<p class="micro" style="margin-top:10px;color:var(--ink-4)">Komt in de ClickUp-lijst “Portaal — Feature Requests”, met jou als aanvrager en het portaal duidelijk vermeld.</p></div>';
+    $('mclose').onclick = closeModal;
+    $('scrim').classList.add('show'); document.body.style.overflow = 'hidden';
+    $('ft-send').onclick = async function () {
+      var titel = $('ft-titel').value.trim(), oms = $('ft-oms').value.trim();
+      if (!titel && !oms) { toast('Beschrijf eerst je idee'); return; }
+      this.disabled = true; this.textContent = 'Versturen…';
+      var r; try { r = await api('teamFeatureRequest', { titel: titel, omschrijving: oms, portaal: $('ft-portaal').value, onderdeel: $('ft-ond').value }); } catch (e) { r = null; }
+      if (r && r.ok) { toast('Idee verstuurd ✓'); closeModal(); } else { toast('Versturen mislukt'); this.disabled = false; this.textContent = 'Versturen'; }
+    };
+  }
 
   /* ---- binnenkort ---- */
   function renderSoon(page, route) {
@@ -389,6 +450,7 @@
   window.addEventListener('DOMContentLoaded', function () {
     $('btn-google').onclick = function () { window.S27TeamAuth.google(); };
     $('hamb').onclick = openSidebar; $('sbScrim').onclick = closeSidebar;
+    var _fb = $('featBtn'); if (_fb) _fb.onclick = openFeature;
     $('scrim').addEventListener('mousedown', function (e) { if (e.target === $('scrim')) closeModal(); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if ($('scrim').classList.contains('show')) closeModal(); else closeSidebar(); } });
     window.addEventListener('hashchange', function () { var h = (location.hash || '').replace('#', ''); if (routeExists(h) && h !== state.route) { state.route = h; renderNav(); render(); } });
@@ -402,5 +464,5 @@
     window.S27TeamAuth.init({ gatewayBase: GATEWAY });
   });
 
-  if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js?v=3').catch(function () { }); }); }
+  if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js?v=4').catch(function () { }); }); }
 })();

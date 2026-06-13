@@ -296,7 +296,10 @@ export async function teamProject(_b, body, env) {
         bedrijf_id: bid, bedrijf: naamMap[bid] || '',
         brief: str(t.description || t.text_content || ''),
         deadline: due, deadline_ymd: due ? msToBrusselsYmd(due) : '',
+        start_ymd: t.start_date ? msToBrusselsYmd(Number(t.start_date)) : '',
         assignees: buildSae(t),
+        assignee_ids: (Array.isArray(t.assignees) ? t.assignees : []).map((a) => Number(a && a.id)).filter(Boolean),
+        est_uren: t.time_estimate ? Math.round(Number(t.time_estimate) / 3600000 * 10) / 10 : 0,
         prioriteit: (t.priority && t.priority.priority) ? str(t.priority.priority) : '',
         parent: str(t.parent || ''), url: str(t.url),
       },
@@ -584,6 +587,90 @@ export async function teamHealth(_b, body, env) {
   return { status: 200, body: { ok: true, week: { van: w.monYmd, tot: w.sunYmd }, target: TARGET, leden, disclaimer: 'INGEPLANDE uren (time_estimate van taken met deadline deze week, gedeeld over de assignees). ClickUp-tijdregistratie is niet actief — dit zijn dus geplande, geen gepresteerde uren.' } };
 }
 
+/* ===========================================================================
+ * VOLLEDIGE CLICKUP-SYNC — elk teamlid mag bewerken: assignees wisselen, uren,
+ * due/start, briefing, bestanden toevoegen. 1 PUT per wijziging (ClickUp-native).
+ * =========================================================================== */
+export async function teamTaskUpdate(_b, body, env) {
+  if (!okStaff(body)) return { status: 403, body: { ok: false } };
+  const taskId = cleanTaskId(body.task_id);
+  if (!taskId) return { status: 400, body: { ok: false, error: 'no_task' } };
+  const put = {};
+  if (typeof body.brief === 'string') put.description = body.brief.slice(0, 20000);
+  if (body.uren != null && body.uren !== '') { const h = Number(body.uren); if (isFinite(h) && h >= 0) put.time_estimate = Math.round(h * 3600000); }
+  if (body.due !== undefined) { const ymd = str(body.due); put.due_date = ymd ? brusselsWallToMs(ymd, '17:00') : null; put.due_date_time = !!ymd; }
+  if (body.start !== undefined) { const ymd = str(body.start); put.start_date = ymd ? brusselsWallToMs(ymd, '09:00') : null; put.start_date_time = !!ymd; }
+  const addA = []; const remA = [];
+  if (body.add_assignee) addA.push(Number(body.add_assignee));
+  if (body.rem_assignee) remA.push(Number(body.rem_assignee));
+  if (addA.length || remA.length) put.assignees = { add: addA, rem: remA };
+  if (!Object.keys(put).length) return { status: 400, body: { ok: false, error: 'niets' } };
+  const r = await cu.put(env, `/task/${taskId}`, put);
+  if (!r.ok) return { status: 200, body: { ok: false, error: 'update_failed', detail: (r.data && r.data.err) || '' } };
+  const t = r.data || {};
+  return {
+    status: 200, body: {
+      ok: true,
+      assignee_ids: (Array.isArray(t.assignees) ? t.assignees : []).map((a) => Number(a && a.id)).filter(Boolean),
+      assignees: buildSae(t),
+      est_uren: t.time_estimate ? Math.round(Number(t.time_estimate) / 3600000 * 10) / 10 : 0,
+      due_ymd: t.due_date ? msToBrusselsYmd(Number(t.due_date)) : '',
+      start_ymd: t.start_date ? msToBrusselsYmd(Number(t.start_date)) : '',
+    },
+  };
+}
+
+// teamTaskAttach: bestand toevoegen aan een taak (base64) + de link aan het
+// Bestanden-veld hangen zodat hij in de Bestanden-tab verschijnt (downloadbaar).
+export async function teamTaskAttach(_b, body, env) {
+  if (!okStaff(body)) return { status: 403, body: { ok: false } };
+  const taskId = cleanTaskId(body.task_id);
+  const filename = (str(body.filename).replace(/[^\w. ()\-]/g, '').slice(0, 140)) || 'bestand';
+  const b64 = str(body.file_data);
+  if (!taskId || !b64) return { status: 400, body: { ok: false, error: 'leeg' } };
+  if (b64.length > 28 * 1024 * 1024) return { status: 200, body: { ok: false, error: 'te_groot' } };
+  let bytes;
+  try { const bin = atob(b64.replace(/^data:[^;]+;base64,/, '').replace(/\s+/g, '')); bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); }
+  catch (e) { return { status: 200, body: { ok: false, error: 'bad_file' } }; }
+  if (!bytes.length || bytes.length > 22 * 1024 * 1024) return { status: 200, body: { ok: false, error: 'te_groot' } };
+  const up = await cu.uploadAttachment(env, taskId, bytes, filename);
+  if (!up || !up.ok || !up.data) return { status: 200, body: { ok: false, error: 'upload_failed' } };
+  const url = str(up.data.url || up.data.url_w_query || '');
+  try {
+    const cur = await cu.get(env, `/task/${taskId}`);
+    const prev = str(getCF(cur.data, FIELD.deliverablesRaw));
+    await cu.field(env, taskId, FIELD.deliverablesRaw, (prev ? prev + '\n' : '') + filename + ' ' + url);
+  } catch (e) { /* best-effort */ }
+  return { status: 200, body: { ok: true, url, filename } };
+}
+
+/* ===========================================================================
+ * FEATURE REQUESTS — eigen ClickUp-lijst (901523887267), met portaal-aanduiding
+ * + aanvrager (als assignee), zodat een AI ze dagelijks per persoon kan verwerken.
+ * =========================================================================== */
+const FEATURE_LIST = '901523887267';
+const PORTALEN = ['Teamportaal', 'Klantenportaal', 'Shoot-planner', 'Anders'];
+export async function teamFeatureRequest(_b, body, env) {
+  if (!okStaff(body)) return { status: 403, body: { ok: false } };
+  const titel = str(body.titel).trim().slice(0, 140);
+  const omschrijving = str(body.omschrijving).trim().slice(0, 6000);
+  const portaal = PORTALEN.indexOf(str(body.portaal)) >= 0 ? str(body.portaal) : 'Teamportaal';
+  const onderdeel = str(body.onderdeel).slice(0, 120);
+  const email = str(body.account_email);
+  if (!titel && !omschrijving) return { status: 400, body: { ok: false, message: 'Beschrijf eerst je idee.' } };
+  const leden = await ledenLijst(env);
+  const me = resolveMember(email, leden);
+  const created = await cu.post(env, `/list/${FEATURE_LIST}/task`, {
+    name: `✨ [${portaal}] ${titel || omschrijving.slice(0, 80)}`,
+    description: ['FEATURE REQUEST', '', `Portaal: ${portaal}`, onderdeel ? `Onderdeel: ${onderdeel}` : '', me ? `Gevraagd door: ${me.naam} (${email})` : `Gevraagd door: ${email}`, '', omschrijving || '(geen omschrijving)'].filter((x) => x !== '').join('\n'),
+    due_date: Date.now(), due_date_time: true,
+    ...(me ? { assignees: [Number(me.id)] } : {}),
+    notify_all: false,
+  });
+  if (!created || !created.ok || !created.data || !created.data.id) return { status: 200, body: { ok: false, error: 'create_failed' } };
+  return { status: 200, body: { ok: true, id: str(created.data.id), portalen: PORTALEN } };
+}
+
 /* ---- dispatch-tabel (worker.js gate't op is_staff) ------------------------ */
 export const TEAM_HANDLERS = {
   teamMe,
@@ -597,4 +684,7 @@ export const TEAM_HANDLERS = {
   teamAllProjects,
   teamFinance,
   teamHealth,
+  teamTaskUpdate,
+  teamTaskAttach,
+  teamFeatureRequest,
 };
