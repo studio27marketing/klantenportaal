@@ -1,6 +1,6 @@
 /* Studio 27 Teamportaal service worker — eigen cache-namespace (los van het klantportaal). */
-var CACHE = 's27-team-v2';
-var SHELL = ['/', '/index.html', '/styles.css?v=2', '/glass.css?v=2', '/team.css?v=2', '/app.js?v=2', '/auth.js?v=2', '/wordmark.svg', '/icon.svg', '/manifest.webmanifest?v=2'];
+var CACHE = 's27-team-v3';
+var SHELL = ['/', '/index.html', '/styles.css?v=3', '/glass.css?v=3', '/team.css?v=3', '/app.js?v=3', '/auth.js?v=3', '/wordmark.svg', '/icon.svg', '/manifest.webmanifest?v=3'];
 
 self.addEventListener('install', function (e) {
   self.skipWaiting();

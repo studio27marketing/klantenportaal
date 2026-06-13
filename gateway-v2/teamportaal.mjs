@@ -41,7 +41,49 @@ function agendaEmail(lid) {
 // Disciplinelijsten = de planning-lijsten zonder Payroll (afwezigheid hoort niet in de takenlijst).
 const DISCIPLINE_LISTS = PLANNING_LISTS.filter((id) => id !== PAYROLL_LIST);
 
+// FINANCIEEL: budget-veld (currency EUR) op offertes ÉN planningstaken (zelfde id),
+// + offerte-velden. Categorie-omzet/omzet-per-persoon = uit de planningstaken (TYPE JOB
+// + Budget + assignees). Vulgraad ~40% → indicatief, eerlijk labelen.
+const BUDGET_FIELD = 'c8d2dd2c-2428-4236-ba37-a3f3cd90c9ec';
+const OFFERTES_LIST = '901520180289';
+const OFFERTE_NAAM = '8da934b5-7747-4ad3-ac2f-cc53cf2985e8'; // short_text 'Bedrijfsnaam'
+// TYPE JOB orderindex -> rapportcategorie (de namen die Vincent noemt: socials/ads/content/...).
+const CAT_BY_IDX = ['Projectmanagement', 'Strategie', 'Branding', 'Branding', 'Content', 'Content', 'Content', 'Content', 'Content', 'Webdesign', 'Webdesign', 'Content', 'SEO', 'Socials', 'Ads', 'Automation', 'Opleiding', 'Overig', 'Webdesign', 'Support'];
+function catOf(v) { const i = parseInt(v, 10); return (i >= 0 && CAT_BY_IDX[i]) ? CAT_BY_IDX[i] : 'Overig'; }
+function num(v) { const n = parseFloat(String(v == null ? '' : v).replace(',', '.')); return isFinite(n) ? n : 0; }
+function monthOf(ms) { const y = msToBrusselsYmd(Number(ms) || 0); return y ? y.slice(0, 7) : ''; }
+function last12Months() { const out = []; const d = new Date(); for (let i = 11; i >= 0; i--) { const dd = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - i, 1)); out.push(dd.getUTCFullYear() + '-' + String(dd.getUTCMonth() + 1).padStart(2, '0')); } return out; }
+// feedbackronde-detectie op taaknaam (geen ronde-teller-veld in ClickUp).
+const FB_RE = /feedback|\bv\d+\b/i;
+
 const okStaff = (body) => body && body.__staff === true;
+
+/* ---- rollen & toegang (server-side; nooit enkel frontend) ----------------- */
+// Alleen Vincent = admin. Arne = sales (cijfers/offertes). Ilke = accountmanager.
+// Iedereen anders = team. ID's: Vincent 8714037, Arne 54513254, Ilke 48338421.
+const ROLES = { 8714037: 'admin', 54513254: 'sales', 48338421: 'accountmanager' };
+function roleOf(id) { return ROLES[Number(id)] || 'team'; }
+function permsFor(role) {
+  return {
+    admin: role === 'admin',                                   // volledige controle — ENKEL Vincent
+    finance: role === 'admin' || role === 'sales',             // cijfers/omzet/offertes — Vincent + Arne
+    finance_full: role === 'admin',                            // omzet per persoon — ENKEL Vincent
+    account: role === 'admin' || role === 'accountmanager',    // alle projecten + planning + health — Vincent + Ilke
+    team: true,
+  };
+}
+// resolveRole -> { me, role, perms } of { error:{status,body} }.
+async function resolveRole(env, body) {
+  const leden = await ledenLijst(env);
+  const me = resolveMember(str(body.account_email), leden);
+  if (!me) return { error: { status: 200, body: { ok: false, error: 'no_member' } }, leden };
+  const role = roleOf(me.id);
+  return { me, role, perms: permsFor(role), leden };
+}
+// poort voor rol-only endpoints; geeft null als toegelaten, anders een 403-body.
+function denyUnless(perms, key) {
+  return perms && perms[key] ? null : { status: 403, body: { ok: false, error: 'forbidden_role', message: 'Geen toegang voor jouw rol.' } };
+}
 
 /* ---- identiteit ----------------------------------------------------------- */
 async function ledenLijst(env) {
@@ -62,7 +104,7 @@ function rosterFrom(leden) {
     .sort((a, b) => a.naam.localeCompare(b.naam, 'nl'));
 }
 
-// teamMe: wie ben ik (ClickUp-lid) + het volledige actieve roster (voor collega-inzicht).
+// teamMe: wie ben ik (ClickUp-lid) + rol + rechten + het actieve roster.
 export async function teamMe(_b, body, env) {
   if (!okStaff(body)) return { status: 403, body: { ok: false, message: 'Alleen voor het Studio 27-team.' } };
   const leden = await ledenLijst(env);
@@ -72,7 +114,8 @@ export async function teamMe(_b, body, env) {
     return { status: 200, body: { ok: false, error: 'no_member', email: str(body.account_email),
       message: 'Je @studio27.be-account is nog niet gekoppeld aan een ClickUp-teamlid. Vraag Vincent je toe te voegen aan de ClickUp-workspace.' } };
   }
-  return { status: 200, body: { ok: true, me, roster: rosterFrom(leden) } };
+  const role = roleOf(me.id);
+  return { status: 200, body: { ok: true, me, role, perms: permsFor(role), roster: rosterFrom(leden) } };
 }
 
 /* ---- taken per teamlid ---------------------------------------------------- */
@@ -369,6 +412,178 @@ export async function teamVerlofAanvraag(_b, body, env) {
   return { status: 200, body: { ok: true, id: str(cr.data.id) } };
 }
 
+/* ===========================================================================
+ * ACCOUNTMANAGER (Ilke) — alle lopende projecten per klant in één oogopslag.
+ * Gegroepeerd per bedrijf, gesorteerd op urgentie (te laat → actief). Klik een
+ * item -> teamProject-detail (zelfde modal). Gated op de 'account'-rol.
+ * =========================================================================== */
+export async function teamAllProjects(_b, body, env) {
+  if (!okStaff(body)) return { status: 403, body: { ok: false } };
+  const rr = await resolveRole(env, body);
+  if (rr.error) return rr.error;
+  const deny = denyUnless(rr.perms, 'account'); if (deny) return deny;
+
+  const CK = 'team:allprojects:v1';
+  try { const hit = await env.KV.get(CK, 'json'); if (hit && hit.clients) return { status: 200, body: hit }; } catch (e) { /* miss */ }
+
+  const listQ = DISCIPLINE_LISTS.map((id) => `list_ids%5B%5D=${encodeURIComponent(id)}`).join('&');
+  const collect = async (sub) => {
+    const out = [];
+    for (let p = 0; p < 20; p++) {
+      const r = await cu.get(env, `/team/${TEAM_ID}/task?${listQ}&include_closed=false&subtasks=${sub}&page=${p}`);
+      const tasks = (r.ok && r.data && Array.isArray(r.data.tasks)) ? r.data.tasks : [];
+      out.push(...tasks);
+      if (!tasks.length || r.data.last_page === true) break;
+    }
+    return out;
+  };
+  const [a, b, naamMap] = await Promise.all([collect('true'), collect('false'), bedrijvenNaamMap(env)]);
+  const byId = new Map();
+  for (const t of [...a, ...b]) byId.set(str(t.id), t);
+
+  const today = msToBrusselsYmd(Date.now());
+  const groups = new Map();
+  for (const t of byId.values()) {
+    if (isDoneTask(t)) continue;
+    const bid = (getRelationIds(t, FIELD.bedrijf)[0]) || '';
+    if (!bid) continue;                                        // enkel taken met een klant-koppeling
+    if (!groups.has(bid)) groups.set(bid, { bedrijf_id: bid, bedrijf: naamMap[bid] || '', items: [], disc: new Set(), fb: 0 });
+    const g = groups.get(bid);
+    const item = shapeTask(t, naamMap);
+    g.items.push(item); if (item.discipline) g.disc.add(item.discipline);
+    if (FB_RE.test(item.naam)) g.fb += 1;
+  }
+  // onbekende klant-namen gericht bijresolven (relatie wijst soms buiten de Bedrijven-lijst);
+  // gecapt + gepersisteerd in de namen-cache zodat het overzicht clean is.
+  const onbekend = [...groups.values()].filter((g) => !g.bedrijf).slice(0, 80);
+  if (onbekend.length) {
+    const resolved = await Promise.all(onbekend.map(async (g) => {
+      try { const r = await cu.get(env, `/task/${g.bedrijf_id}`); return [g.bedrijf_id, (r.ok && r.data && str(r.data.name)) || '']; } catch (e) { return [g.bedrijf_id, '']; }
+    }));
+    for (const [bid, naam] of resolved) { if (naam) { naamMap[bid] = naam; groups.get(bid).bedrijf = naam; } }
+    try { if (env.KV) await env.KV.put('team:bedrijfnamen:v1', JSON.stringify(naamMap), { expirationTtl: 21600 }); } catch (e) { /* best-effort */ }
+  }
+  for (const g of groups.values()) { for (const it of g.items) { if (!it.bedrijf && naamMap[g.bedrijf_id]) it.bedrijf = naamMap[g.bedrijf_id]; } if (!g.bedrijf) g.bedrijf = '(onbekende klant)'; }
+  const clients = [...groups.values()].map((g) => {
+    g.items.sort((x, y) => ((x.due || Infinity) - (y.due || Infinity)) || x.naam.localeCompare(y.naam, 'nl'));
+    const teLaat = g.items.filter((i) => i.due_ymd && i.due_ymd < today).length;
+    const next = g.items.find((i) => i.due_ymd && i.due_ymd >= today);
+    return { bedrijf_id: g.bedrijf_id, bedrijf: g.bedrijf, active: g.items.length, te_laat: teLaat, feedback: g.fb, disciplines: [...g.disc], next_due: next ? next.due_ymd : '', items: g.items };
+  }).sort((x, y) => (y.te_laat - x.te_laat) || (y.active - x.active) || x.bedrijf.localeCompare(y.bedrijf, 'nl'));
+
+  const out = {
+    ok: true, gegenereerd: Date.now(), clients,
+    totaal: { klanten: clients.length, actief: clients.reduce((s, c) => s + c.active, 0), te_laat: clients.reduce((s, c) => s + c.te_laat, 0) },
+  };
+  try { if (env.KV) await env.KV.put(CK, JSON.stringify(out), { expirationTtl: 180 }); } catch (e) { /* best-effort */ }
+  return { status: 200, body: out };
+}
+
+/* ===========================================================================
+ * DIRECTIE (Vincent admin / Arne sales) — financieel.
+ * Offertes = SUM(Budget) per maand op due_date (UITGEBRACHT, geen won/lost-veld).
+ * Omzet per categorie = SUM(taakbudget) per TYPE JOB. Omzet per persoon (admin) =
+ * taakbudget / #assignees. Budget ~40% gevuld → indicatief, eerlijk gelabeld.
+ * =========================================================================== */
+async function collectPlanningBudget(env) {
+  const out = [];
+  for (const id of DISCIPLINE_LISTS) {
+    for (let p = 0; p < 25; p++) {
+      const r = await cu.get(env, `/list/${id}/task?include_closed=true&subtasks=true&page=${p}`);
+      const tasks = (r.ok && r.data && Array.isArray(r.data.tasks)) ? r.data.tasks : [];
+      out.push(...tasks);
+      if (!tasks.length || r.data.last_page === true) break;
+    }
+  }
+  return out;
+}
+
+export async function teamFinance(_b, body, env) {
+  if (!okStaff(body)) return { status: 403, body: { ok: false } };
+  const rr = await resolveRole(env, body);
+  if (rr.error) return rr.error;
+  const deny = denyUnless(rr.perms, 'finance'); if (deny) return deny;
+
+  const CK = 'team:finance:v1';
+  let cached = null;
+  try { cached = await env.KV.get(CK, 'json'); } catch (e) { /* miss */ }
+  if (cached) return { status: 200, body: rr.perms.finance_full ? cached : Object.assign({}, cached, { per_persoon: null }) };
+
+  // offertes
+  let off = [];
+  try { off = await pageAll(env, (p) => `/list/${OFFERTES_LIST}/task?include_closed=true&subtasks=false&page=${p}`, 60); } catch (e) { off = []; }
+  let offTotaal = 0, offZonder = 0; const maand = {}; const top = [];
+  for (const t of off) {
+    const b = num(getCF(t, BUDGET_FIELD));
+    if (b <= 0) { offZonder++; continue; }
+    offTotaal += b;
+    const mk = monthOf(t.due_date); if (mk) maand[mk] = (maand[mk] || 0) + b;
+    top.push({ naam: str(getCF(t, OFFERTE_NAAM)) || str(t.name), bedrag: Math.round(b), maand: mk });
+  }
+  top.sort((a, b) => b.bedrag - a.bedrag);
+
+  // planningstaken: categorie + per persoon
+  let plan = [];
+  try { plan = await collectPlanningBudget(env); } catch (e) { plan = []; }
+  const cat = {}; const persoon = {}; let planTotaal = 0, planGevuld = 0, planTotaalTaken = 0;
+  for (const t of plan) {
+    planTotaalTaken++;
+    const b = num(getCF(t, BUDGET_FIELD)); if (b <= 0) continue;
+    planGevuld++; planTotaal += b;
+    const c = catOf(getCF(t, FIELD.typeJob)); cat[c] = (cat[c] || 0) + b;
+    const as = (Array.isArray(t.assignees) ? t.assignees : []).filter((a) => a && a.id);
+    if (as.length) { const share = b / as.length; for (const a of as) { const k = Number(a.id); persoon[k] = (persoon[k] || 0) + share; } }
+  }
+  const naamById = new Map(rr.leden.map((l) => [Number(l.id), l.naam]));
+  const out = {
+    ok: true, gegenereerd: Date.now(),
+    offertes: { totaal: Math.round(offTotaal), aantal: off.length, zonder_bedrag: offZonder, maand: last12Months().map((mk) => ({ maand: mk, bedrag: Math.round(maand[mk] || 0) })), top: top.slice(0, 8) },
+    categorie: Object.keys(cat).map((k) => ({ categorie: k, bedrag: Math.round(cat[k]) })).sort((a, b) => b.bedrag - a.bedrag),
+    plan_totaal: Math.round(planTotaal), plan_vulgraad: planTotaalTaken ? Math.round(planGevuld / planTotaalTaken * 100) : 0,
+    per_persoon: Object.keys(persoon).map((id) => ({ id: Number(id), naam: naamById.get(Number(id)) || ('#' + id), bedrag: Math.round(persoon[id]) })).sort((a, b) => b.bedrag - a.bedrag),
+    disclaimer: 'Offertebedragen = UITGEBRACHT (ClickUp heeft nog geen won/verloren-veld). Omzet per categorie/persoon komt uit het ingevulde taakbudget (±40% vulgraad) en is dus INDICATIEF, geen sluitende boekhouding.',
+  };
+  try { if (env.KV) await env.KV.put(CK, JSON.stringify(out), { expirationTtl: 3600 }); } catch (e) { /* best-effort */ }
+  return { status: 200, body: rr.perms.finance_full ? out : Object.assign({}, out, { per_persoon: null }) };
+}
+
+/* ---- HEALTH (Ilke/admin): ingeplande uren per teamlid deze week ----------- */
+function weekWindow() {
+  const today = msToBrusselsYmd(Date.now());
+  const wd = new Date(today + 'T12:00:00Z').getUTCDay();   // 0=zo..6=za
+  const monYmd = ymdPlus(today, wd === 0 ? -6 : 1 - wd);
+  const sunYmd = ymdPlus(monYmd, 6);
+  return { van: brusselsWallToMs(monYmd, '00:00'), tot: brusselsWallToMs(sunYmd, '23:59'), monYmd, sunYmd };
+}
+export async function teamHealth(_b, body, env) {
+  if (!okStaff(body)) return { status: 403, body: { ok: false } };
+  const rr = await resolveRole(env, body);
+  if (rr.error) return rr.error;
+  const deny = denyUnless(rr.perms, 'account'); if (deny) return deny;
+
+  const w = weekWindow();
+  const listQ = DISCIPLINE_LISTS.map((id) => `list_ids%5B%5D=${encodeURIComponent(id)}`).join('&');
+  const tasks = [];
+  for (let p = 0; p < 12; p++) {
+    const r = await cu.get(env, `/team/${TEAM_ID}/task?${listQ}&include_closed=false&subtasks=true&due_date_gt=${w.van}&due_date_lt=${w.tot}&page=${p}`);
+    const ts = (r.ok && r.data && Array.isArray(r.data.tasks)) ? r.data.tasks : [];
+    tasks.push(...ts);
+    if (!ts.length || r.data.last_page === true) break;
+  }
+  const uren = {};
+  for (const t of tasks) {
+    if (isDoneTask(t)) continue;
+    const est = Number(t.time_estimate) || 0; if (!est) continue;
+    const as = (Array.isArray(t.assignees) ? t.assignees : []).filter((a) => a && a.id);
+    if (!as.length) continue;
+    const share = est / as.length;
+    for (const a of as) { const k = Number(a.id); uren[k] = (uren[k] || 0) + share; }
+  }
+  const TARGET = 38;
+  const leden = rosterFrom(rr.leden).map((m) => ({ id: m.id, naam: m.naam, pool: m.pool, uren: Math.round((uren[m.id] || 0) / 3600000 * 10) / 10 })).sort((a, b) => b.uren - a.uren);
+  return { status: 200, body: { ok: true, week: { van: w.monYmd, tot: w.sunYmd }, target: TARGET, leden, disclaimer: 'INGEPLANDE uren (time_estimate van taken met deadline deze week, gedeeld over de assignees). ClickUp-tijdregistratie is niet actief — dit zijn dus geplande, geen gepresteerde uren.' } };
+}
+
 /* ---- dispatch-tabel (worker.js gate't op is_staff) ------------------------ */
 export const TEAM_HANDLERS = {
   teamMe,
@@ -379,4 +594,7 @@ export const TEAM_HANDLERS = {
   teamProjectChatPost,
   teamVerlof,
   teamVerlofAanvraag,
+  teamAllProjects,
+  teamFinance,
+  teamHealth,
 };

@@ -23,7 +23,10 @@
     palm: '<path d="M13 8c0-2.76-2.46-5-5.5-5S2 5.24 2 8h2l-1 1 1 1M13 8c0-2.76 2.46-5 5.5-5S24 5.24 24 8h-2l1 1-1 1M13 8c2.76 0 5 2.46 5 5.5S15.76 19 13 19M13 8c-2.76 0-5 2.46-5 5.5S10.24 19 13 19M13 8v13"/>',
     bolt: '<path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/>',
     chat: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
-    spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/>'
+    spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/>',
+    grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+    euro: '<path d="M15 8a4.5 4.5 0 1 0 0 8M4 11h7M4 14h7"/>',
+    chart: '<path d="M3 3v18h18M7 14l3-3 3 2 5-6"/>'
   };
   function svgIc(p, w) { return '<svg viewBox="0 0 24 24" width="' + (w || 20) + '" height="' + (w || 20) + '" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>'; }
 
@@ -36,6 +39,9 @@
   function todayYmd() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function pillHtml(st) { return '<span class="pill ' + (PILL[st.key] || 'pill-todo') + '"><span class="pdot"></span>' + esc(st.label) + '</span>'; }
   function discBr(d) { return DISC_BR[d] || 'br-blue'; }
+  function eur(n) { return '€' + Number(n || 0).toLocaleString('nl-BE'); }
+  function pct(v, max) { return Math.max(2, Math.round((v / (max || 1)) * 100)); }
+  function monthLabel(mk) { var p = mk.split('-'); return MONTHS[(+p[1]) - 1] + ' ' + p[0].slice(2); }
 
   async function api(endpoint, body) {
     var t = await window.S27TeamAuth.token();
@@ -47,15 +53,20 @@
   }
   function toast(msg) { var t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(function () { t.classList.remove('show'); }, 2400); }
 
-  /* ---- nav ---- */
-  var NAV = [
-    { label: 'Overzicht', items: [{ k: 'home', br: 'br-blue', label: 'Home', ic: IC.home }, { k: 'planning', br: 'br-purple', label: 'Mijn planning', ic: IC.cal }] },
-    { label: 'Team', items: [{ k: 'collega', br: 'br-blue', label: "Collega's", ic: IC.team }] },
-    { label: 'Persoonlijk', items: [{ k: 'verlof', br: 'br-green', label: 'Verlof', ic: IC.palm }] },
-    { label: 'Binnenkort', items: [{ k: 'aanvragen', br: 'br-orange', label: 'Aanvragen', ic: IC.bolt, soon: 1 }, { k: 'berichten', br: 'br-pink', label: 'Berichten', ic: IC.chat, soon: 1 }, { k: 'ai', br: 'br-indigo', label: 'AI-planning', ic: IC.spark, soon: 1 }] }
-  ];
+  /* ---- nav (rol-afhankelijk) ---- */
+  function navGroups() {
+    var p = state.perms || {};
+    var g = [{ label: 'Overzicht', items: [{ k: 'home', br: 'br-blue', label: 'Home', ic: IC.home }, { k: 'planning', br: 'br-purple', label: 'Mijn planning', ic: IC.cal }] }];
+    if (p.account) g.push({ label: 'Accountbeheer', items: [{ k: 'account', br: 'br-pink', label: 'Alle projecten', ic: IC.grid }] });
+    if (p.finance) g.push({ label: 'Directie', items: [{ k: 'cijfers', br: 'br-green', label: 'Cijfers & omzet', ic: IC.euro }] });
+    g.push({ label: 'Team', items: [{ k: 'collega', br: 'br-blue', label: "Collega's", ic: IC.team }] });
+    g.push({ label: 'Persoonlijk', items: [{ k: 'verlof', br: 'br-green', label: 'Verlof', ic: IC.palm }] });
+    g.push({ label: 'Binnenkort', items: [{ k: 'aanvragen', br: 'br-orange', label: 'Aanvragen', ic: IC.bolt, soon: 1 }, { k: 'berichten', br: 'br-pink', label: 'Berichten', ic: IC.chat, soon: 1 }, { k: 'ai', br: 'br-indigo', label: 'AI-planning', ic: IC.spark, soon: 1 }] });
+    return g;
+  }
+  function routeExists(k) { return navGroups().some(function (g) { return g.items.some(function (n) { return n.k === k; }); }); }
   function renderNav() {
-    $('nav').innerHTML = NAV.map(function (g) {
+    $('nav').innerHTML = navGroups().map(function (g) {
       return '<div class="sb-group"><div class="sb-glabel">' + esc(g.label) + '</div>' + g.items.map(function (n) {
         return '<button class="sb-item ' + n.br + (state.route === n.k ? ' active' : '') + '" data-k="' + n.k + '">' +
           '<span class="sb-ic">' + svgIc(n.ic) + '</span><span class="sb-label">' + esc(n.label) + '</span>' +
@@ -63,18 +74,22 @@
       }).join('') + '</div>';
     }).join('');
     Array.prototype.forEach.call($('nav').querySelectorAll('.sb-item'), function (b) { b.onclick = function () { go(b.getAttribute('data-k')); closeSidebar(); }; });
-    $('sbFoot').innerHTML = '<div class="sb-me"><span class="av">' + esc(initialen(state.me.naam)) + '</span><span class="tx"><b>' + esc(state.me.naam) + '</b><span>' + esc(state.email) + '</span></span>' +
+    var roleLabel = { admin: 'Zaakvoerder', sales: 'Sales', accountmanager: 'Accountmanager' }[state.role] || '';
+    var roleChip = roleLabel ? '<span class="role-chip role-' + state.role + '">' + roleLabel + '</span>' : '';
+    $('sbFoot').innerHTML = '<div class="sb-me"><span class="av">' + esc(initialen(state.me.naam)) + '</span><span class="tx"><b>' + esc(state.me.naam) + '</b><span>' + (roleChip || esc(state.email)) + '</span></span>' +
       '<button class="sb-logout" id="lo" title="Uitloggen"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button></div>';
     $('lo').onclick = function () { window.S27TeamAuth.logout(); };
   }
   function go(route) { state.route = route; state.viewMember = null; if (location.hash !== '#' + route) location.hash = route; renderNav(); render(); }
 
   function render() {
-    var titles = { home: 'Home', planning: 'Mijn planning', collega: "Collega's", verlof: 'Verlof', aanvragen: 'Aanvragen', berichten: 'Berichten', ai: 'AI-planning' };
+    var titles = { home: 'Home', planning: 'Mijn planning', account: 'Alle projecten', cijfers: 'Cijfers & omzet', collega: "Collega's", verlof: 'Verlof', aanvragen: 'Aanvragen', berichten: 'Berichten', ai: 'AI-planning' };
     $('crumb').textContent = titles[state.route] || 'Teamportaal';
     var page = $('page'); page.scrollTop = 0;
     if (state.route === 'home') return renderHome(page);
     if (state.route === 'planning') return renderPlanning(page, null);
+    if (state.route === 'account') return renderAccount(page);
+    if (state.route === 'cijfers') return renderCijfers(page);
     if (state.route === 'collega') return renderCollega(page);
     if (state.route === 'verlof') return renderVerlof(page);
     return renderSoon(page, state.route);
@@ -145,6 +160,86 @@
     Array.prototype.forEach.call(page.querySelectorAll('.tmember'), function (b) {
       b.onclick = function () { state.route = 'collega'; renderNav(); $('crumb').textContent = "Collega's"; renderPlanning($('page'), Number(b.getAttribute('data-id'))); };
     });
+  }
+
+  /* ---- ACCOUNT (Ilke/admin): alle lopende projecten per klant ---- */
+  async function renderAccount(page) {
+    page.innerHTML = '<div class="panel active"><div class="t-hero"><h1>Accountbeheer</h1><div class="sub">Laden…</div></div><div class="empty"><p>Projecten + weekplanning ophalen…</p></div></div>';
+    var dP = api('teamAllProjects', {}).catch(function () { return null; });
+    var hP = api('teamHealth', {}).catch(function () { return null; });
+    var d = await dP; var h = await hP;
+    if (!d || !d.ok) { page.querySelector('.sub').textContent = (d && d.error === 'forbidden_role') ? 'Geen toegang voor jouw rol.' : 'Kon de projecten niet laden.'; if (page.querySelector('.empty')) page.querySelector('.empty').remove(); return; }
+    state.account = d; var t = d.totaal;
+    var stat = function (n, l, br) { return '<div class="tstat ' + br + '"><div class="n">' + n + '</div><div class="l">' + l + '</div></div>'; };
+    var healthCard = '';
+    if (h && h.ok && h.leden.length) {
+      var maxU = Math.max(h.target, Math.max.apply(null, h.leden.map(function (l) { return l.uren; }).concat([1])));
+      var rows = h.leden.map(function (l) {
+        var w = Math.min(100, Math.round(l.uren / maxU * 100));
+        var col = l.uren >= h.target * 0.8 ? 'var(--s27-green)' : (l.uren >= h.target * 0.4 ? 'var(--s27-yellow)' : 'var(--s27-orange)');
+        return '<div class="uren-row"><span class="un">' + esc(voornaam(l.naam)) + (l.pool ? ' 📷' : '') + '</span><span class="ut"><i style="width:' + w + '%;background:' + col + '"></i></span><span class="uv">' + l.uren + 'u</span></div>';
+      }).join('');
+      healthCard = '<div class="fincard"><h3>Deze week · ingeplande uren <span class="micro" style="font-weight:600;color:var(--ink-4)">· richtlijn ' + h.target + 'u/week</span></h3>' + rows +
+        '<div class="disclaimer-note" style="margin-top:13px"><span>ⓘ</span><span>' + esc(h.disclaimer) + '</span></div></div>';
+    }
+    page.innerHTML = '<div class="panel active"><div class="t-hero"><h1>Accountbeheer</h1><div class="sub">Weekplanning van het team + alle lopende projecten — klaar om een klant meteen te helpen.</div></div>' +
+      healthCard +
+      '<div class="section-head"><h2>Alle lopende projecten</h2></div>' +
+      '<div class="tstats" style="grid-template-columns:repeat(3,1fr)">' + stat(t.klanten, 'Klanten met werk', 'br-blue') + stat(t.actief, 'Open taken', 'br-purple') + stat(t.te_laat, 'Over deadline', t.te_laat ? 'br-orange' : 'br-green') + '</div>' +
+      '<div class="acc-search"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="acc-q" placeholder="Zoek een klant…" autocomplete="off"></div>' +
+      '<div id="acc-list">' + accList(d.clients) + '</div></div>';
+    $('acc-q').oninput = function () { var q = this.value.toLowerCase(); $('acc-list').innerHTML = accList(d.clients.filter(function (c) { return c.bedrijf.toLowerCase().indexOf(q) >= 0; })); wireAcc(); };
+    wireAcc();
+  }
+  function accList(clients) {
+    if (!clients.length) return '<div class="empty"><p>Geen klanten gevonden.</p></div>';
+    return clients.map(function (c) {
+      var fb = (c.feedback >= 3) ? '<span class="acc-fb" title="Veel feedbackrondes — mogelijk handmatig opvolgen">🔁 ' + c.feedback + '</span>' : '';
+      var teLaat = c.te_laat ? '<span class="acc-badge bad">' + c.te_laat + ' te laat</span>' : '';
+      var next = c.next_due ? ' · eerstvolgend ' + dueLabel(c.next_due) : '';
+      var discs = c.disciplines.slice(0, 5).map(function (dd) { return esc(DISC_LABEL[dd] || dd); }).join(' · ');
+      return '<div class="acc-card"><button class="acc-head" data-bid="' + esc(c.bedrijf_id) + '"><span class="acc-sw"></span>' +
+        '<div class="acc-main"><div class="acc-nm">' + esc(c.bedrijf) + '</div><div class="acc-subline">' + esc(discs) + next + '</div></div>' +
+        '<div class="acc-meta">' + fb + teLaat + '<span class="acc-badge">' + c.active + ' actief</span></div>' +
+        '<svg class="chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>' +
+        '<div class="acc-body" data-bid="' + esc(c.bedrijf_id) + '"></div></div>';
+    }).join('');
+  }
+  function wireAcc() {
+    Array.prototype.forEach.call(document.querySelectorAll('.acc-head'), function (h) {
+      h.onclick = function () {
+        var bid = h.getAttribute('data-bid'); var body = document.querySelector('.acc-body[data-bid="' + bid + '"]');
+        var open = h.classList.toggle('open');
+        if (open && !body.innerHTML) { var c = state.account.clients.find(function (x) { return x.bedrijf_id === bid; }); if (c) { body.innerHTML = '<div class="proj-list" style="padding:8px 0 6px">' + c.items.map(function (t) { return projRow(t); }).join('') + '</div>'; wireRows(body); } }
+        body.classList.toggle('open', open);
+      };
+    });
+  }
+
+  /* ---- CIJFERS (admin/sales): financieel ---- */
+  async function renderCijfers(page) {
+    page.innerHTML = '<div class="panel active"><div class="t-hero"><h1>Cijfers & omzet</h1><div class="sub">Laden…</div></div><div class="empty"><p>Cijfers berekenen… (dit duurt even)</p></div></div>';
+    var d; try { d = await api('teamFinance', {}); } catch (e) { d = null; }
+    if (!d || !d.ok) { page.querySelector('.sub').textContent = (d && d.error === 'forbidden_role') ? 'Geen toegang voor jouw rol.' : 'Kon de cijfers niet laden.'; if (page.querySelector('.empty')) page.querySelector('.empty').remove(); return; }
+    var o = d.offertes;
+    var stat = function (n, l, br) { return '<div class="tstat ' + br + '"><div class="n">' + n + '</div><div class="l">' + l + '</div></div>'; };
+    var maxM = Math.max.apply(null, o.maand.map(function (m) { return m.bedrag; }).concat([1]));
+    var maandBars = o.maand.map(function (m) { return '<div class="cbar' + (m.bedrag ? '' : ' green') + '"><span class="cbar-l">' + monthLabel(m.maand) + '</span><span class="cbar-t"><i style="width:' + pct(m.bedrag, maxM) + '%"></i></span><span class="cbar-v">' + eur(m.bedrag) + '</span></div>'; }).join('');
+    var maxC = Math.max.apply(null, d.categorie.map(function (c) { return c.bedrag; }).concat([1]));
+    var catBars = d.categorie.map(function (c) { return '<div class="cbar"><span class="cbar-l">' + esc(c.categorie) + '</span><span class="cbar-t"><i style="width:' + pct(c.bedrag, maxC) + '%"></i></span><span class="cbar-v">' + eur(c.bedrag) + '</span></div>'; }).join('');
+    var perPersoon = '';
+    if (d.per_persoon && d.per_persoon.length) {
+      var maxP = Math.max.apply(null, d.per_persoon.map(function (p) { return p.bedrag; }).concat([1]));
+      perPersoon = '<div class="fincard"><h3>Omzet per persoon <span class="micro" style="font-weight:600;color:var(--ink-4)">· taakbudget gedeeld over de assignees</span></h3><div class="cbars">' +
+        d.per_persoon.map(function (p) { return '<div class="cbar green"><span class="cbar-l">' + esc(voornaam(p.naam)) + '</span><span class="cbar-t"><i style="width:' + pct(p.bedrag, maxP) + '%"></i></span><span class="cbar-v">' + eur(p.bedrag) + '</span></div>'; }).join('') + '</div></div>';
+    }
+    page.innerHTML = '<div class="panel active"><div class="t-hero"><h1>Cijfers & omzet</h1><div class="sub">Financieel overzicht · ' + (state.role === 'admin' ? 'zaakvoerder' : 'sales') + '</div></div>' +
+      '<div class="tstats">' + stat(eur(o.totaal), 'Offertes uitgebracht', 'br-green') + stat(o.aantal, 'Aantal offertes', 'br-blue') + stat(eur(d.plan_totaal), 'Gepland budget', 'br-purple') + stat(o.zonder_bedrag, 'Zonder bedrag', o.zonder_bedrag ? 'br-orange' : 'br-green') + '</div>' +
+      '<div class="fincard"><h3>Uitgebrachte offertes per maand</h3><div class="cbars">' + maandBars + '</div></div>' +
+      '<div class="fincard"><h3>Omzet per categorie <span class="micro" style="font-weight:600;color:var(--ink-4)">· ingevuld taakbudget, vulgraad ' + d.plan_vulgraad + '%</span></h3><div class="cbars">' + catBars + '</div></div>' +
+      perPersoon +
+      '<div class="fincard"><h3>Top offertes</h3><div class="cbars">' + o.top.map(function (t) { return '<div class="cbar"><span class="cbar-l" style="width:auto;flex:1">' + esc(t.naam) + '</span><span class="cbar-v">' + eur(t.bedrag) + '</span></div>'; }).join('') + '</div></div>' +
+      '<div class="disclaimer-note"><span>ⓘ</span><span>' + esc(d.disclaimer) + '</span></div></div>';
   }
 
   /* ---- VERLOF ---- */
@@ -282,9 +377,11 @@
   async function boot() {
     var d; try { d = await api('teamMe', {}); } catch (e) { showLogin('Kon het teamportaal niet bereiken.'); return; }
     if (!d.ok) { $('boot').style.display = 'none'; $('login').style.display = 'flex'; $('app').classList.remove('show'); $('login-err').textContent = d.message || 'Geen teamtoegang.'; $('btn-google').style.display = 'none'; return; }
-    state.me = d.me; state.roster = d.roster || [];
+    state.me = d.me; state.roster = d.roster || []; state.role = d.role || 'team'; state.perms = d.perms || { team: true };
     $('live-name').textContent = voornaam(state.me.naam);
-    var h = (location.hash || '').replace('#', ''); if (NAV.some(function (g) { return g.items.some(function (n) { return n.k === h; }); })) state.route = h;
+    var h = (location.hash || '').replace('#', '');
+    if (routeExists(h)) state.route = h;
+    else if (state.role === 'accountmanager') state.route = 'account';   // Ilke landt op haar projectoverzicht
     $('boot').style.display = 'none'; $('login').style.display = 'none'; $('app').classList.add('show');
     renderNav(); render();
   }
@@ -294,7 +391,7 @@
     $('hamb').onclick = openSidebar; $('sbScrim').onclick = closeSidebar;
     $('scrim').addEventListener('mousedown', function (e) { if (e.target === $('scrim')) closeModal(); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if ($('scrim').classList.contains('show')) closeModal(); else closeSidebar(); } });
-    window.addEventListener('hashchange', function () { var h = (location.hash || '').replace('#', ''); if (NAV.some(function (g) { return g.items.some(function (n) { return n.k === h; }); }) && h !== state.route) { state.route = h; renderNav(); render(); } });
+    window.addEventListener('hashchange', function () { var h = (location.hash || '').replace('#', ''); if (routeExists(h) && h !== state.route) { state.route = h; renderNav(); render(); } });
 
     window.S27TeamAuth.subscribe(function (e) {
       if (e.phase === 'loading') { $('boot').style.display = 'flex'; }
@@ -305,5 +402,5 @@
     window.S27TeamAuth.init({ gatewayBase: GATEWAY });
   });
 
-  if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js?v=2').catch(function () { }); }); }
+  if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js?v=3').catch(function () { }); }); }
 })();
