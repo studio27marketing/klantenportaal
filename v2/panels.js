@@ -124,6 +124,12 @@ const TAK_TABS = {
   video:     { discIds:['video_fotografie'], label:'Video- en fotografie', br:'purple', stamp:'icon-video-fotografie.svg' },
 };
 const TAK_WEBSITE = { discIds:['webdesign','support'], label:'Website', br:'green', stamp:'icon-webdesign.svg' };   // sub-sectie van de Website-tab
+// CONTENT-takken (Vincent 2026-06-13): video, branding en strategie delen exact dezelfde
+// werkwijze + look&feel — pure projectenlijst (geen contactkaart, geen 'plan een meeting',
+// geen apart archief), auto-landing bij 1 project, en in de detail de onderdelen-per-subtaak
+// met geintegreerde bestand-feedback. Eén bron van waarheid zodat de drie takken niet uiteenlopen.
+var CONTENT_TAK_KEYS=['video','branding','strategie'];
+function _isContentTak(key){ return CONTENT_TAK_KEYS.indexOf(key)>=0; }
 function _takProjects(discIds){
   return _projects().filter(function(p){
     var ls=(p.labels&&p.labels.length)?p.labels:[{discId:p.discId}];
@@ -136,8 +142,16 @@ function takOfProject(p){
   var ls=(p.labels&&p.labels.length)?p.labels:[{discId:p.discId}];
   for(var key in TAK_TABS){ if(ls.some(function(l){ return TAK_TABS[key].discIds.indexOf(l.discId)>=0; })) return key; }
   if(ls.some(function(l){ return TAK_WEBSITE.discIds.indexOf(l.discId)>=0; })) return 'webprestaties';
+  // defensieve fallback: leid de tak rechtstreeks af uit discId (labels leeg/mismatch mag NOOIT
+  // naar 'berichten' vallen, anders springt de terugknop naar het verkeerde scherm — review v85)
+  for(var k2 in TAK_TABS){ if(TAK_TABS[k2].discIds.indexOf(p.discId)>=0) return k2; }
+  if(TAK_TABS[p.discId]) return p.discId;
+  if(TAK_WEBSITE.discIds.indexOf(p.discId)>=0) return 'webprestaties';
   return 'berichten';
 }
+// JS-string-veilige escape voor inline onclick-args (esc() zet ' om naar &#39; dat in een
+// dubbel-quoted attribuut weer ' wordt en de JS-string breekt; \x27 heeft geen HTML-betekenis).
+function jsEsc(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,'\\x27').replace(/"/g,'\\x22').replace(/</g,'\\x3c'); }
 function _isSocialProject(p){ if(!p) return false; if(p.discId==='social') return true; var ls=p.labels||[]; return ls.length>0 && ls.every(function(l){return l.discId==='social';}); }
 function _socProject(){ return _projects().filter(_isSocialProject)[0] || null; }   // sociale-media-taak (zelfde maand-logica als de ads-taak)
 function _greetNaam(){ var n=(window.S27DATA && S27DATA.klantNaam && S27DATA.klantNaam())||''; if(n && n!=='daar') return n; return _live()?'daar':'Sarah'; }
@@ -315,12 +329,12 @@ function projDienst(list, fromTab, incDone){
   return `<div class="projclusters">${html}</div>`;
 }
 // video-tak projectrij: naam + voornaam hoofdverantwoordelijke + oranje to-do-teller + Open-knop
-function videoProjRij(p){
+function videoProjRij(p, takKey){
   var n=(p.actiesTodo!=null&&p.actiesTodo>0)?p.actiesTodo:projActieTeller(p);
   var wie=(p.sae&&p.sae[0]&&p.sae[0].naam)?String(p.sae[0].naam).split(/\s+/)[0]:'';
   var st=STATUS_LABEL[p.status]||STATUS_LABEL.prog;
   var cid=String(p.id||'').replace(/[^A-Za-z0-9_-]/g,'');
-  return '<button class="vrij-row card br-'+p.br+'" onclick="openProject(\''+cid+'\',\'video\')">'
+  return '<button class="vrij-row card br-'+p.br+'" onclick="openProject(\''+cid+'\',\''+(takKey||'video')+'\')">'
     +(n?'<span class="vrij-todo" title="'+n+' actie'+(n===1?'':'s')+' voor jou">'+n+'</span>':'')
     +'<span class="vrij-main"><b>'+esc(p.name)+'</b>'
     +'<span class="vrij-sub">'+(wie?ic('user',12)+' '+esc(wie)+' · ':'')+esc(st[0])+'</span></span>'
@@ -383,15 +397,15 @@ function takArchiefSectie(key, T){
 function panelTak(key){
   const T=TAK_TABS[key]; if(!T) return '';
   const all=_takProjects(T.discIds);
-  const isVideo=(key==='video');           // video-tak = pure projectenlijst (Vincent 2026-06-11)
-  const zicht=isVideo?all:all.filter(p=>p.status!=='done');
+  const isContent=_isContentTak(key);      // content-takken (video/branding/strategie): pure lijst, geen contactkaart/archief
+  const zicht=isContent?all:all.filter(p=>p.status!=='done');
   const leeg='<div class="empty"><div class="em-ic">'+(T.stamp?'<img src="assets/'+T.stamp+'" width="56" height="56" alt="">':ic('doc',56))+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog geen '+esc(T.label.toLowerCase())+'-projecten</b><p style="margin:6px 0 14px">Zin om hier samen iets op te starten?</p><button class="btn btn-branch br-'+T.br+'" onclick="openOfferteWizard(\''+(key==='video'?'video':key)+'\')">'+ic('plus',15)+' Start een aanvraag</button></div>';
-  if(isVideo){
+  if(isContent){
     if(!zicht.length) return leeg;
     // vlakke, chronologische lijst (Vincent 2026-06-11): geen actiepunt-clusters, gewoon
     // alle lopende projecten onder elkaar in volgorde van aanmaak.
     var rows=zicht.slice().sort(function(a,b){ return (a.dateCreated||0)-(b.dateCreated||0); })
-      .map(function(p){ return videoProjRij(p); }).join('');
+      .map(function(p){ return videoProjRij(p, key); }).join('');
     return '<div class="vrij-lijst">'+rows+'</div>';
   }
   const lopend=zicht.length ? projDienst(all, key) : leeg;
@@ -3694,7 +3708,7 @@ function deliverFileRow(d, opts){
   opts=opts||{}; const t=d.type==='video'?'video':d.type==='img'?'img':'doc';
   const open = d.url ? `<a class="btn btn-branch br-${opts.br||'blue'} btn-sm" href="${esc(d.url)}" target="_blank" rel="noopener">${ic(t==='video'?'play':'arrow',14)} ${deliverOpenLabel(t)}</a>` : '';
   const actions = opts.done ? spill('done') : `${open}${opts.review!==false?`<button class="btn btn-outline btn-sm" onclick="fileFeedback(this)">Feedback geven</button><button class="btn btn-branch btn-sm br-green" onclick="fileApprove(this)">Goedkeuren</button>`:''}`;
-  return `<div class="deliv-file" data-label="${esc(d.label||'Bestand')}">
+  return `<div class="deliv-file" data-label="${esc(d.label||'Bestand')}"${opts.taskId?` data-task="${esc(opts.taskId)}"`:''}>
     <span class="df-ic">${ic(t,18)}</span>
     <div class="df-tx"><b>${esc(d.label||'Bestand')}</b>${d.url?`<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:42ch;display:inline-block">${esc((d.url||'').replace(/^https?:\/\//,''))}</span>`:''}</div>
     <div class="df-act">${actions}</div>
@@ -3779,10 +3793,12 @@ function feedbackCard(s){
     +'</div>'
   +'</div>';
 }
-function procesBlock(det,p){
+function procesBlock(det,p,opts){
   const pr = det && det.proces;
   if(!pr || !pr.aantal_stappen) return '';
-  const plan = (det && det.plan && det.plan.items) || [];
+  // noPlan (branding/strategie): de plan-aankondiging onderdrukken want scheduleBlock toont daar
+  // geen plan-kaarten -> anders 'je kunt nu inplannen' zonder widget eronder (review v85 #5).
+  const plan = (opts&&opts.noPlan) ? [] : ((det && det.plan && det.plan.items) || []);
   const fb = pr.wacht_feedback || [];
   let h='<div class="proces-panel">';
   // 0) 'Nieuwe taak klaar'-melding (de plan-kaarten staan er net onder via scheduleBlock)
@@ -3940,6 +3956,82 @@ function demoVideoDet(){
     { id:'d-nab', naam:'Nabewerking foto\u2019s', status:'prog', typeJob:7, heeftBestanden:true, bestanden:[{label:'Fotoshoot najaarscollectie', url:'https://drive.google.com/drive/folders/demo-fotomap', type:'img'}] }
   ] };
 }
+/* ---- Generieke onderdelen (branding/strategie): subtaak-status + in-portal bestand-feedback ----
+   Zelfde look&feel als de video-onderdelen, maar zonder shoots: elke subtaak = een rij met
+   status-chip; staat er een bestand klaar, dan integreren we de feedbackmodule rechtstreeks in
+   het portaal (video = frame-accurate review, foto-Drivemap = galerij, doc/beeld = inline
+   goedkeuren/feedback). Na goedkeuring verschijnen de downloadlinks. */
+function _ondTaakIcoon(files, fotoMaps){
+  if(fotoMaps.length) return 'img';
+  if(files.some(function(f){return f.type==='video';})) return 'video';
+  if(files.some(function(f){return f.type==='img';})) return 'img';
+  return 'doc';
+}
+function _ondVideoFileRow(s, f, br){
+  return '<div class="deliv-file" data-label="'+esc(f.label||'Video')+'"><span class="df-ic">'+ic('video',18)+'</span>'
+    +'<div class="df-tx"><b>'+esc(f.label||'Video')+'</b></div>'
+    +'<div class="df-act"><button class="btn btn-branch br-'+br+' btn-sm" onclick="openVideoFeedback(\''+jsEsc(s.id)+'\',\''+jsEsc(f.url)+'\',\''+jsEsc(f.label||'Video')+'\',this)">'+ic('play',14)+' Bekijk &amp; geef feedback</button></div></div>';
+}
+function _ondTaakRij(s, br){
+  var alle=s.bestanden||[];
+  var fotoMaps=alle.filter(function(f){ return /drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\//.test(f.url||''); });
+  var files=alle.filter(function(f){ return fotoMaps.indexOf(f)<0; });
+  var isWait=(s.status==='wait'||s.status==='sent');
+  var chip;
+  if(s.status==='done') chip='<span class="ond-chip ond-chip-ok">'+ic('check',12)+' Goedgekeurd</span>';
+  else if(isWait) chip='<span class="ond-chip ond-chip-wait">Klaar voor feedback</span>';
+  else chip='<span class="ond-chip ond-chip-prog">'+esc(/to.?do/i.test(s.statusRaw||'')?'Te starten':'Aan het werken')+'</span>';
+  var head='<div class="ond-head">'+ic(_ondTaakIcoon(files,fotoMaps),16)+'<span class="ond-naam">'+esc(s.naam)+'</span>'+chip+'</div>';
+  var body='';
+  // bestanden klaar voor feedback: in-portal feedbackmodule per bestand
+  if(isWait && files.length){
+    body+='<div class="ond-info open-static"><div class="subtask-files">'+files.map(function(f){
+      return f.type==='video' ? _ondVideoFileRow(s,f,br) : deliverFileRow(f,{br:br,done:false,taskId:s.id});
+    }).join('')+'</div></div>';
+  } else if(s.status==='done' && files.length){
+    // na goedkeuring: downloadlinks
+    body+='<div class="ond-info open-static"><div class="subtask-files">'+files.map(function(f){
+      return deliverFileRow(f,{br:br,done:true,taskId:s.id});
+    }).join('')+'</div></div>';
+  }
+  // gedeelde Drive-fotomap(pen): altijd als galerij bekijkbaar in het portaal
+  if(fotoMaps.length){
+    body+='<div class="ond-info open-static"><div class="ond-files">'+fotoMaps.map(function(f){
+      return '<div class="ond-file"><span class="df-ic">'+ic('img',16)+'</span><span class="ond-file-nm">'+esc((f.label&&f.label!=='Open in Drive')?f.label:'Beeldmateriaal')+'</span>'
+        +'<button class="btn btn-branch br-'+br+' btn-sm" onclick="openFotoGalerij(\''+esc(s.id)+'\',\''+esc(f.url)+'\')">'+ic('img',14)+' Bekijk de foto’s</button></div>';
+    }).join('')+'</div></div>';
+  }
+  return '<div class="ond-row ond-edit card br-'+br+'">'+head+body+'</div>';
+}
+function onderdelenBlokAlg(det, p){
+  var subs=(det&&det.subtasks)||[];
+  if(!subs.length) return null;
+  var br=p.br||'blue';
+  // pure projectmanagement-subtaken zonder oplevering zijn intern proceswerk -> niet tonen
+  var rows=subs.filter(function(s){
+    var hasF=(s.bestanden||[]).length>0;
+    if(Number(s.typeJob)===0 && !hasF) return false;
+    return true;
+  });
+  if(!rows.length) return null;
+  var h='<div class="section-head ond-kop"><h2>Onderdelen</h2><span class="count">'+rows.length+'</span></div>';
+  h+='<p class="sdesc" style="margin:-2px 0 12px">Hier zie je de status van elk onderdeel. Zodra er iets klaarstaat, bekijk je het en geef je je akkoord of feedback &mdash; rechtstreeks hier.</p>';
+  h+=rows.map(function(s){ return _ondTaakRij(s,br); }).join('');
+  return h;
+}
+// demo-onderdelen voor branding/strategie (voorbeeldportaal, geen live data)
+function demoAlgDet(disc){
+  if(disc==='branding') return { subtasks:[
+    { id:'db-1', naam:'Merkonderzoek & moodboard', status:'done', typeJob:2, heeftBestanden:true, bestanden:[{label:'Moodboard.pdf', url:'#', type:'doc'}] },
+    { id:'db-2', naam:'Logo-ontwerp', status:'wait', typeJob:2, heeftBestanden:true, bestanden:[{label:'Logo-voorstel v1.pdf', url:'#', type:'doc'}] },
+    { id:'db-3', naam:'Huisstijlgids', status:'prog', typeJob:2, heeftBestanden:false, bestanden:[] }
+  ] };
+  return { subtasks:[
+    { id:'ds-1', naam:'Marktonderzoek & analyse', status:'done', typeJob:1, heeftBestanden:true, bestanden:[{label:'Marktanalyse.pdf', url:'#', type:'doc'}] },
+    { id:'ds-2', naam:'Positioneringsworkshop', status:'done', typeJob:1, heeftBestanden:false, bestanden:[] },
+    { id:'ds-3', naam:'Strategiedeck', status:'wait', typeJob:1, heeftBestanden:true, bestanden:[{label:'Strategiedeck v1.pdf', url:'#', type:'doc'}] }
+  ] };
+}
 function buildModal(id, from){
   const p=_projects().find(x=>x.id===id)||{id:id,name:'Project',disc:'',status:'prog',br:'blue'};
   const sl=STATUS_LABEL[p.status]||STATUS_LABEL.prog; const lab=sl[0], cls=sl[1];
@@ -3996,12 +4088,19 @@ function buildModal(id, from){
   // het generieke proces-overzicht. Valt automatisch terug zodra er geen TYPE JOB-data is.
   let detOnd = det;
   if(!detOnd && state.demoMode && p.discId==='video_fotografie') detOnd = demoVideoDet();
-  const OND = (p.discId==='video_fotografie') ? onderdelenBlok(detOnd, p) : null;
+  if(!detOnd && state.demoMode && (p.discId==='branding'||p.discId==='strategie')) detOnd = demoAlgDet(p.discId);
+  const OND = (p.discId==='video_fotografie') ? onderdelenBlok(detOnd, p)
+            : (p.discId==='branding'||p.discId==='strategie') ? onderdelenBlokAlg(detOnd, p)
+            : null;
   const hasProces = !!(det && det.proces && det.proces.aantal_stappen);
+  // content-takken branding/strategie: nooit shoot/meeting-planning tonen (Vincent: 'geen meetings
+  // aanvragen'). Als OND null is (project zonder subtaken) valt de generieke overview terug, maar
+  // dan zonder scheduleBlock en zonder de plan-aankondiging in procesBlock (review v85 #5).
+  const isContentAlg = (p.discId==='branding'||p.discId==='strategie');
   const overview = OND ? `<div class="mpane active" data-mpane="overzicht"><div class="ond-wrap">${OND}</div></div>`
    : `<div class="mpane active" data-mpane="overzicht">
-    ${procesBlock(det,p)}
-    ${scheduleBlock(det,p)}
+    ${procesBlock(det,p,{noPlan:isContentAlg})}
+    ${isContentAlg?'':scheduleBlock(det,p)}
     ${showDeliv?`<h4 style="font-family:var(--font-display);font-size:15px;margin:0 0 4px">${(delivList&&delivList.length>1)||(delivList===null)?'Jouw deliverables':'Jouw deliverable'}</h4>
     <p class="sdesc" style="margin:0 0 10px">Bekijk wat we voor je klaarzetten en laat meteen weten of je akkoord gaat of feedback hebt. Opmerkingen passen we volledig gratis aan.</p>
     ${delivBlock}`:''}
@@ -4049,7 +4148,7 @@ function buildModal(id, from){
       <div style="padding:8px 0 0"><button class="btn btn-ghost btn-sm" style="color:var(--s27-orange-ink)" onclick="dringendeVraag('${esc(p.id)}')">${ic('spark',14)} ${chatClosed?'Nog een vraag over dit project?':'Dringende vraag aan Ilke'}</button></div>
     </div>`;
   return `<div class="detail detail--wide br-${p.br}">
-    <button class="detail-close" title="Terug naar ${backLabel}" aria-label="Terug naar ${backLabel}" onclick="${backTo==='video'?"state._skipVideoAuto=true;":''}goTab('${backTo}')">${ic('plus',22)}</button>
+    <button class="detail-close" title="Terug naar ${backLabel}" aria-label="Terug naar ${backLabel}" onclick="${(typeof _isContentTak==='function'&&_isContentTak(backTo))?`markSkipAutoLand('${backTo}');`:''}goTab('${backTo}')">${ic('plus',22)}</button>
     ${OND?'':`<div class="detail-head">
       <span class="detail-ic">${discMark(p.disc,'detail-stamp')}</span>
       <div class="detail-titles"><h1>${p.name}</h1><div class="detail-sub${saeLine?' sae-line':''}">${saeLine||esc(p.disc)}</div></div>

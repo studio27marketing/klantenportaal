@@ -497,11 +497,12 @@ async function goTab(name){
   await ensureTabData(name);
   // video-tak met exact één actief project: meteen op dat project landen (terug-knop uit het
   // detail zet _skipVideoAuto zodat de klant wél bewust naar de lijst kan)
-  if(name==='video' && !state.demoMode){
-    if(state._skipVideoAuto){ state._skipVideoAuto=false; }
+  if(typeof _isContentTak==='function' && _isContentTak(name) && !state.demoMode){
+    state._skipAutoLand=state._skipAutoLand||{};
+    if(state._skipAutoLand[name]){ state._skipAutoLand[name]=false; }   // per-tak: terug uit detail = bewust naar de lijst (review v85 #1)
     else {
-      var _vps=(typeof _takProjects==='function'&&typeof TAK_TABS!=='undefined')?_takProjects(TAK_TABS.video.discIds):[];
-      if(_vps.length===1){ openProject(_vps[0].id,'video'); return; }
+      var _vps=(typeof _takProjects==='function'&&typeof TAK_TABS!=='undefined'&&TAK_TABS[name])?_takProjects(TAK_TABS[name].discIds):[];
+      if(_vps.length===1){ openProject(_vps[0].id,name); return; }
     }
   }
   renderPanel(name);
@@ -587,7 +588,9 @@ async function openProject(id, from){
   closeSidebar(); syncUrl();
   if($id('chatList')) startChatPoll(id);   // projectchat staat in de DOM (tenzij afgerond) -> auto-refresh
 }
-function closeModal(){ if((state._backTab||'')==='video') state._skipVideoAuto=true; goTab(state._backTab||'start'); }
+// per-tak 'sla auto-landing over'-vlag (terug uit een content-detail = de lijst tonen, niet opnieuw inzoomen)
+function markSkipAutoLand(tak){ if(!tak) return; state._skipAutoLand=state._skipAutoLand||{}; state._skipAutoLand[tak]=true; }
+function closeModal(){ if(typeof _isContentTak==='function'&&_isContentTak(state._backTab||'')) markSkipAutoLand(state._backTab); goTab(state._backTab||'start'); }
 
 /* =============================================================================
    ECHTE HANDLERS
@@ -1036,13 +1039,14 @@ function cancelFileReview(btn){ const row=btn.closest('.deliv-file'); if(!row)re
 async function submitFileReview(btn,choice){
   const row=btn.closest('.deliv-file'); const panel=btn.closest('.rv-panel'); if(!row||!panel)return;
   const label=row.getAttribute('data-label')||'';
+  const reviewTask=row.getAttribute('data-task')||state.activeProject;   // subtaak-id (branding/strategie onderdelen) of hoofdtaak (review v85 #3)
   const sel=panel.querySelector('.rv-chan'); const kanaal=sel?sel.value:'portaal';
   const txEl=panel.querySelector('.rv-tx'); const tx=txEl?txEl.value:'';
   const chan=REVIEW_CHANNELS.find(function(c){return c[0]===kanaal;}); const chanLabel=chan?chan[1]:'';
   const act=row.querySelector('.df-act'); panel.remove();
   if(act){ act.style.display=''; act.innerHTML='<span class="pill pill-'+(choice==='goedgekeurd'?'done':'wait')+'"><span class="pdot"></span>'+(choice==='goedgekeurd'?'Goedgekeurd':'Feedback verstuurd')+'</span><span class="rv-via" style="font-size:12px;color:var(--ink-4);margin-left:8px">'+escapeHtml(chanLabel)+'</span>'; }
   if(state.demoMode || !state.activeProject) return;
-  try { await api(ENDPOINTS.feedbackV2, { task_id:state.activeProject, bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[{label:label,choice:choice,opmerking:tx,kanaal:kanaal,kanaal_label:chanLabel}], algemene_opmerking:'' }); } catch(e){}
+  try { await api(ENDPOINTS.feedbackV2, { task_id:reviewTask, bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[{label:label,choice:choice,opmerking:tx,kanaal:kanaal,kanaal_label:chanLabel}], algemene_opmerking:'' }); } catch(e){}
 }
 function approveAll(btn){ const banner=document.querySelector('.fb-banner'); if(banner){ banner.style.animation='none'; banner.innerHTML='<div class="fb-ic" style="background:var(--s27-green)">'+ic('check',20)+'</div><div class="fb-tx"><b>Bedankt, goedgekeurd!</b><p>We zetten meteen de volgende stap.</p></div>'; banner.style.background='var(--s27-green-soft)'; } submitFeedbackReal('goedgekeurd'); }
 async function submitFeedbackReal(choice){
@@ -2603,7 +2607,7 @@ async function shootInitAutocomplete(tid){
 }
 
 function toggleBot(){ const p=$id('botPanel'),f=$id('botFab'); const open=p.classList.toggle('show'); f.style.display=open?'none':'flex'; if(open){ const g=$id('botGreet'); if(g){ var nm=(typeof _greetNaam==='function'?_greetNaam():'')||''; g.innerHTML='Hallo '+escapeHtml(nm||'daar')+'! Ik help je graag op weg. Waarmee kan ik je verder helpen?'; } if(typeof renderBotChips==='function') renderBotChips(); const inp=p.querySelector('.bot-input input'); if(inp)setTimeout(()=>inp.focus(),50); } }
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($id('tourScrim')&&$id('tourScrim').classList.contains('show'))endTour(false); else if(state.viewMode==='project'){ if((state._backTab||'')==='video') state._skipVideoAuto=true; goTab(state._backTab||'start'); } } });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($id('tourScrim')&&$id('tourScrim').classList.contains('show'))endTour(false); else if(state.viewMode==='project'){ if(typeof _isContentTak==='function'&&_isContentTak(state._backTab||'')) markSkipAutoLand(state._backTab); goTab(state._backTab||'start'); } } });
 
 /* ---------- Onboarding tour (1x + opt-out) ---------- */
 const TOUR=[
