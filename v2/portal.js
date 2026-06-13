@@ -895,8 +895,9 @@ function renderCompanySwitcher(){
 /* =============================================================================
    UI-HELPERS (visueel; uit het ontwerp)
    ============================================================================= */
-function toggleSidebar(){ const sb=$id('sidebar'); const open=sb.classList.toggle('open'); $id('sbScrim').classList.toggle('show',open); }
-function closeSidebar(){ $id('sidebar').classList.remove('open'); $id('sbScrim').classList.remove('show'); }
+function _sbLock(on){ document.body.classList.toggle('sb-open',on); document.documentElement.classList.toggle('sb-open',on); }
+function toggleSidebar(){ const sb=$id('sidebar'); const open=sb.classList.toggle('open'); $id('sbScrim').classList.toggle('show',open); _sbLock(open); }
+function closeSidebar(){ $id('sidebar').classList.remove('open'); $id('sbScrim').classList.remove('show'); _sbLock(false); }
 function toggleSwitch(e){ e.stopPropagation(); if(state.adminMode){ openAdminPicker(); return; } const m=$id('switchMenu'); const sw=$id('clientSwitch'); const open=m.style.display==='block'; m.style.display=open?'none':'block'; sw.classList.toggle('open',!open); }
 function closeSwitchMenu(){ const m=$id('switchMenu'); if(m)m.style.display='none'; const sw=$id('clientSwitch'); if(sw)sw.classList.remove('open'); }
 // nette melding wanneer een bedrijf-switch faalt (zelfde stijl als onSessionExpired, maar zonder uitloggen)

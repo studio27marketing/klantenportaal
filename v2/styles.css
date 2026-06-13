@@ -114,7 +114,8 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;}
 
 /* ----- Sidebar ----- */
 .sidebar{position:fixed;top:0;left:0;bottom:0;width:264px;z-index:60;background:var(--paper);
-  border-right:1px solid var(--line);display:flex;flex-direction:column;overflow-y:auto;scrollbar-width:thin;}
+  border-right:1px solid var(--line);display:flex;flex-direction:column;overflow-y:auto;scrollbar-width:thin;
+  overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
 .sb-head{padding:22px 22px 12px;}
 .sb-wordmark{height:24px;width:auto;display:block;}
 .client-switch-wrap{position:relative;padding:0 14px 12px;}
@@ -183,7 +184,7 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;}
 .switch-menu button.active .nm{color:var(--s27-blue-ink);}
 .switch-menu .sw-check{margin-left:auto;color:var(--s27-blue-ink);flex:none;}
 
-.sb-scrim{display:none;position:fixed;inset:0;background:rgba(35,15,35,.4);z-index:55;}
+.sb-scrim{display:none;position:fixed;inset:0;background:rgba(35,15,35,.4);z-index:55;touch-action:none;overscroll-behavior:contain;}
 .sb-scrim.show{display:block;}
 
 /* ---------- Page layout ---------- */
@@ -628,6 +629,9 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;}
   .page{margin-left:0;}
   .hamb{display:flex;}
   .live-tag span{display:none;}
+  /* uitgeklapt menu = pagina eronder bevriezen (geen scroll-bleed via scrim of menubalk).
+     De scroll-container is documentElement (html), dus die moet OOK gelockt worden. */
+  html.sb-open,body.sb-open{overflow:hidden;touch-action:none;overscroll-behavior:none;}
 }
 @media(max-width:1100px){
   .cockpit-row,.mini-grid,.svc-grid,.kpi-grid,.optcards{grid-template-columns:repeat(2,1fr);}
