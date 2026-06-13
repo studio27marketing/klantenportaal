@@ -1,0 +1,12 @@
+# Studio 27 TEAMPORTAAL — statische host-worker (eigen URL, los van het klantportaal).
+# Serveert de ../team frontend; alle data-calls gaan cross-origin naar de bestaande
+# gateway-v2 worker (die alle secrets + ClickUp + Google + de team-endpoints heeft).
+# Geen secrets nodig op deze worker. Deploy: `wrangler deploy` vanuit deze map.
+name = "s27-teamportaal"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+[assets]
+directory = "../team"
+binding = "ASSETS"
+not_found_handling = "single-page-application"

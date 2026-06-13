@@ -12,7 +12,7 @@ PANDADOC_CREATE_ENABLED = "true"
 # SEC-5: enkel productie-origins. De publieke CDN-origins (raw.githack.com /
 # raw.githubusercontent.com) zijn VERWIJDERD - elke pagina op die CDN's was anders een
 # toegestane CORS-origin voor de API. Previews draaien op de workers.dev-URL zelf.
-ALLOWED_ORIGINS = "https://www.studio27.be,https://studio27.be,https://portaal.studio27.be,https://s27-portal-gateway-v2.studio27marketing.workers.dev"
+ALLOWED_ORIGINS = "https://www.studio27.be,https://studio27.be,https://portaal.studio27.be,https://s27-portal-gateway-v2.studio27marketing.workers.dev,https://s27-teamportaal.studio27marketing.workers.dev,https://team.studio27.be"
 
 # KV-namespace voor rate-limiting + read-cache (TTL 60s).
 # De namespace maak ik bij deploy aan met:

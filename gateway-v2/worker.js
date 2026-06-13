@@ -53,6 +53,7 @@ import { handleClickupHook } from './clickup-push.mjs';
 import * as vr from './videoreview.mjs';
 import * as rem from './reminders.mjs';
 import { handleShootLab } from './shootlab.mjs';
+import { TEAM_HANDLERS } from './teamportaal.mjs';
 
 // Video-review (frame-accurate klantfeedback op Bestanden-veld-video's): registratie
 // hier i.p.v. in handlers.mjs zodat de module zelfstandig blijft (zie videoreview.mjs).
@@ -592,15 +593,16 @@ export default {
 
     const isAdminApi = (path === 'adminCompanies');   // admin-only ClickUp-read (enkel staff)
     const isStaffData = !!STAFF_DATA_HANDLERS[path];   // admin-only rijke rapportage (enkel staff, acting-as)
+    const isTeamApi = !!TEAM_HANDLERS[path];           // team-only portaal-endpoints (enkel staff, eigen identiteit)
     const isPorted = !!(READ_HANDLERS[path] || WRITE_HANDLERS[path] || path === 'bedrijfBeheer');
     // Web-push token-authed routes (subscribe/unsubscribe/test): vereisen het Firebase-token, geen ClickUp/Make.
     const isPushAuthed = (path === 'push/subscribe' || path === 'push/unsubscribe');
     const target = MAKE_ENDPOINTS[path];
-    if (!isAdminApi && !isStaffData && !isPorted && !isPushAuthed && !target) return json({ ok: false, error: 'unknown_endpoint' }, 404, ch);
+    if (!isAdminApi && !isStaffData && !isTeamApi && !isPorted && !isPushAuthed && !target) return json({ ok: false, error: 'unknown_endpoint' }, 404, ch);
 
     if (!env.PROJECT_ID) return json({ ok: false, error: 'gateway_misconfigured' }, 500, ch);
-    // Geporte ClickUp-paden (en admin-API's) vereisen CLICKUP_TOKEN; Make-forward vereist GATEWAY_SECRET.
-    if ((isPorted || isAdminApi || isStaffData) && !env.CLICKUP_TOKEN) return json({ ok: false, error: 'gateway_misconfigured' }, 500, ch);
+    // Geporte ClickUp-paden (en admin-/team-API's) vereisen CLICKUP_TOKEN; Make-forward vereist GATEWAY_SECRET.
+    if ((isPorted || isAdminApi || isStaffData || isTeamApi) && !env.CLICKUP_TOKEN) return json({ ok: false, error: 'gateway_misconfigured' }, 500, ch);
     if (!isPorted && !isAdminApi && !isStaffData && !isPushAuthed && !env.GATEWAY_SECRET) return json({ ok: false, error: 'gateway_misconfigured' }, 500, ch);
 
     // 1. Firebase ID-token
@@ -685,6 +687,31 @@ export default {
       try { rbody = await request.json(); } catch (e) { rbody = {}; }
       try {
         const r = await STAFF_DATA_HANDLERS[path](bedrijfId, rbody || {}, env);
+        return json(r.body, r.status, ch);
+      } catch (e) {
+        return json({ ok: false, error: 'handler_error' }, 502, ch);
+      }
+    }
+
+    // TEAMPORTAAL: team-only endpoints (is_staff). Vóór de bedrijf-gate, want staff
+    // hebben geen bedrijf_id-claim. Identiteit = claims.email -> ClickUp-teamlid (in de handler).
+    if (isTeamApi) {
+      if (!isStaff) return json({ ok: false, error: 'forbidden' }, 403, ch);
+      if (env.KV) {
+        const rlKey = 'rl:' + claims.sub + ':' + Math.floor(Date.now() / 60000);
+        try {
+          const cur = parseInt((await env.KV.get(rlKey)) || '0', 10);
+          if (cur >= LIMIT_DEFAULT) return json({ ok: false, error: 'rate_limited' }, 429, ch);
+          ctx.waitUntil(env.KV.put(rlKey, String(cur + 1), { expirationTtl: 120 }));
+        } catch (e) { /* fail-open op de teller */ }
+      }
+      let tbody = {};
+      try { tbody = await request.json(); } catch (e) { tbody = {}; }
+      if (!tbody || typeof tbody !== 'object') tbody = {};
+      tbody.__staff = true;
+      tbody.account_email = String((claims && claims.email) || '').trim().toLowerCase();
+      try {
+        const r = await TEAM_HANDLERS[path](null, tbody, env, ctx);
         return json(r.body, r.status, ch);
       } catch (e) {
         return json({ ok: false, error: 'handler_error' }, 502, ch);

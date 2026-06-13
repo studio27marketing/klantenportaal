@@ -5383,6 +5383,14 @@ export async function shootEngineDayMap(env, opts) {
 // pure helpers exporteren voor de unit-test-harness (geen netwerk).
 export const _shootEngineTest = { ymdRangeV2, addDaysYmdV2, blockHitsWorkdayV2, isClickupSyncEvent, gcalEventToInterval, msToBrusselsYmd, msToBrusselsHm, brusselsWallToMs, engineAgendaBlocks, SHOOT_HOSTS };
 
+// TEAMPORTAAL: privé-helpers die teamportaal.mjs hergebruikt zodat planning/status/
+// agenda-logica 1:1 gelijk loopt met het klantportaal (geen tweede waarheid).
+export const _teamHelpers = {
+  cuPlanningBlocks, isDoneTask, kanBeginnenGezet, heeftDueDate, planTypeOf,
+  brusselsWallToMs, msToBrusselsYmd, msToBrusselsHm,
+  gcalEventsForHost, isClickupSyncEvent, gcalEventToInterval,
+};
+
 /* ---- publicShootAvailability (PUBLIEK, geen auth, geen klant-scope) ----------
  * Geaggregeerde shoot-capaciteit per dag voor de publieke beschikbaarheidspagina
  * die Studio 27 vrijblijvend naar prospects/klanten doorstuurt (geen offerte nodig).
