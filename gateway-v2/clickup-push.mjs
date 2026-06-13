@@ -3,8 +3,10 @@
  * -----------------------------------------------------------------------------
  * VOLLEDIG Make-vrij: ClickUp post wijzigingen rechtstreeks naar de worker
  * (POST /clickup/hook). De worker verifieert de HMAC-SHA256-signature, herleidt
- * de taak -> bedrijf -> contact-e-mail(s) via de ClickUp REST-API, en stuurt een
- * web-push. PILOT: pushToEmailPilot() laat enkel vincent@studio27.be door.
+ * de taak -> bedrijf -> contacten via de ClickUp REST-API, en stuurt de melding via
+ * de gedeelde dispatcher (notify.mjs) over de kanalen die de contact koos (push/e-mail/
+ * WhatsApp) — met een DEEP-LINK rechtstreeks naar het project of de chat. PILOT (notify.mjs):
+ * enkel Vincent + Studio 27.
  *
  * Signature: header X-Signature = HMAC-SHA256(rawBody, webhook-secret) in hex.
  * Webhook-secret = worker-secret CLICKUP_WEBHOOK_SECRET (gezet bij registratie).
@@ -12,9 +14,9 @@
  * Events: taskStatusUpdated + taskCommentPosted (bij registratie zo gefilterd).
  * ============================================================================= */
 
-import { pushToEmailPilot } from './push.mjs';
+import { kanalenRead } from './handlers.mjs';
+import { notifyContacts, portalLink } from './notify.mjs';
 
-const PILOT_EMAIL = 'vincent@studio27.be';
 const CU_BASE = 'https://api.clickup.com/api/v2';
 
 // ClickUp custom-field UUID's (uit handlers.mjs).
@@ -22,6 +24,8 @@ const FIELD = {
   bedrijf: '4b1fb333-f47a-41bb-a976-dce63ed36657', // taak -> bedrijf (relatie)
   contact: '1bce8db8-717f-4e94-abdc-64feb241087c', // bedrijf -> contactpersonen (relatie)
   email:   'd453a72f-e08e-46bb-b82f-24c311fad13f', // contact-e-mail (text)
+  gsm:     '8cee9669-26f3-4380-b592-175c1c481c7c', // contact-GSM (text, voor WhatsApp)
+  notifKanalen: '1f10ca20-50b2-472a-80d5-4e7ddcdfc3d2', // labels 'Notificatie-kanalen'
   portaalToegang: 'f0de5c6c-0eea-4809-8e40-145fc7359a3d', // CSV e-mails met portaaltoegang
 };
 
@@ -79,34 +83,43 @@ async function verifySignature(rawBody, sigHex, secret) {
   } catch (e) { return false; }
 }
 
-/* ---- taak -> bedrijf -> contact-e-mails ----------------------------------- */
-export async function resolveEmailsForTask(env, task) {
+/* ---- taak -> bedrijf -> contacten (e-mail + GSM + gekozen kanalen) --------- */
+export async function resolveContactsForTask(env, task) {
   const bedrijfIds = getRelationIds(task, FIELD.bedrijf);
-  if (!bedrijfIds.length) return [];
-  const out = new Set();
-  const br = await cuGet(env, '/task/' + bedrijfIds[0]);
-  if (!br.ok || !br.data) return [];
+  if (!bedrijfIds.length) return { bedrijfId: '', contacts: [] };
+  const bedrijfId = bedrijfIds[0];
+  const br = await cuGet(env, '/task/' + bedrijfId);
+  if (!br.ok || !br.data) return { bedrijfId, contacts: [] };
   const bedrijf = br.data;
-  csvEmails(getCF(bedrijf, FIELD.portaalToegang)).forEach((e) => out.add(e));
+  const byEmail = new Map();
+  // login-CSV e-mails (geen contactfiche -> geen kanaal-voorkeur/GSM): default push-kanaal
+  csvEmails(getCF(bedrijf, FIELD.portaalToegang)).forEach((e) => { if (e && !byEmail.has(e)) byEmail.set(e, { email: e, gsm: '', kanalen: [] }); });
   const contactIds = getRelationIds(bedrijf, FIELD.contact);
   if (contactIds.length) {
     const rs = await Promise.all(contactIds.slice(0, 10).map((id) => cuGet(env, '/task/' + id)));
-    rs.forEach((r) => { if (r.ok && r.data) { const e = str(getCF(r.data, FIELD.email)).toLowerCase(); if (e) out.add(e); } });
+    rs.forEach((r) => {
+      if (!(r.ok && r.data)) return;
+      const e = str(getCF(r.data, FIELD.email)).toLowerCase();
+      if (!e) return;
+      byEmail.set(e, { email: e, gsm: str(getCF(r.data, FIELD.gsm)), kanalen: kanalenRead(getCF(r.data, FIELD.notifKanalen)) });
+    });
   }
-  return [...out];
+  return { bedrijfId, contacts: [...byEmail.values()] };
 }
 
-/* ---- bouw de melding + verstuur (pilot-gated) ----------------------------- */
+/* ---- bouw de melding (mét deep-link naar de juiste plek) ------------------- */
 function buildPayload(event, task) {
   const name = str(task && task.name) || 'je project';
   const tag = 's27-cu-' + str(task && task.id);
+  // De klant ziet het PROJECT (top-level taak); een subtaak-update linkt naar dat project.
+  const rootId = str(task && task.top_level_parent) || str(task && task.parent) || str(task && task.id);
   if (event === 'taskStatusUpdated') {
     const st = normStatus(task && task.status && task.status.status);
     const c = STATUS_COPY[st];
-    return { title: c ? c.title : 'Update', body: c ? c.body(name) : ('“' + name + '”: ' + (st || 'status bijgewerkt')), url: '/', tag, icon: '/icons/icon-192.png' };
+    return { title: c ? c.title : 'Update', body: c ? c.body(name) : ('“' + name + '”: ' + (st || 'status bijgewerkt')), url: portalLink(rootId), tag, icon: '/icons/icon-192.png' };
   }
-  // taskCommentPosted
-  return { title: 'Nieuw bericht', body: name + ' — er is een reactie geplaatst.', url: '/', tag, icon: '/icons/icon-192.png' };
+  // taskCommentPosted -> rechtstreeks naar de chat van het project
+  return { title: 'Nieuw bericht', body: name + ' — er is een reactie geplaatst.', url: portalLink(rootId, { chat: true }), tag, icon: '/icons/icon-192.png' };
 }
 async function processEvent(env, event, taskId) {
   const tr = await cuGet(env, '/task/' + taskId);
@@ -114,12 +127,12 @@ async function processEvent(env, event, taskId) {
   const task = tr.data;
   // Statuswijziging: enkel melden bij een notify-waardige NIEUWE status (goedkope check vóór resolutie).
   if (event === 'taskStatusUpdated' && !NOTIFY_STATUSES.includes(normStatus(task.status && task.status.status))) return;
-  const emails = await resolveEmailsForTask(env, task);
-  if (!emails.length) return;
-  // PILOT: enkel doorgaan als de pilot-gebruiker bij de ontvangers zit (spaart werk).
-  if (!emails.includes(PILOT_EMAIL)) return;
+  const { bedrijfId, contacts } = await resolveContactsForTask(env, task);
+  if (!contacts.length) return;
+  // Verzenden via de gedeelde dispatcher: per contact via z'n gekozen kanalen (push/e-mail/WhatsApp),
+  // PILOT-gated op Vincent + Studio 27 (in notify.mjs). Geen koppeling -> contact wordt overgeslagen.
   const payload = buildPayload(event, task);
-  for (const email of emails) { await pushToEmailPilot(env, email, payload); }
+  await notifyContacts(env, contacts, payload, bedrijfId, ['push']);
 }
 
 /* ---- webhook-endpoint (publiek, signature-geverifieerd) ------------------- */

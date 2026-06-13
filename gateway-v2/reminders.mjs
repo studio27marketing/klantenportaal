@@ -14,8 +14,8 @@
  * Idempotentie: KV `reminder:{bedrijfId}:{taskId}` (TTL 90 d) — max 1 reminder per interval.
  * Draait volledig in scheduled() → nul impact op het klant-request-pad. Fail-soft per bedrijf.
  * ============================================================================= */
-import { cu, getCF, getRelationIds, FIELD, adminCompanies, fetchBedrijfTree, isAfgerondStatus, mintGoogleToken } from './handlers.mjs';
-import { pushToEmailPilot } from './push.mjs';
+import { cu, getCF, getRelationIds, FIELD, adminCompanies, fetchBedrijfTree, isAfgerondStatus, kanalenRead } from './handlers.mjs';
+import { notifyContact, portalLink } from './notify.mjs';
 
 const str = (v) => (v == null ? '' : String(v));
 
@@ -51,44 +51,17 @@ function taakReminderAan(t) {
   return v === true || str(v) === 'true';
 }
 
-// e-mail-fallback: contacten zonder push-inschrijving krijgen de reminder per mail vanuit
-// "Studio 27" <no-reply@studio27.be> (vereist send-as-alias op de geïmpersoneerde mailbox).
-const GMAIL_SUBJECT = 'marketing@studio27.be';
-async function sendReminderMail(env, to, payload) {
-  try {
-    const token = await mintGoogleToken(env, GMAIL_SUBJECT, 'https://www.googleapis.com/auth/gmail.send');
-    const subj = `=?UTF-8?B?${btoa(unescape(encodeURIComponent(payload.title)))}?=`;
-    const raw = [
-      `To: ${to}`,
-      `From: "Studio 27" <no-reply@studio27.be>`,
-      `Subject: ${subj}`,
-      'Content-Type: text/plain; charset=utf-8',
-      '',
-      payload.body,
-      '',
-      `Open je portaal: ${payload.url}`,
-      '',
-      'Dit is een automatische herinnering van Studio 27 — antwoorden op deze mail worden niet gelezen.',
-    ].join('\r\n');
-    const b64 = btoa(unescape(encodeURIComponent(raw))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    const r = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ raw: b64 }),
-    });
-    return r.ok;
-  } catch (e) { return false; }
-}
-
-// contact-e-mails van het bedrijf (voor de push-poort)
-async function contactEmails(env, bedrijfTaak) {
+// contacten van het bedrijf (e-mail + GSM + gekozen Notificatie-kanalen) voor de dispatcher.
+async function contactObjects(env, bedrijfTaak) {
   const ids = getRelationIds(bedrijfTaak, FIELD.contact).slice(0, 8);
   const out = [];
   for (const id of ids) {
     try {
       const r = await cu.get(env, `/task/${id}`);
-      const em = r.ok && r.data ? str(getCF(r.data, FIELD.email)).trim().toLowerCase() : '';
-      if (em) out.push(em);
+      if (!(r.ok && r.data)) continue;
+      const em = str(getCF(r.data, FIELD.email)).trim().toLowerCase();
+      if (!em) continue;
+      out.push({ email: em, gsm: str(getCF(r.data, FIELD.gsm)).trim(), kanalen: kanalenRead(getCF(r.data, FIELD.notifKanalen)) });
     } catch (e) { /* contact overslaan */ }
   }
   return out;
@@ -108,7 +81,7 @@ export async function reminderEngine(env, ctx) {
     companies = (r && r.body && Array.isArray(r.body.companies)) ? r.body.companies : [];
   } catch (e) { return { skipped: 'companies_failed' }; }
   // pilot-poort: tijdens de testfase enkel de pilot-bedrijven (Studio 27) verwerken
-  if (PILOT_BEDRIJVEN.length) companies = companies.filter((c) => PILOT_BEDRIJVEN.includes(str(c && c.id)));
+  if (PILOT_BEDRIJVEN.length) companies = companies.filter((c) => PILOT_BEDRIJVEN.includes(str(c && c.id).toLowerCase()));
 
   const now = Date.now();
   let verstuurd = 0;
@@ -124,8 +97,8 @@ export async function reminderEngine(env, ctx) {
         // opt-in PER TAAK: enkel taken waar het team 'Auto-reminder' aanvinkte
         const kandidaten = tree.all.filter(taakReminderAan);
         if (!kandidaten.length) return;
-        const emails = await contactEmails(env, bedrijfTaak);
-        if (!emails.length) return;
+        const contacts = await contactObjects(env, bedrijfTaak);
+        if (!contacts.length) return;
         for (const t of kandidaten) {
           const actie = klantActie(t);
           if (!actie) continue;
@@ -137,23 +110,22 @@ export async function reminderEngine(env, ctx) {
           try { const v = await env.KV.get(kvKey, 'json'); last = (v && v.last_sent_ms) || 0; } catch (e) { last = 0; }
           if (now - last < intervalMs) continue;
           const copy = COPY[actie];
+          // deep-link rechtstreeks naar het project (de klant ziet de top-level taak)
+          const rootId = str(t.top_level_parent) || str(t.parent) || str(t.id);
           const payload = {
             title: copy.title,
             body: copy.body(str(t.name).slice(0, 70)),
-            url: `https://portaal.studio27.be/?p=${str(t.parent || t.id)}`,
+            url: portalLink(rootId),
             tag: `rem-${t.id}`,
           };
+          // via de gedeelde dispatcher: per contact via z'n gekozen kanalen (default e-mail voor
+          // een reminder). PILOT-gated (Vincent + Studio 27) in notify.mjs.
           let sent = 0;
-          for (const em of emails) {
-            let viaPush = 0;
-            try { const r = await pushToEmailPilot(env, em, payload); viaPush = (r && r.sent) || 0; } catch (e) { viaPush = 0; }
-            if (viaPush) { sent += viaPush; continue; }
-            // geen push-inschrijving (of pilot-gate) -> mail-fallback via no-reply
-            try { if (await sendReminderMail(env, em, payload)) sent++; } catch (e) { /* kanaal-fail-soft */ }
+          for (const ct of contacts) {
+            const r = await notifyContact(env, ct, payload, c.id, ['email']);
+            if (r && !r.skipped) sent += (r.push + r.email + r.whatsapp);
           }
-          // ook bij 0 afgeleverde pushes de timer zetten? NEE — pas markeren bij echte
-          // aflevering, zodat klanten zonder push-inschrijving later (mail-fallback) alsnog
-          // bereikt worden zonder dat de teller al loopt.
+          // pas markeren bij echte aflevering (anders loopt de teller terwijl niemand bereikt werd)
           if (sent > 0) {
             verstuurd++;
             try { await env.KV.put(kvKey, JSON.stringify({ last_sent_ms: now, actie }), { expirationTtl: 7776000 }); } catch (e) { /* volgende run opnieuw */ }

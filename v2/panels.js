@@ -1161,7 +1161,7 @@ function panelSocials(){
   const head = '';   // hero/titel "Jouw socials strak gepland" verwijderd (overbodig — altijd de klant zelf)
   var mc = state.demoMode ? {linked:true,posts:socialDemoPosts()} : ((window.S27DATA&&S27DATA.metricool())||null);
   if(!mc) return head+'<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je socials worden geladen…</p></div>';
-  if(!mc.linked) return head+'<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen Metricool-koppeling</div><div style="color:var(--ink-3);max-width:460px;margin:0 auto;line-height:1.55">Zodra je social-kanalen gekoppeld zijn, zie je hier je analyse, planner en inzichten. Vraag gerust je contactpersoon bij Studio&nbsp;27.</div></div>';
+  if(!mc.linked) return head+statNotLinked('socials');
   // Sub-nav (Analyse/Planner/Inzichten) + het actieve tabblad (of de post-editor) in #socialBody,
   // met onderaan de contextuele social-chat (buiten #socialBody zodat sub-tab-wissels 'm niet herrenderen).
   return mcStyleOnce()+head+socialSubnav()+'<div id="socialBody">'+socialBodyHTML()+'</div>'+socialChatSection();
@@ -1383,7 +1383,7 @@ function metaAdsBody(){
   if(adsActivePlatform()==='google'){ return head+sw+googleAdsBody(); }
   var m=(window.S27DATA&&S27DATA.metaAds&&S27DATA.metaAds())||null;
   if(m===null){ return head+sw+'<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je advertenties worden real-time opgehaald…</p></div>'; }
-  if(!m.linked){ return head+sw+'<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen Meta-advertentieaccount gekoppeld</div><div style="color:var(--ink-3);max-width:470px;margin:0 auto;line-height:1.55">Zodra je Meta-advertentieaccount aan je portaal gekoppeld is, zie je hier real-time je campagnes, cijfers en de gebruikte visuals. Vraag gerust je contactpersoon bij Studio&nbsp;27.</div></div>'; }
+  if(!m.linked){ return head+sw+statNotLinked('ads'); }
   var cur=m.currency||'EUR';
   if(state._metaCampaign){ return metaCampaignDetail(m,cur); }
   return head+sw+adsPeriodBar()+'<div id="adsBody">'+adsOverviewInner()+'</div>'+adsChatSection();
@@ -3609,6 +3609,7 @@ function panelInstellingen(){
         <div class="field"><label>GSM / WhatsApp-nummer</label><input id="npGsm" value="${esc(prof.gsm||(demo?'+32 478 12 34 56':''))}" placeholder="+32 4xx xx xx xx" onchange="saveProfile()" ${prof.id?'':'disabled'}></div>
         <div class="field" style="grid-column:1/-1"><label>Notificatie-kanalen</label>${kanaalPicker('npKanalen', (Array.isArray(prof.kanalen)&&prof.kanalen.length)?prof.kanalen:legacyVoorkeurNaarKanalen(vk), prof.id?'saveProfile':null)}${prof.id?'':'<div class="fs" style="color:var(--ink-4);margin-top:6px">Koppel eerst je e-mail om kanalen te bewaren.</div>'}</div>
       </div>
+      ${demo?'':`<div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--paper-3,#F1EBE2)"><button class="btn btn-outline btn-sm" onclick="enablePushHere(this)">${ic('phone',15)} Pushmeldingen op dit toestel aanzetten</button><span id="pushHereMsg" class="fs" style="margin-left:10px;color:var(--ink-4)"></span><div class="fs" style="color:var(--ink-4);margin-top:6px">Krijg meldingen rechtstreeks op dit toestel, ook als de app dicht staat. Werkt op je telefoon zodra je het portaal aan je beginscherm toevoegt.</div></div>`}
       <div id="npSaved" class="fs" style="color:var(--s27-green-ink,#2e7d32);margin-top:8px;display:none">✓ Opgeslagen, gesynchroniseerd met ClickUp</div>
       ${(!demo&&!prof.id)?'<p class="fs" style="color:var(--ink-4);margin-top:8px">Je e-mail is nog niet aan een contactpersoon gekoppeld, voeg jezelf hieronder toe om je voorkeuren te bewaren.</p>':''}
     </div>
@@ -4288,27 +4289,28 @@ function webBuildTrendChart(trend){
       scales:{ y:{ beginAtZero:true, ticks:{ font:{family:'Montserrat',size:10}, color:'#9E919E', precision:0 }, grid:{ color:'rgba(231,223,211,.55)' } },
         x:{ ticks:{ font:{family:'Montserrat',size:10}, color:'#9E919E', maxRotation:0, autoSkip:true, maxTicksLimit:10 }, grid:{ display:false } } } } });
 }
-// Heeft dit bedrijf een gekoppelde statistiekenbron (Vincent 2026-06-13)? which = 'socials'|'ads'|'web'.
-// Demo + team (adminMode) zien alles; een payload zonder koppelingen (oud/cache) verbergt niets (veilig).
-function _statTabLinked(which){
-  if(state.demoMode || state.adminMode) return true;
-  var d=state.data&&state.data.dashboard;
-  var k=d&&d.koppelingen;
-  if(!k) return true;
-  return !!k[which];
+// Nette, uniforme "geen connectie"-melding (Vincent 2026-06-13, herzien): de tabs/knoppen blijven
+// altijd staan; staat er geen koppeling, dan tonen we DIT i.p.v. lege/kapotte statistieken.
+function statNotLinked(kind){
+  var M={
+    web:    ['Nog geen connectie met je websitestatistieken', 'Zodra we je Google Analytics &amp; Search Console koppelen, zie je hier je bezoekers, verkeersbronnen en zoektermen.'],
+    socials:['Nog geen connectie met je socials',             'Zodra je social-kanalen aan het portaal gekoppeld zijn, zie je hier je planning, analyse en inzichten.'],
+    ads:    ['Nog geen connectie met je advertenties',         'Zodra je advertentieaccount (Meta of Google) gekoppeld is, zie je hier real-time je campagnes en cijfers.']
+  }; var m=M[kind]||M.web;
+  return '<div class="card" style="padding:30px 26px;text-align:center">'
+    +'<div style="width:46px;height:46px;border-radius:50%;background:var(--paper-3,#F1EBE2);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;color:var(--ink-4)">'+ic('st_progress',22)+'</div>'
+    +'<div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">'+m[0]+'</div>'
+    +'<div style="color:var(--ink-3);max-width:460px;margin:0 auto;line-height:1.55">'+m[1]+' Vraag gerust je contactpersoon bij Studio&nbsp;27.</div></div>';
 }
 function webTakTab(){
-  if(state._webTakTab && (state._webTakTab!=='stats' || _statTabLinked('web'))) return state._webTakTab;
-  if(!_statTabLinked('web')) return 'projecten';   // geen webstatistieken -> altijd op Projecten
+  if(state._webTakTab) return state._webTakTab;
   return _takProjects(TAK_WEBSITE.discIds).some(function(p){return p.status!=='done';}) ? 'projecten' : 'stats';
 }
-function webSetTakTab(t){ if(t==='stats' && !_statTabLinked('web')) return; state._webTakTab=t; renderPanel('webprestaties'); }
+function webSetTakTab(t){ state._webTakTab=t; renderPanel('webprestaties'); }
 function webTakSubnav(){
   var t=webTakTab();
   var mk=function(key,label,icn){ return '<button class="soc-subtab'+(t===key?' active':'')+'" onclick="webSetTakTab(\''+key+'\')">'+ic(icn,17)+'<span>'+label+'</span></button>'; };
-  // Statistieken-sub-tab enkel als er webstatistieken gekoppeld zijn (anders: geen lege statistiekenpagina)
-  var stats=_statTabLinked('web') ? mk('stats','Statistieken','st_progress') : '';
-  return '<div class="soc-subnav" id="webTakNav">'+mk('projecten','Projecten','doc')+stats+'</div>';
+  return '<div class="soc-subnav" id="webTakNav">'+mk('projecten','Projecten','doc')+mk('stats','Statistieken','st_progress')+'</div>';
 }
 function panelWebprestaties(){
   webEnsureStyles();
@@ -4326,10 +4328,10 @@ function panelWebprestaties(){
   var s=(window.S27DATA&&S27DATA.webSearch&&S27DATA.webSearch())||null;
   if(t===null && s===null){
     // demo heeft geen webdata: meteen doorvallen naar de niet-gekoppeld-staat (geen eeuwige spinner)
-    if(state.demoMode) return head+'<div class="wp-card" style="text-align:center;color:#6B5B6B">Nog geen webstatistieken gekoppeld voor dit bedrijf, of deze module staat in teambeheer.</div>'+webSupportCard();
+    if(state.demoMode) return head+statNotLinked('web')+webSupportCard();
     return head+'<div class="empty" style="padding:70px 20px"><div class="brand-spinner" style="margin:0 auto 14px"></div><div style="font-family:var(--font-display);font-weight:700;color:#9E919E">Webdata laden…</div></div>';
   }
-  if(!(t&&t.linked) && !(s&&s.linked)){ return head+'<div class="wp-card" style="text-align:center;color:#6B5B6B">Nog geen webstatistieken gekoppeld voor dit bedrijf, of deze module staat in teambeheer.</div>'+webSupportCard(); }
+  if(!(t&&t.linked) && !(s&&s.linked)){ return head+statNotLinked('web')+webSupportCard(); }
   return head+'<div id="wpBody">'+webBody(t,s)+'</div>';
 }
 function webBody(t,s){

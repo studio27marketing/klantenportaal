@@ -492,9 +492,6 @@ function renderLoading(name){
 }
 async function goTab(name){
   if(!PANELS[name]) return;
-  // statistieken-tab zonder gekoppelde data is verborgen -> nooit erheen navigeren (Vincent 2026-06-13)
-  if((name==='socials'||name==='advertenties') && typeof _statTabLinked==='function'
-     && !_statTabLinked(name==='socials'?'socials':'ads')){ name='start'; }
   stopChatPoll();   // tab-wissel/modal-sluiten -> chat-poller stoppen (berichten herstart 'm hieronder)
   currentTab=name; state.viewMode='tab'; state.activeProject=null; state._metaCampaign=null; state._chatStaged=[];
   setActiveNav(name);
@@ -570,16 +567,8 @@ function applyTakVisibility(){
   const d=state.data.dashboard;
   const pf=document.querySelector('.sb-item[data-tab="performance"]');
   if(pf) pf.style.display = (d && d.modules && d.modules.performance===false) ? 'none' : '';
-  // Statistieken-tabs verbergen zonder gekoppelde data (Vincent 2026-06-13): Socials = Metricool,
-  // Adverteren = Meta/Google Ads. Team (adminMode) ziet ze altijd (om koppelingen op te zetten);
-  // de Website > Statistieken-sub-tab wordt apart gegate in webTakSubnav.
-  var socLinked=(typeof _statTabLinked==='function')?_statTabLinked('socials'):true;
-  var adsLinked=(typeof _statTabLinked==='function')?_statTabLinked('ads'):true;
-  var setVis=function(tab,linked){ var el=document.querySelector('.sb-item[data-tab="'+tab+'"]'); if(el) el.style.display=linked?'':'none'; };
-  setVis('socials', socLinked);
-  setVis('advertenties', adsLinked);
-  // staat de klant net op een verborgen tab (deeplink/oude state)? -> terug naar Start
-  if((currentTab==='socials'&&!socLinked)||(currentTab==='advertenties'&&!adsLinked)) goTab('start');
+  // (Vincent 2026-06-13, herzien): Socials/Adverteren/Website-tabs blijven ALTIJD zichtbaar.
+  // Zonder gekoppelde data tonen de panels zelf een nette "geen connectie"-melding (zie statNotLinked).
 }
 
 /* =============================================================================
@@ -896,6 +885,15 @@ function renderCompanySwitcher(){
    UI-HELPERS (visueel; uit het ontwerp)
    ============================================================================= */
 function _sbLock(on){ document.body.classList.toggle('sb-open',on); document.documentElement.classList.toggle('sb-open',on); }
+// Pushmeldingen aanzetten op dít toestel (Instellingen-knop; vervangt de oude zwevende box)
+async function enablePushHere(btn){
+  var msg=$id('pushHereMsg');
+  if(!(window.S27Push && S27Push.enable)){ if(msg) msg.textContent='Pushmeldingen zijn hier niet beschikbaar.'; return; }
+  btn.disabled=true; var orig=btn.innerHTML; btn.innerHTML='Bezig…';
+  var r=null; try{ r=await S27Push.enable(); }catch(e){ r={ok:false,msg:'Er ging iets mis.'}; }
+  btn.disabled=false; btn.innerHTML=orig;
+  if(msg){ msg.textContent=(r&&r.msg)||''; msg.style.color=(r&&r.ok)?'var(--s27-green-ink,#147A50)':'var(--s27-orange-ink,#C44514)'; }
+}
 function toggleSidebar(){ const sb=$id('sidebar'); const open=sb.classList.toggle('open'); $id('sbScrim').classList.toggle('show',open); _sbLock(open); }
 function closeSidebar(){ $id('sidebar').classList.remove('open'); $id('sbScrim').classList.remove('show'); _sbLock(false); }
 function toggleSwitch(e){ e.stopPropagation(); if(state.adminMode){ openAdminPicker(); return; } const m=$id('switchMenu'); const sw=$id('clientSwitch'); const open=m.style.display==='block'; m.style.display=open?'none':'block'; sw.classList.toggle('open',!open); }

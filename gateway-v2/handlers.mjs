@@ -111,7 +111,8 @@ const S27_BOT_USER_ID = '6022087';
 
 // WhatsApp via Twilio (fail-soft): alleen actief als alle TWILIO_*-secrets bestaan.
 // Per ontvanger een eigen nummer-secret: TWILIO_WA_ARNE, TWILIO_WA_VINCENT, ... (E.164, bv +32470...).
-async function sendWhatsAppTwilio(env, toNumber, msg) {
+// Geëxporteerd zodat de notificatie-dispatcher (notify.mjs) WhatsApp-meldingen kan sturen.
+export async function sendWhatsAppTwilio(env, toNumber, msg) {
   const sid = str(env && env.TWILIO_ACCOUNT_SID), tok = str(env && env.TWILIO_AUTH_TOKEN), from = str(env && env.TWILIO_WA_FROM);
   const to = str(toNumber);
   if (!sid || !tok || !from || !to) return { skipped: true, ok: false };

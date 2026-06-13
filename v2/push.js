@@ -141,67 +141,57 @@
   }
 
   /* ---- acties ---- */
+  // UI-vrij (Vincent 2026-06-13): geeft {ok,msg} terug; de aanroeper (Instellingen) toont de status.
   async function doEnable() {
     try {
-      if (Notification.permission === 'denied') { renderState('denied'); return; }
+      if (!supported()) return { ok: false, msg: 'Dit toestel/deze browser ondersteunt geen pushmeldingen.' };
+      if (Notification.permission === 'denied') return { ok: false, msg: 'Meldingen staan geblokkeerd. Sta ze toe via de browser- of toestelinstellingen en probeer opnieuw.' };
       var perm = await Notification.requestPermission();
-      if (perm !== 'granted') { renderState(perm === 'denied' ? 'denied' : 'off'); return; }
+      if (perm !== 'granted') return { ok: false, msg: 'Geen toestemming gegeven.' };
       var reg = await navigator.serviceWorker.ready;
       var sub = await reg.pushManager.getSubscription();
-      if (sub) {
-        // bestaande inschrijving met een andere serverkey -> opnieuw inschrijven
-        var key = sub.options && sub.options.applicationServerKey;
-        if (!key) { try { await sub.unsubscribe(); } catch (e) {} sub = null; }
-      }
+      if (sub) { var key = sub.options && sub.options.applicationServerKey; if (!key) { try { await sub.unsubscribe(); } catch (e) {} sub = null; } }
       if (!sub) {
         try {
           sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToU8(VAPID_PUBLIC_KEY) });
         } catch (e) {
-          // val terug: ruim een eventuele oude inschrijving op en probeer 1x opnieuw
           var old = await reg.pushManager.getSubscription();
           if (old) { try { await old.unsubscribe(); } catch (e2) {} }
           sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToU8(VAPID_PUBLIC_KEY) });
         }
       }
       var r = await pushApi('push/subscribe', { subscription: sub.toJSON(), ua: navigator.userAgent });
-      if (r.status === 200 && r.data && r.data.ok) { renderState('on'); }
-      else { renderState('off'); setHint((r.data && r.data.message) || 'Inschrijven mislukte. Probeer opnieuw.'); }
-    } catch (e) {
-      renderState('off'); setHint('Er ging iets mis: ' + (e && e.message ? e.message : e));
-    }
+      if (r.status === 200 && r.data && r.data.ok) return { ok: true, msg: 'Pushmeldingen staan aan op dit toestel.' };
+      return { ok: false, msg: (r.data && r.data.message) || 'Inschrijven mislukte. Probeer opnieuw.' };
+    } catch (e) { return { ok: false, msg: 'Er ging iets mis: ' + (e && e.message ? e.message : e) }; }
   }
   async function doDisable() {
     try {
       var reg = await navigator.serviceWorker.ready;
       var sub = await reg.pushManager.getSubscription();
-      if (sub) {
-        var ep = sub.endpoint;
-        try { await sub.unsubscribe(); } catch (e) {}
-        try { await pushApi('push/unsubscribe', { endpoint: ep }); } catch (e) {}
-      }
-      renderState('off');
-    } catch (e) { setHint('Uitzetten mislukte: ' + (e && e.message ? e.message : e)); }
+      if (sub) { var ep = sub.endpoint; try { await sub.unsubscribe(); } catch (e) {} try { await pushApi('push/unsubscribe', { endpoint: ep }); } catch (e) {} }
+      return { ok: true, msg: 'Pushmeldingen staan uit op dit toestel.' };
+    } catch (e) { return { ok: false, msg: 'Uitzetten mislukte: ' + (e && e.message ? e.message : e) }; }
   }
 
-  /* ---- init ---- */
+  /* ---- init (Vincent 2026-06-13: GEEN zwevende melding meer) ----
+   * De "Pushmeldingen"-box is verwijderd. Push blijft stil werken: als er al een
+   * inschrijving is, verversen we enkel de KV-TTL op de achtergrond (geen UI). Voor
+   * (her)inschrijven op een nieuw toestel is er nu een knop in Instellingen → Meldingen
+   * (S27Push.enable, gate't zelf op de pilot). Geen automatische prompt of banner. */
   async function initForVincent() {
     if (started) return; started = true;
-    try { if (sessionStorage.getItem('s27push_hidden') === '1') return; } catch (e) {}
-
-    if (!supported()) { renderUnsupported(); return; }
-
-    var reg = await navigator.serviceWorker.ready;
-    var sub = await reg.pushManager.getSubscription();
-    if (sub && Notification.permission === 'granted') {
-      // al ingeschreven: ververs de KV-TTL en toon "aan"
-      renderState('on');
-      try { await pushApi('push/subscribe', { subscription: sub.toJSON(), ua: navigator.userAgent }); } catch (e) {}
-    } else if (Notification.permission === 'denied') {
-      renderState('denied');
-    } else {
-      renderState('off');
-    }
+    if (!supported()) return;
+    try {
+      var reg = await navigator.serviceWorker.ready;
+      var sub = await reg.pushManager.getSubscription();
+      if (sub && Notification.permission === 'granted') {
+        try { await pushApi('push/subscribe', { subscription: sub.toJSON(), ua: navigator.userAgent }); } catch (e) {}
+      }
+    } catch (e) { /* stil */ }
   }
+  // manuele controle voor Instellingen (geen auto-UI): aanzetten/uitzetten op aanvraag
+  window.S27Push = { enable: function(){ return doEnable(); }, disable: function(){ return doDisable(); }, supported: supported };
 
   // Wacht (zonder S27Auth.subscribe te kapen) op een token; lees de e-mail; gate op Vincent.
   function waitForUser() {
