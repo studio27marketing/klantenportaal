@@ -1060,7 +1060,7 @@ export function statusMapper(statusObj) {
   const label = String((statusObj && statusObj.status) || '').toLowerCase();
   const type = String((statusObj && statusObj.type) || '').toLowerCase();
   let key;
-  if (label.includes('doorgestuur')) key = 'doorgestuurd';
+  if (label.includes('doorgestuur') || label.includes('feedback klant')) key = 'doorgestuurd';   // 'feedback klant' = nieuwe naam voor 'doorgestuurd' (review-status)
   else if (label.includes('goedgekeur')) key = 'done';
   else if (label.includes('facturati')) key = 'done';   // klaar voor facturatie = afgewerkt voor de klant
   else if (type === 'done') key = 'done';
@@ -1767,7 +1767,7 @@ export async function dashboard(bedrijfId, body, env) {
     //     klaar-voor-facturatie blijven gewone lijst-projecten (vallen door naar (B)) — een
     //     project verdwijnt pas uit het overzicht zodra het gefactureerd is (Vincent 2026-06-11).
     const _lblA = String((t.status && t.status.status) || '').toLowerCase();
-    const _inFactFase = _lblA.includes('goedgekeur') || _lblA.includes('facturati');
+    const _inFactFase = _lblA === 'done' || _lblA.includes('goedgekeur') || _lblA.includes('facturati');   // 'done' = nieuwe 'goedgekeurd': blijft zichtbaar tot gefactureerd
     if (isAfgerondStatus(t.status) && !_inFactFase) {
       const opMs = afgerondMs(t);
       if (opMs && opMs >= cutoff30) {
@@ -1795,7 +1795,7 @@ export async function dashboard(bedrijfId, body, env) {
       const ctj = Number(getCF(c, FIELD.typeJob));
       const cst = String((c.status && c.status.status) || '').toLowerCase();
       if (ctj === 6 && !(Number(c.due_date) > 0)) actiesTodo++;
-      else if (ctj === 7 && cst.includes('doorgestuur')) actiesTodo++;
+      else if (ctj === 7 && (cst.includes('doorgestuur') || cst.includes('feedback klant'))) actiesTodo++;
     }
     actieve.push({
       task_id: str(t.id),
@@ -2582,14 +2582,14 @@ export async function feedbackV2(bedrijfId, body, env) {
   }
   // (b) status -> goedgekeurd als alles goedgekeurd
   if (allApproved) {
-    writes.push(cu.put(env, `/task/${taskId}`, { status: 'goedgekeurd' }));
+    writes.push(cu.put(env, `/task/${taskId}`, { status: 'done' }));   // nieuwe afgerond-status (was 'goedgekeurd')
   }
   // (c) altijd een klant-comment
   const comment =
     `💬 [Klant: ${klant_naam}]\n\nFeedback ronde ${_ronde} ingediend via klantportaal.\n\n` +
     `Goedgekeurd: ${approved}/${total}\nFeedback: ${feedback}/${total}\n\n` +
     (allApproved
-      ? '✅ Alles goedgekeurd - status automatisch op goedgekeurd gezet.'
+      ? '✅ Alles goedgekeurd - status automatisch op Done gezet.'
       : '📝 Deliverables met feedback: ' + feedbackSummary) +
     `\n\n📲 Doorgegeven via: ${viaKanaal}` + (opmerkingen ? `\n📝 Opmerking: ${opmerkingen}` : '');
   writes.push(cu.comment(env, taskId, comment, true));

@@ -31,8 +31,15 @@
   /* ---- status-brug: genormaliseerde ClickUp-status → {key (mock-pill), label} ---- */
   function norm(s){ return String(s||'').toLowerCase().replace(/\s+/g,'_'); }
   var STATUS_MAP = {
+    // NIEUWE statusset (2026-06-14): op te starten / startklaar / in progress / on hold /
+    // feedback klant / done / klaar voor facturatie / gefactureerd. Oude namen (to do, inplannen,
+    // doorgestuurd, goedgekeurd) blijven gemapt voor Social-media-lijst + legacy/cache-data.
+    op_te_starten:        {key:'todo', label:'Op te starten'},
+    startklaar:           {key:'todo', label:'Startklaar'},
     to_do:                {key:'todo', label:'Nog in te plannen'},
+    inplannen:            {key:'todo', label:'In te plannen'},
     in_progress:          {key:'prog', label:'In productie'},
+    feedback_klant:       {key:'wait', label:'Klaar voor feedback'},
     doorgestuurd:         {key:'wait', label:'Klaar voor feedback'},
     goedgekeurd:          {key:'done', label:'Goedgekeurd'},
     done:                 {key:'done', label:'Afgerond'},
@@ -42,8 +49,9 @@
   };
   DATA.status = function(raw){ return STATUS_MAP[norm(raw)] || {key:'prog', label:raw||'Loopt'}; };
   var AFGEROND = ['goedgekeurd','done','klaar_voor_facturatie','gefactureerd'];
-  // projectchat sluit zodra het team de taak niet meer opvolgt: Doorgestuurd of een afgeronde status
-  DATA.isChatClosed = function(raw){ var n=norm(raw); return n==='doorgestuurd' || AFGEROND.indexOf(n)>=0; };
+  // projectchat sluit zodra het team de taak niet meer opvolgt: klaar-voor-review (feedback klant /
+  // doorgestuurd) of een afgeronde status. (feedback_klant = nieuwe naam voor doorgestuurd)
+  DATA.isChatClosed = function(raw){ var n=norm(raw); return n==='feedback_klant' || n==='doorgestuurd' || AFGEROND.indexOf(n)>=0; };
   function isAfgerond(raw){ return AFGEROND.indexOf(norm(raw)) >= 0; }
 
   /* ---- payload-helpers (gateway injecteert bedrijf_id server-side) ---- */

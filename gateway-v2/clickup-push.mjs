@@ -36,8 +36,9 @@ const normStatus = (s) => String(s == null ? '' : s).trim().toLowerCase();
 
 // Statussen die een klantmelding triggeren (genormaliseerd lowercase). Geldt voor
 // gewone taken én social-media-taken; matcht de NIEUWE status na een taskStatusUpdated.
-const NOTIFY_STATUSES = ['doorgestuurd', 'input gevraagd', 'feedback verwerkt', 'on hold'];
+const NOTIFY_STATUSES = ['feedback klant', 'doorgestuurd', 'input gevraagd', 'feedback verwerkt', 'on hold'];   // 'feedback klant' = nieuwe standaard-statusnaam (was 'doorgestuurd'); 'doorgestuurd' blijft voor Social
 const STATUS_COPY = {
+  'feedback klant':    { title: 'Klaar voor jou', body: (n) => '“' + n + '” staat klaar voor jouw feedback in je portaal.' },
   'doorgestuurd':      { title: 'Klaar voor jou', body: (n) => '“' + n + '” staat klaar in je portaal.' },
   'input gevraagd':    { title: 'We hebben je input nodig', body: (n) => 'Voor “' + n + '” hebben we iets van jou nodig.' },
   'feedback verwerkt': { title: 'Feedback verwerkt', body: (n) => 'Je feedback op “' + n + '” is verwerkt.' },

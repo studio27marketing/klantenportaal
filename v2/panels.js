@@ -3886,7 +3886,7 @@ function _ondEditRij(s, br){
   } else if(s.status==='done'){
     inner='<span class="ond-chip ond-chip-ok">'+ic('check',12)+' Goedgekeurd</span>';
   } else {
-    inner='<span class="ond-chip ond-chip-prog">'+esc(/to.?do/i.test(s.statusRaw||'')?'Te starten':'Aan het werken')+'</span>';
+    inner='<span class="ond-chip ond-chip-prog">'+esc(s.status==='todo'?'Te starten':'Aan het werken')+'</span>';
   }
   var lijst='';
   if(files.length>1 && (s.status==='wait'||s.status==='sent')){
@@ -3981,7 +3981,7 @@ function _ondTaakRij(s, br){
   var chip;
   if(s.status==='done') chip='<span class="ond-chip ond-chip-ok">'+ic('check',12)+' Goedgekeurd</span>';
   else if(isWait) chip='<span class="ond-chip ond-chip-wait">Klaar voor feedback</span>';
-  else chip='<span class="ond-chip ond-chip-prog">'+esc(/to.?do/i.test(s.statusRaw||'')?'Te starten':'Aan het werken')+'</span>';
+  else chip='<span class="ond-chip ond-chip-prog">'+esc(s.status==='todo'?'Te starten':'Aan het werken')+'</span>';
   var head='<div class="ond-head">'+ic(_ondTaakIcoon(files,fotoMaps),16)+'<span class="ond-naam">'+esc(s.naam)+'</span>'+chip+'</div>';
   var body='';
   // bestanden klaar voor feedback: in-portal feedbackmodule per bestand

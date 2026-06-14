@@ -563,13 +563,13 @@ export async function videoReviewApprove(bedrijfId, body, env) {
     if (!ok) { allApproved = false; break; }
   }
   if (allApproved) {
-    try { await cu.put(env, `/task/${taskId}`, { status: 'goedgekeurd' }); } catch (e) { /* comment blijft */ }
+    try { await cu.put(env, `/task/${taskId}`, { status: 'done' }); } catch (e) { /* comment blijft */ }   // nieuwe afgerond-status (was 'goedgekeurd')
   }
   const titel = str(vIn.title || '');
   try {
     await cu.comment(env, taskId,
       `\u2705 ${klantNaam} keurde ${titel ? `de video "${titel}"` : 'deze video'} goed via het portaal.` +
-      (allApproved ? `\nAlle video's van deze taak zijn goedgekeurd \u2014 status staat op Goedgekeurd.` : ''), true);
+      (allApproved ? `\nAlle video's van deze taak zijn goedgekeurd \u2014 status staat op Done.` : ''), true);
   } catch (e) { /* best-effort */ }
   return { status: 200, body: { ok: true, all_approved: allApproved } };
 }
@@ -638,7 +638,7 @@ export async function fotoApprove(bedrijfId, body, env) {
   const g = await guardTask(env, bedrijfId, taskId);
   if (!g.ok) return g.res;
   const klantNaam = str(body && body.klant_naam) || 'Klant';
-  try { await cu.put(env, `/task/${taskId}`, { status: 'goedgekeurd' }); }
+  try { await cu.put(env, `/task/${taskId}`, { status: 'done' }); }   // nieuwe afgerond-status (was 'goedgekeurd')
   catch (e) { return { status: 502, body: { ok: false, message: 'Goedkeuren lukte net niet \u2014 probeer zo opnieuw.' } }; }
   try { await cu.comment(env, taskId, `\ud83d\udcf8 ${klantNaam} keurde de foto's goed via het portaal.`, true); } catch (e) { /* best-effort */ }
   return { status: 200, body: { ok: true } };
