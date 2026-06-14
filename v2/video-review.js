@@ -249,7 +249,7 @@
       '      <a id="vrDownload" class="vr-btn vr-ghost vr-hidden" download><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 19h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="vr-dl-txt">Download</span></a>' +
       '      <button id="vrApprove" class="vr-btn">✓ Video goedkeuren</button>' +
       '      <button id="vrSend" class="vr-btn vr-primary">Feedback verzenden <span id="vrCount" class="vr-countbadge vr-hidden">0</span></button>' +
-      '      <button id="vrClose" class="vr-x" title="Sluiten">×</button>' +
+      '      <button id="vrClose" class="vr-x" title="Sluiten" aria-label="Sluiten"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></button>' +
       '    </div>' +
       '  </header>' +
       '  <div class="vr-loading" id="vrLoading"><div class="vr-spin"></div><p>Video wordt geladen…</p></div>' +

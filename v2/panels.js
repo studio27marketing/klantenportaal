@@ -1089,7 +1089,7 @@ function socialDetailPage(id){
   state._socPreviewNet=activeNet;
   var initVid=(mediaArr.length===1)?_isVidUrl(mediaArr[0]):false;
   var fmt=socialInferFormat(p,activeNet,initVid,mediaArr.length);
-  var back='<button class="soc-close" type="button" aria-label="Sluiten" title="Terug naar de kalender" onclick="socialCloseDetail()">'+ic('close',18)+'</button>';
+  var back='<button class="soc-close" type="button" aria-label="Sluiten" title="Terug naar de kalender" onclick="socialCloseDetail()">'+ic('plus',22)+'</button>';
   var phone=socialPhoneMock({brand:_socAccountName(activeNet),caption:p.tekst||'',net:activeNet,format:fmt,mediaArr:mediaArr});
   var datebadge=(dd?'<span class="soc-emeta-date">'+ic('cal',13)+' '+esc(dd)+(tt?' · '+tt:'')+'</span>':'');
   if(published){
