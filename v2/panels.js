@@ -4068,7 +4068,6 @@ function buildModal(id, from){
       approvedTasks=det.subtasks.filter(s=>s.status==='done').map(s=>({naam:s.naam, heeftBestanden:!!s.heeftBestanden, bestanden:s.bestanden||[]}));
     }
   }
-  const saeLine = det ? saeNames(det.sae) : saeNames(p.sae);
 
   // Deliverables-blok in het overzicht: directe link + Feedback geven / Goedkeuren ernaast.
   // Meerdere video's/links => alle rijen onder elkaar. Geen aparte tab nodig.
@@ -4090,18 +4089,19 @@ function buildModal(id, from){
   let detOnd = det;
   if(!detOnd && state.demoMode && p.discId==='video_fotografie') detOnd = demoVideoDet();
   if(!detOnd && state.demoMode && (p.discId==='branding'||p.discId==='strategie')) detOnd = demoAlgDet(p.discId);
+  // Alle niet-video-takken delen exact de content-onderdelen-look (1:1 met branding/strategie):
+  // geen aparte 'generieke' detailweergave meer met icoon-header + meeting-blok (Vincent 2026-06-14).
+  // onderdelenBlokAlg geeft null terug zonder opleverbare subtaken -> dan valt 'ie veilig terug op
+  // de (kop- en meetingloze) proces/deliverables-weergave hieronder.
   const OND = (p.discId==='video_fotografie') ? onderdelenBlok(detOnd, p)
-            : (p.discId==='branding'||p.discId==='strategie') ? onderdelenBlokAlg(detOnd, p)
-            : null;
+            : onderdelenBlokAlg(detOnd, p);
   const hasProces = !!(det && det.proces && det.proces.aantal_stappen);
   // content-takken branding/strategie: nooit shoot/meeting-planning tonen (Vincent: 'geen meetings
   // aanvragen'). Als OND null is (project zonder subtaken) valt de generieke overview terug, maar
   // dan zonder scheduleBlock en zonder de plan-aankondiging in procesBlock (review v85 #5).
-  const isContentAlg = (p.discId==='branding'||p.discId==='strategie');
   const overview = OND ? `<div class="mpane active" data-mpane="overzicht"><div class="ond-wrap">${OND}</div></div>`
    : `<div class="mpane active" data-mpane="overzicht">
-    ${procesBlock(det,p,{noPlan:isContentAlg})}
-    ${isContentAlg?'':scheduleBlock(det,p)}
+    ${procesBlock(det,p,{noPlan:true})}
     ${showDeliv?`<h4 style="font-family:var(--font-display);font-size:15px;margin:0 0 4px">${(delivList&&delivList.length>1)||(delivList===null)?'Jouw deliverables':'Jouw deliverable'}</h4>
     <p class="sdesc" style="margin:0 0 10px">Bekijk wat we voor je klaarzetten en laat meteen weten of je akkoord gaat of feedback hebt. Opmerkingen passen we volledig gratis aan.</p>
     ${delivBlock}`:''}
@@ -4148,12 +4148,9 @@ function buildModal(id, from){
       <div class="dc-body" id="dcBody">${chatClosed?chatHTML(id,true):chatHTML(id)}</div>
       <div style="padding:8px 0 0"><button class="btn btn-ghost btn-sm" style="color:var(--s27-orange-ink)" onclick="dringendeVraag('${esc(p.id)}')">${ic('spark',14)} ${chatClosed?'Nog een vraag over dit project?':'Dringende vraag aan Ilke'}</button></div>
     </div>`;
+  // Geen aparte detail-head meer: de projecttitel staat al in de topbar en content-details tonen
+  // sowieso geen icoon/dubbele titel/status-kop. Zo ligt élk projectdetail 1:1 in lijn (Vincent 2026-06-14).
   return `<div class="detail detail--wide br-${p.br}">
-    ${OND?'':`<div class="detail-head">
-      <span class="detail-ic">${discMark(p.disc,'detail-stamp')}</span>
-      <div class="detail-titles"><h1>${p.name}</h1><div class="detail-sub${saeLine?' sae-line':''}">${saeLine||esc(p.disc)}</div></div>
-      ${spill(p.status)}
-    </div>`}
     <div class="soc-subnav detail-subnav">
       <button class="soc-subtab${startTab==='overzicht'?' active':''}" data-mt="overzicht" onclick="switchModalTab('overzicht')">${ic('doc',15)} Overzicht</button>
       <button class="soc-subtab${startTab==='chat'?' active':''}" data-mt="chat" onclick="switchModalTab('chat')">${ic('msg',15)} Chat${chatWacht?'<span class="snav-dot"></span>':''}</button>
