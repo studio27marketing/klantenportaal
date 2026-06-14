@@ -4149,7 +4149,6 @@ function buildModal(id, from){
       <div style="padding:8px 0 0"><button class="btn btn-ghost btn-sm" style="color:var(--s27-orange-ink)" onclick="dringendeVraag('${esc(p.id)}')">${ic('spark',14)} ${chatClosed?'Nog een vraag over dit project?':'Dringende vraag aan Ilke'}</button></div>
     </div>`;
   return `<div class="detail detail--wide br-${p.br}">
-    <button class="detail-close" title="Terug naar ${backLabel}" aria-label="Terug naar ${backLabel}" onclick="${(typeof _isContentTak==='function'&&_isContentTak(backTo))?`markSkipAutoLand('${backTo}');`:''}goTab('${backTo}')">${ic('plus',22)}</button>
     ${OND?'':`<div class="detail-head">
       <span class="detail-ic">${discMark(p.disc,'detail-stamp')}</span>
       <div class="detail-titles"><h1>${p.name}</h1><div class="detail-sub${saeLine?' sae-line':''}">${saeLine||esc(p.disc)}</div></div>
@@ -4158,6 +4157,8 @@ function buildModal(id, from){
     <div class="soc-subnav detail-subnav">
       <button class="soc-subtab${startTab==='overzicht'?' active':''}" data-mt="overzicht" onclick="switchModalTab('overzicht')">${ic('doc',15)} Overzicht</button>
       <button class="soc-subtab${startTab==='chat'?' active':''}" data-mt="chat" onclick="switchModalTab('chat')">${ic('msg',15)} Chat${chatWacht?'<span class="snav-dot"></span>':''}</button>
+      <span class="detail-subnav-sep"></span>
+      <button class="detail-close detail-close--innav" title="Terug naar ${backLabel}" aria-label="Terug naar ${backLabel}" onclick="${(typeof _isContentTak==='function'&&_isContentTak(backTo))?`markSkipAutoLand('${backTo}');`:''}goTab('${backTo}')">${ic('plus',22)}</button>
     </div>
     <div class="detail-body">${overviewPane}${toonAccordions?deliverables.replace('class="mpane"','class="mpane mpane-sub'+(startTab==='overzicht'?' active':'')+'"'):''}${chatPane}</div>
   </div>`;

@@ -1184,6 +1184,11 @@ button.ond-head{cursor:pointer;}
 .detail-close:hover{background:var(--paper-2,#FAF7F2);color:var(--ink,#230F23);}
 .detail-closerow{display:flex;justify-content:flex-end;margin:0 0 10px;}
 .detail-close--inline{position:static;}
+/* kruisje ALS laatste item IN de Overzicht|Chat-balk (Vincent 2026-06-14) */
+.detail-subnav{align-items:center;}
+.detail-subnav-sep{width:1px; align-self:stretch; margin:4px 2px; background:var(--line,#E7DFD3); flex:none;}
+.detail-close--innav{position:static; width:34px; height:34px; align-self:center; flex:none;}
+@media(max-width:520px){ .detail-subnav .soc-subtab{flex:1 1 auto;} .detail-close--innav{flex:none;} }
 /* oude pijltje-link is vervangen; ruimte bovenaan het detail behouden */
 .detail--wide{padding-top:4px;}
 /* subnav-iconen kleuren mee met de tak (br-X zet --c-ink op de panel/detail-context) */
