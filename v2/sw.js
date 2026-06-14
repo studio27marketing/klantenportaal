@@ -6,7 +6,7 @@
    - Alleen GET + same-origin. API (POST naar de worker) en Firebase/cross-origin gaan
      ongemoeid naar het netwerk, zodat auth en live data nooit door de SW worden geraakt.
    Cachenaam draagt de frontend-versie; bump dit bij een nieuwe release (samen met ?v=). */
-var CACHE = 's27-portaal-v94';
+var CACHE = 's27-portaal-v95';
 // SHELL volgt automatisch de CACHE-versie (geen aparte bump-plek meer)
 var V = (CACHE.split('-v')[1] || '0');
 var SHELL = [
@@ -37,6 +37,11 @@ self.addEventListener('fetch', function (e) {
   var url;
   try { url = new URL(req.url); } catch (err) { return; }
   if (url.origin !== self.location.origin) return;                   // worker/Firebase/CDN -> netwerk
+
+  // Video/media + Range-requests rechtstreeks naar het netwerk: een <video> vraagt byte-ranges en
+  // iOS/Safari eist daarop 206 Partial Content. Cache-first kan een volledige 200 teruggeven
+  // waardoor afspelen breekt (de boot-splash laadde daardoor niet op de PWA).
+  if (req.headers.has('range') || /\.(mp4|webm|mov|m4v)$/i.test(url.pathname)) return;
 
   if (req.mode === 'navigate') {                                     // HTML: network-first
     e.respondWith(
