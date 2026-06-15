@@ -448,7 +448,14 @@ export async function linkApprove(bedrijfId, body, env) {
   for (const l of links) {
     if (l.linkKey === linkKey) continue;
     let ok = false;
-    try { const st = await lrGet(env, taskId, l.linkKey); ok = !!(st && st.state === 'approved'); } catch (e) { ok = false; }
+    try {
+      if (l.mediaType === 'video') {
+        // video's worden via het bestaande video-review goedgekeurd (vr:...:approved), niet via lr:
+        ok = !!(await env.KV.get(`vr:${taskId}:${l.linkKey}:approved`));
+      } else {
+        const st = await lrGet(env, taskId, l.linkKey); ok = !!(st && st.state === 'approved');
+      }
+    } catch (e) { ok = false; }
     if (!ok) { allApproved = false; break; }
   }
 

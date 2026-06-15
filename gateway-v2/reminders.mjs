@@ -15,6 +15,7 @@
  * Draait volledig in scheduled() → nul impact op het klant-request-pad. Fail-soft per bedrijf.
  * ============================================================================= */
 import { cu, getCF, getRelationIds, FIELD, adminCompanies, fetchBedrijfTree, isAfgerondStatus, kanalenRead, TJ, typeJobUuid } from './handlers.mjs';
+import { linkReactionState } from './feedbackcore.mjs';   // eis 6: reminder onderdrukken als klant op alle links reageerde
 import { notifyContact, portalLink } from './notify.mjs';
 
 const str = (v) => (v == null ? '' : String(v));
@@ -29,10 +30,14 @@ const DEFAULT_INTERVAL_DAGEN = 3;     // VAST (Vincent 12-06: geen per-bedrijf-i
 const PILOT_BEDRIJVEN = ['86c8cz2uu']; // Studio 27
 
 // Welke open taken vragen een klant-actie?
-function klantActie(t) {
+async function klantActie(env, t) {
   if (isAfgerondStatus(t.status)) return null;
   const lbl = str(t.status && t.status.status).toLowerCase();
-  if (lbl.includes('doorgestuur') || lbl.includes('feedback klant')) return 'feedback';   // 'feedback klant' = nieuwe naam (was 'doorgestuurd')
+  if (lbl.includes('doorgestuur') || lbl.includes('feedback klant')) {
+    // eis 6: heeft de klant op ÉLKE deliverable-link al gereageerd (approve OF feedback) -> geen reminder.
+    try { const rs = await linkReactionState(env, t); if (rs.links.length && rs.allReacted) return null; } catch (e) { /* fail-soft: niet onderdrukken bij KV-storing */ }
+    return 'feedback';   // 'feedback klant' = nieuwe naam (was 'doorgestuurd')
+  }
   if (lbl.includes('input')) return 'input';
   if (typeJobUuid(t) === TJ.shoot && !(Number(t.due_date) > 0)) return 'shoot';
   return null;
@@ -99,7 +104,7 @@ export async function reminderEngine(env, ctx) {
         const contacts = await contactObjects(env, bedrijfTaak);
         if (!contacts.length) return;
         for (const t of kandidaten) {
-          const actie = klantActie(t);
+          const actie = await klantActie(env, t);
           if (!actie) continue;
           // dubbel vangnet: niet herinneren aan werk dat pas later start
           const startMs = Number(getCF(t, FIELD.startdatum)) || 0;

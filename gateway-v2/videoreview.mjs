@@ -21,6 +21,7 @@
  * ============================================================================= */
 import { cu, scopeCheckTask, mintGoogleToken, DRIVE_SCOPE, isAfgerondStatus, FIELD, getCF, parseDeliverables, TJ, typeJobUuid } from './handlers.mjs';
 import { zipStream } from './zipstream.mjs';
+import { parseTaskLinks, lrGet } from './feedbackcore.mjs';   // lr-pariteit: niet-video deliverables meetellen vóór auto-done (lazy gebruik = circular-veilig)
 
 const str = (v) => (v == null ? '' : String(v));
 const cleanId = (v) => str(v).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
@@ -561,6 +562,18 @@ export async function videoReviewApprove(bedrijfId, body, env) {
     let ok = false;
     try { ok = !!(await env.KV.get(kvKey(taskId, k) + ':approved')); } catch (e) { ok = false; }
     if (!ok) { allApproved = false; break; }
+  }
+  // lr-pariteit: óók de niet-video deliverables (pdf/audio/doc...) moeten via het generieke
+  // feedback-systeem goedgekeurd zijn voor de hele taak op done gaat (gemengde taken). Additief:
+  // een video-only taak heeft geen niet-video links -> blijft allApproved.
+  if (allApproved) {
+    try {
+      for (const l of parseTaskLinks(g.task)) {
+        if (l.mediaType === 'video') continue;
+        const st = await lrGet(env, taskId, l.linkKey);
+        if (!(st && st.state === 'approved')) { allApproved = false; break; }
+      }
+    } catch (e) { /* fail-soft: laat de video-beslissing staan */ }
   }
   if (allApproved) {
     try { await cu.put(env, `/task/${taskId}`, { status: 'done' }); } catch (e) { /* comment blijft */ }   // nieuwe afgerond-status (was 'goedgekeurd')

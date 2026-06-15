@@ -63,7 +63,7 @@
   //   vimeo -> 'v'+id ; drive-bestand -> 'd'+id ; drive-map -> 'g'+id ;
   //   anders -> 'u'+fnv1a(url.toLowerCase().replace(/[?#].*$/,''))
   function linkKeyOf(url) {
-    var u = String(url || '');
+    var u = String(url || '').trim();   // identiek aan de worker (str(url).trim()) — anders divergeren de 'u'-keys
     var v = parseVimeoId(u); if (v) return 'v' + v;
     var d = parseDriveFileId(u); if (d) return 'd' + d;
     var g = parseDriveFolderId(u); if (g) return 'g' + g;
@@ -798,8 +798,11 @@
     if (!row) return;
     var href = a.getAttribute('href') || '';
     if (!href || href === '#') return;
+    // video's: laat S27VideoReview's eigen detectie+delegatie het doen (dekt ook Drive-video's
+    // zonder zichtbare extensie die guessType als 'other' zou zien) -> geen dubbele overlay.
+    if (window.S27VideoReview && typeof S27VideoReview.isReviewable === 'function' && S27VideoReview.isReviewable(href)) return;
     var type = guessType(href);
-    if (type === 'video') return; // laat S27VideoReview dit afhandelen
+    if (type === 'video') return; // vangnet
     var taskId = (row.getAttribute('data-task')) || (window.state && state.activeProject) || '';
     if (!taskId) return; // buiten projectcontext: normaal gedrag
     e.preventDefault();

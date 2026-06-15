@@ -6,14 +6,14 @@
    - Alleen GET + same-origin. API (POST naar de worker) en Firebase/cross-origin gaan
      ongemoeid naar het netwerk, zodat auth en live data nooit door de SW worden geraakt.
    Cachenaam draagt de frontend-versie; bump dit bij een nieuwe release (samen met ?v=). */
-var CACHE = 's27-portaal-v104';
+var CACHE = 's27-portaal-v105';
 // SHELL volgt automatisch de CACHE-versie (geen aparte bump-plek meer)
 var V = (CACHE.split('-v')[1] || '0');
 var SHELL = [
   '/', '/index.html', '/manifest.json',
-  '/styles.css?v=' + V, '/glass.css?v=' + V, '/tweaks.css?v=' + V, '/video-review.css?v=' + V,
+  '/styles.css?v=' + V, '/glass.css?v=' + V, '/tweaks.css?v=' + V, '/video-review.css?v=' + V, '/feedback-core.css?v=' + V,
   '/api.js?v=' + V, '/data.js?v=' + V, '/assets-data.js?v=' + V, '/catalog-data.js?v=' + V,
-  '/panels.js?v=' + V, '/portal.js?v=' + V, '/tweaks.js?v=' + V, '/video-review.js?v=' + V, '/auth.js',
+  '/panels.js?v=' + V, '/portal.js?v=' + V, '/tweaks.js?v=' + V, '/video-review.js?v=' + V, '/feedback-core.js?v=' + V, '/auth.js',
   '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png'
 ];
 

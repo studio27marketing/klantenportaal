@@ -1051,8 +1051,28 @@ function toggleAcc(btn){ btn.classList.toggle('open'); btn.nextElementSibling.cl
 /* ---- Per-bestand review (goedkeuren / feedback + via welke weg) ---- */
 const REVIEW_CHANNELS=[['portaal','via het portaal'],['whatsapp','via WhatsApp'],['email','via e-mail'],['telefoon','telefonisch'],['meeting','in een meeting']];
 function _chanSelect(){ return '<select class="rv-chan" style="font-family:var(--font-body);font-size:13px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;outline:none">'+REVIEW_CHANNELS.map(function(c){return '<option value="'+c[0]+'">'+c[1]+'</option>';}).join('')+'</select>'; }
-function fileApprove(btn){ _fileReviewUI(btn,'approve'); }
-function fileFeedback(btn){ _fileReviewUI(btn,'feedback'); }
+// De review-knoppen openen voortaan de gestandaardiseerde review-overlay (S27Review: preview +
+// comments + goedkeuren/feedback over alle bestandstypes, worker-based i.p.v. Make). Valt terug op
+// de oude inline-flow in demo of als S27Review nog niet geladen is. Video -> S27VideoReview.
+function fileApprove(btn){ if(!_openFileReview(btn)) _fileReviewUI(btn,'approve'); }
+function fileFeedback(btn){ if(!_openFileReview(btn)) _fileReviewUI(btn,'feedback'); }
+function _openFileReview(btn){
+  try{
+    if(state.demoMode) return false;                       // demo: oude inline-flow (geen worker-calls)
+    var row=btn.closest && btn.closest('.deliv-file'); if(!row) return false;
+    var a=row.querySelector('a[href]'); var url=a?(a.getAttribute('href')||''):'';
+    if(!url || url==='#') return false;
+    var taskId=row.getAttribute('data-task')||state.activeProject||'';
+    var label=row.getAttribute('data-label')||'Bestand';
+    if(window.S27VideoReview && typeof S27VideoReview.isReviewable==='function' && S27VideoReview.isReviewable(url)){
+      S27VideoReview.open({ taskId:String(taskId), url:String(url), label:String(label), sourceEl:btn }); return true;
+    }
+    if(window.S27Review && typeof S27Review.pickReviewer==='function'){
+      S27Review.pickReviewer(url, { taskId:String(taskId), label:String(label), sourceEl:btn }); return true;
+    }
+  }catch(e){}
+  return false;
+}
 function _fileReviewUI(btn,mode){
   const row=btn.closest('.deliv-file'); if(!row||row.querySelector('.rv-panel'))return;
   const act=row.querySelector('.df-act'); if(act)act.style.display='none';
