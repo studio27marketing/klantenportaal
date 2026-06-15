@@ -542,20 +542,20 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;}
 .loader-prog .lp-track{fill:none;stroke:var(--paper-3);stroke-width:6;}
 .loader-prog .lp-fill{fill:none;stroke:url(#lpGrad);stroke-width:6;stroke-linecap:round;
   stroke-dasharray:339.292;stroke-dashoffset:319;transition:stroke-dashoffset .5s var(--ease-out);}
-/* het liquid-glass icoon — superellipse-squircle, zelfde gevoel als het app-icon */
-.loader-badge{position:relative;width:86px;height:86px;border-radius:25px;overflow:hidden;display:grid;place-items:center;
+/* het liquid-glass icoon — volle ronde schijf (vult de voortgangsring) */
+.loader-badge{position:relative;width:96px;height:96px;border-radius:50%;overflow:hidden;display:grid;place-items:center;
   background:
-    radial-gradient(125% 90% at 28% 16%,rgba(255,255,255,.55),rgba(255,255,255,0) 44%),
-    linear-gradient(155deg,#5AA0EC 0%,var(--s27-blue) 46%,#6E54CF 100%);
-  box-shadow:0 8px 18px rgba(31,95,168,.22),inset 0 1.5px 1px rgba(255,255,255,.6),inset 0 -10px 18px rgba(31,95,168,.4);}
+    radial-gradient(120% 95% at 30% 16%,rgba(255,255,255,.5),rgba(255,255,255,0) 46%),
+    linear-gradient(155deg,#5AA0EC 0%,var(--s27-blue) 48%,#6E54CF 100%);
+  box-shadow:0 8px 18px rgba(31,95,168,.22),inset 0 1.5px 1px rgba(255,255,255,.55),inset 0 -8px 16px rgba(31,95,168,.3);}
 /* bovenste glas-specular highlight */
-.loader-badge::before{content:"";position:absolute;left:9%;right:9%;top:6%;height:44%;border-radius:50%;
-  background:radial-gradient(100% 100% at 50% 0%,rgba(255,255,255,.72),rgba(255,255,255,0) 70%);pointer-events:none;}
+.loader-badge::before{content:"";position:absolute;left:12%;right:12%;top:7%;height:42%;border-radius:50%;
+  background:radial-gradient(100% 100% at 50% 0%,rgba(255,255,255,.66),rgba(255,255,255,0) 70%);pointer-events:none;}
 /* trage, subtiele licht-veeg over het glas */
 .loader-badge::after{content:"";position:absolute;inset:-30% -60%;pointer-events:none;
-  background:linear-gradient(68deg,transparent 40%,rgba(255,255,255,.32) 50%,transparent 60%);
+  background:linear-gradient(68deg,transparent 40%,rgba(255,255,255,.3) 50%,transparent 60%);
   transform:translateX(-115%);animation:loaderSheen 3s var(--ease-out) infinite;}
-.loader-27{position:relative;z-index:1;width:62%;height:auto;fill:#fff;filter:drop-shadow(0 2px 3px rgba(31,95,168,.4));}
+.loader-27{position:relative;z-index:1;width:60%;height:auto;fill:#fff;filter:drop-shadow(0 2px 3px rgba(31,95,168,.38));}
 .loader-text{font-family:var(--font-display);font-weight:700;font-size:14.5px;color:var(--ink-3);letter-spacing:-0.01em;}
 @keyframes loaderSheen{0%{transform:translateX(-115%);}55%,100%{transform:translateX(115%);}}
 @media (prefers-reduced-motion:reduce){.loader-badge::after{animation:none;}}
