@@ -535,18 +535,38 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;}
 /* ---------- Login loader ---------- */
 #loader{position:fixed;inset:0;z-index:300;background:var(--paper-2);display:none;flex-direction:column;align-items:center;justify-content:center;gap:24px;transition:opacity .45s var(--ease-out);}
 #loader.show{display:flex;}
-.loader-stage{position:relative;width:108px;height:108px;}
-.loader-ring{position:absolute;inset:0;border-radius:50%;
-  background:conic-gradient(var(--s27-blue) 0 16.66%,var(--s27-purple) 16.66% 33.33%,var(--s27-green) 33.33% 50%,var(--s27-orange) 50% 66.66%,var(--s27-yellow) 66.66% 83.33%,var(--s27-pink) 83.33% 100%);
-  -webkit-mask:radial-gradient(circle 38px at center,#0000 98%,#000 100%);mask:radial-gradient(circle 38px at center,#0000 98%,#000 100%);
-  animation:spin 1.3s linear infinite;}
-.loader-badge{position:absolute;inset:26px;border-radius:20px;background:var(--s27-blue);color:#fff;display:flex;align-items:center;justify-content:center;
-  font-family:var(--font-display);font-weight:900;font-size:28px;letter-spacing:-0.03em;animation:badgePop .55s var(--bounce) both;box-shadow:0 6px 16px rgba(48,131,220,.35);}
-.loader-text{font-family:var(--font-display);font-weight:700;font-size:14px;color:var(--ink-3);}
-.loader-bar{width:220px;height:6px;border-radius:var(--r-pill);background:var(--paper-3);overflow:hidden;}
-/* laadbalk volgt nu de ECHTE laadfases (loaderStep in portal.js) i.p.v. een fake 1,75s-animatie */
-.loader-bar i{display:block;height:100%;width:6%;border-radius:var(--r-pill);background:linear-gradient(90deg,var(--s27-blue),var(--s27-blue-ink));transition:width .45s var(--ease-out);}
-@keyframes badgePop{from{transform:scale(.4);opacity:0;}to{transform:scale(1);opacity:1;}}
+/* Liquid-glass "27" = het app-icon, rustig ademend met een trage licht-veeg.
+   Vervangt de oude drukke regenboog-ring; sluit aan op icon B + boot-splash. */
+.loader-stage{position:relative;width:116px;height:116px;display:grid;place-items:center;}
+/* zachte, ademende glow-halo achter het icoon */
+.loader-ring{position:absolute;width:116px;height:116px;border-radius:36px;
+  background:radial-gradient(58% 58% at 50% 42%,rgba(48,131,220,.5),rgba(148,65,219,.28) 58%,transparent 72%);
+  filter:blur(15px);animation:loaderHalo 2.8s var(--ease-out) infinite;}
+/* het liquid-glass icoon — superellipse-squircle, zelfde gevoel als het app-icon */
+.loader-badge{position:relative;width:90px;height:90px;border-radius:27px;overflow:hidden;
+  background:
+    radial-gradient(125% 90% at 28% 16%,rgba(255,255,255,.55),rgba(255,255,255,0) 44%),
+    linear-gradient(155deg,#5AA0EC 0%,var(--s27-blue) 46%,#6E54CF 100%);
+  display:grid;place-items:center;
+  box-shadow:0 16px 36px rgba(48,131,220,.34),0 4px 10px rgba(35,15,35,.12),
+    inset 0 1.5px 1px rgba(255,255,255,.6),inset 0 -11px 20px rgba(31,95,168,.42);
+  animation:loaderBreathe 2.8s var(--ease-out) infinite;}
+/* bovenste glas-specular highlight */
+.loader-badge::before{content:"";position:absolute;left:9%;right:9%;top:6%;height:44%;border-radius:50%;
+  background:radial-gradient(100% 100% at 50% 0%,rgba(255,255,255,.72),rgba(255,255,255,0) 70%);pointer-events:none;}
+/* trage, elegante licht-veeg over het glas (glas dat licht vangt, geen gimmick) */
+.loader-badge::after{content:"";position:absolute;inset:-30% -60%;pointer-events:none;
+  background:linear-gradient(68deg,transparent 38%,rgba(255,255,255,.4) 50%,transparent 62%);
+  transform:translateX(-115%);animation:loaderSheen 2.8s var(--ease-out) infinite;}
+.loader-27{position:relative;z-index:1;width:50%;height:auto;fill:#fff;filter:drop-shadow(0 2px 3px rgba(31,95,168,.45));}
+.loader-text{font-family:var(--font-display);font-weight:700;font-size:14px;color:var(--ink-3);letter-spacing:-0.01em;}
+.loader-bar{width:230px;height:6px;border-radius:var(--r-pill);background:var(--paper-3);overflow:hidden;box-shadow:inset 0 1px 2px rgba(35,15,35,.06);}
+/* laadbalk volgt de ECHTE laadfases (loaderStep in portal.js) i.p.v. een fake animatie */
+.loader-bar i{display:block;height:100%;width:6%;border-radius:var(--r-pill);background:linear-gradient(90deg,var(--s27-blue),var(--s27-purple));transition:width .5s var(--ease-out);}
+@keyframes loaderBreathe{0%,100%{transform:scale(1);}50%{transform:scale(1.035);}}
+@keyframes loaderHalo{0%,100%{opacity:.5;transform:scale(.95);}50%{opacity:.82;transform:scale(1.06);}}
+@keyframes loaderSheen{0%{transform:translateX(-115%);}55%,100%{transform:translateX(115%);}}
+@media (prefers-reduced-motion:reduce){.loader-ring,.loader-badge,.loader-badge::after{animation:none;}}
 .bot-panel{position:fixed;bottom:26px;right:26px;width:min(380px,calc(100vw - 32px));height:min(560px,80vh);background:var(--paper);
   border-radius:var(--r-lg);box-shadow:var(--sh-lg);z-index:85;display:none;flex-direction:column;overflow:hidden;
   animation:popIn .3s var(--bounce);transform-origin:bottom right;}
