@@ -430,11 +430,14 @@ async function adminEnterCompany(id){
 function showApp(){ $id('app').classList.add('show'); const l=$id('login'); l.classList.add('hide'); l.style.opacity=''; window.scrollTo(0,0); }
 function showLogin(){ $id('app').classList.remove('show'); const l=$id('login'); l.classList.remove('hide'); l.style.opacity='1'; }
 function playLoader(){ const loader=$id('loader'); if(!loader) return; state._loaderAt=Date.now(); loader.style.opacity='1'; loader.classList.add('show'); loaderStep(6,'Je portaal wordt klaargezet…'); }
-// laadbalk-fase: vult de balk naar pct% + optioneel label (volgt de échte progressie, geen fake animatie)
+// laadfase: vult de voortgangsring (rond de 27) naar pct% + optioneel label.
+// Volgt de échte progressie (geen fake animatie). 2*PI*r met r=54 => omtrek 339.292.
 function loaderStep(pct,label){
   try{
     var l=$id('loader'); if(!l) return;
-    var b=l.querySelector('.loader-bar i'); if(b) b.style.width=Math.max(4,Math.min(100,pct))+'%';
+    var pc=Math.max(4,Math.min(100,pct));
+    var r=l.querySelector('.lp-fill'); if(r) r.style.strokeDashoffset=(339.292*(1-pc/100)).toFixed(2);
+    var b=l.querySelector('.loader-bar i'); if(b) b.style.width=pc+'%';   // legacy-balk (indien aanwezig)
     if(label){ var t=l.querySelector('.loader-text'); if(t) t.textContent=label; }
   }catch(e){}
 }

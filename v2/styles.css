@@ -535,38 +535,30 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;}
 /* ---------- Login loader ---------- */
 #loader{position:fixed;inset:0;z-index:300;background:var(--paper-2);display:none;flex-direction:column;align-items:center;justify-content:center;gap:24px;transition:opacity .45s var(--ease-out);}
 #loader.show{display:flex;}
-/* Liquid-glass "27" = het app-icon, rustig ademend met een trage licht-veeg.
-   Vervangt de oude drukke regenboog-ring; sluit aan op icon B + boot-splash. */
-.loader-stage{position:relative;width:116px;height:116px;display:grid;place-items:center;}
-/* zachte, ademende glow-halo achter het icoon */
-.loader-ring{position:absolute;width:116px;height:116px;border-radius:36px;
-  background:radial-gradient(58% 58% at 50% 42%,rgba(48,131,220,.5),rgba(148,65,219,.28) 58%,transparent 72%);
-  filter:blur(15px);animation:loaderHalo 2.8s var(--ease-out) infinite;}
+/* Liquid-glass "27" met een real-time voortgangsring eromheen. GEEN achtergrond-bol/halo. */
+.loader-stage{position:relative;width:128px;height:128px;display:grid;place-items:center;}
+/* voortgangsring rond de 27 — gevoed door loaderStep() (echte laadfases) */
+.loader-prog{position:absolute;inset:0;transform:rotate(-90deg);}   /* start bovenaan */
+.loader-prog .lp-track{fill:none;stroke:var(--paper-3);stroke-width:6;}
+.loader-prog .lp-fill{fill:none;stroke:url(#lpGrad);stroke-width:6;stroke-linecap:round;
+  stroke-dasharray:339.292;stroke-dashoffset:319;transition:stroke-dashoffset .5s var(--ease-out);}
 /* het liquid-glass icoon — superellipse-squircle, zelfde gevoel als het app-icon */
-.loader-badge{position:relative;width:90px;height:90px;border-radius:27px;overflow:hidden;
+.loader-badge{position:relative;width:86px;height:86px;border-radius:25px;overflow:hidden;display:grid;place-items:center;
   background:
     radial-gradient(125% 90% at 28% 16%,rgba(255,255,255,.55),rgba(255,255,255,0) 44%),
     linear-gradient(155deg,#5AA0EC 0%,var(--s27-blue) 46%,#6E54CF 100%);
-  display:grid;place-items:center;
-  box-shadow:0 16px 36px rgba(48,131,220,.34),0 4px 10px rgba(35,15,35,.12),
-    inset 0 1.5px 1px rgba(255,255,255,.6),inset 0 -11px 20px rgba(31,95,168,.42);
-  animation:loaderBreathe 2.8s var(--ease-out) infinite;}
+  box-shadow:0 8px 18px rgba(31,95,168,.22),inset 0 1.5px 1px rgba(255,255,255,.6),inset 0 -10px 18px rgba(31,95,168,.4);}
 /* bovenste glas-specular highlight */
 .loader-badge::before{content:"";position:absolute;left:9%;right:9%;top:6%;height:44%;border-radius:50%;
   background:radial-gradient(100% 100% at 50% 0%,rgba(255,255,255,.72),rgba(255,255,255,0) 70%);pointer-events:none;}
-/* trage, elegante licht-veeg over het glas (glas dat licht vangt, geen gimmick) */
+/* trage, subtiele licht-veeg over het glas */
 .loader-badge::after{content:"";position:absolute;inset:-30% -60%;pointer-events:none;
-  background:linear-gradient(68deg,transparent 38%,rgba(255,255,255,.4) 50%,transparent 62%);
-  transform:translateX(-115%);animation:loaderSheen 2.8s var(--ease-out) infinite;}
-.loader-27{position:relative;z-index:1;width:50%;height:auto;fill:#fff;filter:drop-shadow(0 2px 3px rgba(31,95,168,.45));}
-.loader-text{font-family:var(--font-display);font-weight:700;font-size:14px;color:var(--ink-3);letter-spacing:-0.01em;}
-.loader-bar{width:230px;height:6px;border-radius:var(--r-pill);background:var(--paper-3);overflow:hidden;box-shadow:inset 0 1px 2px rgba(35,15,35,.06);}
-/* laadbalk volgt de ECHTE laadfases (loaderStep in portal.js) i.p.v. een fake animatie */
-.loader-bar i{display:block;height:100%;width:6%;border-radius:var(--r-pill);background:linear-gradient(90deg,var(--s27-blue),var(--s27-purple));transition:width .5s var(--ease-out);}
-@keyframes loaderBreathe{0%,100%{transform:scale(1);}50%{transform:scale(1.035);}}
-@keyframes loaderHalo{0%,100%{opacity:.5;transform:scale(.95);}50%{opacity:.82;transform:scale(1.06);}}
+  background:linear-gradient(68deg,transparent 40%,rgba(255,255,255,.32) 50%,transparent 60%);
+  transform:translateX(-115%);animation:loaderSheen 3s var(--ease-out) infinite;}
+.loader-27{position:relative;z-index:1;width:62%;height:auto;fill:#fff;filter:drop-shadow(0 2px 3px rgba(31,95,168,.4));}
+.loader-text{font-family:var(--font-display);font-weight:700;font-size:14.5px;color:var(--ink-3);letter-spacing:-0.01em;}
 @keyframes loaderSheen{0%{transform:translateX(-115%);}55%,100%{transform:translateX(115%);}}
-@media (prefers-reduced-motion:reduce){.loader-ring,.loader-badge,.loader-badge::after{animation:none;}}
+@media (prefers-reduced-motion:reduce){.loader-badge::after{animation:none;}}
 .bot-panel{position:fixed;bottom:26px;right:26px;width:min(380px,calc(100vw - 32px));height:min(560px,80vh);background:var(--paper);
   border-radius:var(--r-lg);box-shadow:var(--sh-lg);z-index:85;display:none;flex-direction:column;overflow:hidden;
   animation:popIn .3s var(--bounce);transform-origin:bottom right;}
