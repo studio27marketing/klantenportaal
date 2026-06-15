@@ -2553,6 +2553,46 @@ export async function contactVraag(bedrijfId, body, env) {
   const accountEmail = str(body && body.account_email);   // server-side geïnjecteerd (worker.js)
   if (!bericht) return { status: 400, body: { ok: false, message: 'Schrijf eerst even je vraag.' } };
 
+  // (0) ZICHTBAAR voor de klant (bug 86ca95zvh): een algemene vraag verdween vroeger naar mail/inbox
+  //     en was nergens terug te vinden. We maken nu een Bedrijf-gekoppeld Support-ticket (assignee
+  //     Ilke) met de vraag als klant-comment -> verschijnt onder 'Support' in het portaal + opvolgbaar.
+  let _vraagTicket = '';
+  const _bid = cleanId(bedrijfId);
+  if (_bid) {
+    try {
+      let bnaam = ''; let bedrijfTaak = null;
+      try { const br = await cu.get(env, `/task/${_bid}`); if (br.ok && br.data) { bedrijfTaak = br.data; if (br.data.name) bnaam = str(br.data.name).slice(0, 120); } } catch (e) {}
+      let contactId = '';
+      const ae = str(accountEmail).trim().toLowerCase();
+      if (ae && bedrijfTaak) {
+        try {
+          const ids = getRelationIds(bedrijfTaak, FIELD.contact).slice(0, 12);
+          const results = await Promise.all(ids.map((id) => cu.get(env, `/task/${id}`).catch(() => ({ ok: false }))));
+          for (const r of results) { if (r.ok && r.data && str(getCF(r.data, FIELD.email)).trim().toLowerCase() === ae) { contactId = str(r.data.id); break; } }
+        } catch (e) {}
+      }
+      const cf = [
+        { id: FIELD.bedrijf, value: { add: [_bid], rem: [] } },
+        { id: FIELD.typeJob, value: TICKET_TYPEJOB_SUPPORT },
+        { id: FIELD.kanBeginnen, value: KANBEGINNEN_JA },
+      ];
+      if (contactId) cf.push({ id: FIELD.contact, value: { add: [contactId], rem: [] } });
+      const cr = await cu.post(env, `/list/${TICKET_LIST}/task`, {
+        name: `💬 ${onderwerp || 'Vraag'}${bnaam ? ` — ${bnaam}` : ''}`,
+        description: `ALGEMENE VRAAG (via klantenportaal)\n\n${bnaam ? `Klant: ${bnaam}\n` : ''}${onderwerp ? `Onderwerp: ${onderwerp}\n` : ''}\n${bericht}`,
+        assignees: [48338421], notify_all: false, custom_fields: cf,
+      });
+      if (cr && cr.ok && cr.data && cr.data.id) {
+        _vraagTicket = str(cr.data.id);
+        await cu.relation(env, _vraagTicket, FIELD.bedrijf, { add: [_bid], rem: [] }).catch(() => {});
+        await cu.field(env, _vraagTicket, FIELD.typeJob, TICKET_TYPEJOB_SUPPORT).catch(() => {});
+        await cu.field(env, _vraagTicket, FIELD.kanBeginnen, KANBEGINNEN_JA).catch(() => {});
+        if (contactId) await cu.relation(env, _vraagTicket, FIELD.contact, { add: [contactId], rem: [] }).catch(() => {});
+        await cu.comment(env, _vraagTicket, `💬 [Klant: ${bnaam || 'klant'}]\n\n${bericht}`, false, 48338421).catch(() => {});
+      }
+    } catch (e) { /* fail-soft: de e-mail hieronder blijft het vangnet */ }
+  }
+
   // (1) e-mail-poging
   let mailOk = false;
   try {
@@ -2585,7 +2625,11 @@ export async function contactVraag(bedrijfId, body, env) {
     mailOk = r.ok;
   } catch (e) { mailOk = false; }
 
-  // (2) vangnet (of bewuste dubbel-bezorging uit) — bij mail-falen: ClickUp-taak aan Ilke
+  // (2) Resultaat: het zichtbare Support-ticket is leidend (opvolgbaar in het portaal); de e-mail is
+  //     een extra notificatie. Lukte het ticket niet, val dan terug op het oude vangnet (directMessage).
+  if (_vraagTicket) {
+    return { status: 200, body: { ok: true, via: 'portaal', ticket_id: _vraagTicket, message: 'Je vraag staat klaar bij Support — Ilke neemt ze snel op. Je kan ze opvolgen in je portaal.' } };
+  }
   if (!mailOk) {
     const res = await directMessage(bedrijfId, {
       klant_naam: klantNaam, onderwerp: onderwerp || 'Algemene vraag via Contact',
@@ -5969,7 +6013,7 @@ export async function ticketCreate(bedrijfId, body, env) {
   // (3) optionele bijlage — server-side caps (frontend bewaakt ook, maar is omzeilbaar):
   //     base64-cap VÓÓR atob (31 MB b64 ≈ 22 MB binair; voorkomt OOM op de isolate) +
   //     extensie-allowlist (spiegel van de frontend-accept; Klaas opent ticketbijlagen standaard).
-  let attached = false;
+  let attached = false; let attBijlage = '';
   if (body && body.file_data && str(body.filename)) {
     const fname = clean(body.filename, 140);
     const ext = (fname.lastIndexOf('.') >= 0 ? fname.slice(fname.lastIndexOf('.') + 1) : '').toLowerCase();
@@ -5978,7 +6022,8 @@ export async function ticketCreate(bedrijfId, body, env) {
     if (ALLOWED_EXT.has(ext) && b64.length <= 31 * 1024 * 1024) {
       let bytes; try { bytes = base64ToBytes(b64); } catch (e) { bytes = new Uint8Array(0); }
       if (bytes.length && bytes.length <= 22 * 1024 * 1024) {
-        try { const up = await cu.uploadAttachment(env, taskId, bytes, fname); attached = !!(up && up.ok); } catch (e) {}
+        // de bijlage-URL onthouden zodat ze in de briefing-comment (de thread die Klaas leest) verschijnt
+        try { const up = await cu.uploadAttachment(env, taskId, bytes, fname); attached = !!(up && up.ok); if (attached && up.data) attBijlage = `\n\n📎 Bijlage: ${fname}${up.data.url ? '\n' + str(up.data.url) : ''}`; } catch (e) {}
       }
     }
   }
@@ -5998,7 +6043,7 @@ export async function ticketCreate(bedrijfId, body, env) {
   //     zelfde formaat als chatPost) + gerichte assignee-notificatie voor Klaas (Inbox + push).
   //     Eén comment, geen apart team-bericht — anders zou chat_wacht_op_klant meteen true zijn.
   try {
-    const briefing = `💬 [Klant: ${naam || 'klant'}]\n\n${onderwerp}${omschrijving ? `\n\n${omschrijving}` : ''}`;
+    const briefing = `💬 [Klant: ${naam || 'klant'}]\n\n${onderwerp}${omschrijving ? `\n\n${omschrijving}` : ''}${attBijlage}`;
     await cu.comment(env, taskId, briefing, false, TICKET_ASSIGNEE);
   } catch (e) {}
 
@@ -6040,7 +6085,16 @@ export async function ticketAttach(bedrijfId, body, env) {
   if (!bytes.length || bytes.length > 22 * 1024 * 1024) return { status: 200, body: { ok: false, error: 'too_large' } };
   try {
     const up = await cu.uploadAttachment(env, ticketId, bytes, fname);
-    return { status: 200, body: { ok: !!(up && up.ok), attached: !!(up && up.ok) } };
+    const ok = !!(up && up.ok);
+    // De bijlage ZICHTBAAR maken in de ticket-thread die Klaas afwerkt: een upload alleen verschijnt
+    // enkel in het Attachments-vak, niet in de comments/chat. Daarom posten we de bijlage óók als
+    // klant-comment (met URL) + notify de ticket-assignee. (Bug 86ca961jz: files kwamen niet mee.)
+    if (ok && up.data) {
+      const klantNaam = clean(body && body.klant_naam, 80) || str(tr.data && tr.data.name).replace(/^[^-–:]*[-–:]\s*/, '').trim() || 'Klant';
+      const url = str(up.data.url);
+      await cu.comment(env, ticketId, `💬 [Klant: ${klantNaam}]\n\n📎 Bijlage doorgestuurd: ${fname}${url ? '\n' + url : ''}`, false, TICKET_ASSIGNEE).catch(() => {});
+    }
+    return { status: 200, body: { ok, attached: ok } };
   } catch (e) { return { status: 200, body: { ok: false, error: 'upload_failed' } }; }
 }
 

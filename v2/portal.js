@@ -32,16 +32,36 @@ function parseRoute(){
   }
   return null;
 }
-// URL bijwerken bij navigatie (deelbare links), zonder reload
-function syncUrl(){
+// URL bijwerken bij navigatie (deelbare links), zonder reload. push=true duwt een echte
+// history-entry (zodat de browser-terugknop binnen de SPA terug kan i.p.v. het portaal te verlaten).
+function syncUrl(push){
   if(state.demoMode) return;
   let url = location.pathname;
+  let st = { tab: currentTab };
   if(state.viewMode==='project' && state.activeProject){
     url += '?p=' + encodeURIComponent(state.activeProject) + (state._mtab && state._mtab!=='overzicht' ? '&tab='+state._mtab : '');
+    st = { p: state.activeProject, mtab: state._mtab||'overzicht', back: state._backTab||'start' };
   } else if(currentTab && currentTab!=='start'){
     url += '?go=' + encodeURIComponent(currentTab);
   }
-  try { history.replaceState(null, '', url); } catch(e){}
+  try { if(push) history.pushState(st, '', url); else history.replaceState(st, '', url); } catch(e){}
+}
+// Browser-terugknop opvangen: navigeer BINNEN het portaal i.p.v. het te verlaten. Defensief:
+// faalt er iets, dan vallen we terug op de Home-tab (nooit slechter dan vandaag).
+function onPopState(ev){
+  if(state.demoMode) return;
+  var st = ev && ev.state;
+  try {
+    if(st && st.p){                                  // terug NAAR een project (vooruit/terug tussen details)
+      openProject(st.p, st.back||'auto', true);       // noPush=true: niet opnieuw pushen
+      if(st.mtab && st.mtab!=='overzicht') switchModalTab(st.mtab);
+    } else if(state.viewMode==='project'){           // terug UIT een project -> zelfde als de in-portaal terugknop
+      closeModal();
+    } else {                                         // tussen tabs
+      var tab=(st && st.tab) || 'start';
+      goTab(PANELS[tab]?tab:'start');
+    }
+  } catch(e){ try{ goTab('start'); }catch(_e){} }
 }
 async function applyRoute(){
   const r = state.route; state.route = null;
@@ -60,6 +80,7 @@ async function applyRoute(){
 function init(){
   $id('overlays').innerHTML = buildOverlays();
   state.route = parseRoute();
+  window.addEventListener('popstate', onPopState);   // browser-terugknop -> in-SPA navigatie (geen portaal-exit)
   S27.onSessionExpired = onSessionExpired;
   // skipLink=true bij een bedrijf-switch: switchCompany heeft al geprovisioned + de claim ververst,
   // dus loadAndEnter hoeft NIET opnieuw te koppelen (vermijdt dubbele Make-provision + token-refresh).
@@ -577,7 +598,7 @@ function applyTakVisibility(){
 /* =============================================================================
    PROJECTDETAIL, lazy detail + chat, dan buildModal
    ============================================================================= */
-async function openProject(id, from){
+async function openProject(id, from, noPush){
   // 'auto' (of onbekend) -> terug-tak afleiden uit de tak van het project (Dakstructuur Q)
   let f=(from && from!=='auto' && typeof PANELS!=='undefined' && PANELS[from])?from:'';
   stopChatPoll();
@@ -592,7 +613,7 @@ async function openProject(id, from){
   page.innerHTML='<div class="panel active br-'+(p?p.br:'blue')+'" data-screen-label="projectdetail">'+buildModal(id,f)+'</div>';
   window.scrollTo({top:0,behavior:'auto'});
   const tt=$id('topbarTitle'); if(tt&&p) tt.textContent=p.name;
-  closeSidebar(); syncUrl();
+  closeSidebar(); syncUrl(!noPush);   // push een history-entry zodat browser-terug binnen de SPA terugkeert
   if($id('chatList')) startChatPoll(id);   // projectchat staat in de DOM (tenzij afgerond) -> auto-refresh
 }
 // per-tak 'sla auto-landing over'-vlag (terug uit een content-detail = de lijst tonen, niet opnieuw inzoomen)
@@ -1414,7 +1435,7 @@ async function loadMeetSlots(who,color,type){
   } else {
     busy=[{start:Date.now()+3*86400000+3*3600000, end:Date.now()+3*86400000+5*3600000},{start:Date.now()+4*86400000+6*3600000, end:Date.now()+4*86400000+8*3600000}];
   }
-  const durMs=30*60000; const slots=computeFreeFromBusy(busy,durMs);
+  const durMs=60*60000; const slots=computeFreeFromBusy(busy,durMs);
   state.meetCtx={who:who,color:color||'blue',type:type,email:email,online:true,sel:null,dur:durMs,byDay:{}};
   if(box)box.innerHTML=renderMeetPicker(slots);
 }
@@ -1451,7 +1472,7 @@ function renderMeetPicker(slots){
   if(!slots.length) return '<p class="fs" style="color:var(--ink-3);padding:6px 0">Geen vrije momenten in de komende maand, stuur ons gerust een berichtje, dan zoeken we samen iets.</p>';
   const byDay={}; slots.forEach(st=>{ (byDay[_dayKey(st)]=byDay[_dayKey(st)]||[]).push(st); });
   state.meetCtx.byDay=byDay; state.meetCtx.slots=slots; state.meetCtx.weekStart=_monday(slots[0]); state.meetCtx.selDay=null; state.meetCtx.navFn='meetWeekNav';
-  return '<p class="fs" style="margin:0 0 10px;color:var(--ink-3)">Live uit de agenda van <b>'+escapeHtml(state.meetCtx.who)+'</b> · ± 30 min. Blader per week tot een maand vooruit:</p>'
+  return '<p class="fs" style="margin:0 0 10px;color:var(--ink-3)">Live uit de agenda van <b>'+escapeHtml(state.meetCtx.who)+'</b> · ± 1 uur. Blader per week tot een maand vooruit:</p>'
     +'<div id="meetWeek">'+meetWeekHTML()+'</div>'
     +'<button class="btn btn-branch br-'+state.meetCtx.color+' btn-block" id="meetConfirm" style="margin-top:16px" onclick="confirmMeeting(this)" disabled>Bevestig afspraak met '+escapeHtml(state.meetCtx.who)+'</button>';
 }
@@ -1522,7 +1543,7 @@ function closeMeetingPlanner(){
 }
 function openMeetingPlanner(mode){
   state.mp={ mode:(mode==='project'||mode==='nieuw')?mode:'algemeen', step:'', project:null,
-             hostKey:'', host:null, online:true, note:'', dur:30*60000,
+             hostKey:'', host:null, online:true, note:'', dur:60*60000,
              slots:null, byDay:null, weekStart:0, selDay:null, selSlot:null, _err:'', booking:false };
   var s=state.mp;
   if(s.mode==='project'){ s.step='project'; }
@@ -1615,7 +1636,7 @@ function mpDemoBusy(){ var n=Date.now(); return [
 async function mpLoadAvail(){
   var s=state.mp; if(!s)return;
   s.slots=null; s._err=''; s.selDay=null; s.selSlot=null; mpRender();   // null = laad-toestand
-  var durMs=30*60000;
+  var durMs=60*60000;
   try{
     if(s.hostKey==='lead' && s.project){
       if(state.demoMode){ s.slots=computeFreeFromBusy(mpDemoBusy(),durMs); }
@@ -1749,7 +1770,7 @@ function mpClientInfo(){
 async function mpBook(){
   var s=state.mp; if(!s||!s.selSlot||s.booking) return; s.booking=true;
   var cf=$id('mpConfirm'); if(cf){ cf.disabled=true; cf.textContent='Inplannen…'; }
-  var start=s.selSlot, eind=s.selSlot+(s.dur||30*60000);
+  var start=s.selSlot, eind=s.selSlot+(s.dur||60*60000);
   var iso=function(ms){ return new Date(ms).toISOString(); };
   var ci=mpClientInfo(); var whenLabel=mpSlotLabelLong(start);
   var hostNaam=(s.host&&s.host.naam)||'Studio 27';
@@ -2093,12 +2114,19 @@ async function checkPortalVersion(){
   var now=Date.now();
   if(state._verLastCheck && (now-state._verLastCheck)<45000) return;   // throttle
   state._verLastCheck=now;
-  var v=0;
+  var target=0;
+  // ZELF-VERVERSEND: lees de LIVE index.html (network-first via de SW) en neem de hoogste ?v=N.
+  // Zo ververst ELKE Pages-deploy automatisch alle clients — zonder de handmatige 'Push'-knop.
+  try{
+    var ir=await fetch('/index.html?ts='+now,{cache:'no-store'});
+    if(ir&&ir.ok){ var html=await ir.text(); var hi=0,m,re=/[?&]v=(\d+)/g; while((m=re.exec(html))){ var n=Number(m[1])||0; if(n>hi)hi=n; } if(hi>target)target=hi; }
+  }catch(e){}
+  // Expliciete team-push (KV) blijft als extra forceer-kanaal werken.
   try{
     var r=await fetch(GATEWAY_BASE+'/portalversion',{cache:'no-store'});
-    var d=await r.json(); v=Number(d&&d.v)||0;
-  }catch(e){ return; }
-  if(v>APP_VERSION) forcePortalUpdate(v);
+    var d=await r.json(); var pv=Number(d&&d.v)||0; if(pv>target)target=pv;
+  }catch(e){}
+  if(target>APP_VERSION) forcePortalUpdate(target);
 }
 async function forcePortalUpdate(target){
   // dubbele loop-guard: sessionStorage + in-memory (private-mode/PWA kan storage weigeren)

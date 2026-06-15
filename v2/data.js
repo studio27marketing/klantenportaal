@@ -307,7 +307,7 @@
         var isShoot=it.type==='shoot';
         out.push({ br:br.br, cat:br.label, title:'Klaar om in te plannen',
           ctx:'Er staat een nieuwe taak voor je klaar bij <b>'+esc(p.naam)+'</b>'+(it.label?' ('+esc(it.label)+')':'')+'. Je kunt nu '+(isShoot?'je shoot':'een meeting')+' inplannen.',
-          cta:(isShoot?'Plan shoot':'Plan moment'), action:"openProject('"+esc(p.task_id)+"','auto')", urgent:true, icon:'st_plan',
+          cta:(isShoot?'Plan shoot':'Plan moment'), action:(isShoot?("openProject('"+esc(p.task_id)+"','auto')"):("openMeetingPlannerForProject('"+esc(p.task_id)+"')")), urgent:true, icon:'st_plan',
           nid:'plan::'+p.task_id+'::'+(it.task_id||it.label||it.type||'') });   // uniek per plan-item (anders wist 1 klik álle plan-kaarten van dit project)
       });
       // Project-chat wacht op de klant: worker-veld chat_wacht_op_klant (Cluster F). Inert zolang de worker
