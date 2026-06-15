@@ -3797,7 +3797,7 @@ function approvedTaskRow(t){
     return `<div class="approved-row"><span class="check-circ">${ic('check',13)}</span><span>${esc(t.naam)}</span></div>`;
   }
   const fid='atask-'+(++_aTaskSeq);
-  const files=(t.bestanden||[]).map(f=>{ const tp=f.type==='video'?'video':f.type==='img'?'img':'doc'; return `<div class="deliv-file" style="background:var(--paper-2,#FAF7F2)"><span class="df-ic">${ic(tp,18)}</span><div class="df-tx"><b>${esc(f.label||'Bestand')}</b><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:42ch;display:inline-block">${esc((f.url||'').replace(/^https?:\/\//,''))}</span></div><div class="df-act">${f.url?`<a class="btn btn-outline btn-sm" href="${esc(f.url)}" target="_blank" rel="noopener">${ic('arrow',14)} Bekijk</a>`:''}</div></div>`; }).join('');
+  const files=(t.bestanden||[]).map(f=>{ const tp=f.type==='video'?'video':f.type==='img'?'img':'doc'; return `<div class="deliv-file"${t.id?` data-task="${esc(t.id)}"`:''} style="background:var(--paper-2,#FAF7F2)"><span class="df-ic">${ic(tp,18)}</span><div class="df-tx"><b>${esc(f.label||'Bestand')}</b><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:42ch;display:inline-block">${esc((f.url||'').replace(/^https?:\/\//,''))}</span></div><div class="df-act">${f.url?`<a class="btn btn-outline btn-sm" href="${esc(f.url)}" target="_blank" rel="noopener">${ic('arrow',14)} Bekijk</a>`:''}</div></div>`; }).join('');
   return `<div class="approved-row approved-clickable" role="button" tabindex="0" onclick="toggleApprovedFiles('${fid}',this)"><span class="check-circ">${ic('check',13)}</span><span>${esc(t.naam)}</span><span class="ar-files-hint">${ic('download',13)} ${(t.bestanden||[]).length} bestand${(t.bestanden||[]).length===1?'':'en'}</span><svg class="chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></div><div class="approved-files" id="${fid}" style="display:none"><div class="subtask-files">${files}</div></div>`;
 }
 function toggleApprovedFiles(fid, el){ const box=document.getElementById(fid); if(!box)return; const open=box.style.display==='none'; box.style.display=open?'':'none'; if(el)el.classList.toggle('open',open); }
@@ -3851,7 +3851,7 @@ function feedbackCard(s){
   var embed=(s.links||[]).map(function(l){ return l.type==='video'?vimeoEmbed(l.url):''; }).filter(Boolean)[0]||'';
   var views=(s.links||[]).map(function(l){
     var typ = l.type==='video'?'Bekijk op Vimeo' : l.type==='img'?"Bekijk de foto's" : l.type==='folder'?'Open de projectmap' : 'Bekijk de oplevering';
-    return '<a class="fbc-view" href="'+esc(l.url)+'" target="_blank" rel="noopener">'+ic(l.type==='video'?'play':l.type==='img'?'img':'doc',15)+'<span>'+esc(typ+' · '+s.naam)+'</span>'+ic('arrow',13)+'</a>';
+    return '<a class="fbc-view" data-task="'+esc(s.task_id)+'" data-label="'+esc(s.naam)+'" href="'+esc(l.url)+'" target="_blank" rel="noopener">'+ic(l.type==='video'?'play':l.type==='img'?'img':'doc',15)+'<span>'+esc(typ+' · '+s.naam)+'</span>'+ic('arrow',13)+'</a>';
   }).join('');
   if(!views) views='<div class="fbc-nm">'+esc(s.naam)+'</div>';
   var tid=esc(s.task_id);
@@ -4153,7 +4153,7 @@ function buildModal(id, from){
     } else { delivList = []; }
     if(det.subtasks && det.subtasks.length){
       approved=det.subtasks.filter(s=>s.status==='done').map(s=>esc(s.naam));
-      approvedTasks=det.subtasks.filter(s=>s.status==='done').map(s=>({naam:s.naam, heeftBestanden:!!s.heeftBestanden, bestanden:s.bestanden||[]}));
+      approvedTasks=det.subtasks.filter(s=>s.status==='done').map(s=>({id:s.id, naam:s.naam, heeftBestanden:!!s.heeftBestanden, bestanden:s.bestanden||[]}));
     }
   }
 
@@ -4163,7 +4163,7 @@ function buildModal(id, from){
   if(delivList!==null){
     if(delivList.length){
       const done = p.status==='done';
-      delivBlock = `<div class="deliv-inline"><div class="subtask-files">${delivList.map(d=>deliverFileRow(d,{br:p.br,done:done})).join('')}</div></div>`;
+      delivBlock = `<div class="deliv-inline"><div class="subtask-files">${delivList.map(d=>deliverFileRow(d,{br:p.br,done:done,taskId:id})).join('')}</div></div>`;
     }
   } else {
     // demo-fallback: toon de mock-deliverables van de eerste subtaak met link-knoppen

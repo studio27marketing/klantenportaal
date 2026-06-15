@@ -226,7 +226,7 @@
 
   async function openReview(opts) {
     if (current) { try { current.close(); } catch (e) { } }
-    var taskId = String(opts.taskId || '');
+    var taskId = String(opts.taskId || (window.state && state.activeProject) || '');
     var url = String(opts.url || '');
     var label = String(opts.label || 'Video');
     if (!taskId || !url) { window.open(url, '_blank', 'noopener'); return; }
@@ -336,6 +336,13 @@
     if (st.closed) return;
     if (!ctx.ok || !d.ok) {
       close();
+      // Het is wél een leesbaar Drive-bestand, maar geen video (pdf/office/audio/foto):
+      // geef het door aan de gestandaardiseerde in-portal review i.p.v. de klant naar
+      // Google Drive te sturen. Zo blijft élk bestandstype binnen het portaal.
+      if (d && d.error === 'not_video' && window.S27Review && typeof S27Review.pickReviewer === 'function') {
+        S27Review.pickReviewer(url, { taskId: taskId, label: label, sourceEl: opts.sourceEl });
+        return;
+      }
       if (d && d.error === 'drive_no_access') toast(d.message || 'Het portaal kan dit Drive-bestand niet lezen.', 5000);
       window.open((d && d.open_url) || url, '_blank', 'noopener');
       return;
@@ -871,7 +878,7 @@
   document.addEventListener('click', function (e) {
     var a = e.target.closest && e.target.closest('a[href]');
     if (!a) return;
-    var row = a.closest && a.closest('.deliv-file');
+    var row = a.closest && a.closest('.deliv-file, .fbc-view');   // dekt ook de proces-feedbackkaart (.fbc-view)
     if (!row) return;
     if (!isReviewable(a.href)) return;
     var taskId = (window.state && state.activeProject) ? String(state.activeProject) : '';

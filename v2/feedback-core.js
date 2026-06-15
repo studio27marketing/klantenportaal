@@ -234,7 +234,7 @@
     opts = opts || {};
     if (current) { try { current.close(); } catch (e) { } }
 
-    var taskId = String(opts.taskId || '');
+    var taskId = String(opts.taskId || (window.state && state.activeProject) || '');
     var url = String(opts.url || '');
     var label = String(opts.label || 'Bestand');
     if (!taskId || !url) { window.open(url, '_blank', 'noopener'); return; }
@@ -281,6 +281,15 @@
       close();
       toast((d && d.message) || 'Dit bestand kan hier niet geopend worden — we openen het origineel.', 4800);
       window.open((d && d.open_url) || url, '_blank', 'noopener');
+      return;
+    }
+    // Server zegt dat dit (bv. een Drive-bestand zonder extensie) eigenlijk een video is →
+    // geef door aan de frame-accurate video-review i.p.v. hier te renderen (geen Drive-redirect).
+    if (d.mediaType === 'video' || d.route === 'videoReview') {
+      close();
+      if (window.S27VideoReview && typeof S27VideoReview.open === 'function') {
+        S27VideoReview.open({ url: url, label: label, taskId: taskId, sourceEl: opts.sourceEl });
+      } else { window.open((d && d.open_url) || url, '_blank', 'noopener'); }
       return;
     }
     if (d.mediaType) st.mediaType = d.mediaType;
@@ -797,7 +806,7 @@
   document.addEventListener('click', function (e) {
     var a = e.target.closest && e.target.closest('a[href]');
     if (!a) return;
-    var row = a.closest && a.closest('.deliv-file');
+    var row = a.closest && a.closest('.deliv-file, .fbc-view');   // dekt ook de proces-feedbackkaart (.fbc-view)
     if (!row) return;
     var href = a.getAttribute('href') || '';
     if (!href || href === '#') return;
