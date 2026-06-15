@@ -539,8 +539,9 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;}
 .loader-stage{position:relative;width:128px;height:128px;display:grid;place-items:center;}
 /* voortgangsring rond de 27 — gevoed door loaderStep() (echte laadfases) */
 .loader-prog{position:absolute;inset:0;transform:rotate(-90deg);}   /* start bovenaan */
-.loader-prog .lp-track{fill:none;stroke:var(--paper-3);stroke-width:6;}
-.loader-prog .lp-fill{fill:none;stroke:url(#lpGrad);stroke-width:6;stroke-linecap:round;
+.loader-prog .lp-track{fill:none;stroke:rgba(35,15,35,.06);stroke-width:6;}
+.loader-prog .lp-fill{fill:none;stroke:#fff;stroke-width:6;stroke-linecap:round;
+  filter:drop-shadow(0 1px 2.5px rgba(31,95,168,.25));
   stroke-dasharray:339.292;stroke-dashoffset:319;transition:stroke-dashoffset .5s var(--ease-out);}
 /* het liquid-glass icoon — volle ronde schijf (vult de voortgangsring) */
 .loader-badge{position:relative;width:96px;height:96px;border-radius:50%;overflow:hidden;display:grid;place-items:center;
