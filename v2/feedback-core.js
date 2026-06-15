@@ -44,10 +44,14 @@
   var VIMEO_RE = /(?:player\.)?vimeo\.com\/(?:video\/|manage\/videos\/)?(\d+)/i;
   var DRIVE_FILE_RE = /drive\.google\.com\/(?:file\/d\/([-\w]{20,})|(?:open|uc)\?[^#]*\bid=([-\w]{20,}))/i;
   var DRIVE_FOLDER_RE = /drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/([-\w]{15,})/i;
+  // Google-native docs (Docs/Sheets/Slides) staan op docs.google.com en dragen geen
+  // extensie; we behandelen ze als een Drive-bestand met dat id (worker exporteert ze → PDF).
+  var GDOC_RE = /docs\.google\.com\/(?:document|spreadsheets|presentation)\/d\/([-\w]{20,})/i;
 
   function parseVimeoId(u) { var m = String(u || '').match(VIMEO_RE); return m ? m[1] : null; }
   function parseDriveFileId(u) { var m = String(u || '').match(DRIVE_FILE_RE); return m ? (m[1] || m[2]) : null; }
   function parseDriveFolderId(u) { var m = String(u || '').match(DRIVE_FOLDER_RE); return m ? m[1] : null; }
+  function parseGoogleDocId(u) { var m = String(u || '').match(GDOC_RE); return m ? m[1] : null; }
 
   // fnv1a-32 → 8-cijferige hex (zelfde basis als de worker voor 'u'-keys)
   function fnv1a(str) {
@@ -67,6 +71,7 @@
     var v = parseVimeoId(u); if (v) return 'v' + v;
     var d = parseDriveFileId(u); if (d) return 'd' + d;
     var g = parseDriveFolderId(u); if (g) return 'g' + g;
+    var gd = parseGoogleDocId(u); if (gd) return 'd' + gd;   // native Google-doc → 'd'+id (zelfde als Drive-bestand)
     return 'u' + fnv1a(u.toLowerCase().replace(/[?#].*$/, ''));
   }
 
@@ -81,6 +86,8 @@
     if (/\.(doc|docx|xls|xlsx|odt|ods|odp)(\?|#|$)/.test(u)) return 'office';
     if (/\.(mp3|wav|m4a|aac|ogg|flac)(\?|#|$)/.test(u)) return 'audio';
     if (/\.(png|jpe?g|webp|gif|avif)(\?|#|$)/.test(u)) return 'foto';
+    if (/docs\.google\.com\/presentation/.test(u)) return 'pptx';
+    if (/docs\.google\.com\/(document|spreadsheets)/.test(u)) return 'office';
     if (parseDriveFileId(u)) return 'other'; // los Drive-bestand: server beslist (kan video/pdf/… zijn)
     return 'other';
   }
@@ -289,6 +296,18 @@
       dl.title = 'Beschikbaar na goedkeuring';
     } else {
       dl.href = st.downloadUrl + (st.downloadUrl.indexOf('?') >= 0 ? '&' : '?') + 'name=' + encodeURIComponent(label);
+    }
+
+    // Native Google-doc/sheet/slides: knop om het in Google te openen/bewerken. Google
+    // dwingt de rechten zelf af (owner/gedeeld → bewerken, anders alleen-lezen), dus dit
+    // is meteen "bewerken als de klant edit-rechten heeft" zonder extra permissie-laag.
+    if (d.edit_url) {
+      var ed = document.createElement('a');
+      ed.className = 'fc-btn fc-ghost fc-edit';
+      ed.target = '_blank'; ed.rel = 'noopener';
+      ed.href = d.edit_url;
+      ed.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 20h16M5 19v-3.6L15.4 5l3.6 3.6L8.6 19H5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Bewerk in Google</span>';
+      dl.parentNode.insertBefore(ed, dl);
     }
 
     if (d.ronde) $('fcSub').textContent = 'Feedbackronde ' + d.ronde;
@@ -576,7 +595,7 @@
     }).catch(function (err) { _pdfLib = null; throw err; });
     return _pdfLib;
   }
-  registerReviewer('pdf', {
+  var PDF_REVIEWER = {
     emptyHint: 'Nog geen feedback. Klik op een plek in het document om er een opmerking aan te koppelen, of typ je opmerking hieronder.',
     init: async function (api, ctx) {
       var lib = await ensurePdfJs();
@@ -674,7 +693,8 @@
       try { if (this._pdf) this._pdf.destroy(); } catch (e) { }
       this._pages = []; this._pdf = null;
     },
-  });
+  };
+  registerReviewer('pdf', PDF_REVIEWER);
 
   /* ---- AUDIO-reviewer: native <audio controls> + 1 globale feedback-textarea
          (de gedeelde composer in de shell vervult de globale-feedback-rol) ---- */
@@ -716,34 +736,17 @@
     },
   });
 
-  /* ---- PPTX / OFFICE-reviewer: ingebedde Office/Google-viewer + globale feedback ---- */
-  function officeViewerUrl(api, kind) {
-    var pub = api.download_url || api.url;
-    // Google Docs Viewer rendert pptx/office read-only; werkt voor publiek-leesbare links
-    return 'https://docs.google.com/gview?embedded=1&url=' + encodeURIComponent(pub);
-  }
-  registerReviewer('pptx', {
-    emptyHint: 'Blader door de slides en schrijf je opmerkingen hieronder (verwijs gerust naar het slidenummer). Klik dan <strong>Toevoegen aan lijst</strong>.',
-    init: function (api, ctx) {
-      var box = document.createElement('div');
-      box.className = 'fc-office';
-      box.innerHTML = '<iframe class="fc-office-frame" referrerpolicy="no-referrer" loading="lazy"></iframe>' +
-        '<p class="fc-office-hint">Lukt de voorvertoning niet? Gebruik de download-knop bovenaan en geef je feedback hieronder.</p>';
-      box.querySelector('iframe').src = officeViewerUrl(api, 'pptx');
-      api.host.appendChild(box);
-    },
-  });
-  registerReviewer('office', {
-    emptyHint: 'Bekijk het document en schrijf je opmerkingen hieronder. Klik dan <strong>Toevoegen aan lijst</strong>.',
-    init: function (api, ctx) {
-      var box = document.createElement('div');
-      box.className = 'fc-office';
-      box.innerHTML = '<iframe class="fc-office-frame" referrerpolicy="no-referrer" loading="lazy"></iframe>' +
-        '<p class="fc-office-hint">Lukt de voorvertoning niet? Gebruik de download-knop bovenaan en geef je feedback hieronder.</p>';
-      box.querySelector('iframe').src = officeViewerUrl(api, 'office');
-      api.host.appendChild(box);
-    },
-  });
+  /* ---- PPTX / OFFICE-reviewer: de worker rendert het document/de presentatie naar
+         PDF (native Google-doc → export, binair Office → convert) en levert dat als
+         stream_url. We hergebruiken dus exact de pdf.js-viewer: 1 PDF-pagina = 1 slide
+         / 1 documentpagina, mét dezelfde klik-to-comment. Valt het renderen weg (bv.
+         een niet-converteerbaar .key-bestand), dan degradeert open() naar 'other'. ---- */
+  registerReviewer('pptx', Object.assign({}, PDF_REVIEWER, {
+    emptyHint: 'Blader door de slides en klik op een plek in een slide om er een opmerking aan te koppelen (of typ je opmerking en verwijs naar het slidenummer). Klik dan <strong>Toevoegen aan lijst</strong>.',
+  }));
+  registerReviewer('office', Object.assign({}, PDF_REVIEWER, {
+    emptyHint: 'Bekijk het document en klik op een plek om er een opmerking aan te koppelen, of typ je opmerking hieronder. Klik dan <strong>Toevoegen aan lijst</strong>.',
+  }));
 
   /* ---- OTHER / fallback-reviewer: nette download-kaart + globale feedback ---- */
   registerReviewer('other', {
