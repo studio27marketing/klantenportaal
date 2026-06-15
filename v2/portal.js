@@ -1780,7 +1780,7 @@ async function mpBook(){
   else { titel='Algemene meeting · '+(ci.bedrijf||''); beschrijving='Algemene meeting (bijpraten over de samenwerking) via het portaal.'; }
   if(state.demoMode){ mpDone(start,'',false); return; }
   var payload={ host_email:(s.host&&s.host.email)||'', host_naam:hostNaam, start:iso(start), eind:iso(eind), start_ms:String(start),
-    online:!!s.online, titel:titel, beschrijving:beschrijving, locatie:s.online?'':'Studio 27, Sint-Lenaartsesteenweg, Rijkevorsel',
+    online:!!s.online, titel:titel, beschrijving:beschrijving, locatie:s.online?'':'Studio 27, Merksplassesteenweg 97 bus 16, 2310 Rijkevorsel',
     client_email:ci.email, client_naam:ci.naam, when_label:whenLabel };
   if(s.mode==='project'&&s.project){ payload.project_task_id=s.project.id; payload.project_naam=s.project.name; }
   if(s.mode==='nieuw') payload.intake=true;
@@ -2040,7 +2040,7 @@ async function bookPlanSlot(taskId){
   const box=$id('s27-plan-'+taskId);
   const done=()=>{ if(box)box.innerHTML='<div class="empty" style="padding:24px"><div class="em-ic">'+ic('st_approved',56)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">'+(ctx.shoot?'Shoot ingepland!':'Afspraak ingepland!')+'</b><p style="margin:6px 0 0">'+escapeHtml(new Date(start).toLocaleString('nl-BE',{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'}))+' met '+escapeHtml(ctx.assignee||'Studio 27')+'.</p><p class="fs" style="color:var(--ink-4)">Je krijgt zo een agenda-uitnodiging'+(ctx.shoot?' (op locatie of bij Studio 27)':ctx.online?' met een Google Meet-link':' (fysiek bij Studio 27)')+'.</p></div>'; };
   if(state.demoMode){ done(); return; }
-  try { await api(ENDPOINTS.inplannen,{task_id:taskId,list_id:ctx.list_id,start:iso(start),eind:iso(eind),start_ms:String(start),online:!!ctx.online,titel:(ctx.shoot?'Shoot, ':'Afspraak, ')+(p.name||'Studio 27'),beschrijving:'Ingepland via je Studio 27-portaal met '+(ctx.assignee||'het team')+'.',locatie:ctx.online?'':'Studio 27, Sint-Lenaartsesteenweg, Rijkevorsel',attendees:attendees,assignee_naam:ctx.assignee,client_email:cc.email||'',client_naam:clientNaam,bedrijf_id:state.session.bedrijf_id,session_token:state.session.session_token}); done(); }
+  try { await api(ENDPOINTS.inplannen,{task_id:taskId,list_id:ctx.list_id,start:iso(start),eind:iso(eind),start_ms:String(start),online:!!ctx.online,titel:(ctx.shoot?'Shoot, ':'Afspraak, ')+(p.name||'Studio 27'),beschrijving:'Ingepland via je Studio 27-portaal met '+(ctx.assignee||'het team')+'.',locatie:ctx.online?'':'Studio 27, Merksplassesteenweg 97 bus 16, 2310 Rijkevorsel',attendees:attendees,assignee_naam:ctx.assignee,client_email:cc.email||'',client_naam:clientNaam,bedrijf_id:state.session.bedrijf_id,session_token:state.session.session_token}); done(); }
   catch(e){ ctx._booking=false; if(btn){btn.disabled=false;btn.textContent='Bevestig afspraak';} }
 }
 

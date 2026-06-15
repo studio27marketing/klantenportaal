@@ -2927,7 +2927,7 @@ function _meetingsTodo(){
     return cp.filter(function(c){ return c.title==='Klaar om in te plannen' && c.cta==='Plan moment'; }); }
   catch(e){ return []; }
 }
-function meetRoute(){ window.open('https://www.google.com/maps/search/?api=1&query=Studio+27+Sint-Lenaartsesteenweg+Rijkevorsel','_blank','noopener'); }
+function meetRoute(){ window.open('https://www.google.com/maps/search/?api=1&query=Studio+27+Merksplassesteenweg+97+2310+Rijkevorsel','_blank','noopener'); }
 
 const NP_OPTIONS = {
   'Strategie':[['Merkstrategie','€ 1.800 – € 3.500'],['Communicatiestrategie','€ 1.200 – € 2.800'],['Employer branding','€ 2.000 – € 4.000']],
@@ -3214,6 +3214,16 @@ function offBuilderStyleOnce(){ return $id('offStyle')?'':('<style id="offStyle"
   +'.off-result{margin-top:12px;padding:14px;border-radius:12px;background:var(--s27-green-soft,rgba(18,172,78,.10));border:1px solid rgba(18,172,78,.28);font-size:13.5px;line-height:1.5;color:var(--ink-2)}'
   +'.off-result.err{background:var(--s27-orange-soft,rgba(246,97,49,.10));border-color:rgba(246,97,49,.30)}'
   +'.off-result a{color:var(--s27-purple-ink);font-weight:800}'
+  // --- offerte-wizard multi-tak (bug 86ca93tzk) ---
+  +'.ow-takhead{display:flex;align-items:center;gap:9px;font-family:var(--font-display);font-weight:800;font-size:15px;color:var(--ink,#3A2A3A);margin:22px 0 10px;padding-bottom:7px;border-bottom:2px solid var(--c-soft,var(--paper-3,#EFE8DD))}'
+  +'.ow-takhead:first-child{margin-top:2px}'
+  +'.ow-takhead-dot{display:inline-block;width:11px;height:11px;border-radius:50%;flex:0 0 auto}'
+  +'.ow-addmore{display:inline-flex;align-items:center;gap:8px;margin-top:14px;font-family:var(--font-display);font-weight:700;font-size:13.5px;color:var(--s27-purple-ink,#6A28A8);background:var(--s27-purple-soft,rgba(148,65,219,.10));border:1px dashed var(--s27-purple,#9441DB);border-radius:999px;padding:10px 16px;cursor:pointer;transition:background .15s}'
+  +'.ow-addmore:hover{background:color-mix(in oklab,var(--s27-purple,#9441DB) 18%,transparent)}'
+  +'.ow-cartback{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 16px;padding:11px 14px;background:var(--s27-purple-soft,rgba(148,65,219,.10));border:1px solid color-mix(in oklab,var(--s27-purple,#9441DB) 28%,transparent);border-radius:12px;font-size:13px;color:var(--ink-2,#3A2A3A);line-height:1.4}'
+  +'.ow-cartback svg:first-child{color:var(--s27-purple-ink,#6A28A8);flex:0 0 auto}'
+  +'.ow-cartback span{flex:1;min-width:160px}'
+  +'.ow-cartback .btn{flex:0 0 auto;margin-left:auto}'
   +'</style>'); }
 // volledige samensteller-sectie (kop + container die we live herrenderen)
 function offerteSamensteller(){
@@ -3295,7 +3305,7 @@ function owEl(){
 }
 function owEsc(e){ if(e.key==='Escape') closeOfferteWizard(); }
 function openOfferteWizard(takKey){
-  state.ow={ step:(takKey?2:1), takKey:(takKey||''), search:'', note:(state._offerteOpm||''), contact:'verzenden', submitting:false, _doneHTML:'' };
+  state.ow={ step:(takKey?2:1), takKey:(takKey||''), filter:(takKey||'alles'), search:'', note:(state._offerteOpm||''), contact:'verzenden', submitting:false, _doneHTML:'' };
   // off-stijlen in <head> injecteren: de overlay leeft buiten #page, waar offStyle normaal landt
   var s=offBuilderStyleOnce();
   if(s){ var t=document.createElement('template'); t.innerHTML=s; document.head.appendChild(t.content.firstChild); }
@@ -3319,9 +3329,23 @@ function owHeader(){
 }
 function owBack(){ var s=state.ow; if(!s) return; if(s.step==='done') return; s.step=Math.max(1,Number(s.step)-1); owRender(); }
 function owNext(){ var s=state.ow; if(!s) return; s.step=Number(s.step)+1; owRender(); }
-function owPickTak(k){ if(!state.ow) return; state.ow.takKey=k; state.ow.step=2; owRender(); }
+function owPickTak(k){ if(!state.ow) return; state.ow.takKey=k; state.ow.filter=k; state.ow.step=2; owRender(); }
+// "Nog een dienst toevoegen": terug naar het tak-overzicht zonder de mand te wissen
+function owAddMore(){ if(!state.ow) return; state.ow.step=1; owRender(); }
+// vanuit het tak-overzicht meteen door naar stap 2 over ALLE takken (mand blijft)
+function owPickFilterAlles(){ if(!state.ow) return; state.ow.filter='alles'; state.ow.step=2; owRender(); }
+// tak-filter in stap 2 wisselen (cart blijft, alleen de zichtbare productlijst verandert)
+function owSetFilter(k){
+  if(!state.ow) return; state.ow.filter=k; if(k!=='alles') state.ow.takKey=k;
+  var l=$id('owList'); if(l) l.innerHTML=owListHTML();
+  document.querySelectorAll('#offWizard .off-tabs .off-tab').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-of')===k); });
+}
 function owStep1(){
-  return '<p class="mp-intro">Kies de tak waarin je iets wil opstarten. Daarna stel je zelf samen wat je nodig hebt — wij werken het persoonlijk uit.</p>'
+  // mand kan al gevuld zijn (terug via "Nog een dienst toevoegen") -> toon het lopend aantal + snelle weg terug
+  var n=offCartCount();
+  var cartHint = n ? ('<div class="ow-cartback">'+ic('cart',16)+'<span><b>'+n+' product'+(n===1?'':'en')+'</b> in je selectie ('+offEur(offCartTotal())+') — kies nog een tak of bekijk je samenstelling.</span><button type="button" class="btn btn-outline btn-sm" onclick="owPickFilterAlles()">Verder met je selectie '+ic('arrow',15)+'</button></div>') : '';
+  return '<p class="mp-intro">Kies de tak waarin je iets wil opstarten. Je kan gerust meerdere takken combineren — alles komt in dezelfde aanvraag.</p>'
+    +cartHint
     +'<div class="ow-takgrid">'+OW_TAKKEN.map(function(t){
       return '<button class="ow-tak br-'+t.br+'" onclick="owPickTak(\''+t.key+'\')"><span class="mp-host-av ow-stamp"><img src="assets/'+t.stamp+'" width="24" height="24" alt=""></span><span class="mp-host-tx"><b>'+esc(t.label)+'</b><span class="mp-host-tag">'+esc(t.sub)+'</span></span>'+ic('arrow',16)+'</button>';
     }).join('')+'</div>';
@@ -3340,15 +3364,10 @@ function owProductRow(p, showGroup){
     +(offDescShort(p.desc_html)?'<div class="off-pdesc">'+esc(offDescShort(p.desc_html))+'</div>':'')
     +'</div><div class="off-pright"><div class="off-pprice">'+priceTxt+'</div>'+stepper+'</div></div>';
 }
-function owListHTML(){
-  var s=state.ow||{}; var tak=owTak(); var cat=offCatalog();
-  var q=String(s.search||'').trim().toLowerCase();
-  if(q){
-    var hits=cat.filter(function(p){ return (p.name||'').toLowerCase().indexOf(q)>=0 || (p.sub||'').toLowerCase().indexOf(q)>=0 || (p.group||'').toLowerCase().indexOf(q)>=0; });
-    return hits.length ? hits.map(function(p){return owProductRow(p,true);}).join('') : '<div class="off-noresult">Geen producten gevonden voor "'+esc(s.search)+'". Probeer een andere zoekterm.</div>';
-  }
-  var groups=(tak&&tak.groups)||[];
-  return groups.map(function(g){
+// één tak-blok: groep-tussenkoppen + subgroep-koppen + productrijen
+function owTakBlock(tak, withTakHead){
+  var cat=offCatalog(); var groups=(tak&&tak.groups)||[];
+  var body=groups.map(function(g){
     var items=cat.filter(function(p){return p.group===g;});
     if(!items.length) return '';
     var bySub={}; items.forEach(function(p){ var k=p.sub||'Algemeen'; (bySub[k]=bySub[k]||[]).push(p); });
@@ -3357,11 +3376,42 @@ function owListHTML(){
     }).join('');
     return (groups.length>1?'<div class="ow-grouphead">'+esc(g)+'</div>':'')+inner;
   }).join('');
+  if(!body) return '';
+  var head = withTakHead ? ('<div class="ow-takhead br-'+tak.br+'"><span class="ow-takhead-dot" style="background:var(--s27-'+tak.br+')"></span>'+esc(tak.label)+'</div>') : '';
+  return head+body;
+}
+function owListHTML(){
+  var s=state.ow||{}; var cat=offCatalog();
+  var q=String(s.search||'').trim().toLowerCase();
+  if(q){
+    var hits=cat.filter(function(p){ return (p.name||'').toLowerCase().indexOf(q)>=0 || (p.sub||'').toLowerCase().indexOf(q)>=0 || (p.group||'').toLowerCase().indexOf(q)>=0; });
+    return hits.length ? hits.map(function(p){return owProductRow(p,true);}).join('') : '<div class="off-noresult">Geen producten gevonden voor "'+esc(s.search)+'". Probeer een andere zoekterm.</div>';
+  }
+  var filter=s.filter||s.takKey||'alles';
+  if(filter==='alles'){
+    // alle takken na elkaar, elk onder een eigen tak-kop -> de klant bladert vrij en bouwt met DEZELFDE mand
+    return OW_TAKKEN.map(function(t){ return owTakBlock(t, true); }).join('');
+  }
+  var tak=owTak();
+  return owTakBlock(tak, false);
+}
+// tak-/groep-filterbalk bovenaan stap 2 (zoals de off-tabs in offBuilderInner): "Alles" + één pill per tak.
+// Wisselen verandert enkel de zichtbare lijst — de mand (state._offerteCart) blijft over alle takken heen gedeeld.
+function owFilterBar(){
+  var s=state.ow||{}; var active=s.filter||s.takKey||'alles'; var cat=offCatalog();
+  var allTab='<button class="off-tab'+(active==='alles'?' active':'')+'" role="tab" data-of="alles" onclick="owSetFilter(\'alles\')"><span class="off-tabic">'+ic('cart',15)+'</span>Alles<span class="off-tabn">'+offCartCount()+'</span></button>';
+  var takTabs=OW_TAKKEN.map(function(t){
+    var n=cat.filter(function(p){return (t.groups||[]).indexOf(p.group)>=0;}).length;
+    return '<button class="off-tab br-'+t.br+(active===t.key?' active':'')+'" role="tab" data-of="'+t.key+'" onclick="owSetFilter(\''+t.key+'\')"><span class="off-tabic">'+ic(OFF_GROUP_BRAND[(t.groups||[])[0]]?OFF_GROUP_BRAND[(t.groups||[])[0]].icon:'doc',15)+'</span>'+esc(t.label)+'<span class="off-tabn">'+n+'</span></button>';
+  }).join('');
+  return '<div class="off-tabs" id="owFilters" role="tablist">'+allTab+takTabs+'</div>';
 }
 function owStep2(){
   var s=state.ow||{};
   return '<div class="off-search"><span class="off-searchic">'+ic('search',16)+'</span><input id="owSearch" type="search" placeholder="Zoek een product of dienst…" value="'+esc(s.search||'')+'" oninput="owSearchInput(this.value)"></div>'
-    +'<div id="owList" class="off-list">'+owListHTML()+'</div>';
+    +owFilterBar()
+    +'<div id="owList" class="off-list">'+owListHTML()+'</div>'
+    +'<button type="button" class="ow-addmore" onclick="owAddMore()">'+ic('plus',16)+' Nog een dienst toevoegen</button>';
 }
 function owSearchInput(v){
   if(!state.ow) return; state.ow.search=v;
@@ -3377,8 +3427,10 @@ function owRefreshRow(sku){
   row.replaceWith(t.content.firstChild);
 }
 function owRefreshFoot(){ var f=$id('owFoot'); if(f) f.innerHTML=owFootInner(); }
-function owAdd(sku){ var c=offCart(); c[sku]=(c[sku]||0)+1; owRefreshRow(sku); owRefreshFoot(); }
-function owQty(sku,d){ var c=offCart(); var n=(c[sku]||0)+d; if(n<=0) delete c[sku]; else c[sku]=n; owRefreshRow(sku); owRefreshFoot(); }
+// "Alles"-filtertab toont het lopende mand-aantal -> mee verversen bij elke wijziging
+function owRefreshAllesBadge(){ var t=document.querySelector('#owFilters .off-tab[data-of="alles"] .off-tabn'); if(t) t.textContent=offCartCount(); }
+function owAdd(sku){ var c=offCart(); c[sku]=(c[sku]||0)+1; owRefreshRow(sku); owRefreshFoot(); owRefreshAllesBadge(); }
+function owQty(sku,d){ var c=offCart(); var n=(c[sku]||0)+d; if(n<=0) delete c[sku]; else c[sku]=n; owRefreshRow(sku); owRefreshFoot(); owRefreshAllesBadge(); }
 const OW_CONTACT={
   verzenden:'Stuur me de offerte direct',
   akkoord:'Zet in planning — ik ga akkoord',
@@ -3402,23 +3454,43 @@ function owStep3(){
       return '<button type="button" class="mp-tg ow-cact'+(s.contact===k?' on':'')+'" data-k="'+k+'" onclick="owSetContact(\''+k+'\')"><b>'+esc(OW_CONTACT[k])+'</b><span>'+esc(OW_CONTACT_SUB[k]||'')+'</span></button>';
     }).join('')+'</div>';
 }
+// welke tak hoort bij een catalogus-groep (eerste match in OW_TAKKEN.groups); null => Overig
+function owTakForGroup(group){
+  for(var i=0;i<OW_TAKKEN.length;i++){ if((OW_TAKKEN[i].groups||[]).indexOf(group)>=0) return OW_TAKKEN[i]; }
+  return null;
+}
 function owStep4(){
-  var s=state.ow||{}; var tak=owTak(); var c=offCart();
+  var s=state.ow||{}; var c=offCart();
   var skus=Object.keys(c).filter(function(k){return c[k]>0;});
-  var rows=skus.map(function(sku){
-    var p=offBySku(sku); if(!p) return '';
-    var line=(Number(p.price)||0)*(c[sku]||0);
-    return '<div class="ow-sumrow"><span>'+c[sku]+'× '+esc(p.name)+'</span><b>'+((Number(p.price)>0)?offEur(line):'op maat')+'</b></div>';
+  // de mand groeperen PER tak: één tussenkop per tak, daaronder de gekozen producten
+  var byTak={}, order=[];
+  skus.forEach(function(sku){
+    var p=offBySku(sku); if(!p) return;
+    var tak=owTakForGroup(p.group);
+    var key=tak?tak.key:'_overig';
+    if(!byTak[key]){ byTak[key]={tak:tak, items:[]}; order.push(key); }
+    byTak[key].items.push({sku:sku, p:p, qty:c[sku]||0});
+  });
+  var groupedRows=order.map(function(key){
+    var blk=byTak[key]; var tak=blk.tak;
+    var head='<div class="ow-sumrow ow-sumtak"><span>'+(tak?('<i class="ow-takdot" style="background:var(--s27-'+tak.br+')"></i>'+esc(tak.label)):'<i class="ow-takdot" style="background:var(--ink-4,#9E919E)"></i>Overig')+'</span></div>';
+    var rows=blk.items.map(function(it){
+      var line=(Number(it.p.price)||0)*it.qty;
+      return '<div class="ow-sumrow"><span>'+it.qty+'× '+esc(it.p.name)+'</span><b>'+((Number(it.p.price)>0)?offEur(line):'op maat')+'</b></div>';
+    }).join('');
+    return head+rows;
   }).join('');
   var hasOpMaat=skus.some(function(sku){ var p=offBySku(sku); return p && !(Number(p.price)>0); });
+  var multiTak=order.length>1;
   return '<div class="ow-sum card">'
-    +(tak?'<div class="ow-sumrow ow-sumtak"><span><i class="ow-takdot" style="background:var(--s27-'+tak.br+')"></i>'+esc(tak.label)+'</span></div>':'')
-    +rows
+    +groupedRows
     +'<div class="ow-sumrow ow-sumtotal"><span>Totaal (richtprijs)</span><b>'+offEur(offCartTotal())+'</b></div>'
     +(hasOpMaat?'<div class="off-cartnote">Items "op maat" prijzen we persoonlijk in je offerte.</div>':'')
+    +(multiTak?'<div class="off-cartnote">'+ic('info',13)+' Je combineert '+order.length+' diensten in één aanvraag — wij bundelen ze in je offerte.</div>':'')
     +(String(s.note||'').trim()?'<div class="ow-sumnote"><b>Jouw context:</b> '+esc(s.note)+'</div>':'')
     +'<div class="ow-sumnote"><b>Vervolg:</b> '+esc(OW_CONTACT[s.contact]||OW_CONTACT.verzenden)+'</div>'
   +'</div>'
+  +'<button type="button" class="ow-addmore" onclick="owAddMore()">'+ic('plus',16)+' Nog een dienst toevoegen</button>'
   +'<p class="off-cartdisc" style="margin-top:12px">'+ic('info',14)+' Je krijgt een richtprijs — wij kijken alles persoonlijk na voor je definitieve offerte.</p>';
 }
 function owFootInner(){
@@ -3475,11 +3547,13 @@ async function owSubmit(btn){
   var s=state.ow; if(!s||s.submitting) return;
   var c=offCart(); var skus=Object.keys(c).filter(function(k){return c[k]>0;});
   if(!skus.length){ owBack(); return; }
-  var tak=owTak();
   var items=skus.map(function(sku){ var p=offBySku(sku)||{}; return { sku:sku, naam:String(p.name||sku), groep:String(p.group||''), prijs:Number(p.price)||0, aantal:c[sku]||1 }; });
+  // alle betrokken takken verzamelen (mand kan nu meerdere takken combineren)
+  var takSet=[]; skus.forEach(function(sku){ var p=offBySku(sku); if(!p) return; var t=owTakForGroup(p.group); var lbl=t?t.label:'Overig'; if(takSet.indexOf(lbl)<0) takSet.push(lbl); });
+  var takLine=takSet.length?takSet.join(', '):'-';
   var note=String(s.note||'').trim();
   var actie=OW_CONTACT[s.contact]?s.contact:'verzenden';
-  var opmerking=(note?note+'\n\n':'')+'— Aangevraagd via de offerte-wizard —\nTak: '+(tak?tak.label:'-')+'\nGekozen vervolg: '+(OW_CONTACT[actie]||'');
+  var opmerking=(note?note+'\n\n':'')+'— Aangevraagd via de offerte-wizard —\nTak'+(takSet.length>1?'ken':'')+': '+takLine+'\nGekozen vervolg: '+(OW_CONTACT[actie]||'');
   if(state.demoMode || !state.session){ state._offerteCart={}; state._offerteOpm=''; owDone('Dit is de voorbeeldweergave — in je echte portaal versturen we deze aanvraag meteen.'); return; }
   s.submitting=true;
   if(btn){ btn.disabled=true; btn.innerHTML=(actie==='verzenden')?'Je offerte wordt klaargezet…':'Versturen…'; }
