@@ -102,7 +102,10 @@
   function rid(p) { return p + '_' + Math.random().toString(36).slice(2, 10); }
   function extOf(name) { return (String(name || '').split('.').pop() || '').toLowerCase(); }
   function isImg(ct) { return /^image\//.test(String(ct || '')); }
-  function gwUrl(rel) { return rel ? (/^https?:/.test(rel) ? rel : (window.GATEWAY_BASE || '') + rel) : ''; }
+  // GATEWAY_BASE is een top-level const in api.js (globaal lexicaal, NIET op window). Daarom
+  // bare 'GATEWAY_BASE' gebruiken — net als video-review.js. window.GATEWAY_BASE was undefined,
+  // waardoor alle calls naar een relatieve URL op de Pages-host gingen (405 → 'kon niet inladen').
+  function gwUrl(rel) { return rel ? (/^https?:/.test(rel) ? rel : GATEWAY_BASE + rel) : ''; }
   function fileIcon(name) {
     var e = extOf(name);
     if (['ttf', 'otf', 'woff', 'woff2'].indexOf(e) >= 0) return '🔤';
@@ -133,7 +136,7 @@
     try {
       var token = window.S27Auth ? await window.S27Auth.token() : null;
       if (!token) return { ok: false, status: 401, data: {} };
-      var r = await fetch((window.GATEWAY_BASE || '') + '/' + key, {
+      var r = await fetch(GATEWAY_BASE + '/' + key, {
         method: 'POST', headers: fcHeaders(token), body: JSON.stringify(payload || {}),
       });
       var d = await r.json().catch(function () { return {}; });
@@ -151,7 +154,7 @@
   function uploadB64(payload, token, onProgress) {
     return new Promise(function (resolve, reject) {
       var xhr = new XMLHttpRequest();
-      xhr.open('POST', (window.GATEWAY_BASE || '') + '/fileReviewUpload');
+      xhr.open('POST', GATEWAY_BASE + '/fileReviewUpload');
       var h = fcHeaders(token);
       Object.keys(h).forEach(function (k) { xhr.setRequestHeader(k, h[k]); });
       if (xhr.upload && onProgress) {
