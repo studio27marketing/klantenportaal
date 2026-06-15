@@ -370,6 +370,7 @@
       var heeft = (t.heeft_bestanden===true || t.heeft_bestanden==='true') || best.length>0;
       return { id:t.task_id, naam:cleanTaakNaam(t.naam), status:DATA.status(t.status).key, statusRaw:t.status, statusColor:t.status_color,
         datum:t.datum, startDate:t.start_date, typeJob:(t.type_job===''||t.type_job==null)?null:Number(t.type_job),
+        typeJobKey:t.type_job_key||null,   // stabiele TYPE JOB-sleutel (immuun voor herordenen); legacy typeJob blijft als fallback
         locatie:t.locatie||'', timeEstimate:Number(t.time_estimate)||0, fbRondes:(t.fb_rondes||[]),
         link:t.link||t.url, heeftBestanden:heeft, bestanden:best };
     });
@@ -381,7 +382,7 @@
       beschrijving:d.beschrijving||'', subtasks:subs, deliverables:delivs, sae:mapSae(d.sae||p.sae),
       proces:d.proces||null, plan:d.plan||null,
       feedbackStatus:d.feedback_status||'', hasContact:d.has_contact==='yes', hasBedrijf:d.has_bedrijf==='yes',
-      timeEstimate:d.time_estimate||'', typeJob:d.type_job||'', _raw:d
+      timeEstimate:d.time_estimate||'', typeJob:d.type_job||'', typeJobKey:d.type_job_key||'', _raw:d
     };
   };
 

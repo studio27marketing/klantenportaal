@@ -25,44 +25,25 @@
  *     ctx.waitUntil((async () => { try { await ds.doneSweep(env); } catch (e) {} })());
  * GO-LIVE: bovenstaande wiring meedeployen + KV `donesweep:enabled` op '1' zetten.
  * ============================================================================= */
-import { cu, getCF, FIELD, adminCompanies, fetchBedrijfTree, isAfgerondStatus } from './handlers.mjs';
+import { cu, getCF, FIELD, adminCompanies, fetchBedrijfTree, isAfgerondStatus, TJ, typeJobUuid, ensureTjMap } from './handlers.mjs';
 
 const str = (v) => (v == null ? '' : String(v));
 
-// TYPE JOBs die auto-done mogen (Vincent 14-06). Op NAAM (case-insensitief, getrimd)
-// i.p.v. hardcoded orderindex, want de dropdown-volgorde kan wijzigen.
-const AUTO_DONE_TYPEJOBS = new Set(['meeting', 'shoot', 'ugc-shoot', 'hosting']);
-// Eén Planning-lijst volstaat om de TYPE JOB-optiedefinitie op te halen (het veld leeft
-// op de Planning-folder en is identiek op alle onderliggende lijsten).
-const TYPEJOB_REF_LIST = '901520180316'; // Video- en fotografie
+// TYPE JOBs die auto-done mogen (Vincent 14-06), op STABIELE option-UUID — immuun voor zowel
+// herordenen ALS hernoemen van de dropdown. typeJobUuid() resolvet de opgeslagen orderindex live.
+const AUTO_DONE_UUIDS = new Set([TJ.meeting, TJ.shoot, TJ.ugcShoot, TJ.hosting]);
 const PILOT_BEDRIJVEN = ['86c8cz2uu'];   // Studio 27 (zelfde pilot als de reminders)
 const TARGET_STATUS = 'done';
-
-// Huidige orderindexen voor de auto-done TYPE JOBs ophalen (naam -> index, live).
-async function resolveTypeJobIndexes(env) {
-  try {
-    const r = await cu.get(env, `/list/${TYPEJOB_REF_LIST}/field`);
-    const fields = (r && r.ok && r.data && Array.isArray(r.data.fields)) ? r.data.fields : [];
-    const f = fields.find((x) => str(x.id) === FIELD.typeJob);
-    const opts = (f && f.type_config && Array.isArray(f.type_config.options)) ? f.type_config.options : [];
-    const set = new Set();
-    for (const o of opts) {
-      if (AUTO_DONE_TYPEJOBS.has(str(o.name).trim().toLowerCase())) set.add(Number(o.orderindex));
-    }
-    return set;
-  } catch (e) { return new Set(); }
-}
 
 function isOnHold(statusObj) {
   return str(statusObj && statusObj.status).toLowerCase().includes('hold');
 }
 
-// Mag deze taak auto-done? Juiste TYPE JOB + geplande datum voorbij + nog niet afgerond/on hold.
-function magAutoDone(t, jobIdx, now) {
+// Mag deze taak auto-done? Juiste TYPE JOB (UUID) + geplande datum voorbij + nog niet afgerond/on hold.
+function magAutoDone(t, now) {
   if (isAfgerondStatus(t.status)) return false;        // al done / (klaar voor) facturatie / gefactureerd
   if (isOnHold(t.status)) return false;                // gepauzeerd -> niet automatisch afsluiten
-  const tj = Number(getCF(t, FIELD.typeJob));
-  if (!Number.isFinite(tj) || !jobIdx.has(tj)) return false;
+  if (!AUTO_DONE_UUIDS.has(typeJobUuid(t))) return false;
   const due = Number(t.due_date) || 0;
   if (!(due > 0 && due < now)) return false;           // enkel als het geplande moment écht voorbij is
   return true;
@@ -74,9 +55,10 @@ export async function doneSweep(env, ctx) {
   try { enabled = str(await env.KV.get('donesweep:enabled')); } catch (e) { enabled = ''; }
   if (enabled !== '1') return { skipped: 'disabled' };
 
-  // noodrem 2: zonder herkende TYPE JOB-indexen sluiten we NIETS af
-  const jobIdx = await resolveTypeJobIndexes(env);
-  if (!jobIdx.size) return { skipped: 'typejobs_unresolved' };
+  // noodrem 2: zonder beschikbare TYPE JOB-optielijst sluiten we NIETS af. typeJobUuid gebruikt
+  // per-taak type_config, maar we warmen de fallbackcache als gordel-en-bretels + gate erop.
+  const tjm = await ensureTjMap(env);
+  if (!tjm) return { skipped: 'typejobs_unresolved' };
 
   let companies = [];
   try {
@@ -93,7 +75,7 @@ export async function doneSweep(env, ctx) {
     await Promise.all(companies.slice(i, i + BATCH).map(async (c) => {
       try {
         const tree = await fetchBedrijfTree(env, c.id);
-        const kandidaten = (tree.all || []).filter((t) => magAutoDone(t, jobIdx, now));
+        const kandidaten = (tree.all || []).filter((t) => magAutoDone(t, now));
         for (const t of kandidaten) {
           try {
             const r = await cu.put(env, `/task/${t.id}`, { status: TARGET_STATUS });

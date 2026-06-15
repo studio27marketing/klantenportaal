@@ -3838,7 +3838,7 @@ function procesBlock(det,p,opts){
   h+='</div>';
   return h;
 }
-/* ---- Video-onderdelen (V): subtaken per TYPE JOB (4=Pre 6=Shoot 7=Edit 8=FB-ronde) ---- */
+/* ---- Video-onderdelen (V): subtaken per TYPE JOB (stabiele sleutel: preproductie/shoot/edit/fbEdit) ---- */
 function _ondMs(v){ var n=Number(v); return Number.isFinite(n)&&n>0?n:0; }
 function _ondDatum(ms){ var d=new Date(_ondMs(ms)); return _ondMs(ms)?d.toLocaleDateString('nl-BE',{weekday:'short',day:'numeric',month:'short'}):''; }
 function _ondUur(ms){ var d=new Date(_ondMs(ms)); return _ondMs(ms)?(('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)):''; }
@@ -3914,16 +3914,29 @@ function _ondEditRij(s, br){
   return '<div class="ond-row ond-edit card br-'+br+'"><div class="ond-head">'+ic(isNab?'img':'video',16)
     +'<span class="ond-naam">'+esc(s.naam)+'</span>'+inner+'</div>'+lijst+dls+fotoBtns+'</div>';
 }
+// Stabiele TYPE JOB-sleutel van een subtaak: gebruik de door de worker meegestuurde
+// type_job_key (immuun voor herordenen van de ClickUp-dropdown). Valt terug op de TAAKNAAM
+// zolang de worker de sleutel nog niet meestuurt (transitie) of als ze ontbreekt — NOOIT meer
+// op de orderindex (die verschuift bij het toevoegen/verwijderen van een dropdown-optie).
+function _tjKey(s){
+  if(s && s.typeJobKey) return s.typeJobKey;
+  var n=String((s&&s.naam)||'').toLowerCase();
+  if(/montage|monteren|\bedit\b|nabewerk/.test(n)) return 'edit';   // nabewerking valt ook onder 'edit' (subset via naamregex hieronder)
+  if(/\bshoot\b|draaidag|opname|fotoshoot|filmdag/.test(n)) return 'shoot';
+  if(/pre-?productie|draaiboek|storyboard|script/.test(n)) return 'preproductie';
+  if(/^fb\b|feedbackronde|revisieronde/.test(n)) return 'fbEdit';
+  return '';
+}
 function onderdelenBlok(det, p){
   var subs=(det&&det.subtasks)||[];
-  var typed=subs.filter(function(s){ return s.typeJob!=null && s.typeJob!==''; });
+  var typed=subs.filter(function(s){ return (s.typeJobKey!=null && s.typeJobKey!=='') || (s.typeJob!=null && s.typeJob!==''); });
   if(!typed.length) return null;   // geen TYPE JOB-data -> klassieke detailweergave
   var br=p.br||'purple';
-  var pre=typed.filter(function(s){ return s.typeJob===4 && (s.bestanden||[]).length>0; });
-  var shoots=typed.filter(function(s){ return s.typeJob===6; });
-  var edits=typed.filter(function(s){ return s.typeJob===7 && !/nabewerk/i.test(s.naam||''); });
-  var nab=typed.filter(function(s){ return s.typeJob===7 && /nabewerk/i.test(s.naam||''); });
-  var fb=typed.filter(function(s){ return s.typeJob===8; });
+  var pre=typed.filter(function(s){ return _tjKey(s)==='preproductie' && (s.bestanden||[]).length>0; });
+  var shoots=typed.filter(function(s){ return _tjKey(s)==='shoot'; });
+  var edits=typed.filter(function(s){ return _tjKey(s)==='edit' && !/nabewerk/i.test(s.naam||''); });
+  var nab=typed.filter(function(s){ return _tjKey(s)==='edit' && /nabewerk/i.test(s.naam||''); });
+  var fb=typed.filter(function(s){ return _tjKey(s)==='fbEdit'; });
   var h='';
   function kop(t,n){ return '<div class="section-head ond-kop"><h2>'+esc(t)+'</h2>'+(n?'<span class="count">'+n+'</span>':'')+'</div>'; }
   if(pre.length){
@@ -3950,11 +3963,11 @@ function onderdelenBlok(det, p){
 function demoVideoDet(){
   var nu=Date.now();
   return { subtasks:[
-    { id:'d-pre', naam:'Preproductie — draaiboek', status:'done', typeJob:4, heeftBestanden:true, bestanden:[{label:'Draaiboek v2.pdf', url:'#', type:'doc'}] },
-    { id:'d-sh1', naam:'Shoot 1 — kantoor & team', status:'prog', typeJob:6, startDate:String(nu+5*86400000), datum:String(nu+5*86400000+4*3600000), locatie:'Industrieweg 27, 2320 Hoogstraten', heeftBestanden:false, bestanden:[] },
-    { id:'d-sh2', naam:'Shoot 2 — klantcases on-site', status:'todo', typeJob:6, startDate:'', datum:'', locatie:'', heeftBestanden:false, bestanden:[] },
-    { id:'d-ed1', naam:'Montage bedrijfsfilm', status:'wait', typeJob:7, heeftBestanden:true, bestanden:[{label:'Montage v1 — bedrijfsfilm', url:'https://vimeo.com/76979871', type:'video'}] },
-    { id:'d-nab', naam:'Nabewerking foto\u2019s', status:'prog', typeJob:7, heeftBestanden:true, bestanden:[{label:'Fotoshoot najaarscollectie', url:'https://drive.google.com/drive/folders/demo-fotomap', type:'img'}] }
+    { id:'d-pre', naam:'Preproductie — draaiboek', status:'done', typeJobKey:'preproductie', heeftBestanden:true, bestanden:[{label:'Draaiboek v2.pdf', url:'#', type:'doc'}] },
+    { id:'d-sh1', naam:'Shoot 1 — kantoor & team', status:'prog', typeJobKey:'shoot', startDate:String(nu+5*86400000), datum:String(nu+5*86400000+4*3600000), locatie:'Industrieweg 27, 2320 Hoogstraten', heeftBestanden:false, bestanden:[] },
+    { id:'d-sh2', naam:'Shoot 2 — klantcases on-site', status:'todo', typeJobKey:'shoot', startDate:'', datum:'', locatie:'', heeftBestanden:false, bestanden:[] },
+    { id:'d-ed1', naam:'Montage bedrijfsfilm', status:'wait', typeJobKey:'edit', heeftBestanden:true, bestanden:[{label:'Montage v1 — bedrijfsfilm', url:'https://vimeo.com/76979871', type:'video'}] },
+    { id:'d-nab', naam:'Nabewerking foto\u2019s', status:'prog', typeJobKey:'edit', heeftBestanden:true, bestanden:[{label:'Fotoshoot najaarscollectie', url:'https://drive.google.com/drive/folders/demo-fotomap', type:'img'}] }
   ] };
 }
 /* ---- Generieke onderdelen (branding/strategie): subtaak-status + in-portal bestand-feedback ----
@@ -4011,7 +4024,8 @@ function onderdelenBlokAlg(det, p){
   // pure projectmanagement-subtaken zonder oplevering zijn intern proceswerk -> niet tonen
   var rows=subs.filter(function(s){
     var hasF=(s.bestanden||[]).length>0;
-    if(Number(s.typeJob)===0 && !hasF) return false;
+    var isPM = s.typeJobKey ? (s.typeJobKey==='projectmanagement') : (Number(s.typeJob)===0);
+    if(isPM && !hasF) return false;
     return true;
   });
   if(!rows.length) return null;
@@ -4023,14 +4037,14 @@ function onderdelenBlokAlg(det, p){
 // demo-onderdelen voor branding/strategie (voorbeeldportaal, geen live data)
 function demoAlgDet(disc){
   if(disc==='branding') return { subtasks:[
-    { id:'db-1', naam:'Merkonderzoek & moodboard', status:'done', typeJob:2, heeftBestanden:true, bestanden:[{label:'Moodboard.pdf', url:'#', type:'doc'}] },
-    { id:'db-2', naam:'Logo-ontwerp', status:'wait', typeJob:2, heeftBestanden:true, bestanden:[{label:'Logo-voorstel v1.pdf', url:'#', type:'doc'}] },
-    { id:'db-3', naam:'Huisstijlgids', status:'prog', typeJob:2, heeftBestanden:false, bestanden:[] }
+    { id:'db-1', naam:'Merkonderzoek & moodboard', status:'done', typeJobKey:'branding', heeftBestanden:true, bestanden:[{label:'Moodboard.pdf', url:'#', type:'doc'}] },
+    { id:'db-2', naam:'Logo-ontwerp', status:'wait', typeJobKey:'branding', heeftBestanden:true, bestanden:[{label:'Logo-voorstel v1.pdf', url:'#', type:'doc'}] },
+    { id:'db-3', naam:'Huisstijlgids', status:'prog', typeJobKey:'branding', heeftBestanden:false, bestanden:[] }
   ] };
   return { subtasks:[
-    { id:'ds-1', naam:'Marktonderzoek & analyse', status:'done', typeJob:1, heeftBestanden:true, bestanden:[{label:'Marktanalyse.pdf', url:'#', type:'doc'}] },
-    { id:'ds-2', naam:'Positioneringsworkshop', status:'done', typeJob:1, heeftBestanden:false, bestanden:[] },
-    { id:'ds-3', naam:'Strategiedeck', status:'wait', typeJob:1, heeftBestanden:true, bestanden:[{label:'Strategiedeck v1.pdf', url:'#', type:'doc'}] }
+    { id:'ds-1', naam:'Marktonderzoek & analyse', status:'done', typeJobKey:'strategie', heeftBestanden:true, bestanden:[{label:'Marktanalyse.pdf', url:'#', type:'doc'}] },
+    { id:'ds-2', naam:'Positioneringsworkshop', status:'done', typeJobKey:'strategie', heeftBestanden:false, bestanden:[] },
+    { id:'ds-3', naam:'Strategiedeck', status:'wait', typeJobKey:'strategie', heeftBestanden:true, bestanden:[{label:'Strategiedeck v1.pdf', url:'#', type:'doc'}] }
   ] };
 }
 function buildModal(id, from){

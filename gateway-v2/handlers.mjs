@@ -50,7 +50,38 @@ export const PAYROLL_LIST = '901520180360';
 export const SOCIAL_LIST = '901520180312'; // Social media-planning: communicatietaak + maandtaken + input-subtaken
 export const TICKET_LIST = '901523697831'; // Tickets (website-support); standaard-statussen incl. on hold/doorgestuurd (push-triggers)
 export const TICKET_ASSIGNEE = 36517215;   // Klaas — vaste assignee voor website-support-tickets (lijsttoegang geverifieerd via 86ca6qth2)
-export const TICKET_TYPEJOB_SUPPORT = 'a8e2a949-3111-4d4b-b3ee-45f3a049d365'; // TYPE JOB-optie 'Support' (orderindex 19)
+// ====== TYPE JOB — STABIELE OPTION-UUID's =====================================
+// De TYPE JOB-dropdown wordt in een task-GET als ORDERINDEX (positie) opgeslagen; die positie
+// verschuift zodra je een optie toevoegt/verwijdert/herordent. UUID's zijn onveranderlijk.
+// Daarom hardcoden we NOOIT meer een orderindex: SCHRIJVEN gebeurt met de UUID, LEZEN resolvet
+// de opgeslagen orderindex via de LIVE optielijst naar de UUID (zie typeJobUuid). Eén bron van
+// waarheid; geëxporteerd zodat videoreview/reminders/done-sweep/teamportaal dezelfde map delen.
+export const TJ = {
+  projectmanagement: '35767068-2103-46b0-940c-2547a97726b7',
+  meeting:           '8edaf179-0d6d-496e-aa56-fc59c86c9354',
+  strategie:         '4a317bc6-460b-400b-ba62-5f262fe94fb1',
+  branding:          'cbbd0adc-ca01-43bc-8f29-7841b8b46265',
+  fbBranding:        '72552b66-7abb-4f12-afca-8d25285a1302',
+  preproductie:      'a5801998-f558-4c22-8fdc-452241ca176d',
+  fbPreproductie:    '714fbca2-0c74-4039-bc67-0b1b770b559d',
+  shoot:             'ceaa5d14-b8c6-42ca-8509-3050eba99f9e',
+  ugcShoot:          '71788ae2-a6ee-4889-ba86-a30f00363f38',
+  edit:              '100d5e1a-4534-4c56-93c3-1804e1f505bd',
+  fbEdit:            '38d2c712-4acc-4cf3-ba02-f87e752d4e88',
+  webdesign:         'ce161e70-b1b0-4ee7-be23-553b034a605b',
+  fbWebdesign:       '14a1ae79-9926-4b54-8332-b875ad5d9d02',
+  copywriting:       '87f6aff4-1f78-4d4c-8fc8-2f0ffeb7b865',
+  seo:               '368fb0b3-74ae-42d0-802f-8fac4b8228b3',
+  socialMedia:       'af2a8235-5c23-484d-a5ab-8e8ea32877f0',
+  adverteren:        '3ee5526b-62f8-4cf3-a897-670087f8e38c',
+  automation:        '77d7101e-af04-41f6-9656-ff13740f315d',
+  opleiding:         'b7fd4558-5f0e-4801-89be-20ddf1f54dec',
+  bestelling:        '4e99d548-e438-4ad8-921a-ee4051f64930',
+  hosting:           'e66d3f6a-a38a-4ac2-8fcf-c2f5fe2e4980',
+  support:           'a8e2a949-3111-4d4b-b3ee-45f3a049d365',
+};
+export const TJ_UUID_TO_KEY = Object.fromEntries(Object.entries(TJ).map(([k, v]) => [v, k]));
+export const TICKET_TYPEJOB_SUPPORT = TJ.support; // TYPE JOB-optie 'Support' (schrijven = UUID)
 export const KANBEGINNEN_JA = 'a3800974-cb47-4744-a2d1-1abc842b9bfd';          // 'Kan beginnen?'-optie JA (orderindex 0)
 
 export const FIELD = {
@@ -656,6 +687,38 @@ export function getCF(task, fieldId) {
   return f ? f.value : undefined;
 }
 
+// ---- TYPE JOB-resolutie: opgeslagen orderindex -> stabiele option-UUID --------
+// Module-cache (per isolate) orderindex->UUID, gevoed uit de LIVE velddefinitie. Dient als
+// FALLBACK voor taken die hun eigen type_config.options niet zouden meedragen. (In de praktijk
+// dragen single-GET én list-reads het wél mee, dus dit is gordel-en-bretels.)
+const TJ_REF_LIST = '901520180316'; // Video-en fotografie; het TYPE JOB-veld leeft op de Planning-folder (identiek op alle lijsten)
+let _tjIdxToUuid = null, _tjIdxAt = 0;
+export async function ensureTjMap(env) {
+  try {
+    if (_tjIdxToUuid && (Date.now() - _tjIdxAt) < 6 * 3600 * 1000) return _tjIdxToUuid;
+    const r = await cu.get(env, `/list/${TJ_REF_LIST}/field`);
+    const fields = (r && r.ok && r.data && Array.isArray(r.data.fields)) ? r.data.fields : [];
+    const f = fields.find((x) => String(x.id) === FIELD.typeJob);
+    const opts = (f && f.type_config && Array.isArray(f.type_config.options)) ? f.type_config.options : [];
+    if (opts.length) { const m = new Map(); for (const o of opts) m.set(Number(o.orderindex), String(o.id)); _tjIdxToUuid = m; _tjIdxAt = Date.now(); }
+  } catch (e) { /* fail-soft: behoud bestaande cache */ }
+  return _tjIdxToUuid;
+}
+// Stabiele UUID van de TYPE JOB van een (sub)taak. Prefereert de optielijst die de taak ZÉLF
+// draagt (type_config.options = altijd actueel); valt anders terug op de gewarmde module-cache.
+// Lege string = geen betrouwbare match -> nooit blind een verkeerde optie aannemen.
+export function typeJobUuid(task) {
+  const f = ((task && task.custom_fields) || []).find((c) => String(c.id) === FIELD.typeJob);
+  if (!f || f.value == null || f.value === '') return '';
+  const idx = Number(f.value);
+  const opts = (f.type_config && Array.isArray(f.type_config.options)) ? f.type_config.options : [];
+  if (opts.length) { const hit = opts.find((o) => Number(o.orderindex) === idx); if (hit) return String(hit.id); }
+  if (_tjIdxToUuid && Number.isFinite(idx)) { const u = _tjIdxToUuid.get(idx); if (u) return u; }
+  return '';
+}
+// Stabiele semantische sleutel (bv. 'edit','shoot','preproductie') of '' als geen match.
+export const typeJobKey = (task) => TJ_UUID_TO_KEY[typeJobUuid(task)] || '';
+
 // relatie-ids: dekt array-van-objecten EN string-array; .id/.task_id/string.
 export function getRelationIds(task, fieldId) {
   const v = getCF(task, fieldId);
@@ -779,27 +842,22 @@ export function isCompanyTask(task) {
   return !!(task && task.list && String(task.list.id) === LIST.bedrijven);
 }
 
-// discipline uit TYPE JOB-orderindex (int). Volledige tabel (live geverifieerd):
-// 0 Projectmanagement (communicatie/hoofdtaak-label, GEEN discipline -> ''),
-// 1 Strategie, 2 Branding, 3 FB-Branding, 4 Preproductie, 5 FB-preproductie,
-// 6 Shoot, 7 Edit, 8 FB-Edit, 9 Webdesign, 10 FB-Webdesign, 11 Copywriting,
-// 12 SEO, 13 Social media, 14 Adverteren, 15 Automation, 16 Opleiding,
-// 17 hosting, 18 bestelling. FB-* = feedbackronde van dezelfde discipline; de
-// granulaire video-jobs (preproductie/shoot/edit) rollen naar 'video_fotografie'.
-const DISCIPLINE_MAP = {
-  1: 'strategie',
-  2: 'branding', 3: 'branding',
-  4: 'video_fotografie', 5: 'video_fotografie', 6: 'video_fotografie', 7: 'video_fotografie', 8: 'video_fotografie',
-  9: 'webdesign', 10: 'webdesign', 11: 'webdesign', 17: 'webdesign',
-  12: 'seo', 13: 'social', 14: 'ads', 15: 'automation', 16: 'opleiding',
-  19: 'support',   // website-supporttickets (portaal) -> eigen discipline, wint van de naam-fallback
-  // 0 (projectmanagement) en 18 (bestelling) bewust ongemapt -> '' (val terug op lijst/naam)
+// discipline-bucket per TYPE JOB, op STABIELE option-UUID (immuun voor herordenen). FB-* =
+// feedbackronde van dezelfde discipline; de granulaire video-jobs (preproductie/shoot/edit)
+// rollen naar 'video_fotografie'. Projectmanagement/Meeting/bestelling bewust ongemapt -> ''
+// (val terug op lijst-/taaknaam).
+const DISCIPLINE_BY_UUID = {
+  [TJ.strategie]: 'strategie',
+  [TJ.branding]: 'branding', [TJ.fbBranding]: 'branding',
+  [TJ.preproductie]: 'video_fotografie', [TJ.fbPreproductie]: 'video_fotografie', [TJ.shoot]: 'video_fotografie', [TJ.ugcShoot]: 'video_fotografie', [TJ.edit]: 'video_fotografie', [TJ.fbEdit]: 'video_fotografie',
+  [TJ.webdesign]: 'webdesign', [TJ.fbWebdesign]: 'webdesign', [TJ.copywriting]: 'webdesign', [TJ.hosting]: 'webdesign',
+  [TJ.seo]: 'seo', [TJ.socialMedia]: 'social', [TJ.adverteren]: 'ads', [TJ.automation]: 'automation', [TJ.opleiding]: 'opleiding',
+  [TJ.support]: 'support', // website-supporttickets (portaal) -> eigen discipline, wint van de naam-fallback
 };
-export function disciplineMapper(typeJobValue) {
-  if (typeJobValue == null || typeJobValue === '') return '';
-  const n = Number(typeJobValue);
-  if (!Number.isFinite(n)) return '';
-  return DISCIPLINE_MAP[n] || '';
+// discipline van één (sub)taak via de stabiele TYPE JOB-UUID. Neemt de TAAK (niet de rauwe
+// orderindex) zodat de UUID-resolutie binnenin gebeurt.
+export function disciplineMapper(task) {
+  return DISCIPLINE_BY_UUID[typeJobUuid(task)] || '';
 }
 // Fallback: als TYPE JOB niet (correct) is ingevuld, leid de discipline af uit de LIJSTNAAM.
 // Projecten zijn in ClickUp georganiseerd in disciplineе-lijsten (Webdesign, Branding, Video-en
@@ -840,7 +898,7 @@ export function disciplineFromName(name) {
 // disciplineOf: de beste discipline-gok voor één (sub)taak. Volgorde: TYPE JOB ->
 // lijstnaam -> taaknaam. Kan '' teruggeven (bv. een pure PM-/herinneringstaak).
 export function disciplineOf(task) {
-  let d = disciplineMapper(getCF(task, FIELD.typeJob));
+  let d = disciplineMapper(task);
   if (!d) d = disciplineFromList(task && task.list && task.list.name);
   if (!d) d = disciplineFromName(task && task.name);
   return d;
@@ -851,6 +909,7 @@ export function disciplineOf(task) {
 // subtasks=false in ClickUp (sommige losse top-level taken vallen weg), dus dit dient
 // ENKEL als subtaak-/discipline-bron, NOOIT als bron voor de projectlijst zelf.
 export async function fetchBedrijfTree(env, bedrijfId) {
+  await ensureTjMap(env);   // warm de orderindex->UUID-fallbackcache (gordel-en-bretels; reads dragen type_config meestal zelf)
   const cf = `[{"field_id":"${FIELD.bedrijf}","operator":"ANY","value":["${bedrijfId}"]}]`;
   const enc = encodeURIComponent(cf);
   const all = await pageAll(env, (page) =>
@@ -894,7 +953,7 @@ export function labelsForProject(topTask, directChildren) {
     const d = disciplineOf(c);
     if (d) set.add(d);
   }
-  const ownTj = disciplineMapper(getCF(topTask, FIELD.typeJob)); // eigen niet-PM discipline
+  const ownTj = disciplineMapper(topTask); // eigen niet-PM discipline
   if (ownTj) set.add(ownTj);
   if (set.size === 0) {
     const f = disciplineFromList(topTask && topTask.list && topTask.list.name) || disciplineFromName(topTask && topTask.name);
@@ -930,9 +989,9 @@ export function buildProces(rootTask, descendants) {
   const steps = [];
   for (const s of pool) {
     // ruis eruit (maar root altijd houden): PM-/herinnering-/fase-koptaken én de interne
-    // FB-feedbackrondes (TYPE JOB 3/5/8/10) zijn geen klant-opleverstappen.
-    const tjNum = Number(getCF(s, FIELD.typeJob));
-    const isInterneFeedback = tjNum === 3 || tjNum === 5 || tjNum === 8 || tjNum === 10;
+    // FB-feedbackrondes (FB-Branding/FB-preproductie/FB-Edit/FB-Webdesign) zijn geen klant-opleverstappen.
+    const sUuid = typeJobUuid(s);
+    const isInterneFeedback = sUuid === TJ.fbBranding || sUuid === TJ.fbPreproductie || sUuid === TJ.fbEdit || sUuid === TJ.fbWebdesign;
     if (s !== rootTask && (isProcesNoise(s.name) || isInterneFeedback)) continue;
     const st = statusMapper(s.status);
     const deliv = parseDeliverables(getCF(s, FIELD.deliverablesRaw));
@@ -950,6 +1009,7 @@ export function buildProces(rootTask, descendants) {
       naam: str(s.name),
       discipline: disciplineOf(s),
       type_job: (function(){ const n = Number(getCF(s, FIELD.typeJob)); return Number.isFinite(n) ? n : null; })(),
+      type_job_key: typeJobKey(s),                            // stabiele sleutel (immuun voor herordenen)
       staat,
       status_label: st.label,
       pct: st.pct,
@@ -1028,9 +1088,9 @@ function isDoneTask(t) {
   return ty === 'done' || ty === 'closed' || isAfgerondStatus(t && t.status);
 }
 function planTypeOf(t) {
-  const tj = Number(getCF(t, FIELD.typeJob));
-  if (tj === 6) return 'shoot';                                                      // TYPE JOB = Shoot
-  if (tj === 19) return '';                                                          // support-tickets zijn nooit plannbaar (klant-tekst met 'meeting' mag geen plan-actiepunt triggeren)
+  const u = typeJobUuid(t);
+  if (u === TJ.shoot) return 'shoot';                                                // TYPE JOB = Shoot
+  if (u === TJ.support) return '';                                                   // support-tickets zijn nooit plannbaar (klant-tekst met 'meeting' mag geen plan-actiepunt triggeren)
   const hay = (String(t.name || '') + ' ' + String(t.description || t.text_content || '')).toLowerCase();
   if (hay.indexOf('meeting') >= 0) return 'meeting';
   return '';
@@ -1427,7 +1487,8 @@ export async function projectDetailV2(bedrijfId, body, env) {
       start_date: str(s.start_date),
       orderindex: str(s.orderindex != null ? s.orderindex : '0'),
       url: str(s.url),
-      type_job: str(getCF(s, FIELD.typeJob)),                 // orderindex bij read: 4=Preproductie 6=Shoot 7=Edit 8=FB-Edit
+      type_job: str(getCF(s, FIELD.typeJob)),                 // legacy (orderindex); de frontend gebruikt voortaan type_job_key
+      type_job_key: typeJobKey(s),                            // stabiele sleutel (immuun voor herordenen)
       time_estimate: str(s.time_estimate || ''),
       locatie: (function () { const lv = getCF(s, FIELD.locatie); return lv && lv.formatted_address ? str(lv.formatted_address) : ''; })(),
       heeft_bestanden: subDeliv.length > 0,                   // goedgekeurde subtaak met bestanden = klikbaar in de tijdlijn
@@ -1450,7 +1511,7 @@ export async function projectDetailV2(bedrijfId, body, env) {
     // het portaal toont daarmee 'Feedback gegeven' + het rondenummer.
     for (const tk of taken) {
       const kids = tree.childrenByParent.get(String(tk.task_id)) || [];
-      const fb = kids.filter((k) => Number(getCF(k, FIELD.typeJob)) === 8);
+      const fb = kids.filter((k) => typeJobUuid(k) === TJ.fbEdit);
       if (fb.length) tk.fb_rondes = fb.map((k) => ({ naam: str(k.name), status: str(k.status && k.status.status) }));
     }
   } catch (e) { /* proces-overzicht + plan zijn additief; nooit de detail breken */ }
@@ -1506,6 +1567,7 @@ export async function projectDetailV2(bedrijfId, body, env) {
     time_estimate: str(task.time_estimate),
     content_creators: str(getCF(task, FIELD.contentCreators)),
     type_job: str(getCF(task, FIELD.typeJob)),
+    type_job_key: typeJobKey(task),
     shootlink: str(getCF(task, FIELD.shootlink)),
     has_contact: getRelationIds(task, FIELD.contact).length > 0 ? 'yes' : 'no',
     has_bedrijf: getRelationIds(task, FIELD.bedrijf).length > 0 ? 'yes' : 'no',
@@ -1532,7 +1594,7 @@ function detailSkeleton(taskId, err) {
 
 /* ---- chatList ------------------------------------------------------------ */
 // ── Klantchat-resolvers (altijd-open chat op de vaste communicatietaak) ───────────────
-const TYPEJOB_PROJECTMGMT = '35767068-2103-46b0-940c-2547a97726b7'; // TYPE JOB-optie 'Projectmanagement' (orderindex 0)
+const TYPEJOB_PROJECTMGMT = TJ.projectmanagement; // TYPE JOB-optie 'Projectmanagement' (schrijven = UUID)
 const SOCIAL_FALLBACK = { id: 94564122, naam: 'Danique', initialen: 'DB', avatar: '' }; // social-lead fallback
 
 // Vind (of lazy-create) de vaste communicatietaak van een bedrijf in de Social-lijst:
@@ -1543,7 +1605,7 @@ async function resolveCommsTask(bedrijfId, env) {
   const filter = encodeURIComponent(JSON.stringify([{ field_id: FIELD.bedrijf, operator: 'ANY', value: [bid] }]));
   let tasks = [];
   try { tasks = await pageAll(env, (page) => `/list/${SOCIAL_LIST}/task?include_closed=true&subtasks=false&page=${page}&custom_fields=${filter}`); } catch (e) { tasks = []; }
-  const hit = (tasks || []).find((t) => getRelationIds(t, FIELD.bedrijf).includes(bid) && Number(getCF(t, FIELD.typeJob)) === 0);
+  const hit = (tasks || []).find((t) => getRelationIds(t, FIELD.bedrijf).includes(bid) && typeJobUuid(t) === TJ.projectmanagement);
   if (hit && hit.id) return str(hit.id);
   // lazy-create voor een bedrijf dat er nog geen heeft
   let naam = bid;
@@ -1575,7 +1637,7 @@ async function resolveActiveSocial(bedrijfId, env) {
   const now = Date.now();
   const cands = (tasks || []).filter((t) =>
     getRelationIds(t, FIELD.bedrijf).includes(bid) &&
-    Number(getCF(t, FIELD.typeJob)) === 13 &&
+    typeJobUuid(t) === TJ.socialMedia &&
     t.due_date && monthKey(Number(t.due_date)) === monthKey(now));
   cands.sort((a, b) => (Number(b.due_date) || 0) - (Number(a.due_date) || 0));
   for (const t of cands) {
@@ -1792,10 +1854,10 @@ export async function dashboard(bedrijfId, body, env) {
     let actiesTodo = 0;
     for (const c of directChildren) {
       if (isAfgerondStatus(c.status)) continue;
-      const ctj = Number(getCF(c, FIELD.typeJob));
+      const cUuid = typeJobUuid(c);
       const cst = String((c.status && c.status.status) || '').toLowerCase();
-      if (ctj === 6 && !(Number(c.due_date) > 0)) actiesTodo++;
-      else if (ctj === 7 && (cst.includes('doorgestuur') || cst.includes('feedback klant'))) actiesTodo++;
+      if (cUuid === TJ.shoot && !(Number(c.due_date) > 0)) actiesTodo++;
+      else if (cUuid === TJ.edit && (cst.includes('doorgestuur') || cst.includes('feedback klant'))) actiesTodo++;
     }
     actieve.push({
       task_id: str(t.id),
@@ -5020,7 +5082,7 @@ export async function buildAiContext(env, bedrijfId) {
 // Hosts = content-creators-pool, 1:1 met VIDEO_POOL (+ display-naam voor output).
 const SHOOT_HOSTS = VIDEO_POOL.map((m) => ({ id: Number(m.id), name: m.naam, email: m.email }));
 // TYPE JOB dropdown-optie 'Shoot' (UUID-filter op de planning-lijst).
-const SHOOT_TYPE_OPTION = 'ceaa5d14-b8c6-42ca-8509-3050eba99f9e';
+const SHOOT_TYPE_OPTION = TJ.shoot;
 // Payroll 'HR Field' (afwezigheidstype) - enkel voor leesbare labels in het lab.
 const SHOOT_HR_FIELD = 'e4f701e4-5aa4-42e0-a61a-0a36a01ba549';
 const SHOOT_HR_TYPES = ['Vakantie', 'Jeugdvakantie', 'Feestdag', 'Ziekte', 'Recup', 'Toegestane afwezigheid', 'Klein verlet', 'Ouderschapsverlof', 'Sollicitatieverlof'];
@@ -5435,8 +5497,8 @@ export async function shootContext(bedrijfId, body, env) {
   const task = tr.data;
   const sc = scopeCheckTask(task, bedrijfId, SCOPE_FAIL_CLOSED.write);
   if (!sc.ok) return { status: 403, body: { status: 'forbidden', message: 'Geen toegang tot deze taak.' } };
-  // TYPE JOB = Shoot (single-task GET levert de orderindex 6).
-  if (Number(getCF(task, FIELD.typeJob)) !== 6) return { status: 200, body: { status: 'wrong_type' } };
+  // TYPE JOB = Shoot (op stabiele UUID; immuun voor herordenen van de dropdown).
+  if (typeJobUuid(task) !== TJ.shoot) return { status: 200, body: { status: 'wrong_type' } };
   // Reeds een due_date -> al ingepland: details tonen, niet opnieuw laten boeken.
   if (heeftDueDate(task)) {
     const locVal = getCF(task, FIELD.locatie);
@@ -5539,9 +5601,8 @@ async function syncEditStartdates(env, shootTask, bookedDueMs) {
   const pr = await cu.get(env, `/task/${parentId}?include_subtasks=true`);
   const subs = (pr.ok && pr.data && Array.isArray(pr.data.subtasks)) ? pr.data.subtasks : [];
   if (!subs.length) return;
-  const tj = (t) => Number(getCF(t, FIELD.typeJob));
-  const shoots = subs.filter((s) => tj(s) === 6);
-  const edits = subs.filter((s) => tj(s) === 7);
+  const shoots = subs.filter((s) => typeJobUuid(s) === TJ.shoot);
+  const edits = subs.filter((s) => typeJobUuid(s) === TJ.edit);
   if (!shoots.length || !edits.length) return;
   // due van de zonet geboekte shoot kan nog stale zijn in deze read -> lokaal patchen
   const dueOf = (s) => (str(s.id) === str(shootTask.id) ? Number(bookedDueMs) || 0 : Number(s.due_date) || 0);

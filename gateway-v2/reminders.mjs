@@ -14,7 +14,7 @@
  * Idempotentie: KV `reminder:{bedrijfId}:{taskId}` (TTL 90 d) — max 1 reminder per interval.
  * Draait volledig in scheduled() → nul impact op het klant-request-pad. Fail-soft per bedrijf.
  * ============================================================================= */
-import { cu, getCF, getRelationIds, FIELD, adminCompanies, fetchBedrijfTree, isAfgerondStatus, kanalenRead } from './handlers.mjs';
+import { cu, getCF, getRelationIds, FIELD, adminCompanies, fetchBedrijfTree, isAfgerondStatus, kanalenRead, TJ, typeJobUuid } from './handlers.mjs';
 import { notifyContact, portalLink } from './notify.mjs';
 
 const str = (v) => (v == null ? '' : String(v));
@@ -34,8 +34,7 @@ function klantActie(t) {
   const lbl = str(t.status && t.status.status).toLowerCase();
   if (lbl.includes('doorgestuur') || lbl.includes('feedback klant')) return 'feedback';   // 'feedback klant' = nieuwe naam (was 'doorgestuurd')
   if (lbl.includes('input')) return 'input';
-  const tj = Number(getCF(t, FIELD.typeJob));
-  if (tj === 6 && !(Number(t.due_date) > 0)) return 'shoot';
+  if (typeJobUuid(t) === TJ.shoot && !(Number(t.due_date) > 0)) return 'shoot';
   return null;
 }
 

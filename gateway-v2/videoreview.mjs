@@ -19,7 +19,7 @@
  *   /videofile?key=&exp=&tok=                   → R2-bijlage (inline beeld/pdf, anders download)
  * Secrets/bindings: GATEWAY_SECRET (HMAC), SA_* + GDRIVE_SUBJECT (Drive), R2 (bucket).
  * ============================================================================= */
-import { cu, scopeCheckTask, mintGoogleToken, DRIVE_SCOPE, isAfgerondStatus, FIELD, getCF, parseDeliverables } from './handlers.mjs';
+import { cu, scopeCheckTask, mintGoogleToken, DRIVE_SCOPE, isAfgerondStatus, FIELD, getCF, parseDeliverables, TJ, typeJobUuid } from './handlers.mjs';
 import { zipStream } from './zipstream.mjs';
 
 const str = (v) => (v == null ? '' : String(v));
@@ -186,7 +186,7 @@ export async function videoReviewContext(bedrijfId, body, env) {
   const taakGoedgekeurd = isAfgerondStatus(g.task && g.task.status);
   const isLocked = !!last || taakGoedgekeurd || videoApproved;
   // rondenummer: 1 + het aantal eerder aangemaakte FB-Edit-subtaken onder deze montagetaak
-  const fbRondes = ((g.task && g.task.subtasks) || []).filter((s) => Number((((s.custom_fields || []).find((f) => f.id === FIELD.typeJob) || {}).value)) === 8).length;
+  const fbRondes = ((g.task && g.task.subtasks) || []).filter((s) => typeJobUuid(s) === TJ.fbEdit).length;
   const ronde = isLocked ? Math.max(1, fbRondes) : fbRondes + 1;
   // downloaden mag pas na goedkeuring van de video (Vincent: content pas vrij na akkoord)
   const canDownload = taakGoedgekeurd || videoApproved;
@@ -404,7 +404,7 @@ export async function videoReviewSubmit(bedrijfId, body, env) {
   // — Feedbackronde = SUBTAAK onder de montagetaak (TYPE JOB FB-Edit) — de bundel-tekst als
   //   omschrijving, zodat het team de ronde als taak oppakt (Vincent 2026-06-11). Bedrijf-relatie
   //   mee zodat de subtaak in het portaal-scope-model past.
-  const TYPEJOB_FBEDIT = '38d2c712-4acc-4cf3-ba02-f87e752d4e88';  // optie-UUID 'FB-Edit' (write = UUID)
+  const TYPEJOB_FBEDIT = TJ.fbEdit;  // optie-UUID 'FB-Edit' (write = UUID)
   let subId = '';
   try {
     const listId = str(g.task && g.task.list && g.task.list.id);
