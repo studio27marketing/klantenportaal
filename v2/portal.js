@@ -2158,7 +2158,8 @@ async function forcePortalUpdate(target){
   try{ if(navigator.serviceWorker&&navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage({type:'FLUSH'}); }catch(e){}
   try{ var keys=await caches.keys(); await Promise.all(keys.map(function(x){return caches.delete(x);})); }catch(e){}
   try{ var reg=await navigator.serviceWorker.getRegistration(); if(reg) await reg.update(); }catch(e){}
-  setTimeout(function(){ location.reload(); }, 350);
+  // gedeelde guard met de SW-controllerchange-reload (index.html) -> nooit dubbel herladen
+  if(window.__s27reload) window.__s27reload(); else setTimeout(function(){ location.reload(); }, 350);
 }
 function startVersionWatch(){
   setTimeout(checkPortalVersion, 4000);                                 // na de boot, niet blokkerend
