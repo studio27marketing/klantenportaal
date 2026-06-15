@@ -229,7 +229,8 @@
     var taskId = String(opts.taskId || (window.state && state.activeProject) || '');
     var url = String(opts.url || '');
     var label = String(opts.label || 'Video');
-    if (!taskId || !url) { window.open(url, '_blank', 'noopener'); return; }
+    if (!url) return;
+    if (!taskId) { toast('Deze video kan alleen binnen een project geopend worden.', 3600); return; }
 
     var P = createPlayer();
     var st = {
@@ -336,15 +337,14 @@
     if (st.closed) return;
     if (!ctx.ok || !d.ok) {
       close();
-      // Het is wél een leesbaar Drive-bestand, maar geen video (pdf/office/audio/foto):
-      // geef het door aan de gestandaardiseerde in-portal review i.p.v. de klant naar
-      // Google Drive te sturen. Zo blijft élk bestandstype binnen het portaal.
-      if (d && d.error === 'not_video' && window.S27Review && typeof S27Review.pickReviewer === 'function') {
+      // Geen (leesbare) video — bv. een pdf/office/audio Drive-bestand of een tijdelijke fout.
+      // We sturen de klant NOOIT naar Google Drive: geef door aan de gestandaardiseerde
+      // in-portal review (die desnoods zelf een nette 'kon niet inladen'-kaart toont).
+      if (window.S27Review && typeof S27Review.pickReviewer === 'function') {
         S27Review.pickReviewer(url, { taskId: taskId, label: label, sourceEl: opts.sourceEl });
-        return;
+      } else {
+        toast((d && d.message) || 'Dit bestand kan hier niet geopend worden — probeer het zo opnieuw.', 4200);
       }
-      if (d && d.error === 'drive_no_access') toast(d.message || 'Het portaal kan dit Drive-bestand niet lezen.', 5000);
-      window.open((d && d.open_url) || url, '_blank', 'noopener');
       return;
     }
     st.video = d.video;
@@ -881,8 +881,10 @@
     var row = a.closest && a.closest('.deliv-file, .fbc-view');   // dekt ook de proces-feedbackkaart (.fbc-view)
     if (!row) return;
     if (!isReviewable(a.href)) return;
-    var taskId = (window.state && state.activeProject) ? String(state.activeProject) : '';
-    if (!taskId) return; // buiten projectcontext: normaal gedrag
+    // taskId uit de rij (data-task) én pas dan uit de actieve-project-staat — anders lekt een
+    // Drive-videolink/-bestand naar een nieuw tabblad zodra state.activeProject (nog) leeg is.
+    var taskId = String(row.getAttribute('data-task') || (window.state && state.activeProject) || '');
+    if (!taskId) return; // echt buiten projectcontext: normaal gedrag
     e.preventDefault();
     openReview({
       url: a.href,

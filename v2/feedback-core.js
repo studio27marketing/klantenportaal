@@ -237,7 +237,8 @@
     var taskId = String(opts.taskId || (window.state && state.activeProject) || '');
     var url = String(opts.url || '');
     var label = String(opts.label || 'Bestand');
-    if (!taskId || !url) { window.open(url, '_blank', 'noopener'); return; }
+    if (!url) return;
+    if (!taskId) { toast('Dit bestand kan alleen binnen een project geopend worden.', 3600); return; }
 
     var st = {
       taskId: taskId, url: url, annotations: [], reviewAttachments: [],
@@ -278,9 +279,15 @@
     var d = ctx.data || {};
     if (st.closed) return;
     if (!ctx.ok || !d.ok) {
-      close();
-      toast((d && d.message) || 'Dit bestand kan hier niet geopend worden — we openen het origineel.', 4800);
-      window.open((d && d.open_url) || url, '_blank', 'noopener');
+      // NOOIT wegnavigeren naar Google Drive: blijf in het portaal met een nette kaart +
+      // een handmatige 'open origineel'-knop (de klant kiest zelf of die het portaal verlaat).
+      $('fcLoading').classList.add('fc-hidden');
+      $('fcMain').classList.remove('fc-hidden');
+      var vfb = $('fcViewer');
+      if (vfb) vfb.innerHTML = '<div class="fc-foto"><div class="fc-foto-card"><div class="fc-foto-ic">📄</div><b>Voorvertoning niet beschikbaar</b><p>' +
+        _esc((d && d.message) || 'We konden dit bestand niet in het portaal inladen. Probeer het zo opnieuw of open het origineel.') +
+        '</p><a class="fc-btn fc-primary" href="' + _esc((d && d.open_url) || url) + '" target="_blank" rel="noopener">Open origineel</a></div></div>';
+      var sub = $('fcSub'); if (sub) sub.textContent = 'Kon niet inladen';
       return;
     }
     // Server zegt dat dit (bv. een Drive-bestand zonder extensie) eigenlijk een video is →
