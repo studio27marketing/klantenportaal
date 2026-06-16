@@ -194,6 +194,7 @@
       '      <a id="fcDownload" class="fc-btn fc-ghost" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 19h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="fc-dl-txt">Download</span></a>' +
       '      <button id="fcApprove" class="fc-btn fc-approve">✓ Goedkeuren</button>' +
       '      <button id="fcFeedback" class="fc-btn fc-primary">Feedback geven <span id="fcCount" class="fc-countbadge fc-hidden">0</span></button>' +
+      '      <button id="fcPanelToggle" class="fc-btn fc-ghost fc-paneltoggle" title="Opmerkingen tonen/verbergen" aria-label="Opmerkingen tonen/verbergen"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-11.7 7.7L3 21l1.8-6.3A8.4 8.4 0 1 1 21 11.5Z"/></svg><span class="fc-pt-n" id="fcPtN">0</span></button>' +
       '      <button id="fcClose" class="fc-x" title="Sluiten" aria-label="Sluiten"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></button>' +
       '    </div>' +
       '  </header>' +
@@ -222,7 +223,6 @@
       '        </div>' +
       '      </div>' +
       '    </aside>' +
-      '    <button class="fc-panel-fab fc-hidden" id="fcPanelFab" aria-label="Opmerkingen tonen"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-11.7 7.7L3 21l1.8-6.3A8.4 8.4 0 1 1 21 11.5Z"/></svg><span class="fc-fab-n" id="fcFabN">0</span></button>' +
       '  </main>' +
       '</div>' +
       '<div id="fcSendScrim" class="fc-scrim fc-hidden"></div>' +
@@ -491,10 +491,11 @@
       _collapsed = c;
       $('fcPanel').classList.toggle('fc-panel-collapsed', c);
       document.body.classList.toggle('fc-panel-hidden', c);
-      $('fcPanelFab').classList.toggle('fc-hidden', !c);
+      $('fcPanelToggle').classList.toggle('fc-pt-on', !c);   // knop rechtsboven licht op als het paneel open is
     }
-    $('fcCollapse').addEventListener('click', function () { setCollapsed(!_collapsed); });
-    $('fcPanelFab').addEventListener('click', function () { setCollapsed(false); });
+    $('fcCollapse').addEventListener('click', function () { setCollapsed(true); });
+    $('fcPanelToggle').addEventListener('click', function () { setCollapsed(!_collapsed); });
+    setCollapsed(false);
 
     /* ---- composer (lijst van losse feedbackpunten) ---- */
     function renderComposeAtts() {
@@ -570,7 +571,7 @@
       $('fcCount').textContent = n;
       $('fcCount').classList.toggle('fc-hidden', n === 0);
       $('fcEmpty').classList.toggle('fc-hidden', n > 0);
-      var fabn = $('fcFabN'); if (fabn) fabn.textContent = n;
+      var ptn = $('fcPtN'); if (ptn) ptn.textContent = n;
       var list = $('fcList');
       list.querySelectorAll('.fc-card').forEach(function (el) { el.remove(); });
       st.annotations.forEach(function (a, i) {
@@ -737,11 +738,21 @@
       var self = this;
 
       // cursor-volgende ghost-pin: toont vóór de klik exact waar de opmerking landt.
+      // rAF-lerp (easing naar de doelpositie) i.p.v. left/top per mousemove → smooth volgen,
+      // geen 'schok' bij snelle muisbewegingen.
       var ghost = document.createElement('div');
       ghost.className = 'fc-ghostpin';
       ghost.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.4 8.4 0 0 1-11.7 7.7L3 21l1.8-6.3A8.4 8.4 0 1 1 21 11.5Z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>';
       document.body.appendChild(ghost);
       this._ghost = ghost;
+      var gst = { gx: 0, gy: 0, tx: 0, ty: 0, raf: 0 };
+      this._gst = gst;
+      function ghostTick() {
+        gst.gx += (gst.tx - gst.gx) * 0.32;
+        gst.gy += (gst.ty - gst.gy) * 0.32;
+        ghost.style.transform = 'translate3d(' + (gst.gx - 13) + 'px,' + (gst.gy - 13) + 'px,0) rotate(-45deg)';
+        gst.raf = ghost.classList.contains('show') ? requestAnimationFrame(ghostTick) : 0;
+      }
 
       // één placeholder per pagina; render lazy via IntersectionObserver
       var io = new IntersectionObserver(function (entries) {
@@ -760,9 +771,9 @@
         (function (pageNum, pageEl) {
           pageEl.addEventListener('mousemove', function (ev) {
             if (api.locked || api.mode() !== 'comment' || ev.target.closest('.fc-pin')) { ghost.classList.remove('show'); return; }
-            ghost.classList.add('show');
-            ghost.style.left = ev.clientX + 'px';
-            ghost.style.top = ev.clientY + 'px';
+            gst.tx = ev.clientX; gst.ty = ev.clientY;
+            if (!ghost.classList.contains('show')) { gst.gx = ev.clientX; gst.gy = ev.clientY; ghost.classList.add('show'); }
+            if (!gst.raf) gst.raf = requestAnimationFrame(ghostTick);
           });
           pageEl.addEventListener('mouseleave', function () { ghost.classList.remove('show'); });
           pageEl.addEventListener('click', function (ev) {
@@ -848,6 +859,7 @@
     destroy: function () {
       try { if (this._io) this._io.disconnect(); } catch (e) { }
       try { if (this._pdf) this._pdf.destroy(); } catch (e) { }
+      try { if (this._gst && this._gst.raf) cancelAnimationFrame(this._gst.raf); } catch (e) { }
       try { if (this._ghost) this._ghost.remove(); } catch (e) { }
       this._pages = []; this._pdf = null;
     },

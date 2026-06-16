@@ -3911,15 +3911,8 @@ function procesBlock(det,p,opts){
     }).join('');
     h+='</div>';
   }
-  // 3) Nog in productie (compacte samenvatting i.p.v. tientallen interne stappen)
-  if(pr.loopt && pr.loopt.aantal){
-    var dn=(pr.loopt.disciplines||[]).map(function(k){ return (window.S27DATA?S27DATA.disc(k).label:k); }).join(', ');
-    h+='<div class="proces-loopt">'+ic('st_progress',14)+'<span>Nog <b>'+pr.loopt.aantal+'</b> stap'+(pr.loopt.aantal===1?'':'pen')+' in productie'+(dn?' · '+esc(dn):'')+'</span></div>';
-  }
-  // 4) Niets te doen -> geruststelling
-  if(!plan.length && !fb.length && !(pr.opgeleverd&&pr.opgeleverd.length)){
-    h+='<div class="proces-allgood">'+ic('st_approved',16)+'<span>Alles loopt op schema. Je hoeft nu even niets te doen.</span></div>';
-  }
+  // (3+4) 'Nog N stap in productie' + 'Alles loopt op schema, je hoeft niets te doen' weggehaald
+  // (Vincent 16-06): te veel ruis in de projectweergave; de opgeleverd/feedback-blokken volstaan.
   // 5) Meeting al gepland?
   if(pr.meeting && pr.meeting.gepland){
     h+='<div class="proces-loopt">'+ic('cal',14)+'<span>Er staat al een meeting gepland voor dit project.</span></div>';
