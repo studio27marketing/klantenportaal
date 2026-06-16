@@ -1246,12 +1246,15 @@ function socialDemoPosts(){
 }
 
 /* ---- Advertenties (echte Meta/Google-data) ---- */
-const ADS_PLAT={meta:['Meta','#1877f2'],facebook:['Facebook','#1877f2'],instagram:['Instagram','#d6336c'],google:['Google Ads','#C28E0E'],'google-ads':['Google Ads','#C28E0E'],tiktok:['TikTok','#111827'],linkedin:['LinkedIn','#0a66c2'],snapchat:['Snapchat','#f7b500']};
+// item 7: blauw = Meta (huisstijl-blauw, matcht de grafiek), oranje = Google Ads (matcht de adverteren-tak).
+const ADS_PLAT={meta:['Meta','#3083DC'],facebook:['Facebook','#3083DC'],instagram:['Instagram','#d6336c'],google:['Google Ads','#F66131'],'google-ads':['Google Ads','#F66131'],tiktok:['TikTok','#111827'],linkedin:['LinkedIn','#0a66c2'],snapchat:['Snapchat','#f7b500']};
+function adsPlatAccent(){ return adsActivePlatform()==='google' ? '#F66131' : '#3083DC'; }
+function _adsApplyAccent(){ var p=document.querySelector('.panel[data-screen-label="advertenties"]'); if(p) p.style.setProperty('--ads-accent', adsPlatAccent()); }
 function adsPlat(p){ p=String(p||'').toLowerCase(); return ADS_PLAT[p]||[(p?p.charAt(0).toUpperCase()+p.slice(1):'Ads'),'#667684']; }
 function adsObjective(o){ o=String(o||'').toUpperCase(); var m={OUTCOME_LEADS:'Leads',OUTCOME_SALES:'Verkoop',OUTCOME_TRAFFIC:'Verkeer',OUTCOME_AWARENESS:'Naamsbekendheid',OUTCOME_ENGAGEMENT:'Betrokkenheid',OUTCOME_APP_PROMOTION:'App-promotie',LINK_CLICKS:'Klikken',LEAD_GENERATION:'Leads',CONVERSIONS:'Conversies'}; return m[o]||(o?o.replace(/^OUTCOME_/,'').replace(/_/g,' ').toLowerCase():''); }
 function adsNum(n){ return (Number(n)||0).toLocaleString('nl-BE'); }
 function adsEur(n){ return '€ '+(Number(n)||0).toLocaleString('nl-BE',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-function setAdsPlatform(p){ state._adsPlatform=p; if(p!=='google' && state._adsTab==='maand') state._adsTab='samengevat'; renderPanel('advertenties'); if(isRichView()){ if(adsActivePlatform()==='google') googleRichMountTabCharts(); else adsRichMountTabCharts(); } else adsClientMountChart(); }
+function setAdsPlatform(p){ state._adsPlatform=p; state._adsPlatMenuOpen=false; if(p!=='google' && state._adsTab==='maand') state._adsTab='samengevat'; renderPanel('advertenties'); _adsApplyAccent(); if(isRichView()){ if(adsActivePlatform()==='google') googleRichMountTabCharts(); else adsRichMountTabCharts(); } else adsClientMountChart(); }
 function campaignCard(c){
   var pl=adsPlat(c.platform);
   var metrics=[['Besteed',adsEur(c.budget)],['Vertoningen',adsNum(c.impressies)],['Klikken',adsNum(c.klikken)],['CTR',(Number(c.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%'],['Bereik',adsNum(c.bereik)]];
@@ -1295,6 +1298,7 @@ function metaEnsureStyles(){
 .meta-lb{position:fixed;inset:0;z-index:9999;background:rgba(20,8,20,.78);display:none;align-items:center;justify-content:center;padding:24px;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
 .meta-lb-box{max-width:680px;width:100%;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.42)}
 .meta-lb-stage{position:relative;background:#000;display:flex;align-items:center;justify-content:center;min-height:280px}
+.meta-lb-col{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%}
 .meta-lb-box img.meta-lb-media{width:100%;max-height:74vh;object-fit:contain;display:block;background:#000}
 .meta-lb-box video.meta-lb-vid{width:100%;max-height:74vh;display:block;background:#000;outline:none}
 .meta-lb-cap{padding:13px 16px;font-family:var(--font-display);font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:12px}
@@ -1304,7 +1308,7 @@ function metaEnsureStyles(){
 .meta-lb-permalink{display:inline-flex;align-items:center;gap:6px;color:#fff;background:#3083DC;border-radius:999px;padding:8px 16px;font-weight:700;font-size:13px;text-decoration:none;margin:22px auto}
 /* Carrousel met klik-doorklik (pijlen + dots), per kaart in correcte verhouding */
 .meta-car{position:relative;background:#000;overflow:hidden}
-.meta-car-track{display:flex;transition:transform .32s cubic-bezier(.4,0,.2,1)}
+.meta-car-track{display:flex;transition:transform .32s cubic-bezier(.4,0,.2,1);touch-action:pan-y}
 .meta-car-slide{flex:0 0 100%;position:relative;display:flex;align-items:center;justify-content:center;min-height:280px}
 .meta-car-slide img{width:100%;max-height:72vh;object-fit:contain;display:block;background:#000}
 .meta-car-slide video{width:100%;max-height:72vh;display:block;background:#000;outline:none}
@@ -1325,7 +1329,7 @@ function metaPeriodLabel(p){ return ({today:'Vandaag',last_7d:'7 dagen',last_30d
 // (KPI-grids, per-campagne-KPI's én tabelcellen) en € nooit los op een vorige regel komt.
 function metaEur(n,cur){ var s=(Number(n)||0).toLocaleString('nl-BE',{minimumFractionDigits:2,maximumFractionDigits:2}); cur=cur||'EUR'; return cur==='EUR'?('€ '+s):(s+' '+cur); }
 function metaKpiCard(br,lab,val){ return '<div class="kpi br-'+br+'"><div class="kbar"></div><div class="klab">'+lab+'</div><div class="knum">'+val+'</div></div>'; }
-function adsKpiDelta(cur,prev,invert){ if(prev==null) return ''; cur=Number(cur)||0; prev=Number(prev)||0; if(!prev){ return cur>0?'<span class="kdelta up">nieuw</span>':''; } var pct=Math.round(((cur-prev)/prev)*1000)/10; var better=invert?pct<0:pct>0; var cls=pct===0?'flat':(better?'up':'down'); return '<span class="kdelta '+cls+'">'+(pct>0?'+':'')+pct+'%</span>'; }
+function adsKpiDelta(cur,prev,invert){ if(prev==null) return ''; cur=Number(cur)||0; prev=Number(prev)||0; if(!prev){ return cur>0?'<span class="kdelta up">nieuw</span>':''; } var pct=Math.round(((cur-prev)/prev)*1000)/10; var better=invert?pct<0:pct>0; var flat=Math.abs(pct)<0.05; var cls=flat?'flat':(better?'up':'down'); return '<span class="kdelta '+cls+'"'+(flat?' title="gelijk gebleven"':'')+'>'+(flat?'gelijk gebleven':((pct>0?'+':'')+pct+'%'))+'</span>'; }
 function adsKpiCard(br,lab,val,d){ return '<div class="kpi br-'+br+'"><div class="kbar"></div><div class="klab">'+lab+'</div><div class="knum">'+val+'</div>'+(d?'<div class="kdrow">'+d+'</div>':'')+'</div>'; }
 function metaFmt(f){ return ({video:['Video','purple'],carousel:['Carrousel','blue'],image:['Foto','green']})[f]||['Foto','green']; }
 /* ---- Ads periode-selector (custom range) + rolling vergelijking (spiegelt socials) ---- */
@@ -1344,14 +1348,47 @@ function adsPeriodWindow(preset){
 }
 function adsPeriod(){ if(!state._adsPeriod){ var def=isRichView()?'30d':'7d'; var w=adsPeriodWindow(def); state._adsPeriod={preset:def,compare:'none',from:w.from,to:w.to}; } return state._adsPeriod; }
 function _adsRefreshIc(){ return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>'; }
+// item 4: één uitklapbare "Periode"-knop i.p.v. 5 losse tijdblokken; presets + custom + vergelijking
+// zitten in de popover. De buitenste class blijft .soc-period (sticky-regels + _adsRerenderPeriodBar).
 function adsPeriodBar(){
+  _adsInstallMenuCloser();
   var pp=adsPeriod();
+  var open=!!state._adsPerOpen;
   var presets=[['today','Vandaag'],['7d','7 dagen'],['30d','30 dagen'],['90d','90 dagen'],['custom','Aangepast']];
   var comps=[['none','Geen vergelijking'],['previous','Vorige periode'],['month','Vorige maand'],['year','Vorig jaar']];
   var chips=presets.map(function(o){ return '<button class="soc-perchip'+(pp.preset===o[0]?' active':'')+'" onclick="adsSetPeriod(\''+o[0]+'\')">'+esc(o[1])+'</button>'; }).join('');
   var custom = pp.preset==='custom' ? '<div class="soc-percustom"><input type="date" id="adsFrom" value="'+esc(pp.from||'')+'" onchange="adsCustomPeriod()"><span>tot</span><input type="date" id="adsTo" value="'+esc(pp.to||'')+'" onchange="adsCustomPeriod()"></div>' : '';
-  var comp='<div class="soc-percompare">'+'<select onchange="adsSetCompare(this.value)" aria-label="Vergelijken met">'+comps.map(function(o){return '<option value="'+o[0]+'"'+(pp.compare===o[0]?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')+'</select><button class="seg-btn" onclick="adsReload()" title="Verversen" aria-label="Verversen" style="margin-left:4px">'+_adsRefreshIc()+'</button></div>';
-  return '<div class="soc-period"><div class="soc-perchips">'+chips+'</div>'+custom+comp+'</div>';
+  var comp=comps.map(function(o){ return '<button class="soc-perchip'+(pp.compare===o[0]?' active':'')+'" onclick="adsSetCompare(\''+o[0]+'\')">'+esc(o[1])+'</button>'; }).join('');
+  return '<div class="soc-period ads-perwrap">'
+    +'<button class="ads-perbtn'+(open?' open':'')+'" onclick="adsPeriodToggle()" aria-expanded="'+(open?'true':'false')+'">'+ic('cal',15)+'<span class="ads-perbtn-tx">'+esc(_adsPeriodSummary(pp))+'</span>'+_adsChevDown()+'</button>'
+    +'<div class="ads-perpop'+(open?' open':'')+'" id="adsPerPop">'
+      +'<div class="ads-perpop-sec"><div class="ads-perpop-lab">Periode</div><div class="soc-perchips">'+chips+'</div>'+custom+'</div>'
+      +'<div class="ads-perpop-sec"><div class="ads-perpop-lab">Vergelijken met</div><div class="soc-perchips ads-perpop-cmp">'+comp+'</div></div>'
+      +'<div class="ads-perpop-foot"><button class="seg-btn" onclick="adsReload()" title="Verversen">'+_adsRefreshIc()+' Verversen</button><button class="btn btn-primary btn-sm" onclick="adsPeriodToggle()">Klaar</button></div>'
+    +'</div></div>';
+}
+function _adsChevDown(){ return '<svg class="ads-perchev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>'; }
+function _adsPeriodLabel(preset){ return ({today:'Vandaag','7d':'Laatste 7 dagen','30d':'Laatste 30 dagen','90d':'Laatste 90 dagen',custom:'Aangepaste periode'})[preset]||preset; }
+function _adsCompareLabel(c){ return ({none:'',previous:'vorige periode',month:'vorige maand',year:'vorig jaar'})[c]||''; }
+function _adsDateShort(s){ var p=String(s||'').split('-'); return p.length===3?(p[2]+'/'+p[1]):s; }
+function _adsPeriodSummary(pp){
+  var base=(pp.preset==='custom' && pp.from && pp.to) ? (_adsDateShort(pp.from)+' – '+_adsDateShort(pp.to)) : _adsPeriodLabel(pp.preset);
+  var cl=_adsCompareLabel(pp.compare);
+  return base+(cl?' · vs '+cl:'');
+}
+function adsPeriodToggle(){
+  state._adsPerOpen=!state._adsPerOpen;
+  var pop=document.getElementById('adsPerPop'); if(pop) pop.classList.toggle('open',state._adsPerOpen);
+  var wrap=pop?pop.parentNode:null; var btn=wrap?wrap.querySelector('.ads-perbtn'):null;
+  if(btn){ btn.classList.toggle('open',state._adsPerOpen); btn.setAttribute('aria-expanded',state._adsPerOpen?'true':'false'); }
+}
+// gedeelde "klik buiten" sluiter voor de periode-popover + platform-dropdown (één keer geïnstalleerd)
+function _adsInstallMenuCloser(){
+  if(state._adsMenuCloser) return; state._adsMenuCloser=true;
+  document.addEventListener('click',function(e){
+    if(state._adsPerOpen){ var w=document.querySelector('.ads-perwrap'); if(w && !w.contains(e.target)){ state._adsPerOpen=false; var pop=document.getElementById('adsPerPop'); if(pop) pop.classList.remove('open'); var b=w.querySelector('.ads-perbtn'); if(b){ b.classList.remove('open'); b.setAttribute('aria-expanded','false'); } } }
+    if(state._adsPlatMenuOpen){ var pw=document.querySelector('.ads-platpick'); if(pw && !pw.contains(e.target)){ state._adsPlatMenuOpen=false; var m=document.getElementById('adsPlatMenu'); if(m) m.classList.remove('open'); pw.classList.remove('open'); } }
+  },true);
 }
 function _adsRerenderPeriodBar(){ var bar=document.querySelector('.panel[data-screen-label="advertenties"] .soc-period'); if(bar) bar.outerHTML=adsPeriodBar(); }
 function adsReload(){
@@ -1376,8 +1413,8 @@ function adsReload(){
   S27DATA.loadMetaAds({from:pp.from,to:pp.to,compare:pp.compare}).then(function(){ var b=document.getElementById('adsBody'); if(b){ b.innerHTML=adsOverviewInner(); adsClientMountChart(); } }).catch(function(){ var b=document.getElementById('adsBody'); if(b){ b.innerHTML=adsOverviewInner(); adsClientMountChart(); } });
 }
 function adsSetPeriod(preset){ var pp=adsPeriod(); pp.preset=preset; if(preset!=='custom'){ var w=adsPeriodWindow(preset); if(w){ pp.from=w.from; pp.to=w.to; } } _adsRerenderPeriodBar(); if(preset!=='custom') adsReload(); }
-function adsCustomPeriod(){ var f=document.getElementById('adsFrom'),t=document.getElementById('adsTo'); if(!f||!t||!f.value||!t.value) return; var pp=adsPeriod(); pp.from=f.value; pp.to=t.value; adsReload(); }
-function adsSetCompare(mode){ var pp=adsPeriod(); pp.compare=mode; adsReload(); }
+function adsCustomPeriod(){ var f=document.getElementById('adsFrom'),t=document.getElementById('adsTo'); if(!f||!t||!f.value||!t.value) return; var pp=adsPeriod(); pp.from=f.value; pp.to=t.value; _adsRerenderPeriodBar(); adsReload(); }
+function adsSetCompare(mode){ var pp=adsPeriod(); pp.compare=mode; _adsRerenderPeriodBar(); adsReload(); }
 function refreshMetaAds(){ adsReload(); }
 function metaCreativeCard(a,i,cur){
   var fm=metaFmt(a.format); var thumb=(a.format==='video'?(a.poster||a.image):a.image)||a.thumb||'';
@@ -1392,7 +1429,32 @@ function metaCampaignCard(c,cur){
   var obj=adsObjective(c.objective);
   var ms=[['Besteed',metaEur(c.spend,cur),'spend'],['Vertoningen',adsNum(c.impressions),'impressions'],['Klikken',adsNum(c.linkClicks||c.clicks),'linkClicks'],['CPC',metaEur(c.cpc,cur),'cpc'],['CTR',(Number(c.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%','ctr'],['Resultaten',adsNum(c.results),'results']];
   var chev='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="color:var(--ink-4);flex:none"><path d="M9 6l6 6-6 6"/></svg>';
-  return '<div class="card" onclick="openMetaCampaign(\''+esc(c.id)+'\')" style="padding:14px 16px;margin-bottom:10px;cursor:pointer"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:11px"><span class="pill pill-prog"><span class="pdot"></span>Live</span><b style="font-family:var(--font-display);font-size:15px;flex:1;min-width:130px">'+esc(c.name||'Campagne')+'</b>'+(obj?'<span class="fs" style="color:var(--ink-4)">'+esc(obj)+'</span>':'')+chev+'</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:10px">'+ms.map(function(m){var d=arRowDelta(c,m[2],cur);return '<div><div style="color:var(--ink-4);font-size:11px;font-weight:600">'+m[0]+'</div><div style="font-family:var(--font-display);font-weight:800;font-size:16px;color:var(--ink)">'+m[1]+'</div>'+(d?'<div class="ar-ckd">'+d+'</div>':'')+'</div>';}).join('')+'</div></div>';
+  // item 9: klik klapt de advertenties/visuals INLINE open onder de kaart (geen aparte pagina meer).
+  return '<div class="card meta-camp-card" onclick="toggleMetaCampaign(\''+esc(c.id)+'\')" style="padding:14px 16px;margin-bottom:10px;cursor:pointer"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:11px"><span class="pill pill-prog"><span class="pdot"></span>Live</span><b style="font-family:var(--font-display);font-size:15px;flex:1;min-width:130px">'+esc(c.name||'Campagne')+'</b>'+(obj?'<span class="fs" style="color:var(--ink-4)">'+esc(obj)+'</span>':'')+chev+'</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:10px">'+ms.map(function(m){var d=arRowDelta(c,m[2],cur);return '<div><div style="color:var(--ink-4);font-size:11px;font-weight:600">'+m[0]+'</div><div style="font-family:var(--font-display);font-weight:800;font-size:16px;color:var(--ink)">'+m[1]+'</div>'+(d?'<div class="ar-ckd">'+d+'</div>':'')+'</div>';}).join('')+'</div></div><div class="meta-camp-exp" id="metaCampExp_'+esc(c.id)+'" style="display:none"></div>';
+}
+// item 9: inline campagne-expand (vervangt de paginavervanging van openMetaCampaign).
+function toggleMetaCampaign(id){
+  id=String(id); var exp=document.getElementById('metaCampExp_'+id); if(!exp) return;
+  var card=exp.previousElementSibling;
+  if(exp.getAttribute('data-open')==='1'){ exp.style.display='none'; exp.innerHTML=''; exp.removeAttribute('data-open'); if(card) card.classList.remove('open'); return; }
+  // slechts één campagne tegelijk open (state._metaAdsView is globaal en wordt door de open expand gebruikt)
+  var open=document.querySelectorAll('.meta-camp-exp[data-open="1"]');
+  for(var k=0;k<open.length;k++){ open[k].style.display='none'; open[k].innerHTML=''; open[k].removeAttribute('data-open'); var pc=open[k].previousElementSibling; if(pc) pc.classList.remove('open'); }
+  if(card) card.classList.add('open'); exp.style.display='block'; exp.setAttribute('data-open','1');
+  _metaCampExpRender(id);
+}
+function _metaCampExpRender(id){
+  var exp=document.getElementById('metaCampExp_'+id); if(!exp||exp.getAttribute('data-open')!=='1') return;
+  var cur=((window.S27DATA&&S27DATA.metaAds&&S27DATA.metaAds())||{}).currency||'EUR';
+  var loaded=(window.S27DATA&&S27DATA.campaignAds)?S27DATA.campaignAds(id):undefined;
+  if(loaded===undefined){
+    exp.innerHTML='<div class="empty" style="padding:30px"><div class="brand-spinner" style="margin:0 auto 10px"></div><p>De advertenties en visuals worden opgehaald…</p></div>';
+    if(window.S27DATA&&S27DATA.loadCampaignAds){ S27DATA.loadCampaignAds(id).then(function(){ _metaCampExpRender(id); }).catch(function(){ var e2=document.getElementById('metaCampExp_'+id); if(e2) e2.innerHTML='<div class="card" style="padding:18px;text-align:center;color:var(--ink-3)">De advertenties konden niet geladen worden.</div>'; }); }
+    return;
+  }
+  var ads=loaded.slice().sort(function(a,b){return (b.spend||0)-(a.spend||0);});
+  state._metaAdsView=ads;   // globaal — daarom max. 1 expand open
+  exp.innerHTML='<div class="meta-camp-exp-in"><div class="section-head" style="margin-top:8px"><h2>Advertenties &amp; visuals</h2><span class="count">'+ads.length+'</span></div>'+(ads.length?('<div class="ads-adtable"><div class="ads-adhead"><span>Advertentie</span><span>Besteed</span><span>Klikken</span><span>CTR</span><span>CPC</span><span></span></div>'+ads.map(function(a,i){return metaAdRow(a,i,cur);}).join('')+'</div>'):'<div class="card" style="padding:18px;text-align:center;color:var(--ink-3)">Geen actieve advertenties in deze campagne.</div>')+'</div>';
 }
 /* ---- Multi-series toggle-trend: besteding/klikken/vertoningen per dag, aan/uit te klikken ---- */
 var ADS_TREND_META={ spend:['Besteding','#C44514'], clicks:['Klikken','#147A50'], impressions:['Vertoningen','#1F5FA8'] };
@@ -1430,7 +1492,7 @@ function metaAdsBody(){
   if(m===null){ return head+sw+'<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je advertenties worden real-time opgehaald…</p></div>'; }
   if(!m.linked){ return head+sw+statNotLinked('ads'); }
   var cur=m.currency||'EUR';
-  if(state._metaCampaign){ return metaCampaignDetail(m,cur); }
+  state._metaCampaign=null;   // item 9: campagnes openen nu INLINE (toggleMetaCampaign), geen paginavervanging meer
   return head+sw+adsPeriodBar()+'<div id="adsBody">'+adsOverviewInner()+'</div>'+adsChatSection();
 }
 // Ads-chat: enkel zichtbaar als er een advertentietaak van de HUIDIGE MAAND bestaat (worker filtert
@@ -1456,7 +1518,8 @@ function renderAds(){ renderPanel('advertenties'); if(typeof adsChatMount==='fun
 function _adsDeferClientMount(){ if(isRichView()) return; var fn=function(){ adsClientMountChart(); }; if(window.requestAnimationFrame) requestAnimationFrame(fn); else setTimeout(fn,0); }
 // #17: client-overzicht-grafiek monteren (zelfde Chart.js dag-grafiek als de team-Samengevat).
 function adsClientMountChart(){
-  if(isRichView() || state._metaCampaign) return;
+  _adsApplyAccent();
+  if(isRichView()) return;
   var goog=adsActivePlatform()==='google';
   var canvasId=goog?'garch_account':'arch_account';
   if(!document.getElementById(canvasId)) return;
@@ -1475,9 +1538,9 @@ function adsClientMountChart(){
    ============================================================================= */
 function metaAdsBodyRich(){
   metaEnsureStyles();
-  var sw=adsPlatformSwitch();
+  // platform-keuze zit nu in de subnav (adsRichSubnav/googleRichSubnav), niet meer als losse pill-rij bovenaan.
   var body=(adsActivePlatform()==='google')?googleAdsBodyRich():(adsPeriodBar()+adsRichSubnav()+'<div id="adsBody">'+adsRichTabBody()+'</div>'+adsRichPdfFooter());
-  return sw+body+adsNotepadMount();
+  return body+adsNotepadMount();
 }
 /* ---- ads-menubalk (team-weergave): Samengevat / Campagnes / Uitgebreide gegevens / Aanbevelingen ---- */
 function adsRichTab(){ return state._adsTab||'samengevat'; }
@@ -1485,8 +1548,12 @@ function adsRichSubnav(){
   var t=adsRichTab();
   var tabs=[['samengevat','Samengevat','st_progress'],['campagnes','Campagnes','cal'],['gegevens','Uitgebreide gegevens','st_approved'],['aanbevelingen','Aanbevelingen','msg']];
   if(isRichView()) tabs.push(['meeting','Meeting','img']);
-  return '<div class="soc-subnav" id="adsSubnav">'+tabs.map(function(x){ return '<button class="soc-subtab'+(t===x[0]?' active':'')+'" data-atab="'+x[0]+'" onclick="adsRichSetTab(\''+x[0]+'\')">'+ic(x[2],17)+'<span>'+esc(x[1])+'</span></button>'; }).join('')+'</div>';
+  var tabsHtml=tabs.map(function(x){ return '<button class="soc-subtab'+(t===x[0]?' active':'')+'" data-atab="'+x[0]+'" onclick="adsRichSetTab(\''+x[0]+'\')">'+ic(x[2],17)+'<span>'+esc(x[1])+'</span></button>'; }).join('');
+  // item 5+6: platform-dropdown + notitie-knop in de tweede menubalk (action-cluster rechts).
+  return '<div class="soc-subnav-row"><div class="soc-subnav" id="adsSubnav">'+tabsHtml+'</div><div class="soc-subnav-act">'+adsPlatformPicker()+adsNoteBtn()+'</div></div>';
 }
+// item 6: notitie-toggle als knop in de menubalk (i.p.v. de zwevende FAB rechtsonder)
+function adsNoteBtn(){ if(!isRichView()) return ''; var n=adsNoteState(); return '<button id="adsNoteBtn" class="soc-subnav-act-btn'+(n.open?' on':'')+'" onclick="adsNotepadToggle()" title="Meeting-kladblok">'+ic('msg',16)+'<span>Notities</span></button>'; }
 function adsRichSetTab(name){
   state._adsTab=name;
   var goog=isRichView()&&adsActivePlatform()==='google';
@@ -1568,11 +1635,11 @@ function adsGegevensTable(){
   var tpl=cols.map(function(c,i){ return i===0?'minmax(150px,1.5fr)':(c[0]==='campaign'?'minmax(110px,1.1fr)':(c[2]?'minmax(70px,1fr)':'minmax(80px,1fr)')); }).join(' ');
   var head=cols.map(function(c){ var on=ADS_GEG_SORT.key===c[0]; var arr=on?(ADS_GEG_SORT.dir<0?' ▼':' ▲'):''; return '<button class="ar-th'+(c[2]?' num':'')+(on?' on':'')+'" onclick="adsGegSort(\''+c[0]+'\')">'+esc(c[1])+arr+'</button>'; }).join('');
   var body=rows.map(function(a,i){
-    var nm='<span class="ar-nm">'+esc(a.name||'–')+'</span>'+(a.merged?' <span class="ar-star">★'+a.count+'</span>':'');
+    var nm='<span class="ar-nm" title="'+esc(a.name||'')+'">'+esc(a.name||'–')+'</span>'+(a.merged?' <span class="ar-star">★'+a.count+'</span>':'');
     var nmCell=a.campaignId?'<button class="ar-namebtn" type="button" onclick="adsGegVisual('+i+')" title="Bekijk de visual van deze advertentie">'+nm+'</button>':nm;
     return '<div class="ar-trow" style="grid-template-columns:'+tpl+'">'
     +'<span class="ar-td">'+nmCell+'</span>'
-    +'<span class="ar-td">'+esc(a.campaign||'')+'</span>'
+    +'<span class="ar-td" title="'+esc(a.campaign||'')+'">'+esc(a.campaign||'')+'</span>'
     +'<span class="ar-td num">'+metaEur(a.spend,cur)+'</span>'
     +'<span class="ar-td num">'+arNum(a.impressions)+'</span>'
     +'<span class="ar-td num">'+arNum(a.linkClicks||a.clicks)+'</span>'
@@ -1581,13 +1648,21 @@ function adsGegevensTable(){
     +'<span class="ar-td num">'+(a.leads?arNum(a.leads):'–')+'</span></div>'; }).join('');
   return '<div class="ar-table"><div class="ar-tscroll"><div class="ar-thead" style="grid-template-columns:'+tpl+'">'+head+'</div>'+body+'</div></div>';
 }
+// item 8c: robuuste naam-match (genormaliseerd + substring), want de team-tabel kan samengevoegde/PAUSED-namen
+// tonen die niet exact in campaignAds zitten. Fallback naar idx 0 enkel als er precies één advertentie is.
+function _adsMatchAdIdx(ads,name){
+  var nn=function(s){ return String(s||'').trim().toLowerCase(); };
+  var t=nn(name); if(!t) return ads.length===1?0:-1;
+  var j; for(j=0;j<ads.length;j++){ if(nn(ads[j].name)===t) return j; }        // exact (genormaliseerd)
+  for(j=0;j<ads.length;j++){ var an=nn(ads[j].name); if(an && (an.indexOf(t)>=0||t.indexOf(an)>=0)) return j; }  // substring
+  return ads.length===1?0:-1;
+}
 function adsGegVisual(i){
   var a=(state._adsGegRows||[])[i]; if(!a||!a.campaignId) return;
   // openMetaCreative(i) indexeert state._metaAdsView -> die array zetten + de juiste index doorgeven.
   function show(){
     var ads=((window.S27DATA&&S27DATA.campaignAds)?S27DATA.campaignAds(a.campaignId):[])||[];
-    var idx=-1; for(var j=0;j<ads.length;j++){ if(a.name && ads[j].name===a.name){ idx=j; break; } }
-    if(idx<0 && ads.length) idx=0;
+    var idx=_adsMatchAdIdx(ads,a.name);
     if(idx<0 || typeof openMetaCreative!=='function'){ alert('Geen visual gevonden voor deze advertentie.'); return; }
     state._metaAdsView=ads; openMetaCreative(idx);
   }
@@ -1598,7 +1673,7 @@ function adsGegVisual(i){
 // Klik op een advertentienaam in de Campagnes-tab -> open de visual/video (zelfde lightbox als de gegevenstabel, géén oog-icoon).
 function adsRichAdVisual(cid,encName){
   var name=''; try{ name=decodeURIComponent(encName||''); }catch(e){ name=encName||''; }
-  function show(){ var ads=((window.S27DATA&&S27DATA.campaignAds)?S27DATA.campaignAds(cid):[])||[]; var idx=-1; for(var j=0;j<ads.length;j++){ if(name && ads[j].name===name){ idx=j; break; } } if(idx<0 && ads.length) idx=0; if(idx<0 || typeof openMetaCreative!=='function'){ alert('Geen visual gevonden voor deze advertentie.'); return; } state._metaAdsView=ads; openMetaCreative(idx); }
+  function show(){ var ads=((window.S27DATA&&S27DATA.campaignAds)?S27DATA.campaignAds(cid):[])||[]; var idx=_adsMatchAdIdx(ads,name); if(idx<0 || typeof openMetaCreative!=='function'){ alert('Geen visual gevonden voor deze advertentie.'); return; } state._metaAdsView=ads; openMetaCreative(idx); }
   var have=(window.S27DATA&&S27DATA.campaignAds)?S27DATA.campaignAds(cid):null;
   if(have){ show(); return; }
   if(window.S27DATA&&S27DATA.loadCampaignAds){ S27DATA.loadCampaignAds(cid).then(show).catch(function(){ alert('De visual kon niet geladen worden.'); }); }
@@ -1606,20 +1681,22 @@ function adsRichAdVisual(cid,encName){
 /* PDF subtiel onderaan (team kiest zelf wanneer) */
 function adsRichPdfFooter(){ return '<div class="ads-pdffoot"><button class="ads-pdflink" onclick="exportAdsPdf()"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Exporteer dit rapport als PDF</button></div>'; }
 /* === Meeting-kladblok (#21, staff): zwevend notitieblok, auto-save naar adsWorkspace.notes per bedrijf === */
-function adsNoteStyles(){ if(document.getElementById('adsNoteStyles'))return; var s=document.createElement('style'); s.id='adsNoteStyles'; s.textContent='.ads-note-fab{position:fixed;right:22px;bottom:22px;z-index:8000;width:52px;height:52px;border-radius:50%;border:1px solid var(--glass-border,#E7DFD3);background:linear-gradient(180deg,#fff,#f6f2ec);color:var(--s27-blue-ink,#1F5FA8);box-shadow:0 10px 28px rgba(60,40,80,.22);cursor:pointer;display:flex;align-items:center;justify-content:center}.ads-note-fab:hover{filter:brightness(1.05)}.ads-note{position:fixed;right:22px;bottom:84px;z-index:8001;width:340px;max-width:calc(100vw - 32px);background:rgba(255,255,255,.93);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid var(--glass-border,#E7DFD3);border-radius:16px;box-shadow:0 18px 48px rgba(60,40,80,.28);display:none;flex-direction:column;overflow:hidden}.ads-note.open{display:flex}.ads-note-head{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line,#E7DFD3);font-family:var(--font-display)}.ads-note-head b{font-size:13.5px;display:flex;align-items:center;gap:6px;flex:1}.ads-note-stat{font-size:11px;color:var(--ink-4);font-weight:600}.ads-note-x{border:0;background:transparent;font-size:15px;color:var(--ink-4);cursor:pointer;padding:2px 4px}.ads-note-ta{border:0;outline:0;resize:vertical;min-height:200px;max-height:50vh;padding:12px 14px;font:inherit;font-size:13.5px;line-height:1.5;color:var(--ink);background:transparent}'; document.head.appendChild(s); }
+function adsNoteStyles(){ if(document.getElementById('adsNoteStyles'))return; var s=document.createElement('style'); s.id='adsNoteStyles'; s.textContent='.ads-note{position:fixed;right:22px;top:74px;z-index:8001;width:340px;max-width:calc(100vw - 32px);max-height:calc(100vh - 100px);background:rgba(255,255,255,.93);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid var(--glass-border,#E7DFD3);border-radius:16px;box-shadow:0 18px 48px rgba(60,40,80,.28);display:none;flex-direction:column;overflow:hidden}.ads-note.open{display:flex}.ads-note-head{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line,#E7DFD3);font-family:var(--font-display)}.ads-note-head b{font-size:13.5px;display:flex;align-items:center;gap:6px;flex:1}.ads-note-stat{font-size:11px;color:var(--ink-4);font-weight:600}.ads-note-x{border:0;background:transparent;font-size:15px;color:var(--ink-4);cursor:pointer;padding:2px 4px}.ads-note-ta{border:0;outline:0;resize:vertical;min-height:200px;max-height:50vh;padding:12px 14px;font:inherit;font-size:13.5px;line-height:1.5;color:var(--ink);background:transparent}'; document.head.appendChild(s); }
 function adsNoteState(){ if(!state._adsNote) state._adsNote={open:false,loaded:false,text:''}; return state._adsNote; }
 function adsNotepadMount(){
   if(!isRichView()) return '';
   adsNoteStyles();
   var n=adsNoteState();
   if(!n.loaded && !state.demoMode && window.S27DATA && S27DATA.loadAdsWorkspace){ n.loaded=true; S27DATA.loadAdsWorkspace().then(function(ws){ n.text=(ws&&ws.notes)||''; var ta=document.getElementById('adsNoteTa'); if(ta && document.activeElement!==ta) ta.value=n.text; }); }
-  return '<div class="ads-note'+(n.open?' open':'')+'" id="adsNotePanel"><div class="ads-note-head"><b>'+ic('msg',16)+' Meeting-kladblok</b><span class="ads-note-stat" id="adsNoteStat"></span><button class="ads-note-x" onclick="adsNotepadToggle()" aria-label="Sluiten">✕</button></div><textarea id="adsNoteTa" class="ads-note-ta" placeholder="Notities voor deze meeting… (slaat automatisch op)" oninput="adsNoteInput()">'+esc(n.text||'')+'</textarea></div><button class="ads-note-fab" onclick="adsNotepadToggle()" title="Meeting-kladblok">'+ic('msg',20)+'</button>';
+  // FAB verwijderd (item 6): de toggle staat nu in de menubalk (adsNoteBtn). Enkel het paneel komt in de DOM.
+  return '<div class="ads-note'+(n.open?' open':'')+'" id="adsNotePanel"><div class="ads-note-head"><b>'+ic('msg',16)+' Meeting-kladblok</b><span class="ads-note-stat" id="adsNoteStat"></span><button class="ads-note-x" onclick="adsNotepadToggle()" aria-label="Sluiten">✕</button></div><textarea id="adsNoteTa" class="ads-note-ta" placeholder="Notities voor deze meeting… (slaat automatisch op)" oninput="adsNoteInput()">'+esc(n.text||'')+'</textarea></div>';
 }
-function adsNotepadToggle(){ var n=adsNoteState(); n.open=!n.open; var p=document.getElementById('adsNotePanel'); if(p) p.classList.toggle('open',n.open); if(n.open){ var ta=document.getElementById('adsNoteTa'); if(ta){ ta.value=n.text||''; ta.focus(); } } }
+function adsNotepadToggle(){ var n=adsNoteState(); n.open=!n.open; var p=document.getElementById('adsNotePanel'); if(p) p.classList.toggle('open',n.open); var b=document.getElementById('adsNoteBtn'); if(b) b.classList.toggle('on',n.open); if(n.open){ var ta=document.getElementById('adsNoteTa'); if(ta){ ta.value=n.text||''; ta.focus(); } } }
 function adsNoteInput(){ var ta=document.getElementById('adsNoteTa'); if(!ta) return; adsNoteState().text=ta.value; var st=document.getElementById('adsNoteStat'); if(st) st.textContent='bewaren…'; clearTimeout(state._adsNoteTmr); state._adsNoteTmr=setTimeout(adsNoteSave,900); }
 function adsNoteSave(){ if(!(window.S27DATA&&S27DATA.saveAdsWorkspace)) return; S27DATA.saveAdsWorkspace({notes:adsNoteState().text}).then(function(ok){ var st=document.getElementById('adsNoteStat'); if(st){ st.textContent=ok?'opgeslagen ✓':'opslaan mislukt'; if(ok) setTimeout(function(){ var s2=document.getElementById('adsNoteStat'); if(s2&&s2.textContent==='opgeslagen ✓') s2.textContent=''; },1600); } }); }
 /* per-tab charts: Samengevat = account-overzicht; Campagnes = per-campagne dag-evolutie */
 function adsRichMountTabCharts(){
+  _adsApplyAccent();
   if(!isRichView()) return;
   if(adsActivePlatform()==='google') return googleRichMountTabCharts();
   var t=adsRichTab();
@@ -1650,16 +1727,16 @@ var ADS_SEL_METRICS = {
     { key:'frequency',   label:'Frequentie',     color:'#6B5B6B', axis:'ratio', daily:'frequency',   kind:'line' }
   ],
   google: [
-    { key:'spend',       label:'Besteed',     color:'#C28E0E', axis:'money', daily:'spend',       kind:'bar'  },
+    { key:'spend',       label:'Besteed',     color:'#F66131', axis:'money', daily:'spend',       kind:'bar'  },
     { key:'impressions', label:'Vertoningen', color:'#1F5FA8', axis:'count', daily:'impressions', kind:'line' },
     { key:'cpm',         label:'CPM',         color:'#3083DC', axis:'money', daily:'cpm',         kind:'line' },
     { key:'clicks',      label:'Klikken',     color:'#230F23', axis:'count', daily:'clicks',      kind:'line' },
     { key:'ctr',         label:'CTR',         color:'#E07A1E', axis:'ratio', daily:'ctr',         kind:'line' },
     { key:'cpc',         label:'CPC',         color:'#7A8794', axis:'money', daily:'cpc',         kind:'line' },
-    { key:'conversions', label:'Conversies',  color:'#12AC4E', axis:'count', daily:'conversions', kind:'line' },
-    { key:'costPerConv', label:'Kost/conv.',  color:'#B4540B', axis:'money', daily:'costPerConv', kind:'line' },
+    { key:'conversions', label:'Leads',  color:'#12AC4E', axis:'count', daily:'conversions', kind:'line' },
+    { key:'costPerConv', label:'CPL',  color:'#B4540B', axis:'money', daily:'costPerConv', kind:'line' },
     { key:'convValue',   label:'Waarde',      color:'#9441DB', axis:'money', daily:'convValue',   kind:'line' },
-    { key:'convRate',    label:'Conv.ratio',  color:'#0EA5A5', axis:'ratio', daily:'convRate',    kind:'line' }
+    { key:'convRate',    label:'Leadratio',  color:'#0EA5A5', axis:'ratio', daily:'convRate',    kind:'line' }
   ]
 };
 // axis-groep van een metric (voor links/rechts-as-toewijzing).
@@ -1796,7 +1873,7 @@ function adsChartRebuild(plat){
 // CSS-injector voor klikbare KPI-kaarten + maandgrafiek-controls (guarded).
 function adsChartStyles(){ if(document.getElementById('adsChartStyles'))return; var s=document.createElement('style'); s.id='adsChartStyles'; s.textContent=
   '.arkpi.arkpi-clk{cursor:pointer;position:relative;transition:border-color .15s,box-shadow .15s,transform .12s;}'
- +'.arkpi.arkpi-clk:hover{border-color:var(--s27-blue,#3083DC);box-shadow:0 4px 14px rgba(48,131,220,.16);}'
+ +'.arkpi.arkpi-clk:hover{border-color:var(--ads-accent,#3083DC);box-shadow:0 4px 14px rgba(48,131,220,.16);}'
  +'.arkpi.arkpi-clk::after{content:"";position:absolute;left:13px;right:13px;bottom:8px;height:3px;border-radius:3px;background:var(--arkpi-dot,#3083DC);opacity:0;transition:opacity .15s;}'
  +'.arkpi.arkpi-clk.on{border-color:var(--arkpi-dot,#3083DC);}'
  +'.arkpi.arkpi-clk.on::after{opacity:.9;}'
@@ -1940,7 +2017,7 @@ function adsRichInner(){
 /* ---- formatters ---- */
 function arNum(n){ return (Number(n)||0).toLocaleString('nl-BE'); }
 function arEur(n,cur){ return metaEur(n,cur); }
-function arPct(n){ return (Math.round((Number(n)||0)*100)/100).toLocaleString('nl-BE')+'%'; }
+function arPct(n){ return (Number(n)||0).toLocaleString('nl-BE',{minimumFractionDigits:2,maximumFractionDigits:2})+'%'; }
 function arDec(n,d){ d=d||2; var f=Math.pow(10,d); return (Math.round((Number(n)||0)*f)/f).toLocaleString('nl-BE',{minimumFractionDigits:d,maximumFractionDigits:d}); }
 // vergelijkings-chip: groen=beter, oranje=slechter, grijs=gelijk. invert=lager-is-beter (CPM/CPC/CPL/freq).
 function arCmp(cur,prev,invert){
@@ -1948,7 +2025,7 @@ function arCmp(cur,prev,invert){
   cur=Number(cur)||0; prev=Number(prev)||0;
   if(!prev){ return cur>0?'<span class="arcmp good">nieuw</span>':''; }
   var pct=Math.round(((cur-prev)/Math.abs(prev))*1000)/10;
-  if(pct===0) return '<span class="arcmp flat">0%</span>';
+  if(Math.abs(pct) < 0.05) return '<span class="arcmp flat" title="gelijk gebleven">gelijk gebleven</span>';
   var better = invert ? pct<0 : pct>0;
   return '<span class="arcmp '+(better?'good':'bad')+'">'+(pct>0?'▲ +':'▼ ')+pct+'%</span>';
 }
@@ -1961,7 +2038,7 @@ function arCmpAbs(cur,prev,invert,fmt){
   if(!prev) return cur>0?'<span class="arcmp good">nieuw</span>':'';
   var diff=cur-prev;
   var prevTxt=(fmt?fmt(prev):prev);
-  if(diff===0) return '<span class="arcmp flat">▬ '+prevTxt+'</span>';
+  if(Math.abs(diff) < 0.005*Math.max(1,Math.abs(prev))) return '<span class="arcmp flat" title="gelijk gebleven">gelijk gebleven</span>';
   var cls=((invert?diff<0:diff>0)?'good':'bad');
   var arrow=diff>0?'▲':'▼';
   return '<span class="arcmp '+cls+'">'+arrow+' '+prevTxt+'</span>';
@@ -2046,11 +2123,11 @@ function adsRichMergeAds(ads){
 function _arGridCols(cols){ return cols.map(function(col,i){ return i===0?'minmax(190px,2.2fr)':(col[0]==='status'?'46px':(col[2]?'minmax(72px,1fr)':'minmax(96px,1fr)')); }).join(' '); }
 function _arCell(key,r,cur){
   switch(key){
-    case 'name': var _nm='<span class="ar-nm">'+esc(r.name||'–')+'</span>'+(r.merged?' <span class="ar-star" title="'+r.count+' advertenties met dezelfde naam, samengeteld">★'+r.count+'</span>':''); return r._cid?'<button class="ar-namebtn" type="button" onclick="adsRichAdVisual(\''+esc(r._cid)+'\',\''+encodeURIComponent(r.name||'')+'\')" title="Bekijk de visual van deze advertentie">'+_nm+'</button>':_nm;
+    case 'name': var _nm='<span class="ar-nm" title="'+esc(r.name||'')+'">'+esc(r.name||'–')+'</span>'+(r.merged?' <span class="ar-star" title="'+r.count+' advertenties met dezelfde naam, samengeteld">★'+r.count+'</span>':''); return r._cid?'<button class="ar-namebtn" type="button" onclick="adsRichAdVisual(\''+esc(r._cid)+'\',\''+encodeURIComponent(r.name||'')+'\')" title="Bekijk de visual van deze advertentie">'+_nm+'</button>':_nm;
     case 'status': return adsRichStatus(r.status);
-    case 'text': return '<span class="ar-nm">'+esc(r.text||'–')+'</span>';
+    case 'text': return '<span class="ar-nm" title="'+esc(r.text||'')+'">'+esc(r.text||'–')+'</span>';
     case 'matchType': return esc(_gMatch(r.matchType));
-    case 'campaign': return esc(r.campaign||'');
+    case 'campaign': return '<span class="ar-nm" title="'+esc(r.campaign||'')+'">'+esc(r.campaign||'')+'</span>';
   }
   var v;
   switch(key){
@@ -2156,11 +2233,20 @@ function adsOverviewInner(){
    ============================================================================= */
 function adsActivePlatform(){ return state._adsPlatform==='google'?'google':'meta'; }
 function adsPlatStyles(){ if(document.getElementById('adsPlatStyles'))return; var s=document.createElement('style'); s.id='adsPlatStyles'; s.textContent='.ads-platsw{display:inline-flex;gap:5px;background:linear-gradient(180deg,rgba(255,255,255,.72),rgba(255,255,255,.42));-webkit-backdrop-filter:blur(12px) saturate(1.3);backdrop-filter:blur(12px) saturate(1.3);border:1px solid var(--glass-border,rgba(255,255,255,.6));border-radius:999px;padding:5px;margin:2px 0 16px;box-shadow:var(--glass-sh,0 8px 24px rgba(60,40,80,.09)),inset 0 1px 0 rgba(255,255,255,.7)}.ads-plat{display:inline-flex;align-items:center;gap:7px;border:0;background:transparent;font:inherit;font-weight:700;font-size:13px;color:var(--ink-3);padding:8px 16px;border-radius:999px;cursor:pointer;transition:all .18s var(--ease-out,ease)}.ads-plat:hover{color:var(--ink)}.ads-plat.active{background:linear-gradient(180deg,#fff,#f7f3ec);color:var(--ink);box-shadow:0 2px 8px rgba(35,15,35,.13),inset 0 1px 0 #fff}.ads-platdot{width:8px;height:8px;border-radius:50%;flex:none;box-shadow:0 0 0 2px rgba(255,255,255,.5)}.ads-ovw{display:flex;flex-direction:column;gap:16px}.ads-ovw>.ads-reschip{margin:0}.ads-camps .section-head{margin-top:0}.ar-ckd{display:block;font-size:10px;line-height:1.15;margin-top:1px}.ar-td.num{flex-direction:column;align-items:flex-end;gap:1px}.ar-tdd{display:block;font-size:9.5px;line-height:1.1}.ar-namebtn{border:0;background:transparent;padding:0;font:inherit;color:inherit;text-align:left;cursor:pointer;border-bottom:1px dashed var(--line,#E7DFD3)}.ar-namebtn:hover{color:var(--s27-blue-ink,#1F5FA8);border-bottom-color:currentColor}'; document.head.appendChild(s); }
-function adsPlatformSwitch(){
-  adsPlatStyles(); var p=adsActivePlatform();
-  function b(id,lab,col){ return '<button class="ads-plat'+(p===id?' active':'')+'" onclick="setAdsPlatform(\''+id+'\')"><span class="ads-platdot" style="background:'+col+'"></span>'+esc(lab)+'</button>'; }
-  return '<div class="ads-platsw">'+b('meta','Meta',ADS_PLAT.meta[1])+b('google','Google Ads',ADS_PLAT.google[1])+'</div>';
+// item 5: platform-keuze als compacte dropdown-knop (i.p.v. pill-rij). In team-view zit hij in de
+// subnav-balk (adsRichSubnav/googleRichSubnav); in klant-view bovenaan naast de periode-knop.
+function adsPlatformPicker(){
+  adsPlatStyles(); _adsInstallMenuCloser();
+  var p=adsActivePlatform(); var open=!!state._adsPlatMenuOpen; var curp=adsPlat(p==='google'?'google':'meta');
+  function opt(id){ var pl=adsPlat(id==='google'?'google':'meta'); return '<button class="ads-platpick-opt'+(p===id?' active':'')+'" onclick="setAdsPlatform(\''+id+'\')"><span class="ads-platdot" style="background:'+pl[1]+'"></span>'+esc(pl[0])+'</button>'; }
+  return '<div class="ads-platpick'+(open?' open':'')+'">'
+    +'<button class="ads-platpick-btn" onclick="adsPlatPickToggle()" aria-expanded="'+(open?'true':'false')+'" title="Wissel van platform"><span class="ads-platdot" style="background:'+curp[1]+'"></span><span class="ads-platpick-nm">'+esc(curp[0])+'</span>'+_adsChevDown()+'</button>'
+    +'<div class="ads-platpick-menu'+(open?' open':'')+'" id="adsPlatMenu"><div class="ads-platpick-hd">Platform</div>'+opt('meta')+opt('google')+'</div>'
+  +'</div>';
 }
+function adsPlatPickToggle(){ state._adsPlatMenuOpen=!state._adsPlatMenuOpen; var m=document.getElementById('adsPlatMenu'); if(!m) return; var w=m.parentNode; m.classList.toggle('open',state._adsPlatMenuOpen); if(w){ w.classList.toggle('open',state._adsPlatMenuOpen); var b=w.querySelector('.ads-platpick-btn'); if(b) b.setAttribute('aria-expanded',state._adsPlatMenuOpen?'true':'false'); } }
+// back-compat alias (oude call-sites)
+function adsPlatformSwitch(){ return adsPlatformPicker(); }
 function googleAdsBody(){
   var g=(window.S27DATA&&S27DATA.googleAds&&S27DATA.googleAds())||null;
   if(g===null){
@@ -2200,7 +2286,7 @@ function googleOverviewInner(){
   return '<div class="ads-ovw">'+grid+chart+'<div class="ads-camps">'+campSec+'</div></div>';
 }
 function googleCampaignCard(c,cur){
-  var ms=[['Besteed',metaEur(c.spend,cur),'spend'],['Vertoningen',adsNum(c.impressions),'impressions'],['Klikken',adsNum(c.clicks),'clicks'],['CPC',metaEur(c.cpc,cur),'cpc'],['CTR',(Number(c.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%','ctr'],['Conversies',adsNum(c.results),'results']];
+  var ms=[['Besteed',metaEur(c.spend,cur),'spend'],['Vertoningen',adsNum(c.impressions),'impressions'],['Klikken',adsNum(c.clicks),'clicks'],['CPC',metaEur(c.cpc,cur),'cpc'],['CTR',(Number(c.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%','ctr'],['Leads',adsNum(c.results),'results']];
   var chan=c.objective?'<span class="fs" style="color:var(--ink-4)">'+esc(c.objective)+'</span>':'';
   return '<div class="card" style="padding:14px 16px;margin-bottom:10px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:11px"><span class="pill pill-prog"><span class="pdot"></span>Live</span><b style="font-family:var(--font-display);font-size:15px;flex:1;min-width:130px">'+esc(c.name||'Campagne')+'</b>'+chan+'</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:10px">'+ms.map(function(m){var d=arRowDelta(c,m[2],cur);return '<div><div style="color:var(--ink-4);font-size:11px;font-weight:600">'+m[0]+'</div><div style="font-family:var(--font-display);font-weight:800;font-size:16px;color:var(--ink)">'+m[1]+'</div>'+(d?'<div class="ar-ckd">'+d+'</div>':'')+'</div>';}).join('')+'</div></div>';
 }
@@ -2227,7 +2313,8 @@ function googleRichSubnav(){
   var t=adsRichTab();
   var tabs=[['samengevat','Samengevat','st_progress'],['maand','Maandoverzicht','cal'],['campagnes','Campagnes','cal'],['gegevens','Zoekwoorden','st_approved'],['aanbevelingen','Aanbevelingen','msg']];
   if(isRichView()) tabs.push(['meeting','Meeting','img']);
-  return '<div class="soc-subnav" id="adsSubnav">'+tabs.map(function(x){ return '<button class="soc-subtab'+(t===x[0]?' active':'')+'" data-atab="'+x[0]+'" onclick="adsRichSetTab(\''+x[0]+'\')">'+ic(x[2],17)+'<span>'+esc(x[1])+'</span></button>'; }).join('')+'</div>';
+  var tabsHtml=tabs.map(function(x){ return '<button class="soc-subtab'+(t===x[0]?' active':'')+'" data-atab="'+x[0]+'" onclick="adsRichSetTab(\''+x[0]+'\')">'+ic(x[2],17)+'<span>'+esc(x[1])+'</span></button>'; }).join('');
+  return '<div class="soc-subnav-row"><div class="soc-subnav" id="adsSubnav">'+tabsHtml+'</div><div class="soc-subnav-act">'+adsPlatformPicker()+adsNoteBtn()+'</div></div>';
 }
 function googleRichTabBody(){
   if(adsRichTab()==='meeting') return adsWsMeetingTab();
@@ -2278,10 +2365,10 @@ function adsKpiGridGeneric(plat,k,p,cur,cmpLabel){
       card('Klikken',arNum(k.clicks),'clicks',false,fN),
       card('CTR',arPct(k.ctr),'ctr',false),
       card('CPC',arEur(k.cpc,cur),'cpc',true,fE),
-      card('Conversies',arDec(k.conversions,2),'conversions',false,fD),
-      card('Kost/conv.',k.conversions?arEur(k.costPerConv,cur):'–','costPerConv',true,fE),
+      card('Leads',arDec(k.conversions,2),'conversions',false,fD),
+      card('CPL',k.conversions?arEur(k.costPerConv,cur):'–','costPerConv',true,fE),
       card('Waarde',arEur(k.convValue,cur),'convValue',false,fE),
-      card('Conv.ratio',arPct(k.convRate),'convRate',false)
+      card('Leadratio',arPct(k.convRate),'convRate',false)
     ];
   } else {
     var hasLeads=((Number(k.leads)||0)>0)||(p&&(Number(p.leads)||0)>0);
@@ -2308,8 +2395,8 @@ function googleRichSamengevat(g,cur){
     +(hasDaily?'<div class="ar-chartwrap"><canvas id="garch_account"></canvas></div>':'<div class="sr-chempty">Nog te weinig dagen met data om een grafiek te tonen in deze periode.</div>')+'</div>';
 }
 function googleRichCampKpis(c,cur){
-  // CANONIEKE Google-volgorde: Besteed → Vertoningen → CPM → Klikken → CTR → CPC → Conversies → Kost/conv. → Waarde → Conv.ratio.
-  var items=[['Besteed',arEur(c.spend,cur),'spend'],['Vertoningen',arNum(c.impressions),'impressions'],['CPM',arEur(c.cpm,cur),'cpm'],['Klikken',arNum(c.clicks),'clicks'],['CTR',arPct(c.ctr),'ctr'],['CPC',arEur(c.cpc,cur),'cpc'],['Conversies',arDec(c.conversions,2),'conversions'],['Kost/conv.',c.conversions?arEur(c.costPerConv,cur):'–','costPerConv'],['Waarde',arEur(c.convValue,cur),'convValue'],['Conv.ratio',arPct(c.convRate),'convRate']];
+  // CANONIEKE Google-volgorde: Besteed → Vertoningen → CPM → Klikken → CTR → CPC → Leads → CPL → Waarde → Leadratio.
+  var items=[['Besteed',arEur(c.spend,cur),'spend'],['Vertoningen',arNum(c.impressions),'impressions'],['CPM',arEur(c.cpm,cur),'cpm'],['Klikken',arNum(c.clicks),'clicks'],['CTR',arPct(c.ctr),'ctr'],['CPC',arEur(c.cpc,cur),'cpc'],['Leads',arDec(c.conversions,2),'conversions'],['CPL',c.conversions?arEur(c.costPerConv,cur):'–','costPerConv'],['Waarde',arEur(c.convValue,cur),'convValue'],['Leadratio',arPct(c.convRate),'convRate']];
   return adsCampKpiGrid('google',c,cur,items);
 }
 function googleRichCampaign(c,cur){
@@ -2328,9 +2415,9 @@ function googleRichCampagnes(g,cur){
   if(!camps.length) return '<div class="card" style="padding:24px;text-align:center;color:var(--ink-3)">Geen campagnes met activiteit in deze periode.</div>';
   return '<div class="section-head" style="margin-top:2px"><h2>Campagnes</h2><span class="count">'+camps.length+'</span></div>'+camps.map(function(c){ return googleRichCampaign(c,cur); }).join('');
 }
-// CANONIEKE Google-kolomvolgorde: Besteed → Vert. → CPM → Klikken → CTR → CPC → Conv. → Kost/conv. → Waarde → Conv.ratio.
-var G_AG_COLS=[['name','Advertentiegroep',0],['status','Status',0],['spend','Besteed',1],['impressions','Vert.',1],['cpm','CPM',1],['clicks','Klikken',1],['ctr','CTR',1],['cpc','CPC',1],['conversions','Conv.',1],['costPerConv','Kost/conv.',1],['convValue','Waarde',1],['convRate','Conv.ratio',1]];
-var G_KW_COLS=[['text','Zoekwoord',0],['matchType','Type',0],['campaign','Campagne',0],['spend','Besteed',1],['impressions','Vert.',1],['cpm','CPM',1],['clicks','Klikken',1],['ctr','CTR',1],['cpc','CPC',1],['conversions','Conv.',1],['costPerConv','Kost/conv.',1],['convRate','Conv.ratio',1]];
+// CANONIEKE Google-kolomvolgorde: Besteed → Vert. → CPM → Klikken → CTR → CPC → Leads → CPL → Waarde → Leadratio.
+var G_AG_COLS=[['name','Advertentiegroep',0],['status','Status',0],['spend','Besteed',1],['impressions','Vert.',1],['cpm','CPM',1],['clicks','Klikken',1],['ctr','CTR',1],['cpc','CPC',1],['conversions','Leads',1],['costPerConv','CPL',1],['convValue','Waarde',1],['convRate','Leadratio',1]];
+var G_KW_COLS=[['text','Zoekwoord',0],['matchType','Type',0],['campaign','Campagne',0],['spend','Besteed',1],['impressions','Vert.',1],['cpm','CPM',1],['clicks','Klikken',1],['ctr','CTR',1],['cpc','CPC',1],['conversions','Leads',1],['costPerConv','CPL',1],['convRate','Leadratio',1]];
 function _gTable(which,cid,cols,s,rows,cur,emptyMsg,title){
   var tpl=_arGridCols(cols);
   var head=cols.map(function(col){ var on=s.key===col[0]; var arr=on?(s.dir<0?' ▼':' ▲'):''; return '<button class="ar-th'+(col[2]?' num':'')+(on?' on':'')+'" onclick="googleRichSort(\''+esc(cid)+'\',\''+which+'\',\''+col[0]+'\')">'+esc(col[1])+arr+'</button>'; }).join('');
@@ -2339,12 +2426,21 @@ function _gTable(which,cid,cols,s,rows,cur,emptyMsg,title){
 }
 function googleRichAdGroupTable(c,cur){ var ags=(c.adGroups||[]); if(!ags.length) return ''; var s=arSortState('g_'+c.id,'ag'); var rows=ags.slice().sort(function(a,b){return _arCmpVal(a,b,s);}); return _gTable('ag',c.id,G_AG_COLS,s,rows,cur,'Geen advertentiegroepen met data.','Advertentiegroepen'); }
 function _gKwSort(){ if(!state._gKwSort) state._gKwSort={key:'spend',dir:-1}; return state._gKwSort; }
-function googleRichKwInner(){ var rows=(state._gKw||[]).slice(); var s=_gKwSort(); rows.sort(function(a,b){return _arCmpVal(a,b,s);}); return _gTable('kw','all',G_KW_COLS,s,rows,_gCur(),'Geen zoekwoorden met vertoningen in deze periode.','Zoekwoorden'); }
+function _gKwCampFilter(){ return state._gKwCamp||''; }
+function googleRichKwInner(){ var f=_gKwCampFilter(); var rows=(state._gKw||[]).filter(function(k){ return !f || (k.campaign||'')===f; }); var s=_gKwSort(); rows.sort(function(a,b){return _arCmpVal(a,b,s);}); return _gTable('kw','all',G_KW_COLS,s,rows,_gCur(),(f?'Geen zoekwoorden voor deze campagne in deze periode.':'Geen zoekwoorden met vertoningen in deze periode.'),'Zoekwoorden'); }
+// item 2: filter zoekwoorden op campagne; herrendert enkel de tabel (geen volledige paneel-rebuild)
+function gKwSetCamp(v){ state._gKwCamp=v||''; var w=document.getElementById('gart_kw_all'); if(w) w.outerHTML=googleRichKwInner(); }
 function googleRichKeywords(g,cur){
   state._gKw=(g.keywords||[]);
-  if(!state._gKw.length) return '<div class="section-head" style="margin-top:2px"><h2>Zoekwoorden</h2></div><div class="card" style="padding:24px;text-align:center;color:var(--ink-3)">Geen zoekwoord-data in deze periode (enkel zoekcampagnes leveren zoekwoorden).</div>';
+  if(!state._gKw.length){ state._gKwCamp=''; return '<div class="section-head" style="margin-top:2px"><h2>Zoekwoorden</h2></div><div class="card" style="padding:24px;text-align:center;color:var(--ink-3)">Geen zoekwoord-data in deze periode (enkel zoekcampagnes leveren zoekwoorden).</div>'; }
+  var camps=[],seen={}; state._gKw.forEach(function(k){ var n=k.campaign||''; if(n&&!seen[n]){ seen[n]=1; camps.push(n); } }); camps.sort();
+  if(state._gKwCamp && camps.indexOf(state._gKwCamp)<0) state._gKwCamp='';   // stale filter (ander bedrijf/periode) opruimen
+  var filterUi = camps.length>1
+    ? '<div class="ads-kwfilter"><span class="ads-kwfilter-lab">Campagne</span><select onchange="gKwSetCamp(this.value)" aria-label="Filter op campagne"><option value="">Alle campagnes</option>'+camps.map(function(n){ return '<option value="'+esc(n)+'"'+(_gKwCampFilter()===n?' selected':'')+'>'+esc(n)+'</option>'; }).join('')+'</select></div>'
+    : '';
   return '<div class="section-head" style="margin-top:2px"><h2>Zoekwoorden</h2><span class="count">'+state._gKw.length+'</span></div>'
     +'<p class="sdesc" style="margin:-2px 0 10px;max-width:66ch">De zoekwoorden die je advertenties triggerden in deze periode (top 250 op besteding). Klik op een kolomtitel om te sorteren.</p>'
+    +filterUi
     +'<div id="gKwWrap">'+googleRichKwInner()+'</div>';
 }
 function googleRichSort(cid,which,key){
@@ -2613,6 +2709,7 @@ function adsWsUploadDel(idx){
   else { adsWsRefreshGrid(); }
 }
 function googleRichMountTabCharts(){
+  _adsApplyAccent();
   if(!isRichView()||adsActivePlatform()!=='google') return;
   var t=adsRichTab();
   if(t==='maand'){ googleMonthlyMount(); return; }
@@ -2625,7 +2722,7 @@ function googleRichMountTabCharts(){
 function _gChartDs(spend,clicks,conv){
   var ds=[{type:'bar',label:'Besteed',data:spend,backgroundColor:'rgba(194,142,14,.55)',borderColor:'rgba(194,142,14,.95)',borderWidth:1,borderRadius:4,yAxisID:'y',order:3},
           {type:'line',label:'Klikken',data:clicks,borderColor:'#230F23',backgroundColor:'#230F23',borderWidth:2,tension:.32,pointRadius:0,yAxisID:'y1',order:2}];
-  if(conv.some(function(v){return v>0;})) ds.push({type:'line',label:'Conversies',data:conv,borderColor:'#12AC4E',backgroundColor:'#12AC4E',borderWidth:2,tension:.32,pointRadius:0,yAxisID:'y1',order:1});
+  if(conv.some(function(v){return v>0;})) ds.push({type:'line',label:'Leads',data:conv,borderColor:'#12AC4E',backgroundColor:'#12AC4E',borderWidth:2,tension:.32,pointRadius:0,yAxisID:'y1',order:1});
   return ds;
 }
 function _gChartOpts(cur){
@@ -2652,8 +2749,8 @@ function googleRichBuildCampChart(c,cur){
    ============================================================================= */
 var G_MONTH_METRICS=[
   { key:'spend',       label:'Besteding',   color:'#C28E0E', axis:'eur'   },
-  { key:'conversions', label:'Conversies',  color:'#12AC4E', axis:'count' },
-  { key:'convValue',   label:'Conv.waarde', color:'#9441DB', axis:'eur'   },
+  { key:'conversions', label:'Leads',  color:'#12AC4E', axis:'count' },
+  { key:'convValue',   label:'Leadwaarde', color:'#9441DB', axis:'eur'   },
   { key:'clicks',      label:'Klikken',     color:'#230F23', axis:'count' }
 ];
 function gMonthSel(){
@@ -2746,12 +2843,12 @@ function _gPdfCharts(g,cur){
 function _gPdfAgTable(c,cur){
   var ags=(c.adGroups||[]).slice(0,8); if(!ags.length) return '';
   var rows=ags.map(function(a){ return '<tr><td>'+esc(a.name||'–')+'</td><td class="num">'+metaEur(a.spend,cur)+'</td><td class="num">'+arNum(a.clicks)+'</td><td class="num">'+arPct(a.ctr)+'</td><td class="num">'+arDec(a.conversions,2)+'</td></tr>'; }).join('');
-  return '<table><thead><tr><th>Advertentiegroep</th><th class="num">Besteed</th><th class="num">Klikken</th><th class="num">CTR</th><th class="num">Conv.</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  return '<table><thead><tr><th>Advertentiegroep</th><th class="num">Besteed</th><th class="num">Klikken</th><th class="num">CTR</th><th class="num">Leads</th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
 function _gPdfKwTable(kws,cur){
   var top=(kws||[]).slice(0,15); if(!top.length) return '';
   var rows=top.map(function(w){ return '<tr><td>'+esc(w.text||'–')+'</td><td>'+esc(w.campaign||'')+'</td><td class="num">'+metaEur(w.spend,cur)+'</td><td class="num">'+arNum(w.clicks)+'</td><td class="num">'+arPct(w.ctr)+'</td><td class="num">'+arDec(w.conversions,2)+'</td></tr>'; }).join('');
-  return '<table><thead><tr><th>Zoekwoord</th><th>Campagne</th><th class="num">Besteed</th><th class="num">Klikken</th><th class="num">CTR</th><th class="num">Conv.</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  return '<table><thead><tr><th>Zoekwoord</th><th>Campagne</th><th class="num">Besteed</th><th class="num">Klikken</th><th class="num">CTR</th><th class="num">Leads</th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
 function googleAdsPdf(){
   var g=(window.S27DATA&&S27DATA.googleAdsRich&&S27DATA.googleAdsRich()); if(!g||!g.linked){ alert('Er is nog geen Google-rapportdata om te exporteren. Open eerst de Google-rapportage in de TeamView.'); return; }
@@ -2759,12 +2856,12 @@ function googleAdsPdf(){
   var company=(state._adminActiveName||(window.S27DATA&&S27DATA.bedrijfsnaam&&S27DATA.bedrijfsnaam())||'Klant');
   var imgs=_gPdfCharts(g,cur);
   function kc(lab,val,key,inv){ return '<div class="pdf-kpi"><div class="l">'+lab+'</div><div class="v">'+val+'</div>'+(p?_pdfDelta(k[key],p[key],inv):'')+'</div>'; }
-  var kpis='<div class="pdf-kpis">'+[kc('Besteed',metaEur(k.spend,cur),'spend',true),kc('Conversies',arDec(k.conversions,2),'conversions',false),kc('Conv.waarde',metaEur(k.convValue,cur),'convValue',false),kc('Kost/conv.',k.conversions?metaEur(k.costPerConv,cur):'–','costPerConv',true),kc('Conv.ratio',arPct(k.convRate),'convRate',false),kc('Klikken',arNum(k.clicks),'clicks',false),kc('Vertoningen',arNum(k.impressions),'impressions',false),kc('CTR',arPct(k.ctr),'ctr',false),kc('CPC',metaEur(k.cpc,cur),'cpc',true),kc('CPM',metaEur(k.cpm,cur),'cpm',true)].join('')+'</div>';
-  var accImg=imgs.account?'<div class="pdf-chart"><div style="font-weight:800;font-size:10px;margin-bottom:4px">Account-overzicht per dag (besteding · klikken · conversies)</div><img src="'+imgs.account+'"></div>':'';
+  var kpis='<div class="pdf-kpis">'+[kc('Besteed',metaEur(k.spend,cur),'spend',true),kc('Leads',arDec(k.conversions,2),'conversions',false),kc('Leadwaarde',metaEur(k.convValue,cur),'convValue',false),kc('CPL',k.conversions?metaEur(k.costPerConv,cur):'–','costPerConv',true),kc('Leadratio',arPct(k.convRate),'convRate',false),kc('Klikken',arNum(k.clicks),'clicks',false),kc('Vertoningen',arNum(k.impressions),'impressions',false),kc('CTR',arPct(k.ctr),'ctr',false),kc('CPC',metaEur(k.cpc,cur),'cpc',true),kc('CPM',metaEur(k.cpm,cur),'cpm',true)].join('')+'</div>';
+  var accImg=imgs.account?'<div class="pdf-chart"><div style="font-weight:800;font-size:10px;margin-bottom:4px">Account-overzicht per dag (besteding · klikken · leads)</div><img src="'+imgs.account+'"></div>':'';
   var camps=(g.campaigns||[]).map(function(c){
     var img=imgs['c'+c.id]?'<div class="pdf-chart"><img src="'+imgs['c'+c.id]+'"></div>':'';
     return '<div class="pdf-camp"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:12.5px">'+esc(c.name||'Campagne')+'</b>'+(c.channel?'<span class="pdf-pill">'+esc(c.channel)+'</span>':'')+'</div>'
-      +'<div style="font-size:9.5px;color:#6B5B6B;margin:3px 0 5px">'+metaEur(c.spend,cur)+' besteed · '+arDec(c.conversions,2)+' conv.'+(c.conversions?(' · '+metaEur(c.costPerConv,cur)+' /conv.'):'')+' · '+arNum(c.clicks)+' klikken · CTR '+arPct(c.ctr)+' · CPC '+metaEur(c.cpc,cur)+(c.imprShare>0?(' · vert.aandeel '+arPct(c.imprShare)):'')+'</div>'+img+_gPdfAgTable(c,cur)+'</div>';
+      +'<div style="font-size:9.5px;color:#6B5B6B;margin:3px 0 5px">'+metaEur(c.spend,cur)+' besteed · '+arDec(c.conversions,2)+' leads'+(c.conversions?(' · '+metaEur(c.costPerConv,cur)+' CPL'):'')+' · '+arNum(c.clicks)+' klikken · CTR '+arPct(c.ctr)+' · CPC '+metaEur(c.cpc,cur)+(c.imprShare>0?(' · vert.aandeel '+arPct(c.imprShare)):'')+'</div>'+img+_gPdfAgTable(c,cur)+'</div>';
   }).join('');
   var kwTable=_gPdfKwTable(g.keywords||[],cur);
   var recs=googleRichOptimList(g).map(function(r){ return '<div class="pdf-rec '+(r[0]==='orange'?'':r[0])+'"><b>'+r[1]+'</b><span>'+r[2]+'</span></div>'; }).join('');
@@ -2774,13 +2871,8 @@ function googleAdsPdf(){
     +'<h2 class="pdf-sec">Optimalisatie-aanbevelingen</h2>'+recs;
   _pdfOpen(s27PdfShell('Google Ads-rapport — '+company,'Google Ads-rapport',company+' · '+_pdfPeriodFromUI('ads'),body));
 }
-function openMetaCampaign(id){
-  state._metaCampaign=String(id); renderPanel('advertenties'); if(window.scrollTo)window.scrollTo({top:0,behavior:'auto'});
-  if(window.S27DATA && S27DATA.loadCampaignAds && (!state.data.metaCampaignAds || state.data.metaCampaignAds[String(id)]===undefined)){
-    S27DATA.loadCampaignAds(id).then(function(){ if(state._metaCampaign===String(id) && document.querySelector('.panel[data-screen-label="advertenties"]')) renderPanel('advertenties'); });
-  }
-}
-function closeMetaCampaign(){ state._metaCampaign=null; renderAds(); }
+// item 9: openMetaCampaign/closeMetaCampaign/metaCampaignDetail (paginavervanging) verwijderd —
+// campagnes openen nu inline via toggleMetaCampaign().
 function _adsChev(){ return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>'; }
 function metaAdRow(a,i,cur){
   var fm=metaFmt(a.format); var thumb=(a.format==='video'?(a.poster||a.image):a.image)||a.thumb||'';
@@ -2806,28 +2898,6 @@ function adsToggleAdRow(i){
   exp.innerHTML='<div class="ads-adexp-in"><div class="ads-adexp-media">'+media+'<button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openMetaCreative('+i+')">'+ic('arrow',13)+' Vergroot visual</button></div><div class="ads-adexp-stats">'+stats.map(function(s){return '<div><div class="ads-adexp-lab">'+esc(s[0])+'</div><div class="ads-adexp-num">'+s[1]+'</div></div>';}).join('')+'</div></div>';
   exp.style.display='block'; if(row) row.classList.add('open');
 }
-function metaCampaignDetail(m,cur){
-  var id=state._metaCampaign;
-  var c=(m.campaigns||[]).filter(function(x){return String(x.id)===String(id);})[0];
-  var back='<div class="detail-closerow"><button class="detail-close detail-close--inline" title="Terug naar overzicht" aria-label="Terug naar overzicht" onclick="closeMetaCampaign()">'+ic('plus',22)+'</button></div>';
-  if(!c){ return back+'<div class="card" style="padding:24px;text-align:center;color:var(--ink-3)">Deze campagne heeft geen activiteit in de gekozen periode.</div>'; }
-  var obj=adsObjective(c.objective);
-  var head='<div class="section-head" style="margin-bottom:8px"><h2 style="display:flex;align-items:center;gap:9px;min-width:0"><span class="pill pill-prog"><span class="pdot"></span>Live</span><span style="overflow:hidden;text-overflow:ellipsis">'+esc(c.name||'Campagne')+'</span></h2>'+(obj?'<span class="count">'+esc(obj)+'</span>':'')+'</div>';
-  var kpis='<div class="kpi-grid">'+metaKpiCard('orange','Besteding',metaEur(c.spend,cur))+metaKpiCard('blue','Vertoningen',adsNum(c.impressions))+metaKpiCard('green','Klikken',adsNum(c.linkClicks||c.clicks))+metaKpiCard('purple','CTR',(Number(c.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%')+'</div>';
-  var sub=[['Bereik',adsNum(c.reach)],['CPC',metaEur(c.cpc,cur)],['CPM',metaEur(c.cpm,cur)],['Frequentie',(Number(c.frequency)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})],['Resultaten',adsNum(c.results)]];
-  var subGrid='<div class="card" style="padding:14px 16px;margin-top:2px"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:12px">'+sub.map(function(s){return '<div><div style="color:var(--ink-4);font-size:11px;font-weight:600">'+s[0]+'</div><div style="font-family:var(--font-display);font-weight:800;font-size:16px;color:var(--ink)">'+s[1]+'</div></div>';}).join('')+'</div></div>';
-  var loaded=(window.S27DATA&&S27DATA.campaignAds)?S27DATA.campaignAds(id):undefined;
-  var creSec;
-  if(loaded===undefined){
-    state._metaAdsView=[];
-    creSec='<div class="section-head" style="margin-top:20px"><h2>Advertenties &amp; visuals</h2></div><div class="empty" style="padding:40px"><div class="brand-spinner" style="margin:0 auto 10px"></div><p>De advertenties en visuals worden opgehaald…</p></div>';
-  } else {
-    var ads=loaded.slice().sort(function(a,b){return (b.spend||0)-(a.spend||0);});
-    state._metaAdsView=ads;
-    creSec='<div class="section-head" style="margin-top:20px"><h2>Advertenties &amp; visuals</h2><span class="count">'+ads.length+'</span></div>'+(ads.length?('<div class="ads-adtable"><div class="ads-adhead"><span>Advertentie</span><span>Besteed</span><span>Klikken</span><span>CTR</span><span>CPC</span><span></span></div>'+ads.map(function(a,i){return metaAdRow(a,i,cur);}).join('')+'</div>'):'<div class="card" style="padding:22px;text-align:center;color:var(--ink-3)">Geen actieve advertenties in deze campagne.</div>');
-  }
-  return back+head+kpis+subGrid+creSec;
-}
 var _metaLbCar=null; // carrousel-state {idx,n} voor toetsenbord-/pijl-navigatie
 function metaCloseLightbox(){ var o=document.getElementById('metaLightbox'); if(o){ o.style.display='none'; o.innerHTML=''; } _metaLbCar=null; document.removeEventListener('keydown',_metaLbKey); }
 function _metaLbKey(e){
@@ -2842,9 +2912,13 @@ function _metaLbMedia(a){
   var type=cm.type||a.format||'image';
   if(type==='video'){
     var vsrc=cm.video||a.videoSrc||''; var poster=cm.poster||a.poster||'';
-    if(vsrc) return '<div class="meta-lb-stage"><video class="meta-lb-vid" controls autoplay playsinline preload="metadata" poster="'+esc(poster)+'" src="'+esc(vsrc)+'"></video></div>';
     var plink=cm.permalink||a.videoPermalink||'';
-    if(plink) return '<div class="meta-lb-stage">'+(poster?'<img class="meta-lb-media" src="'+esc(poster)+'" alt="" referrerpolicy="no-referrer">':'')+'<a class="meta-lb-permalink" href="'+esc(plink)+'" target="_blank" rel="noopener">'+ic('play',14)+' Bekijk video op Facebook</a></div>';
+    // item 8b: 'muted' houdt autoplay toegestaan (anders blokkeert de browser → zwart kader). De fbcdn-source
+    // is kort geldig, dus toon ALTIJD ook de permalink-fallback zodat de klant bij een verlopen video kan doorklikken.
+    var flink=plink?'<a class="meta-lb-permalink" href="'+esc(plink)+'" target="_blank" rel="noopener">'+ic('play',14)+' Bekijk op Facebook</a>':'';
+    // kolom-wrapper zodat de permalink-fallback ONDER de video/poster komt (niet ernaast in de flex-row van .meta-lb-stage)
+    if(vsrc) return '<div class="meta-lb-stage"><div class="meta-lb-col"><video class="meta-lb-vid" controls autoplay muted playsinline preload="metadata" poster="'+esc(poster)+'" src="'+esc(vsrc)+'"></video>'+flink+'</div></div>';
+    if(plink) return '<div class="meta-lb-stage"><div class="meta-lb-col">'+(poster?'<img class="meta-lb-media" src="'+esc(poster)+'" alt="" referrerpolicy="no-referrer">':'')+flink+'</div></div>';
     var pf=poster||a.image||a.thumb||'';
     return pf?'<div class="meta-lb-stage"><img class="meta-lb-media" src="'+esc(pf)+'" alt="" referrerpolicy="no-referrer"></div>':'<div class="meta-lb-stage"><div class="meta-lb-load"><span>Video niet beschikbaar</span></div></div>';
   }
@@ -2857,7 +2931,7 @@ function _metaLbMedia(a){
       return '<div class="meta-car-slide">'+inner+(c.title?'<div class="meta-car-t">'+esc(c.title)+'</div>':'')+'</div>';
     }).join('');
     var dots=cards.map(function(c,j){ return '<button class="meta-car-dot'+(j===0?' on':'')+'" onclick="metaCarTo('+j+')" aria-label="Kaart '+(j+1)+'"></button>'; }).join('');
-    return '<div class="meta-car" id="metaCar">'
+    return '<div class="meta-car" id="metaCar" ontouchstart="metaCarTouchStart(event)" ontouchend="metaCarTouchEnd(event)">'
       +'<span class="meta-car-n"><span id="metaCarPos">1</span> / '+cards.length+'</span>'
       +'<div class="meta-car-track" id="metaCarTrack" style="transform:translateX(0)">'+slides+'</div>'
       +'<button class="meta-car-nav prev" id="metaCarPrev" disabled onclick="metaCarGo(-1)" aria-label="Vorige">'+_metaChevL()+'</button>'
@@ -2881,6 +2955,10 @@ function metaCarTo(j){
   var vids=document.querySelectorAll('#metaCarTrack video'); for(var v=0;v<vids.length;v++){ try{ vids[v].pause(); }catch(e){} }
 }
 function metaCarGo(d){ if(_metaLbCar) metaCarTo(_metaLbCar.idx+d); }
+// item 8a: swipe op de carrousel (naast de pijl-knoppen + pijltjestoetsen)
+var _metaCarX=null, _metaCarY=null;
+function metaCarTouchStart(e){ var t=(e&&e.touches&&e.touches[0])||null; _metaCarX=t?t.clientX:null; _metaCarY=t?t.clientY:null; }
+function metaCarTouchEnd(e){ if(_metaCarX==null||!_metaLbCar){ _metaCarX=null; _metaCarY=null; return; } var t=(e&&e.changedTouches&&e.changedTouches[0])||null; var dx=t?(t.clientX-_metaCarX):0; var dy=(t&&_metaCarY!=null)?(t.clientY-_metaCarY):0; _metaCarX=null; _metaCarY=null; if(Math.abs(dx)<=Math.abs(dy)) return; if(dx<-30) metaCarGo(1); else if(dx>30) metaCarGo(-1); }
 function openMetaCreative(i){
   var a=(state._metaAdsView||[])[i]; if(!a) return;
   _metaLbCar=null; // reset carrousel-state: pijltjes mogen nooit op een vorige carrousel inwerken

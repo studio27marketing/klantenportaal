@@ -559,8 +559,11 @@
    top sub-nav = 60 + 39 (periodebalk-hoogte) + 18 (flow-marge) = 117. */
 .panel[data-screen-label="advertenties"] .soc-period{top:60px;z-index:8;}
 .panel[data-screen-label="advertenties"] .soc-subnav{top:117px;z-index:7;}
+/* tweede menubalk zit nu in een .soc-subnav-row (tabs + platform-dropdown + notitie-knop) → die rij pint */
+.panel[data-screen-label="advertenties"] .soc-subnav-row{position:sticky;top:117px;z-index:7;}
 /* mobiel wrapt de periodebalk naar meerdere regels (hoogte > 39px) -> sub-nav daar niet pinnen (geen overlap) */
-@media(max-width:760px){ .panel[data-screen-label="advertenties"] .soc-subnav{position:static;} }
+@media(max-width:760px){ .panel[data-screen-label="advertenties"] .soc-subnav,
+  .panel[data-screen-label="advertenties"] .soc-subnav-row{position:static;} }
 .soc-percompare select, .soc-percustom input[type=date]{background:linear-gradient(180deg,rgba(255,255,255,.74),rgba(255,255,255,.40));-webkit-backdrop-filter:blur(10px) saturate(1.3);backdrop-filter:blur(10px) saturate(1.3);border:1px solid var(--glass-border,rgba(255,255,255,.6));box-shadow:0 4px 14px rgba(60,40,80,.08),inset 0 1px 0 rgba(255,255,255,.7);}
 /* Berichten-chat schermvullender + scrollbaar */
 #berichtChat .chat-list{height:calc(100vh - 340px);min-height:280px;max-height:none;overflow-y:auto;}
@@ -570,6 +573,59 @@
 .soc-percompare svg{color:var(--ink-4,#9E919E);}
 .soc-percompare select{font-family:var(--font-display);font-weight:700;font-size:12.5px;color:var(--ink-2,#3A2A3A);padding:8px 11px;border:1px solid var(--line,#E7DFD3);border-radius:10px;background:var(--paper,#fff);cursor:pointer;}
 @media(max-width:560px){.soc-percompare{margin-left:0;}}
+
+/* ============ ADVERTEREN-CHROME (items 2,4,5,6) ============ */
+/* item 4: één "Periode"-knop + uitklap-popover */
+.ads-perwrap{position:relative;}
+.ads-perbtn{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-display);font-weight:700;font-size:13px;color:var(--ink-2,#3A2A3A);
+  background:linear-gradient(180deg,rgba(255,255,255,.74),rgba(255,255,255,.42));-webkit-backdrop-filter:blur(12px) saturate(1.3);backdrop-filter:blur(12px) saturate(1.3);
+  border:1px solid var(--glass-border,rgba(255,255,255,.6));border-radius:12px;padding:9px 14px;cursor:pointer;box-shadow:0 8px 24px rgba(60,40,80,.10),inset 0 1px 0 rgba(255,255,255,.75);transition:box-shadow .15s,border-color .15s;}
+.ads-perbtn:hover{border-color:var(--ads-accent,#3083DC);}
+.ads-perbtn svg{color:var(--ads-accent,#3083DC);flex:none;}
+.ads-perbtn .ads-perchev{color:var(--ink-4,#9E919E);margin-left:2px;transition:transform .18s;}
+.ads-perbtn.open .ads-perchev{transform:rotate(180deg);}
+.ads-perpop{position:absolute;top:calc(100% + 7px);left:0;z-index:30;min-width:300px;max-width:calc(100vw - 36px);
+  background:rgba(255,255,255,.97);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border:1px solid var(--glass-border,#E7DFD3);border-radius:16px;
+  box-shadow:0 22px 60px rgba(60,40,80,.26);padding:14px;display:none;flex-direction:column;gap:14px;}
+.ads-perpop.open{display:flex;}
+.ads-perpop-sec{display:flex;flex-direction:column;gap:8px;}
+.ads-perpop-lab{font-family:var(--font-display);font-weight:700;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-4,#9E919E);}
+.ads-perpop .soc-perchips{flex-wrap:wrap;}
+.ads-perpop-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--line,#EFE7DC);padding-top:11px;}
+.ads-perpop-foot .seg-btn{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--ink-3,#6B5B6B);background:transparent;border:0;cursor:pointer;padding:4px 6px;}
+.ads-perpop-foot .seg-btn:hover{color:var(--ink,#230F23);}
+/* item 5: platform-dropdown */
+.ads-platpick{position:relative;display:inline-flex;}
+.ads-platpick-btn{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-display);font-weight:700;font-size:12.5px;color:var(--ink-2,#3A2A3A);
+  background:var(--paper,#fff);border:1px solid var(--line,#E7DFD3);border-radius:11px;padding:8px 12px;cursor:pointer;transition:border-color .15s;}
+.ads-platpick-btn:hover{border-color:var(--ads-accent,#3083DC);}
+.ads-platpick-btn .ads-perchev{color:var(--ink-4,#9E919E);margin-left:1px;transition:transform .18s;}
+.ads-platpick.open .ads-perchev{transform:rotate(180deg);}
+.ads-platpick-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:30;min-width:178px;background:rgba(255,255,255,.97);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);
+  border:1px solid var(--glass-border,#E7DFD3);border-radius:13px;box-shadow:0 18px 48px rgba(60,40,80,.24);padding:6px;display:none;flex-direction:column;gap:2px;}
+.ads-platpick-menu.open{display:flex;}
+.ads-platpick-hd{font-family:var(--font-display);font-weight:700;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-4,#9E919E);padding:5px 9px 3px;}
+.ads-platpick-opt{display:flex;align-items:center;gap:9px;font-family:var(--font-display);font-weight:700;font-size:13px;color:var(--ink-2,#3A2A3A);background:transparent;border:0;border-radius:9px;padding:9px 10px;cursor:pointer;text-align:left;transition:background .12s;}
+.ads-platpick-opt:hover{background:var(--paper-2,#FAF7F2);}
+.ads-platpick-opt.active{background:var(--paper-2,#FAF7F2);color:var(--ink,#230F23);}
+/* item 6: notitie-knop in de menubalk */
+.soc-subnav-act-btn{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-display);font-weight:700;font-size:12.5px;color:var(--ink-2,#3A2A3A);
+  background:var(--paper,#fff);border:1px solid var(--line,#E7DFD3);border-radius:11px;padding:8px 12px;cursor:pointer;transition:border-color .15s,background .15s,color .15s;}
+.soc-subnav-act-btn svg{color:var(--ink-4,#9E919E);flex:none;}
+.soc-subnav-act-btn:hover{border-color:var(--ads-accent,#3083DC);color:var(--ink,#230F23);}
+.soc-subnav-act-btn.on{background:var(--ads-accent,#3083DC);border-color:var(--ads-accent,#3083DC);color:#fff;}
+.soc-subnav-act-btn.on svg{color:#fff;}
+/* item 9: inline campagne-expand (klant-view) */
+.meta-camp-card svg{transition:transform .18s;}
+.meta-camp-card.open{box-shadow:0 6px 22px rgba(60,40,80,.14);border-color:var(--ads-accent,#3083DC);}
+.meta-camp-card.open svg{transform:rotate(90deg);}
+.meta-camp-exp-in{padding:0 2px 8px;animation:adsExpIn .22s ease;}
+@keyframes adsExpIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:none;}}
+/* item 2: zoekwoord-campagnefilter */
+.ads-kwfilter{display:inline-flex;align-items:center;gap:9px;margin:0 0 12px;}
+.ads-kwfilter-lab{font-family:var(--font-display);font-weight:700;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-4,#9E919E);}
+.ads-kwfilter select{font-family:var(--font-display);font-weight:700;font-size:12.5px;color:var(--ink-2,#3A2A3A);padding:8px 11px;border:1px solid var(--line,#E7DFD3);border-radius:10px;background:var(--paper,#fff);cursor:pointer;max-width:280px;}
+@media(max-width:560px){ .ads-perpop,.ads-platpick-menu{min-width:0;} .ads-platpick-menu{right:auto;left:0;} }
 
 /* ============================================================
    Ads-dashboard (Meta): KPI-delta's, resultaten-chip, multi-trend, uitklap-tabel
