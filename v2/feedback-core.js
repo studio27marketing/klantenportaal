@@ -34,6 +34,13 @@
   var EXT_ALLOW = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'pdf', 'ttf', 'otf', 'woff', 'woff2', 'zip'];
   var ACCEPT = '.png,.jpg,.jpeg,.webp,.gif,.pdf,.ttf,.otf,.woff,.woff2,.zip';
   var MAX_BYTES = 15 * 1024 * 1024;
+  // Fase 2: type per opmerking (kleur-gecodeerd, filterbaar). Default = 'wijziging'.
+  var ANN_TYPES = [
+    { key: 'wijziging', label: 'Wijziging', color: '#9441DB' },
+    { key: 'vraag', label: 'Vraag', color: '#3083DC' },
+    { key: 'idee', label: 'Idee', color: '#12AC4E' },
+  ];
+  function annType(k) { for (var i = 0; i < ANN_TYPES.length; i++) if (ANN_TYPES[i].key === k) return ANN_TYPES[i]; return ANN_TYPES[0]; }
   // pdf.js legacy (mjs) build — ESM, draait zonder bundler in elke moderne browser
   var PDFJS_VER = '4.10.38';
   var PDFJS_BASE = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/' + PDFJS_VER + '/';
@@ -106,6 +113,16 @@
   // bare 'GATEWAY_BASE' gebruiken — net als video-review.js. window.GATEWAY_BASE was undefined,
   // waardoor alle calls naar een relatieve URL op de Pages-host gingen (405 → 'kon niet inladen').
   function gwUrl(rel) { return rel ? (/^https?:/.test(rel) ? rel : GATEWAY_BASE + rel) : ''; }
+  // Stuur de volledige stored-attachment-velden mee die de worker (cleanAtt) nodig heeft —
+  // niet enkel {filename,url}, anders dropt de worker de bijlage (uploadStatus/key ontbreken).
+  function cleanAttPayload(x) {
+    return {
+      attachmentId: x.attachmentId || '', filename: x.filename || 'bijlage',
+      contentType: x.contentType || '', sizeBytes: x.sizeBytes || 0,
+      key: x.key || '', uploadStatus: x.uploadStatus || 'stored',
+      url: x.url || x.fileUrl || ''
+    };
+  }
   function fileIcon(name) {
     var e = extOf(name);
     if (['ttf', 'otf', 'woff', 'woff2'].indexOf(e) >= 0) return '🔤';
@@ -211,6 +228,7 @@
       '    </section>' +
       '    <aside class="fc-panel" id="fcPanel">' +
       '      <div class="fc-panelhead"><h3>Opmerkingen</h3><span id="fcAnnCount" class="fc-chip">0</span><button class="fc-collapse" id="fcCollapse" title="Paneel in-/uitklappen" aria-label="Paneel in-/uitklappen"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button></div>' +
+      '      <div class="fc-filterbar fc-hidden" id="fcFilter"></div>' +
       '      <div id="fcList" class="fc-list"><p class="fc-empty" id="fcEmpty"></p></div>' +
       '      <div class="fc-composewrap">' +
       '        <div class="fc-compose-lbl">Algemene opmerking <em>(niet aan een plek gekoppeld)</em></div>' +
@@ -254,7 +272,7 @@
       taskId: taskId, url: url, annotations: [], reviewAttachments: [],
       composerAtts: [], uploadsBusy: 0, closed: false, locked: false,
       streamUrl: null, downloadUrl: null, mediaType: opts.mediaType || guessType(url),
-      reviewer: null, mode: 'comment', _pop: null,
+      reviewer: null, mode: 'comment', _pop: null, filter: 'all', sort: 'new',
     };
 
     var root = buildShell(st);
@@ -352,7 +370,8 @@
       if (lb && Array.isArray(lb.annotations)) {
         st.annotations = lb.annotations.map(function (a, i) {
           return {
-            id: 'prev_' + i, comment: String(a.comment || ''), pin: a.pin || null, locked: true,
+            id: 'prev_' + i, comment: String(a.comment || ''), type: a.type || 'wijziging', pin: a.pin || null, locked: true,
+            replies: Array.isArray(a.replies) ? a.replies.map(function (r) { return { text: String(r.text || ''), createdAt: r.createdAt || null }; }) : [],
             attachments: (a.attachments || []).map(function (x) { return { filename: String(x.filename || 'bijlage'), url: gwUrl(x.url), uploadStatus: 'stored' }; }),
           };
         });
@@ -369,25 +388,29 @@
       st._pop = null;
       try { if (st.reviewer && st.reviewer.clearDraftPin) st.reviewer.clearDraftPin(); } catch (e) { }
     }
-    function openInlinePopover(pin, cx, cy) {
+    function openInlinePopover(pin, cx, cy, existing) {
       if (st.locked) { toast('Dit bestand is al doorgestuurd — feedback is vergrendeld.', 3600); return; }
       closeInlinePopover();
+      var selType = (existing && existing.type) || 'wijziging';
+      var typeChips = ANN_TYPES.map(function (t) {
+        return '<button type="button" class="fc-typechip' + (t.key === selType ? ' on' : '') + '" data-t="' + t.key + '" style="--tc:' + t.color + '">' + t.label + '</button>';
+      }).join('');
       var pop = document.createElement('div');
       pop.className = 'fc-pop';
       pop.innerHTML =
-        '<div class="fc-pop-head"><span class="fc-pop-dot">' + (st.annotations.length + 1) + '</span><b>Nieuwe opmerking</b><button class="fc-pop-x" title="Annuleren" aria-label="Annuleren">×</button></div>' +
+        '<div class="fc-pop-head"><span class="fc-pop-dot" style="background:' + annType(selType).color + '">' + (existing ? '✎' : (st.annotations.length + 1)) + '</span><b>' + (existing ? 'Opmerking bewerken' : 'Nieuwe opmerking') + '</b><button class="fc-pop-x" title="Annuleren" aria-label="Annuleren">×</button></div>' +
+        '<div class="fc-typebar">' + typeChips + '</div>' +
         '<textarea class="fc-pop-ta" rows="3" placeholder="Wat wil je hier aangepast zien?"></textarea>' +
         '<div class="fc-pop-atts fc-attrow"></div>' +
         '<div class="fc-pop-foot">' +
         '  <label class="fc-attach fc-sm" title="Bijlage toevoegen"><input type="file" accept="' + ACCEPT + '" multiple hidden><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="m21 12-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6L15 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></label>' +
         '  <span class="fc-spacer"></span>' +
         '  <button class="fc-btn fc-ghost fc-sm fc-pop-cancel">Annuleren</button>' +
-        '  <button class="fc-btn fc-primary fc-sm fc-pop-save">Plaats</button>' +
+        '  <button class="fc-btn fc-primary fc-sm fc-pop-save">' + (existing ? 'Opslaan' : 'Plaats') + '</button>' +
         '</div>';
       document.body.appendChild(pop);
       st._pop = pop;
-      // fixed positioneren bij het klikpunt, geklemd binnen de viewport
-      var PW = 290, PH = pop.offsetHeight || 210;
+      var PW = 290, PH = pop.offsetHeight || 230;
       var x = Math.min(Math.max(10, (cx || window.innerWidth / 2) + 14), window.innerWidth - PW - 10);
       var y = Math.min(Math.max(70, (cy || window.innerHeight / 2) - 10), window.innerHeight - PH - 12);
       pop.style.left = x + 'px'; pop.style.top = y + 'px';
@@ -398,6 +421,20 @@
         atts.filter(function (a) { return a.uploadStatus === 'stored'; }).forEach(function (att) {
           attRow.appendChild(attChip(att, function () { atts.splice(atts.indexOf(att), 1); rerenderAtts(); }));
         });
+      }
+      // type-keuze
+      pop.querySelectorAll('.fc-typechip').forEach(function (b) {
+        b.addEventListener('click', function () {
+          selType = b.getAttribute('data-t');
+          pop.querySelectorAll('.fc-typechip').forEach(function (x) { x.classList.toggle('on', x === b); });
+          var dot = pop.querySelector('.fc-pop-dot'); if (dot) dot.style.background = annType(selType).color;
+        });
+      });
+      // bestaande waarden tonen (bewerken)
+      if (existing) {
+        ta.value = existing.comment || '';
+        (existing.attachments || []).forEach(function (a) { atts.push(a); });
+        rerenderAtts();
       }
       pop.querySelector('input[type=file]').addEventListener('change', function (e) {
         Array.prototype.forEach.call(e.target.files, function (f) { addUpload(f, attRow, atts, rerenderAtts); });
@@ -410,11 +447,16 @@
         var text = ta.value.trim();
         if (!text) { ta.focus(); toast('Schrijf eerst je opmerking.'); return; }
         if (st.uploadsBusy > 0) { toast('Even wachten tot de bijlage klaar is…'); return; }
-        st.annotations.push({ id: rid('ann'), comment: text, pin: pin || null, attachments: atts.filter(function (x) { return x.uploadStatus === 'stored'; }), createdAt: new Date().toISOString() });
+        var stored = atts.filter(function (x) { return x.uploadStatus === 'stored'; });
+        if (existing) {
+          existing.comment = text; existing.type = selType; existing.attachments = stored;
+        } else {
+          st.annotations.push({ id: rid('ann'), comment: text, type: selType, pin: pin || null, attachments: stored, replies: [], createdAt: new Date().toISOString() });
+        }
         st._pop = null; try { pop.remove(); } catch (e) { }
         try { if (st.reviewer && st.reviewer.clearDraftPin) st.reviewer.clearDraftPin(); } catch (e) { }
         renderAll();
-        toast('Opmerking geplaatst ✓');
+        toast(existing ? 'Opmerking bijgewerkt ✓' : 'Opmerking geplaatst ✓');
       });
       pop._esc = function (e) { if (e.key === 'Escape') cancel(); };
       document.addEventListener('keydown', pop._esc);
@@ -565,6 +607,24 @@
     });
 
     /* ---- lijst renderen ---- */
+    function renderFilterBar() {
+      var fb = $('fcFilter'); if (!fb) return;
+      var n = st.annotations.length;
+      if (n < 2) { fb.classList.add('fc-hidden'); fb.innerHTML = ''; return; }
+      fb.classList.remove('fc-hidden');
+      var counts = {};
+      st.annotations.forEach(function (a) { var k = a.type || 'wijziging'; counts[k] = (counts[k] || 0) + 1; });
+      var chips = '<button class="fc-fbtn' + (st.filter === 'all' ? ' on' : '') + '" data-f="all">Alle <i>' + n + '</i></button>';
+      chips += ANN_TYPES.map(function (t) {
+        if (!counts[t.key]) return '';
+        return '<button class="fc-fbtn' + (st.filter === t.key ? ' on' : '') + '" data-f="' + t.key + '" style="--tc:' + t.color + '">' + t.label + ' <i>' + counts[t.key] + '</i></button>';
+      }).join('');
+      var sortLbl = st.sort === 'new' ? 'Nieuwste' : (st.sort === 'old' ? 'Oudste' : 'Pagina');
+      chips += '<span class="fc-spacer"></span><button class="fc-sortbtn" title="Sorteren">⇅ ' + sortLbl + '</button>';
+      fb.innerHTML = chips;
+      fb.querySelectorAll('.fc-fbtn').forEach(function (b) { b.addEventListener('click', function () { st.filter = b.getAttribute('data-f'); renderAll(); }); });
+      var sb = fb.querySelector('.fc-sortbtn'); if (sb) sb.addEventListener('click', function () { st.sort = st.sort === 'new' ? 'old' : (st.sort === 'old' ? 'page' : 'new'); renderAll(); });
+    }
     function renderAll() {
       var n = st.annotations.length;
       $('fcAnnCount').textContent = n;
@@ -572,34 +632,65 @@
       $('fcCount').classList.toggle('fc-hidden', n === 0);
       $('fcEmpty').classList.toggle('fc-hidden', n > 0);
       var ptn = $('fcPtN'); if (ptn) ptn.textContent = n;
+      renderFilterBar();
       var list = $('fcList');
-      list.querySelectorAll('.fc-card').forEach(function (el) { el.remove(); });
-      st.annotations.forEach(function (a, i) {
+      list.querySelectorAll('.fc-card, .fc-noresult').forEach(function (el) { el.remove(); });
+
+      // KAART-volgorde = filter+sort; het PINNUMMER blijft de globale index zodat pin↔kaart matchen.
+      var view = st.annotations.map(function (a, gi) { return { a: a, num: gi + 1 }; });
+      if (st.filter !== 'all') view = view.filter(function (o) { return (o.a.type || 'wijziging') === st.filter; });
+      if (st.sort === 'old') view = view.slice().reverse();
+      else if (st.sort === 'page') view = view.slice().sort(function (x, y) { return (((x.a.pin && x.a.pin.page) || 999) - ((y.a.pin && y.a.pin.page) || 999)); });
+      if (n > 0 && !view.length) { var nr = document.createElement('p'); nr.className = 'fc-noresult fc-empty'; nr.textContent = 'Geen opmerkingen van dit type.'; list.appendChild(nr); }
+
+      view.forEach(function (o) {
+        var a = o.a, num = o.num, t = annType(a.type);
         var card = document.createElement('div');
-        card.className = 'fc-card';
+        card.className = 'fc-card' + (a.pin ? ' fc-card-pinned' : '');
         card.dataset.id = a.id;
+        card.style.setProperty('--tc', t.color);
         card.innerHTML =
-          '<div class="fc-cardtop"><span class="fc-pindot">' + (i + 1) + '</span>' +
+          '<div class="fc-cardtop"><span class="fc-pindot" style="background:' + t.color + '">' + num + '</span>' +
+          '<span class="fc-typetag">' + t.label + '</span>' +
           (a.pin ? '<span class="fc-timechip">' + _esc(pinLabel(a.pin)) + '</span>' : '') +
-          (a.locked ? '' : '<button class="fc-del" title="Verwijderen">×</button>') + '</div>' +
-          '<div class="fc-cardtxt"></div><div class="fc-attrow"></div>';
+          (a.locked ? '' : '<button class="fc-edit-c" title="Bewerken" aria-label="Bewerken"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L18 10l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></button><button class="fc-del" title="Verwijderen">×</button>') +
+          '</div>' +
+          '<div class="fc-cardtxt"></div><div class="fc-attrow"></div>' +
+          '<div class="fc-replies"></div>' +
+          (a.locked ? '' : '<button class="fc-replybtn">+ reactie</button>');
         card.querySelector('.fc-cardtxt').textContent = a.comment;
-        var row = card.querySelector('.fc-attrow');
-        (a.attachments || []).forEach(function (att) { row.appendChild(attChip(att, null)); });
+        var arow = card.querySelector('.fc-attrow');
+        (a.attachments || []).forEach(function (att) { arow.appendChild(attChip(att, null)); });
+        var repWrap = card.querySelector('.fc-replies');
+        (a.replies || []).forEach(function (r) {
+          var rEl = document.createElement('div'); rEl.className = 'fc-reply';
+          rEl.innerHTML = '<span class="fc-reply-dot"></span><span class="fc-reply-tx"></span>';
+          rEl.querySelector('.fc-reply-tx').textContent = r.text || '';
+          repWrap.appendChild(rEl);
+        });
         if (a.pin) {
-          card.classList.add('fc-card-pinned');
           card.addEventListener('click', function (e) {
-            if (e.target.closest('.fc-del') || e.target.closest('.fc-attchip')) return;
+            if (e.target.closest('.fc-del') || e.target.closest('.fc-edit-c') || e.target.closest('.fc-replybtn') || e.target.closest('.fc-attchip') || e.target.closest('.fc-reply-input')) return;
             if (st.reviewer && st.reviewer.goToPin) try { st.reviewer.goToPin(a.pin); } catch (er) { }
           });
           card.addEventListener('mouseenter', function () { if (st.reviewer && st.reviewer.highlightPin) try { st.reviewer.highlightPin(a.id, true); } catch (er) { } });
           card.addEventListener('mouseleave', function () { if (st.reviewer && st.reviewer.highlightPin) try { st.reviewer.highlightPin(a.id, false); } catch (er) { } });
         }
         var del = card.querySelector('.fc-del');
-        if (del) del.addEventListener('click', function () {
-          st.annotations = st.annotations.filter(function (x) { return x.id !== a.id; });
-          renderAll();
-          if (st.reviewer && st.reviewer.onAnnotationsChanged) try { st.reviewer.onAnnotationsChanged(st.annotations); } catch (er) { }
+        if (del) del.addEventListener('click', function () { st.annotations = st.annotations.filter(function (x) { return x.id !== a.id; }); renderAll(); });
+        var edit = card.querySelector('.fc-edit-c');
+        if (edit) edit.addEventListener('click', function (e) { e.stopPropagation(); openInlinePopover(a.pin || null, null, null, a); });
+        var rb = card.querySelector('.fc-replybtn');
+        if (rb) rb.addEventListener('click', function (e) {
+          e.stopPropagation();
+          if (card.querySelector('.fc-reply-input')) { card.querySelector('.fc-reply-input input').focus(); return; }
+          var box = document.createElement('div'); box.className = 'fc-reply-input';
+          box.innerHTML = '<input type="text" placeholder="Reactie of verduidelijking…"><button class="fc-btn fc-primary fc-sm">Plaats</button>';
+          repWrap.appendChild(box);
+          var inp = box.querySelector('input'); inp.focus();
+          function add() { var v = inp.value.trim(); if (!v) { inp.focus(); return; } a.replies = a.replies || []; a.replies.push({ text: v, createdAt: new Date().toISOString() }); renderAll(); }
+          box.querySelector('button').addEventListener('click', add);
+          inp.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') add(); });
         });
         list.appendChild(card);
       });
@@ -664,7 +755,11 @@
         task_id: st.taskId, url: st.url, klant_naam: klantNaam(),
         comment: $('fcSummary').value.trim(),
         annotations: st.annotations.map(function (a) {
-          return { comment: a.comment, pin: a.pin || null, attachments: (a.attachments || []).map(function (x) { return { filename: x.filename, url: x.url || x.fileUrl }; }) };
+          return {
+            comment: a.comment, type: a.type || 'wijziging', pin: a.pin || null,
+            replies: (a.replies || []).map(function (r) { return { text: r.text, createdAt: r.createdAt || null }; }),
+            attachments: (a.attachments || []).map(cleanAttPayload)
+          };
         }),
         attachments: st.reviewAttachments.filter(function (a) { return a.uploadStatus === 'stored'; }),
       });
@@ -841,6 +936,7 @@
           el.setAttribute('data-ann', a.id);
           el.style.left = (a.pin.xNorm * 100) + '%';
           el.style.top = (a.pin.yNorm * 100) + '%';
+          el.style.background = annType(a.type).color;
           el.innerHTML = '<span>' + (i + 1) + '</span>';
           el.title = String(a.comment || '').slice(0, 140);
           el.addEventListener('click', function (ev) { ev.stopPropagation(); if (api && api.highlightCard) { api.highlightCard(a.id, true); setTimeout(function () { if (api && api.highlightCard) api.highlightCard(a.id, false); }, 1500); } });

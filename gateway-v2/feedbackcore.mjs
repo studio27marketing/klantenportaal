@@ -66,6 +66,18 @@ function parseDriveFolderUrl(raw) {
 }
 
 /* =============================================================================
+ * Google-native-document-URL (Docs/Sheets/Slides) → {id, kind}.
+ * Deze links staan op docs.google.com (niet drive.google.com/file) en dragen
+ * geen extensie; we behandelen ze als een Drive-bestand met dat id, zodat de
+ * SA er de mime van kan ophalen en ze naar PDF kan exporteren voor de viewer.
+ * ============================================================================= */
+function parseGoogleDocUrl(raw) {
+  const m = str(raw).match(/docs\.google\.com\/(document|spreadsheets|presentation)\/d\/([-\w]{20,})/);
+  if (!m) return null;
+  return { id: m[2], kind: m[1] };
+}
+
+/* =============================================================================
  * linkKeyOf — stabiele, deterministische sleutel per deliverable-link.
  * GEDEELD CONTRACT: vimeo→'v'+id · drive-bestand→'d'+id · drive-map→'g'+id ·
  * anders→'u'+fnv1a(url.toLowerCase, query/hash gestript).
@@ -86,6 +98,8 @@ export function linkKeyOf(url) {
   if (vimeo) return 'v' + vimeo.id;
   const drive = parseDriveUrl(raw);
   if (drive) return 'd' + drive.id;
+  const gdoc = parseGoogleDocUrl(raw);
+  if (gdoc) return 'd' + gdoc.id;   // native Google-doc → zelfde 'd'+id-conventie als een Drive-bestand
   const norm = raw.toLowerCase().replace(/[?#].*$/, '');
   return 'u' + fnv1a(norm);
 }
@@ -128,6 +142,8 @@ export function mediaTypeOf(url, mime) {
   }
   // 2) host-heuristiek (geen extensie op Vimeo-links e.d.)
   if (u.includes('vimeo') || u.includes('youtu')) return 'video';
+  if (u.includes('docs.google.com/presentation')) return 'pptx';
+  if (u.includes('docs.google.com/document') || u.includes('docs.google.com/spreadsheets')) return 'office';
   // 3) extensie
   const ext = extOf(u);
   if (VIDEO_EXT.has(ext)) return 'video';
@@ -298,7 +314,7 @@ export async function fileReviewContext(bedrijfId, body, env) {
   const canDownload = taakGoedgekeurd || lrState === 'approved';
 
   const vimeo = parseVimeoUrl(url);
-  const drive = vimeo ? null : parseDriveUrl(url);
+  const drive = vimeo ? null : (parseDriveUrl(url) || parseGoogleDocUrl(url));
 
   // Video → expliciet doorverwijzen naar de video-review-module (niet hier streamen).
   if (vimeo || mediaTypeOf(url, '') === 'video') {
@@ -320,18 +336,36 @@ export async function fileReviewContext(bedrijfId, body, env) {
       return { status: 200, body: { ok: false, error: 'drive_no_access', open_url: url, message: 'Het portaal kan dit Drive-bestand niet lezen. Zet het op de gedeelde S27-Drive of deel het met portal-admin@studio27-cloud.iam.gserviceaccount.com.' } };
     }
     const mediaType = mediaTypeOf(url, meta.mimeType);
+    const isNative = str(meta.mimeType).startsWith('application/vnd.google-apps.');
+    // PDF-render-modus voor documenten/presentaties zodat ze met pdf.js (klik-to-comment,
+    // 1 pagina = 1 slide) getoond worden i.p.v. een onbetrouwbare externe iframe:
+    //   native Google-doc/sheet/slides → 'export' (Drive export → PDF)
+    //   binair Office (pptx/docx/xlsx)  → 'convert' (copy→Google-type→export→PDF, R2-cache)
+    //   al de rest (pdf/foto/audio)     → 'media'  (ruwe bytes, Range-passthrough)
+    let viewMode = 'media';
+    if (mediaType === 'office' || mediaType === 'pptx') viewMode = isNative ? 'export' : 'convert';
+    const dlMode = viewMode === 'export' ? 'export' : 'media';   // native: download = PDF-export; rest = origineel
     const exp = Math.floor(Date.now() / 1000) + STREAM_TTL_SEC;
     const route = mediaType === 'audio' ? 'audiostream' : 'docstream';
     const prefix = mediaType === 'audio' ? 'as' : 'ds';
-    const tok = await signTok(env, `${prefix}|${taskId}|${drive.id}|${exp}`);
-    const q = `task=${encodeURIComponent(taskId)}&file=${encodeURIComponent(drive.id)}&exp=${exp}&tok=${tok}`;
-    const streamUrl = `/${route}?${q}`;
-    const downloadUrl = `/${route}?${q}&dl=1`;
+    const mkUrl = async (mode, dl) => {
+      const tok = await signTok(env, `${prefix}|${taskId}|${drive.id}|${mode}|${exp}`);
+      const q = `task=${encodeURIComponent(taskId)}&file=${encodeURIComponent(drive.id)}&mode=${mode}&exp=${exp}&tok=${tok}`;
+      return `/${route}?${q}${dl ? '&dl=1' : ''}`;
+    };
+    const streamUrl = await mkUrl(viewMode, false);
+    const downloadUrl = await mkUrl(dlMode, true);
     return {
       status: 200,
       body: {
         ok: true,
         mediaType,
+        view_mode: viewMode,
+        // native Google-doc/sheet/slides: laat de klant het in Google openen om te
+        // bewerken (Google dwingt de schrijfrechten zelf af — owner/gedeeld = bewerken,
+        // anders alleen-lezen). Voor binair/PDF is er geen online-editor.
+        is_native: isNative,
+        edit_url: isNative ? url : null,
         task_name: str(g.task && g.task.name),
         file_name: meta.name,
         mime_type: meta.mimeType,
@@ -342,7 +376,7 @@ export async function fileReviewContext(bedrijfId, body, env) {
         is_read_only: isReadOnly,
         lr_state: lrState,
         can_download: canDownload,
-        last_bundle: lr && lr.bundle ? lr.bundle : null,
+        last_bundle: await signBundleAtts(env, lr && lr.bundle ? lr.bundle : null),
       },
     };
   }
@@ -378,6 +412,18 @@ async function signedFileUrl(env, key, ttlSec) {
   const exp = Math.floor(Date.now() / 1000) + (ttlSec || FILE_TTL_SEC);
   const tok = await signTok(env, `ff|${key}|${exp}`);
   return `/feedbackfile?key=${encodeURIComponent(key)}&exp=${exp}&tok=${tok}`;
+}
+// Naslag-bundel: bijlagen zijn als {filename,key} opgeslagen — her-onderteken naar
+// een verse tijdelijke stream-URL zodat de read-only naslag de bijlage kan tonen.
+async function signBundleAtts(env, bundle) {
+  if (!bundle || !Array.isArray(bundle.annotations)) return bundle || null;
+  for (const a of bundle.annotations) {
+    if (!Array.isArray(a.attachments)) { a.attachments = []; continue; }
+    for (const x of a.attachments) {
+      if (x && x.key && !x.url) { try { x.url = await signedFileUrl(env, x.key); } catch (e) { x.url = ''; } }
+    }
+  }
+  return bundle;
 }
 
 export async function fileReviewUpload(bedrijfId, body, env) {
@@ -494,6 +540,25 @@ export function FB_VARIANT(uuid) {
   }
 }
 
+/* Type-label per annotatie (Fase 2): wijziging/vraag/idee. Onbekend → Wijziging. */
+const ANN_TYPE_LABELS = { wijziging: 'Wijziging', vraag: 'Vraag', idee: 'Idee' };
+function annTypeKey(k) { const v = str(k).toLowerCase(); return ANN_TYPE_LABELS[v] ? v : 'wijziging'; }
+function annTypeLabel(k) { return ANN_TYPE_LABELS[annTypeKey(k)]; }
+function cleanPin(p) {
+  if (!p || typeof p !== 'object') return null;
+  const out = {};
+  if (typeof p.page === 'number') out.page = p.page;
+  if (typeof p.xNorm === 'number') out.xNorm = Math.round(p.xNorm * 1e4) / 1e4;
+  if (typeof p.yNorm === 'number') out.yNorm = Math.round(p.yNorm * 1e4) / 1e4;
+  if (typeof p.timestampSec === 'number') out.timestampSec = Math.round(p.timestampSec * 1000) / 1000;
+  return (out.page != null || out.xNorm != null || out.timestampSec != null) ? out : null;
+}
+function cleanReplies(r) {
+  if (!Array.isArray(r)) return [];
+  return r.slice(0, 30).map((x) => ({ text: str(x && x.text).slice(0, 2000), createdAt: str(x && x.createdAt).slice(0, 40) || null }))
+    .filter((x) => x.text);
+}
+
 /* =============================================================================
  * createFeedbackSubtask — feedbackronde als SUBTAAK onder de deliverable-taak.
  * TYPE JOB = FB-variant van de eigen type job, status 'startklaar',
@@ -594,18 +659,25 @@ export async function linkFeedback(bedrijfId, body, env) {
     reviewer: { name: klantNaam, role: 'client' },
     ronde,
     summary: summary || null,
-    annotations: annotations.map((a, i) => ({
-      id: cleanId(a && a.id) || 'ann_' + i,
-      sequenceNumber: i + 1,
-      page: (a && typeof a.page === 'number') ? a.page : null,
-      timestampSec: (a && typeof a.timestampSec === 'number') ? Math.round(a.timestampSec * 1000) / 1000 : null,
-      hasPin: !!(a && a.hasPin),
-      xPct: (a && a.hasPin && typeof a.xPct === 'number') ? Math.round(a.xPct * 10) / 10 : null,
-      yPct: (a && a.hasPin && typeof a.yPct === 'number') ? Math.round(a.yPct * 10) / 10 : null,
-      comment: str(a && a.comment).slice(0, 5000),
-      status: 'open',
-      attachments: (Array.isArray(a && a.attachments) ? a.attachments : []).filter((x) => x && x.uploadStatus === 'stored').map(cleanAtt),
-    })),
+    annotations: annotations.map((a, i) => {
+      const pin = cleanPin(a && a.pin);
+      const hasPin = !!(pin && pin.xNorm != null);
+      return {
+        id: cleanId(a && a.id) || 'ann_' + i,
+        sequenceNumber: i + 1,
+        type: annTypeKey(a && a.type),
+        pin,
+        page: pin && typeof pin.page === 'number' ? pin.page : null,
+        timestampSec: pin && typeof pin.timestampSec === 'number' ? pin.timestampSec : null,
+        hasPin,
+        xPct: hasPin ? Math.round(pin.xNorm * 1000) / 10 : null,
+        yPct: hasPin ? Math.round(pin.yNorm * 1000) / 10 : null,
+        comment: str(a && a.comment).slice(0, 5000),
+        status: 'open',
+        replies: cleanReplies(a && a.replies),
+        attachments: (Array.isArray(a && a.attachments) ? a.attachments : []).filter((x) => x && x.uploadStatus === 'stored').map(cleanAtt),
+      };
+    }),
     reviewAttachments: reviewAttachments.filter((x) => x && x.uploadStatus === 'stored').map(cleanAtt),
   };
   const attCount = bundle.reviewAttachments.length + bundle.annotations.reduce((n, a) => n + a.attachments.length, 0);
@@ -626,9 +698,10 @@ export async function linkFeedback(bedrijfId, body, env) {
   lines.push('');
   for (const a of bundle.annotations) {
     const loc = a.page != null ? `pagina ${a.page}` : (a.timestampSec != null ? fmtTime(a.timestampSec) : (a.hasPin ? 'pin' : ''));
-    lines.push(`#${a.sequenceNumber}${loc ? ` · ${loc}` : ''}`);
+    lines.push(`#${a.sequenceNumber} · ${annTypeLabel(a.type)}${loc ? ` · ${loc}` : ''}`);
     lines.push(a.comment);
     for (const att of a.attachments) lines.push(`   📎 ${att.filename}`);
+    for (const r of (a.replies || [])) lines.push(`   ↳ ${r.text}`);
     lines.push('');
   }
   if (bundle.summary) { lines.push(`💬 Algemene opmerking: ${bundle.summary}`); lines.push(''); }
@@ -645,7 +718,18 @@ export async function linkFeedback(bedrijfId, body, env) {
   });
 
   // — Reactiestaat opslaan (met de FB-subtaak-referentie) -----------------------
-  await lrSet(env, taskId, linkKey, { state: 'feedback', door: klantNaam, ronde, fb_task_id: subId || null, bundle: { submittedAt: bundle.submittedAt, summary: bundle.summary, counts: bundle.counts } });
+  //   We bewaren een compacte annotatie-lijst in de KV-bundel zodat de klant na
+  //   het indienen de feedback nog kan BEKIJKEN (read-only naslag). Bijlagen als
+  //   {filename,key}; fileReviewContext her-ondertekent de key → tijdelijke URL.
+  const naslagAnnotations = bundle.annotations.slice(0, 60).map((a) => ({
+    comment: a.comment, type: a.type, pin: a.pin || null,
+    replies: a.replies || [],
+    attachments: a.attachments.map((x) => ({ filename: x.filename, key: x.key })),
+  }));
+  await lrSet(env, taskId, linkKey, {
+    state: 'feedback', door: klantNaam, ronde, fb_task_id: subId || null,
+    bundle: { submittedAt: bundle.submittedAt, summary: bundle.summary, counts: bundle.counts, annotations: naslagAnnotations },
+  });
 
   // — Hoofdtaak naar 'feedback klant' (de review-status) ------------------------
   try { await cu.put(env, `/task/${taskId}`, { status: 'feedback klant' }); } catch (e) { /* comment blijft de drager */ }
@@ -698,28 +782,123 @@ export async function linkFeedback(bedrijfId, body, env) {
  *   /audiostream  — Drive-audio (Range-passthrough, inline player)
  *   /feedbackfile — R2-bijlage (inline beeld/pdf, anders download)
  * ============================================================================= */
+// CORS voor de publieke stream-routes: pdf.js haalt de PDF cross-origin op
+// (portaal.studio27.be → gateway-worker) en heeft expliciete CORS nodig; een
+// <video>/<img>/<audio> niet, maar het is hier overal veilig (HMAC-token gate't).
+function withCors(h) {
+  h.set('access-control-allow-origin', '*');
+  h.set('access-control-expose-headers', 'content-length, content-range, accept-ranges, content-disposition');
+  return h;
+}
+
+// Binair Office-mimetype/extensie → het Google-native doeltype voor conversie.
+// Apple iWork (.key/.pages/.numbers) is NIET converteerbaar → null (download-only).
+function officeConvertTarget(mimeType, fileName) {
+  const m = str(mimeType).toLowerCase();
+  const ext = extOf(fileName);
+  if (m.includes('iwork') || m.includes('keynote') || ['key', 'pages', 'numbers'].includes(ext)) return null;
+  const isPres = m.includes('presentation') || m.includes('powerpoint') || ['ppt', 'pptx', 'odp'].includes(ext);
+  const isSheet = m.includes('spreadsheet') || m.includes('excel') || ['xls', 'xlsx', 'csv', 'ods'].includes(ext);
+  const isDoc = m.includes('word') || m.includes('msword') || m.includes('wordprocessing') ||
+    m.includes('opendocument.text') || ['doc', 'docx', 'rtf', 'odt', 'txt'].includes(ext);
+  if (isPres) return 'application/vnd.google-apps.presentation';
+  if (isSheet) return 'application/vnd.google-apps.spreadsheet';
+  if (isDoc) return 'application/vnd.google-apps.document';
+  return null;
+}
+
+// Binair Office-bestand → PDF: kopie mét conversie naar Google-type → export PDF →
+// R2-cache (per fileId+versie) → temp-kopie wissen. Geeft Uint8Array of null.
+async function officeToPdf(env, fileId) {
+  const token = await mintGoogleToken(env, str(env.GDRIVE_SUBJECT), DRIVE_SCOPE);
+  const auth = { authorization: 'Bearer ' + token };
+  let meta = {};
+  try {
+    const mr = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?supportsAllDrives=true&fields=id,name,mimeType,modifiedTime`, { headers: auth });
+    if (mr.ok) meta = await mr.json();
+  } catch (e) { /* meta best-effort */ }
+  const ver = str(meta.modifiedTime).replace(/\D/g, '') || '0';
+  const cacheKey = `feedbackcore/pdfcache/${fileId}/${ver}.pdf`;
+  if (env.R2) {
+    try { const hit = await env.R2.get(cacheKey); if (hit) return new Uint8Array(await hit.arrayBuffer()); } catch (e) { /* */ }
+  }
+  const target = officeConvertTarget(meta.mimeType, meta.name);
+  if (!target) return null;
+  let tmpId = '';
+  try {
+    const cp = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/copy?supportsAllDrives=true&fields=id`, {
+      method: 'POST', headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'fbpdf-' + fileId, mimeType: target }),
+    });
+    if (!cp.ok) return null;
+    const cpj = await cp.json().catch(() => ({}));
+    tmpId = str(cpj.id);
+    if (!tmpId) return null;
+    const ex = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(tmpId)}/export?mimeType=application%2Fpdf&supportsAllDrives=true`, { headers: auth });
+    if (!ex.ok) return null;
+    const bytes = new Uint8Array(await ex.arrayBuffer());
+    if (env.R2 && bytes.length) {
+      try { await env.R2.put(cacheKey, bytes, { httpMetadata: { contentType: 'application/pdf' } }); } catch (e) { /* */ }
+    }
+    return bytes.length ? bytes : null;
+  } catch (e) {
+    return null;
+  } finally {
+    if (tmpId) { try { await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(tmpId)}?supportsAllDrives=true`, { method: 'DELETE', headers: auth }); } catch (e) { /* temp-cleanup best-effort */ } }
+  }
+}
+
 async function streamDrive(request, env, prefix, opts = {}) {
   const u = new URL(request.url);
   const taskId = cleanId(u.searchParams.get('task'));
   const fileId = cleanId(u.searchParams.get('file'));
+  const mode = str(u.searchParams.get('mode') || 'media');
   const exp = str(u.searchParams.get('exp'));
   const tok = str(u.searchParams.get('tok'));
   const download = !!u.searchParams.get('dl');
-  if (!(await tokOk(env, `${prefix}|${taskId}|${fileId}|${exp}`, tok, exp))) {
-    return new Response('Link verlopen — herlaad het portaal.', { status: 403 });
+  if (!(await tokOk(env, `${prefix}|${taskId}|${fileId}|${mode}|${exp}`, tok, exp))) {
+    return new Response('Link verlopen — herlaad het portaal.', { status: 403, headers: withCors(new Headers()) });
   }
   let token;
   try { token = await mintGoogleToken(env, str(env.GDRIVE_SUBJECT), DRIVE_SCOPE); }
-  catch (e) { return new Response('Bestand niet beschikbaar', { status: 502 }); }
+  catch (e) { return new Response('Bestand niet beschikbaar', { status: 502, headers: withCors(new Headers()) }); }
+  const auth = { authorization: 'Bearer ' + token };
 
-  const headers = { authorization: 'Bearer ' + token };
+  // --- Office/Google → PDF (export native of convert binair), altijd volledig (geen Range) ---
+  if (mode === 'export' || mode === 'convert') {
+    let bytes = null;
+    try {
+      if (mode === 'export') {
+        const exUrl = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=application%2Fpdf`;
+        let ex = await fetch(exUrl + '&supportsAllDrives=true', { headers: auth });
+        if (!ex.ok) ex = await fetch(exUrl, { headers: auth });   // fallback: sommige API-edges weigeren de param
+        if (ex.ok) bytes = new Uint8Array(await ex.arrayBuffer());
+      } else {
+        bytes = await officeToPdf(env, fileId);
+      }
+    } catch (e) { bytes = null; }
+    if (!bytes || !bytes.length) {
+      return new Response('Voorvertoning niet beschikbaar — gebruik de download-knop.', { status: 502, headers: withCors(new Headers()) });
+    }
+    const h = withCors(new Headers());
+    h.set('content-type', 'application/pdf');
+    h.set('content-length', String(bytes.length));
+    h.set('cache-control', 'private, max-age=0');
+    h.set('x-content-type-options', 'nosniff');
+    const fn = str(u.searchParams.get('name') || (opts.defaultName || 'document')).replace(/[^\w.\- ]+/g, '_').slice(0, 120) || 'document';
+    h.set('content-disposition', download ? `attachment; filename="${fn}.pdf"` : 'inline');
+    return new Response(bytes, { status: 200, headers: h });
+  }
+
+  // --- Ruwe bytes (pdf/foto/audio): Range-passthrough ---
+  const headers = { ...auth };
   const range = request.headers.get('range');
   if (range && !download) headers.range = range;
   const r = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`, { headers });
   if (!(r.ok || r.status === 206)) {
-    return new Response('Bestand niet beschikbaar (' + r.status + ')', { status: r.status === 404 ? 404 : 502 });
+    return new Response('Bestand niet beschikbaar (' + r.status + ')', { status: r.status === 404 ? 404 : 502, headers: withCors(new Headers()) });
   }
-  const h = new Headers();
+  const h = withCors(new Headers());
   for (const k of ['content-type', 'content-length', 'content-range']) {
     const v = r.headers.get(k);
     if (v) h.set(k, v);
@@ -755,7 +934,7 @@ export async function handleFeedbackFile(request, env) {
   if (!env.R2) return new Response('Opslag niet beschikbaar', { status: 500 });
   const obj = await env.R2.get(key);
   if (!obj) return new Response('Niet gevonden', { status: 404 });
-  const h = new Headers();
+  const h = withCors(new Headers());
   obj.writeHttpMetadata(h);
   h.set('cache-control', 'private, max-age=3600');
   h.set('x-content-type-options', 'nosniff');

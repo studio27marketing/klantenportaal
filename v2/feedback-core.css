@@ -216,6 +216,49 @@ body.fc-panel-hidden .fc-main{grid-template-columns:minmax(0,1fr)}
 /* locked: geen modus-balk/pop-over/compose meer */
 .fc-locked .fc-modebar{display:none!important}
 
+/* =============================================================================
+   ANNOTATIE-LAAG (Fase 2): type/status per opmerking, filter+sorteer-balk,
+   reacties (threads), bewerk-knop.
+   ============================================================================= */
+/* ---- type-kiezer in de pop-over ---- */
+.fc-typebar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.fc-typechip{font-family:var(--font-display);font-weight:700;font-size:11.5px;color:var(--ink-3,#6B5B6B);background:var(--glass-fill,rgba(255,255,255,.6));border:1px solid var(--glass-border,rgba(255,255,255,.85));border-radius:999px;padding:4px 11px;cursor:pointer;transition:background .14s ease,color .14s ease,border-color .14s ease}
+.fc-typechip:hover{border-color:var(--tc,#9441DB)}
+.fc-typechip.on{background:var(--tc,#9441DB);border-color:var(--tc,#9441DB);color:#fff}
+
+/* ---- type-label op de kaart ---- */
+.fc-typetag{font-family:var(--font-display);font-weight:800;font-size:10.5px;letter-spacing:.02em;text-transform:uppercase;color:var(--tc,#9441DB);background:color-mix(in srgb,var(--tc,#9441DB) 13%,transparent);padding:2px 8px;border-radius:999px}
+
+/* ---- filter+sorteer-balk boven de lijst ---- */
+.fc-filterbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:9px 13px 4px}
+.fc-fbtn{font-family:var(--font-display);font-weight:700;font-size:11.5px;color:var(--ink-3,#6B5B6B);background:var(--glass-fill,rgba(255,255,255,.6));border:1px solid var(--glass-border,rgba(255,255,255,.85));border-radius:999px;padding:4px 10px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:background .14s ease,color .14s ease,border-color .14s ease}
+.fc-fbtn i{font-style:normal;font-weight:800;font-size:10px;background:var(--paper-2,#FAF7F2);color:var(--ink-3,#6B5B6B);border-radius:999px;padding:0 5px;min-width:15px;text-align:center}
+.fc-fbtn:hover{border-color:var(--tc,#9441DB)}
+.fc-fbtn.on{background:var(--tc,#9441DB);border-color:var(--tc,#9441DB);color:#fff}
+.fc-fbtn.on i{background:rgba(255,255,255,.28);color:#fff}
+.fc-sortbtn{font-family:var(--font-display);font-weight:700;font-size:11.5px;color:var(--ink-3,#6B5B6B);background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:8px}
+.fc-sortbtn:hover{background:var(--paper-2,#FAF7F2)}
+
+/* ---- bewerk-knop op de kaart (naast verwijderen) ---- */
+.fc-cardtop .fc-edit-c{margin-left:auto;color:var(--ink-4,#9A8B9A);padding:3px 6px;border-radius:8px;border:none;background:none;cursor:pointer;display:inline-flex;align-items:center}
+.fc-cardtop .fc-edit-c:hover{background:var(--s27-purple-soft,#F1E6FB);color:var(--s27-purple-ink,#7A2BC0)}
+.fc-cardtop .fc-edit-c+.fc-del{margin-left:0}
+
+/* ---- reacties (threads) onder een opmerking ---- */
+.fc-replies{display:flex;flex-direction:column;gap:5px;margin-top:8px}
+.fc-replies:empty{margin-top:0}
+.fc-reply{display:flex;gap:7px;align-items:flex-start;padding-left:3px}
+.fc-reply-dot{width:6px;height:6px;border-radius:50%;background:var(--tc,#9441DB);margin-top:6px;flex:none}
+.fc-reply-tx{font-size:12.5px;color:var(--ink-2);white-space:pre-wrap;word-break:break-word;line-height:1.4}
+.fc-replybtn{align-self:flex-start;margin-top:7px;font-family:var(--font-display);font-weight:700;font-size:11.5px;color:var(--s27-purple-ink,#7A2BC0);background:none;border:none;cursor:pointer;padding:2px 0}
+.fc-replybtn:hover{text-decoration:underline}
+.fc-reply-input{display:flex;gap:6px;margin-top:7px}
+.fc-reply-input input{flex:1;border:1px solid var(--glass-border,rgba(255,255,255,.85));background:var(--glass-fill,rgba(255,255,255,.6));border-radius:10px;padding:6px 10px;font-family:inherit;font-size:12.5px;box-sizing:border-box}
+.fc-noresult{color:var(--ink-4,#9A8B9A);font-size:12.5px;text-align:center;padding:16px 10px}
+
+/* locked: geen type-kiezer/bewerk/reactie-knoppen, reacties wel zichtbaar */
+.fc-locked .fc-edit-c,.fc-locked .fc-replybtn,.fc-locked .fc-reply-input{display:none!important}
+
 /* ---- mobiel layout ---- */
 @media (max-width:880px){
   .fc-main{grid-template-columns:1fr;padding:13px}
