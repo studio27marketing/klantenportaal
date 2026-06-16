@@ -201,21 +201,28 @@
       '  <main class="fc-main fc-hidden" id="fcMain">' +
       '    <section class="fc-stagecol">' +
       '      <div class="fc-prevnote fc-hidden" id="fcPrev"></div>' +
+      '      <div class="fc-modebar fc-hidden" id="fcModebar" role="tablist" aria-label="Modus">' +
+      '        <button class="fc-mode-opt fc-mode-active" id="fcModeComment" role="tab"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.4 8.4 0 0 1-11.7 7.7L3 21l1.8-6.3A8.4 8.4 0 1 1 21 11.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span>Opmerking plaatsen</span></button>' +
+      '        <button class="fc-mode-opt" id="fcModeBrowse" role="tab"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg><span>Bekijken</span></button>' +
+      '        <span class="fc-mode-hint" id="fcModeHint">Klik in het document om er een opmerking op te plaatsen.</span>' +
+      '      </div>' +
       '      <div class="fc-stage" id="fcStage"><div class="fc-viewer" id="fcViewer"></div></div>' +
       '    </section>' +
-      '    <aside class="fc-panel">' +
-      '      <div class="fc-panelhead"><h3>Feedback</h3><span id="fcAnnCount" class="fc-chip">0</span></div>' +
+      '    <aside class="fc-panel" id="fcPanel">' +
+      '      <div class="fc-panelhead"><h3>Opmerkingen</h3><span id="fcAnnCount" class="fc-chip">0</span><button class="fc-collapse" id="fcCollapse" title="Paneel in-/uitklappen" aria-label="Paneel in-/uitklappen"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button></div>' +
       '      <div id="fcList" class="fc-list"><p class="fc-empty" id="fcEmpty"></p></div>' +
       '      <div class="fc-composewrap">' +
-      '        <textarea id="fcCompose" rows="3" placeholder="Schrijf hier je opmerking of vraag…"></textarea>' +
+      '        <div class="fc-compose-lbl">Algemene opmerking <em>(niet aan een plek gekoppeld)</em></div>' +
+      '        <textarea id="fcCompose" rows="2" placeholder="Iets dat over het hele bestand gaat…"></textarea>' +
       '        <div id="fcComposeAtts" class="fc-attrow"></div>' +
       '        <div class="fc-composefoot">' +
       '          <label class="fc-attach" title="Bijlage toevoegen"><input id="fcComposeFile" type="file" accept="' + ACCEPT + '" multiple hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="m21 12-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6L15 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></label>' +
       '          <span class="fc-spacer"></span>' +
-      '          <button id="fcComposeAdd" class="fc-btn fc-ghost fc-sm">Toevoegen aan lijst</button>' +
+      '          <button id="fcComposeAdd" class="fc-btn fc-ghost fc-sm">Toevoegen</button>' +
       '        </div>' +
       '      </div>' +
       '    </aside>' +
+      '    <button class="fc-panel-fab fc-hidden" id="fcPanelFab" aria-label="Opmerkingen tonen"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-11.7 7.7L3 21l1.8-6.3A8.4 8.4 0 1 1 21 11.5Z"/></svg><span class="fc-fab-n" id="fcFabN">0</span></button>' +
       '  </main>' +
       '</div>' +
       '<div id="fcSendScrim" class="fc-scrim fc-hidden"></div>' +
@@ -247,7 +254,7 @@
       taskId: taskId, url: url, annotations: [], reviewAttachments: [],
       composerAtts: [], uploadsBusy: 0, closed: false, locked: false,
       streamUrl: null, downloadUrl: null, mediaType: opts.mediaType || guessType(url),
-      reviewer: null,
+      reviewer: null, mode: 'comment', _pop: null,
     };
 
     var root = buildShell(st);
@@ -264,6 +271,7 @@
       if (st.closed) return;
       st.closed = true;
       vrLift(false);
+      try { closeInlinePopover(); } catch (e) { }
       try { document.removeEventListener('click', navClose, true); } catch (e) { }
       try { if (st.reviewer && st.reviewer.destroy) st.reviewer.destroy(); } catch (e) { }
       try { document.body.classList.remove('fc-open'); } catch (e) { }
@@ -352,6 +360,66 @@
       if (lb && lb.summary) { prev.innerHTML += '<br><span class="fc-locksum">Algemene opmerking: ' + _esc(lb.summary) + '</span>'; }
     }
 
+    /* ---- INLINE POP-OVER-EDITOR (ruttl-stijl): typ je opmerking + bijlage exact op de
+           klikplek; 'Plaats' commit de annotatie, 'Annuleren' gooit de draftpin weg. ---- */
+    function closeInlinePopover() {
+      if (!st._pop) return;
+      try { document.removeEventListener('keydown', st._pop._esc); } catch (e) { }
+      try { st._pop.remove(); } catch (e) { }
+      st._pop = null;
+      try { if (st.reviewer && st.reviewer.clearDraftPin) st.reviewer.clearDraftPin(); } catch (e) { }
+    }
+    function openInlinePopover(pin, cx, cy) {
+      if (st.locked) { toast('Dit bestand is al doorgestuurd — feedback is vergrendeld.', 3600); return; }
+      closeInlinePopover();
+      var pop = document.createElement('div');
+      pop.className = 'fc-pop';
+      pop.innerHTML =
+        '<div class="fc-pop-head"><span class="fc-pop-dot">' + (st.annotations.length + 1) + '</span><b>Nieuwe opmerking</b><button class="fc-pop-x" title="Annuleren" aria-label="Annuleren">×</button></div>' +
+        '<textarea class="fc-pop-ta" rows="3" placeholder="Wat wil je hier aangepast zien?"></textarea>' +
+        '<div class="fc-pop-atts fc-attrow"></div>' +
+        '<div class="fc-pop-foot">' +
+        '  <label class="fc-attach fc-sm" title="Bijlage toevoegen"><input type="file" accept="' + ACCEPT + '" multiple hidden><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="m21 12-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6L15 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></label>' +
+        '  <span class="fc-spacer"></span>' +
+        '  <button class="fc-btn fc-ghost fc-sm fc-pop-cancel">Annuleren</button>' +
+        '  <button class="fc-btn fc-primary fc-sm fc-pop-save">Plaats</button>' +
+        '</div>';
+      document.body.appendChild(pop);
+      st._pop = pop;
+      // fixed positioneren bij het klikpunt, geklemd binnen de viewport
+      var PW = 290, PH = pop.offsetHeight || 210;
+      var x = Math.min(Math.max(10, (cx || window.innerWidth / 2) + 14), window.innerWidth - PW - 10);
+      var y = Math.min(Math.max(70, (cy || window.innerHeight / 2) - 10), window.innerHeight - PH - 12);
+      pop.style.left = x + 'px'; pop.style.top = y + 'px';
+      var ta = pop.querySelector('.fc-pop-ta'); setTimeout(function () { try { ta.focus(); } catch (e) { } }, 30);
+      var atts = [], attRow = pop.querySelector('.fc-pop-atts');
+      function rerenderAtts() {
+        attRow.innerHTML = '';
+        atts.filter(function (a) { return a.uploadStatus === 'stored'; }).forEach(function (att) {
+          attRow.appendChild(attChip(att, function () { atts.splice(atts.indexOf(att), 1); rerenderAtts(); }));
+        });
+      }
+      pop.querySelector('input[type=file]').addEventListener('change', function (e) {
+        Array.prototype.forEach.call(e.target.files, function (f) { addUpload(f, attRow, atts, rerenderAtts); });
+        e.target.value = '';
+      });
+      function cancel() { closeInlinePopover(); }
+      pop.querySelector('.fc-pop-x').addEventListener('click', cancel);
+      pop.querySelector('.fc-pop-cancel').addEventListener('click', cancel);
+      pop.querySelector('.fc-pop-save').addEventListener('click', function () {
+        var text = ta.value.trim();
+        if (!text) { ta.focus(); toast('Schrijf eerst je opmerking.'); return; }
+        if (st.uploadsBusy > 0) { toast('Even wachten tot de bijlage klaar is…'); return; }
+        st.annotations.push({ id: rid('ann'), comment: text, pin: pin || null, attachments: atts.filter(function (x) { return x.uploadStatus === 'stored'; }), createdAt: new Date().toISOString() });
+        st._pop = null; try { pop.remove(); } catch (e) { }
+        try { if (st.reviewer && st.reviewer.clearDraftPin) st.reviewer.clearDraftPin(); } catch (e) { }
+        renderAll();
+        toast('Opmerking geplaatst ✓');
+      });
+      pop._esc = function (e) { if (e.key === 'Escape') cancel(); };
+      document.addEventListener('keydown', pop._esc);
+    }
+
     /* ---- viewer-api die de reviewer mag aanspreken ---- */
     var viewerApi = {
       host: $('fcViewer'),
@@ -359,19 +427,24 @@
       download_url: st.downloadUrl,
       url: url,
       locked: st.locked,
-      // pin/punt toevoegen vanuit de viewer (bv. klik-to-comment in pdf)
+      // huidige modus ('comment' = klik plaatst een opmerking, 'browse' = vrij bekijken)
+      mode: function () { return st.mode; },
+      // klik-to-comment: open de inline pop-over-editor exact op de klikplek
+      commentAt: function (pin, cx, cy) {
+        if (st.locked) { toast('Dit bestand is al doorgestuurd — feedback is vergrendeld.', 3600); return; }
+        openInlinePopover(pin, cx, cy);
+      },
+      // back-compat: oude reviewers die enkel een pin doorgeven → pop-over centraal
+      composeWithPin: function (pin) { openInlinePopover(pin, null, null); },
       addAnnotation: function (a) {
         if (st.locked) { toast('Dit bestand is al doorgestuurd — feedback is vergrendeld.', 3600); return; }
         st.annotations.push({ id: rid('ann'), comment: String(a && a.comment || ''), pin: (a && a.pin) || null, attachments: (a && a.attachments) || [], createdAt: new Date().toISOString() });
         renderAll();
-        toast('Feedbackpunt toegevoegd ✓');
       },
-      // prefill de composer met een pin uit de viewer (klik-to-comment flow)
-      composeWithPin: function (pin) {
-        if (st.locked) { toast('Dit bestand is al doorgestuurd — feedback is vergrendeld.', 3600); return; }
-        st.pendingPin = pin || null;
-        var c = $('fcCompose'); c.focus();
-        if (pin) toast('Schrijf je opmerking — we koppelen ze aan deze plek.', 2400);
+      // pin↔kaart-koppeling: viewer meldt hover op een pin → wij lichten de kaart op
+      highlightCard: function (annId, on) {
+        var c = $('fcList').querySelector('.fc-card[data-id="' + (window.CSS && CSS.escape ? CSS.escape(annId) : annId) + '"]');
+        if (c) { c.classList.toggle('fc-card-active', !!on); if (on) c.scrollIntoView({ block: 'nearest' }); }
       },
       getAnnotations: function () { return st.annotations.slice(); },
       toast: toast,
@@ -394,6 +467,34 @@
     $('fcLoading').classList.add('fc-hidden');
     $('fcMain').classList.remove('fc-hidden');
     $('fcEmpty').innerHTML = def.emptyHint || 'Nog geen feedback. Typ hieronder je opmerking en klik <strong>Toevoegen aan lijst</strong>.';
+
+    /* ---- comment/bekijk-modus (enkel voor pin-viewers: pdf/office/pptx) ---- */
+    if (def.pins && !st.locked) {
+      var mb = $('fcModebar'); mb.classList.remove('fc-hidden');
+      var setMode = function (m) {
+        st.mode = m;
+        $('fcModeComment').classList.toggle('fc-mode-active', m === 'comment');
+        $('fcModeBrowse').classList.toggle('fc-mode-active', m === 'browse');
+        $('fcModeHint').textContent = m === 'comment'
+          ? 'Klik in het document om er een opmerking op te plaatsen.'
+          : 'Je kan vrij scrollen en lezen — schakel naar “Opmerking plaatsen” om feedback te geven.';
+        try { viewerApi.host.classList.toggle('fc-commenting', m === 'comment'); } catch (e) { }
+        if (m === 'browse') closeInlinePopover();
+      };
+      $('fcModeComment').addEventListener('click', function () { setMode('comment'); });
+      $('fcModeBrowse').addEventListener('click', function () { setMode('browse'); });
+      setMode('comment');
+    }
+    /* ---- comment-paneel in-/uitklappen (desktop) + zwevende knop (mobiel) ---- */
+    var _collapsed = false;
+    function setCollapsed(c) {
+      _collapsed = c;
+      $('fcPanel').classList.toggle('fc-panel-collapsed', c);
+      document.body.classList.toggle('fc-panel-hidden', c);
+      $('fcPanelFab').classList.toggle('fc-hidden', !c);
+    }
+    $('fcCollapse').addEventListener('click', function () { setCollapsed(!_collapsed); });
+    $('fcPanelFab').addEventListener('click', function () { setCollapsed(false); });
 
     /* ---- composer (lijst van losse feedbackpunten) ---- */
     function renderComposeAtts() {
@@ -469,6 +570,7 @@
       $('fcCount').textContent = n;
       $('fcCount').classList.toggle('fc-hidden', n === 0);
       $('fcEmpty').classList.toggle('fc-hidden', n > 0);
+      var fabn = $('fcFabN'); if (fabn) fabn.textContent = n;
       var list = $('fcList');
       list.querySelectorAll('.fc-card').forEach(function (el) { el.remove(); });
       st.annotations.forEach(function (a, i) {
@@ -483,10 +585,15 @@
         card.querySelector('.fc-cardtxt').textContent = a.comment;
         var row = card.querySelector('.fc-attrow');
         (a.attachments || []).forEach(function (att) { row.appendChild(attChip(att, null)); });
-        if (a.pin) card.addEventListener('click', function (e) {
-          if (e.target.closest('.fc-del') || e.target.closest('.fc-attchip')) return;
-          if (st.reviewer && st.reviewer.goToPin) try { st.reviewer.goToPin(a.pin); } catch (er) { }
-        });
+        if (a.pin) {
+          card.classList.add('fc-card-pinned');
+          card.addEventListener('click', function (e) {
+            if (e.target.closest('.fc-del') || e.target.closest('.fc-attchip')) return;
+            if (st.reviewer && st.reviewer.goToPin) try { st.reviewer.goToPin(a.pin); } catch (er) { }
+          });
+          card.addEventListener('mouseenter', function () { if (st.reviewer && st.reviewer.highlightPin) try { st.reviewer.highlightPin(a.id, true); } catch (er) { } });
+          card.addEventListener('mouseleave', function () { if (st.reviewer && st.reviewer.highlightPin) try { st.reviewer.highlightPin(a.id, false); } catch (er) { } });
+        }
         var del = card.querySelector('.fc-del');
         if (del) del.addEventListener('click', function () {
           st.annotations = st.annotations.filter(function (x) { return x.id !== a.id; });
@@ -615,7 +722,8 @@
     return _pdfLib;
   }
   var PDF_REVIEWER = {
-    emptyHint: 'Nog geen feedback. Klik op een plek in het document om er een opmerking aan te koppelen, of typ je opmerking hieronder.',
+    pins: true,
+    emptyHint: 'Nog geen opmerkingen. Klik in het document op de plek waar je iets wil aanduiden — er opent een venstertje om je opmerking te typen en (optioneel) een bijlage toe te voegen.',
     init: async function (api, ctx) {
       var lib = await ensurePdfJs();
       var src = api.stream_url || api.url;
@@ -627,6 +735,13 @@
       api.host.appendChild(wrap);
       this._wrap = wrap;
       var self = this;
+
+      // cursor-volgende ghost-pin: toont vóór de klik exact waar de opmerking landt.
+      var ghost = document.createElement('div');
+      ghost.className = 'fc-ghostpin';
+      ghost.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.4 8.4 0 0 1-11.7 7.7L3 21l1.8-6.3A8.4 8.4 0 1 1 21 11.5Z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>';
+      document.body.appendChild(ghost);
+      this._ghost = ghost;
 
       // één placeholder per pagina; render lazy via IntersectionObserver
       var io = new IntersectionObserver(function (entries) {
@@ -640,23 +755,42 @@
         var ph = document.createElement('div');
         ph.className = 'fc-pdf-page';
         ph.dataset.page = p;
-        ph.innerHTML = '<div class="fc-pdf-ph">Pagina ' + p + '…</div><div class="fc-pdf-pins"></div>';
-        // klik-to-comment: normaliseer naar [0..1] binnen de pagina
-        (function (pageNum) {
-          ph.addEventListener('click', function (ev) {
-            if (api.locked || ev.target.closest('.fc-pin')) return;
-            var box = ph.getBoundingClientRect();
+        ph.innerHTML = '<div class="fc-pdf-ph">Pagina ' + p + '…</div><div class="fc-pdf-pins"></div><div class="fc-pdf-draft"></div>';
+        // klik-to-comment (enkel in comment-modus): pin + inline pop-over op de klikplek
+        (function (pageNum, pageEl) {
+          pageEl.addEventListener('mousemove', function (ev) {
+            if (api.locked || api.mode() !== 'comment' || ev.target.closest('.fc-pin')) { ghost.classList.remove('show'); return; }
+            ghost.classList.add('show');
+            ghost.style.left = ev.clientX + 'px';
+            ghost.style.top = ev.clientY + 'px';
+          });
+          pageEl.addEventListener('mouseleave', function () { ghost.classList.remove('show'); });
+          pageEl.addEventListener('click', function (ev) {
+            if (api.locked || api.mode() !== 'comment' || ev.target.closest('.fc-pin')) return;
+            var box = pageEl.getBoundingClientRect();
             if (!box.width || !box.height) return;
             var xNorm = Math.min(1, Math.max(0, (ev.clientX - box.left) / box.width));
             var yNorm = Math.min(1, Math.max(0, (ev.clientY - box.top) / box.height));
-            api.composeWithPin({ page: pageNum, xNorm: Math.round(xNorm * 1000) / 1000, yNorm: Math.round(yNorm * 1000) / 1000 });
-            self._layoutPins(api.getAnnotations());
+            var pin = { page: pageNum, xNorm: Math.round(xNorm * 1000) / 1000, yNorm: Math.round(yNorm * 1000) / 1000 };
+            ghost.classList.remove('show');
+            api.commentAt(pin, ev.clientX, ev.clientY);   // sluit vorige pop-over + wist oude drafts
+            var dl = pageEl.querySelector('.fc-pdf-draft');   // NA commentAt: nieuwe draftpin tonen
+            if (dl) dl.innerHTML = '<span class="fc-pin fc-pin-draft" style="left:' + (xNorm * 100) + '%;top:' + (yNorm * 100) + '%"><span>+</span></span>';
           });
-        })(p);
+        })(p, ph);
         wrap.appendChild(ph);
         io.observe(ph);
         this._pages.push(ph);
       }
+    },
+    clearDraftPin: function () {
+      if (this._pages) this._pages.forEach(function (ph) { var d = ph.querySelector('.fc-pdf-draft'); if (d) d.innerHTML = ''; });
+    },
+    highlightPin: function (annId, on) {
+      if (!this._wrap) return;
+      var sel = (window.CSS && CSS.escape) ? CSS.escape(String(annId)) : String(annId);
+      var el = this._wrap.querySelector('.fc-pin[data-ann="' + sel + '"]');
+      if (el) { el.classList.toggle('fc-pin-active', !!on); if (on) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
     },
     _renderPage: async function (pageNum) {
       var ph = this._pages[pageNum - 1]; if (!ph || ph._rendered) return;
@@ -685,7 +819,7 @@
       }
     },
     _layoutPins: function (anns) {
-      var self = this;
+      var api = this._api;
       this._pages.forEach(function (ph, idx) {
         var layer = ph.querySelector('.fc-pdf-pins'); if (!layer) return;
         layer.innerHTML = '';
@@ -693,10 +827,14 @@
           if (!a.pin || a.pin.page !== (idx + 1)) return;
           var el = document.createElement('button');
           el.className = 'fc-pin';
+          el.setAttribute('data-ann', a.id);
           el.style.left = (a.pin.xNorm * 100) + '%';
           el.style.top = (a.pin.yNorm * 100) + '%';
           el.innerHTML = '<span>' + (i + 1) + '</span>';
-          el.addEventListener('click', function (ev) { ev.stopPropagation(); });
+          el.title = String(a.comment || '').slice(0, 140);
+          el.addEventListener('click', function (ev) { ev.stopPropagation(); if (api && api.highlightCard) { api.highlightCard(a.id, true); setTimeout(function () { if (api && api.highlightCard) api.highlightCard(a.id, false); }, 1500); } });
+          el.addEventListener('mouseenter', function () { if (api && api.highlightCard) api.highlightCard(a.id, true); });
+          el.addEventListener('mouseleave', function () { if (api && api.highlightCard) api.highlightCard(a.id, false); });
           layer.appendChild(el);
         });
       });
@@ -710,6 +848,7 @@
     destroy: function () {
       try { if (this._io) this._io.disconnect(); } catch (e) { }
       try { if (this._pdf) this._pdf.destroy(); } catch (e) { }
+      try { if (this._ghost) this._ghost.remove(); } catch (e) { }
       this._pages = []; this._pdf = null;
     },
   };

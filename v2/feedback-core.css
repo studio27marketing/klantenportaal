@@ -158,6 +158,62 @@ body.fc-lift .fc-root{z-index:960}            /* modal/sheet open -> boven de to
   .fc-modal{top:auto;bottom:var(--fc-kb,0px);transform:translateX(-50%);width:100vw;max-height:calc(100dvh - var(--fc-kb,0px) - 14px);border-radius:20px 20px 0 0;padding-bottom:max(18px,env(safe-area-inset-bottom))}
 }
 
+/* =============================================================================
+   ANNOTATIE-LAAG (Fase 1, ruttl-stijl): comment/bekijk-modus, cursor-volgende
+   ghost-pin, inline pop-over-editor op de klikplek, in/uitklapbaar paneel + FAB,
+   pin↔kaart-koppeling met tooltip.
+   ============================================================================= */
+/* ---- modus-balk boven de viewer ---- */
+.fc-modebar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:11px;background:var(--glass-fill,rgba(255,255,255,.6));border:1px solid var(--glass-border,rgba(255,255,255,.85));border-radius:14px;padding:6px 8px}
+.fc-mode-opt{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-display);font-weight:700;font-size:12.5px;color:var(--ink-3,#6B5B6B);background:transparent;border:none;border-radius:10px;padding:7px 12px;cursor:pointer;transition:background .15s ease,color .15s ease}
+.fc-mode-opt:hover{background:var(--paper-2,#FAF7F2)}
+.fc-mode-opt.fc-mode-active{background:var(--s27-purple,#9441DB);color:#fff;box-shadow:0 4px 12px rgba(148,65,219,.26)}
+.fc-mode-hint{font-size:12px;color:var(--ink-4,#9A8B9A);margin-left:auto;padding-right:4px}
+
+/* ---- cursor-volgende ghost-pin ---- */
+.fc-ghostpin{position:fixed;z-index:950;pointer-events:none;width:26px;height:26px;margin:-26px 0 0 2px;border-radius:50% 50% 50% 4px;background:var(--s27-purple,#9441DB);color:#fff;display:flex;align-items:center;justify-content:center;transform:rotate(-45deg) scale(.6);opacity:0;transition:opacity .12s ease,transform .12s ease;box-shadow:0 4px 12px rgba(0,0,0,.3),0 0 0 2px rgba(255,255,255,.9)}
+.fc-ghostpin.show{opacity:.92;transform:rotate(-45deg) scale(1)}
+.fc-ghostpin svg{transform:rotate(45deg)}
+.fc-viewer.fc-commenting .fc-pdf-page{cursor:none}
+
+/* ---- draftpin (tot 'Plaats'/'Annuleer') + actieve pin + tooltip ---- */
+.fc-pdf-draft{position:absolute;inset:0;pointer-events:none}
+.fc-pin-draft{background:var(--s27-orange,#F66131)!important;animation:fcpindrop .25s var(--bounce,ease)}
+@keyframes fcpindrop{0%{transform:rotate(-45deg) scale(.2)}100%{transform:rotate(-45deg) scale(1)}}
+.fc-pin{transition:transform .14s ease,box-shadow .14s ease}
+.fc-pin.fc-pin-active{transform:rotate(-45deg) scale(1.22);box-shadow:0 6px 18px rgba(148,65,219,.5),0 0 0 3px #fff;z-index:6}
+
+/* ---- inline pop-over-editor (op de klikplek) ---- */
+.fc-pop{position:fixed;z-index:955;width:290px;max-width:calc(100vw - 20px);background:rgba(252,250,247,.97);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);border:1px solid var(--glass-border,rgba(255,255,255,.85));border-radius:15px;box-shadow:var(--glass-sh-lg,0 18px 44px rgba(60,40,80,.22));padding:12px 13px 11px;animation:fcpop .16s ease}
+@keyframes fcpop{from{opacity:0;transform:translateY(6px) scale(.98)}to{opacity:1;transform:none}}
+.fc-pop-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.fc-pop-dot{width:22px;height:22px;border-radius:50%;background:var(--s27-purple,#9441DB);color:#fff;font-family:var(--font-display);font-weight:800;font-size:11.5px;display:flex;align-items:center;justify-content:center;flex:none}
+.fc-pop-head b{font-family:var(--font-display);font-size:13.5px;flex:1}
+.fc-pop-x{color:var(--ink-4,#9A8B9A);font-size:18px;line-height:1;border:none;background:none;cursor:pointer;padding:0 3px}
+.fc-pop-x:hover{color:var(--s27-orange,#F66131)}
+.fc-pop-ta{width:100%;border:1px solid var(--glass-border,rgba(255,255,255,.85));background:var(--glass-fill,rgba(255,255,255,.6));border-radius:11px;padding:9px 11px;resize:vertical;min-height:58px;font-family:inherit;font-size:13.5px;box-sizing:border-box}
+.fc-pop-foot{display:flex;align-items:center;gap:8px;margin-top:9px}
+
+/* ---- paneelkop: in-/uitklap-chevron + algemene-opmerking-label ---- */
+.fc-collapse{margin-left:auto;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border:none;background:none;color:var(--ink-3,#6B5B6B);cursor:pointer;border-radius:9px;transition:transform .2s ease,background .15s ease}
+.fc-collapse:hover{background:var(--paper-2,#FAF7F2)}
+.fc-panelhead{gap:8px}
+.fc-compose-lbl{font-family:var(--font-display);font-weight:700;font-size:11.5px;color:var(--ink-3,#6B5B6B);margin-bottom:6px}
+.fc-compose-lbl em{font-weight:400;font-style:normal;color:var(--ink-4,#9A8B9A)}
+
+/* ---- comment-kaart: actieve highlight (pin-hover) ---- */
+.fc-card.fc-card-pinned{cursor:pointer}
+.fc-card.fc-card-active{border-color:var(--s27-purple,#9441DB);box-shadow:0 0 0 2px var(--s27-purple-soft,#F1E6FB),0 6px 16px rgba(148,65,219,.16)}
+
+/* ---- paneel in-/uitklappen (desktop) ---- */
+body.fc-panel-hidden .fc-main{grid-template-columns:minmax(0,1fr)}
+.fc-panel.fc-panel-collapsed{display:none}
+.fc-panel-fab{position:fixed;right:18px;bottom:18px;z-index:880;width:54px;height:54px;border-radius:50%;background:var(--s27-purple,#9441DB);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 26px rgba(148,65,219,.4)}
+.fc-panel-fab .fc-fab-n{position:absolute;top:-4px;right:-4px;min-width:21px;height:21px;padding:0 5px;border-radius:999px;background:var(--s27-orange,#F66131);color:#fff;font-family:var(--font-display);font-weight:800;font-size:11.5px;display:flex;align-items:center;justify-content:center;border:2px solid #fff}
+
+/* locked: geen modus-balk/pop-over/compose meer */
+.fc-locked .fc-modebar{display:none!important}
+
 /* ---- mobiel layout ---- */
 @media (max-width:880px){
   .fc-main{grid-template-columns:1fr;padding:13px}
@@ -167,4 +223,8 @@ body.fc-lift .fc-root{z-index:960}            /* modal/sheet open -> boven de to
   .fc-top{padding:10px 13px}
   .fc-pdf{max-height:none}
   .fc-office-frame{height:60vh}
+  .fc-mode-hint{display:none}
+  /* mobiel: paneel als onderblad-look; FAB tilt mee met het iOS-toetsenbord */
+  .fc-panel-fab{bottom:calc(18px + var(--fc-kb,0px))}
+  .fc-pop{width:calc(100vw - 20px)}
 }
