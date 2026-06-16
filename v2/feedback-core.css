@@ -259,6 +259,22 @@ body.fc-panel-hidden .fc-main{grid-template-columns:minmax(0,1fr)}
 /* locked: geen type-kiezer/bewerk/reactie-knoppen, reacties wel zichtbaar */
 .fc-locked .fc-edit-c,.fc-locked .fc-replybtn,.fc-locked .fc-reply-input{display:none!important}
 
+/* =============================================================================
+   ANNOTATIE-LAAG (Fase 3): pin-op-foto (inline image-reviewer), pin verslepen,
+   audio-tijdmarkers.
+   ============================================================================= */
+.fc-imgwrap{display:flex;justify-content:center;align-items:flex-start;max-height:calc(100dvh - 220px);overflow:auto;padding:8px;border-radius:14px;background:#0d0a12;-webkit-overflow-scrolling:touch}
+.fc-imgstage{position:relative;display:inline-block;line-height:0;border-radius:8px;box-shadow:0 6px 20px rgba(20,12,30,.4);max-width:100%}
+.fc-img{display:block;max-width:100%;height:auto;border-radius:8px}
+.fc-img-pins,.fc-img-draft{position:absolute;inset:0;pointer-events:none}
+.fc-img-pins .fc-pin{pointer-events:auto}
+.fc-viewer.fc-commenting .fc-imgstage{cursor:none}
+/* pin verslepen: grijp-cursor + lichte schaal tijdens slepen */
+.fc-pin-movable{cursor:grab}
+.fc-pin.fc-pin-drag{cursor:grabbing;transform:rotate(-45deg) scale(1.18);box-shadow:0 8px 22px rgba(0,0,0,.45),0 0 0 3px #fff;z-index:7;transition:none}
+/* audio: tijdmarker-knop */
+.fc-audio-mark{margin-top:2px}
+
 /* ---- mobiel layout ---- */
 @media (max-width:880px){
   .fc-main{grid-template-columns:1fr;padding:13px}

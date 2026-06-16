@@ -113,6 +113,44 @@
   // bare 'GATEWAY_BASE' gebruiken — net als video-review.js. window.GATEWAY_BASE was undefined,
   // waardoor alle calls naar een relatieve URL op de Pages-host gingen (405 → 'kon niet inladen').
   function gwUrl(rel) { return rel ? (/^https?:/.test(rel) ? rel : GATEWAY_BASE + rel) : ''; }
+  function fmtClock(sec) { sec = Math.max(0, Math.round(sec || 0)); var m = Math.floor(sec / 60), s = sec % 60; return m + ':' + (s < 10 ? '0' : '') + s; }
+  // Sleep een bestaande pin naar een nieuwe plek. el = het pin-DOM, a = de annotatie,
+  // getBox levert de huidige bounding-rect van de container (pagina/afbeelding), api.updatePin
+  // commit de nieuwe genormaliseerde positie. Onder de drempel = gewone klik (highlight).
+  function makePinDraggable(el, a, api, getBox) {
+    if (!a || !a.pin || a.locked || (api && api.locked)) return;
+    var down = null, moved = false;
+    el.addEventListener('pointerdown', function (ev) {
+      if (ev.button != null && ev.button !== 0) return;
+      down = { x: ev.clientX, y: ev.clientY }; moved = false;
+      try { el.setPointerCapture(ev.pointerId); } catch (e) { }
+      el.classList.add('fc-pin-drag'); ev.preventDefault(); ev.stopPropagation();
+    });
+    el.addEventListener('pointermove', function (ev) {
+      if (!down) return;
+      if (!moved && Math.abs(ev.clientX - down.x) + Math.abs(ev.clientY - down.y) < 4) return;
+      moved = true;
+      var box = getBox(); if (!box || !box.width || !box.height) return;
+      var xN = Math.min(1, Math.max(0, (ev.clientX - box.left) / box.width));
+      var yN = Math.min(1, Math.max(0, (ev.clientY - box.top) / box.height));
+      el.style.left = (xN * 100) + '%'; el.style.top = (yN * 100) + '%';
+      el._nx = xN; el._ny = yN;
+    });
+    function end(ev) {
+      if (!down) return;
+      try { el.releasePointerCapture(ev.pointerId); } catch (e) { }
+      el.classList.remove('fc-pin-drag');
+      if (moved && el._nx != null && api && api.updatePin) {
+        var np = Object.assign({}, a.pin, { xNorm: Math.round(el._nx * 1000) / 1000, yNorm: Math.round(el._ny * 1000) / 1000 });
+        api.updatePin(a.id, np);
+      } else if (!moved && api && api.highlightCard) {
+        api.highlightCard(a.id, true); setTimeout(function () { if (api.highlightCard) api.highlightCard(a.id, false); }, 1500);
+      }
+      down = null; moved = false; el._nx = el._ny = null;
+    }
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+  }
   // Stuur de volledige stored-attachment-velden mee die de worker (cleanAtt) nodig heeft —
   // niet enkel {filename,url}, anders dropt de worker de bijlage (uploadStatus/key ontbreken).
   function cleanAttPayload(x) {
@@ -329,6 +367,9 @@
       return;
     }
     if (d.mediaType) st.mediaType = d.mediaType;
+    // Eén losse afbeelding (eigen stream, geen Drive-map/picflow-galerij) → inline pin-bare
+    // foto-reviewer i.p.v. de galerij-launcher.
+    if (st.mediaType === 'foto' && d.stream_url && !parseDriveFolderId(url) && !/picflow/.test(String(url))) st.mediaType = 'image';
     st.streamUrl = gwUrl(d.stream_url) || url;
     st.downloadUrl = gwUrl(d.download_url) || url;
     st.locked = d.is_read_only === true || d.lr_state === 'approved';
@@ -489,6 +530,15 @@
         if (c) { c.classList.toggle('fc-card-active', !!on); if (on) c.scrollIntoView({ block: 'nearest' }); }
       },
       getAnnotations: function () { return st.annotations.slice(); },
+      // pin verslepen: commit een nieuwe genormaliseerde positie voor één annotatie
+      updatePin: function (annId, pin) {
+        if (st.locked) return;
+        var a = st.annotations.filter(function (x) { return x.id === annId; })[0];
+        if (!a) return;
+        a.pin = pin;
+        renderAll();
+        toast('Pin verplaatst ✓', 1500);
+      },
       toast: toast,
       esc: _esc,
       gwUrl: gwUrl,
@@ -698,8 +748,10 @@
     }
     function pinLabel(pin) {
       if (!pin) return '';
+      if (pin.timestampSec != null) return '🕑 ' + fmtClock(pin.timestampSec);
       if (pin.page != null) return 'p.' + pin.page;
-      return '📍';
+      if (pin.xNorm != null) return '📍';
+      return '';
     }
 
     /* ---- GOEDKEUREN ---- */
@@ -939,9 +991,11 @@
           el.style.background = annType(a.type).color;
           el.innerHTML = '<span>' + (i + 1) + '</span>';
           el.title = String(a.comment || '').slice(0, 140);
-          el.addEventListener('click', function (ev) { ev.stopPropagation(); if (api && api.highlightCard) { api.highlightCard(a.id, true); setTimeout(function () { if (api && api.highlightCard) api.highlightCard(a.id, false); }, 1500); } });
           el.addEventListener('mouseenter', function () { if (api && api.highlightCard) api.highlightCard(a.id, true); });
           el.addEventListener('mouseleave', function () { if (api && api.highlightCard) api.highlightCard(a.id, false); });
+          // klik = highlight, slepen = pin verplaatsen (gedeelde helper)
+          if (!a.locked && api && !api.locked) { el.classList.add('fc-pin-movable'); makePinDraggable(el, a, api, function () { return ph.getBoundingClientRect(); }); }
+          else el.addEventListener('click', function (ev) { ev.stopPropagation(); if (api && api.highlightCard) { api.highlightCard(a.id, true); setTimeout(function () { if (api && api.highlightCard) api.highlightCard(a.id, false); }, 1500); } });
           layer.appendChild(el);
         });
       });
@@ -962,19 +1016,122 @@
   };
   registerReviewer('pdf', PDF_REVIEWER);
 
+  /* ---- IMAGE-reviewer: één losse afbeelding inline, met pin-op-foto (klik = pin +
+         pop-over), cursor-volgende ghost-pin en pin-verslepen. Zelfde pin-model als de
+         PDF-reviewer maar zonder pagina (pin = {xNorm,yNorm}). ---- */
+  var IMAGE_REVIEWER = {
+    pins: true,
+    emptyHint: 'Klik op de foto op de plek waar je iets wil aanduiden — er opent een venstertje om je opmerking te typen en (optioneel) een bijlage toe te voegen. Sleep een bestaande pin om hem te verplaatsen.',
+    init: function (api, ctx) {
+      var self = this; this._api = api;
+      var wrap = document.createElement('div'); wrap.className = 'fc-imgwrap';
+      var stage = document.createElement('div'); stage.className = 'fc-imgstage';
+      var img = document.createElement('img'); img.className = 'fc-img'; img.alt = ''; img.decoding = 'async';
+      var pins = document.createElement('div'); pins.className = 'fc-img-pins';
+      var draft = document.createElement('div'); draft.className = 'fc-img-draft';
+      stage.appendChild(img); stage.appendChild(pins); stage.appendChild(draft);
+      wrap.appendChild(stage); api.host.appendChild(wrap);
+      this._wrap = wrap; this._stage = stage; this._img = img; this._pinsLayer = pins; this._draft = draft;
+
+      // cursor-volgende ghost-pin (rAF-lerp, zoals de PDF-reviewer)
+      var ghost = document.createElement('div'); ghost.className = 'fc-ghostpin';
+      ghost.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.4 8.4 0 0 1-11.7 7.7L3 21l1.8-6.3A8.4 8.4 0 1 1 21 11.5Z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>';
+      document.body.appendChild(ghost); this._ghost = ghost;
+      var gst = { gx: 0, gy: 0, tx: 0, ty: 0, raf: 0 }; this._gst = gst;
+      function ghostTick() {
+        gst.gx += (gst.tx - gst.gx) * 0.32; gst.gy += (gst.ty - gst.gy) * 0.32;
+        ghost.style.transform = 'translate3d(' + (gst.gx - 13) + 'px,' + (gst.gy - 13) + 'px,0) rotate(-45deg)';
+        gst.raf = ghost.classList.contains('show') ? requestAnimationFrame(ghostTick) : 0;
+      }
+
+      img.addEventListener('load', function () { try { self._layoutPins(api.getAnnotations()); } catch (e) { } });
+      img.addEventListener('error', function () {
+        wrap.innerHTML = '<div class="fc-foto"><div class="fc-foto-card"><div class="fc-foto-ic">🖼️</div><b>Voorvertoning niet beschikbaar</b><p>Open de foto via de downloadknop bovenaan en geef hiernaast je feedback.</p></div></div>';
+      });
+      img.src = api.stream_url || api.url;
+
+      stage.addEventListener('mousemove', function (ev) {
+        if (api.locked || api.mode() !== 'comment' || ev.target.closest('.fc-pin')) { ghost.classList.remove('show'); return; }
+        gst.tx = ev.clientX; gst.ty = ev.clientY;
+        if (!ghost.classList.contains('show')) { gst.gx = ev.clientX; gst.gy = ev.clientY; ghost.classList.add('show'); }
+        if (!gst.raf) gst.raf = requestAnimationFrame(ghostTick);
+      });
+      stage.addEventListener('mouseleave', function () { ghost.classList.remove('show'); });
+      stage.addEventListener('click', function (ev) {
+        if (api.locked || api.mode() !== 'comment' || ev.target.closest('.fc-pin')) return;
+        var box = img.getBoundingClientRect(); if (!box.width || !box.height) return;
+        var xN = Math.min(1, Math.max(0, (ev.clientX - box.left) / box.width));
+        var yN = Math.min(1, Math.max(0, (ev.clientY - box.top) / box.height));
+        var pin = { xNorm: Math.round(xN * 1000) / 1000, yNorm: Math.round(yN * 1000) / 1000 };
+        ghost.classList.remove('show');
+        api.commentAt(pin, ev.clientX, ev.clientY);
+        draft.innerHTML = '<span class="fc-pin fc-pin-draft" style="left:' + (xN * 100) + '%;top:' + (yN * 100) + '%"><span>+</span></span>';
+      });
+    },
+    clearDraftPin: function () { if (this._draft) this._draft.innerHTML = ''; },
+    highlightPin: function (annId, on) {
+      if (!this._wrap) return;
+      var sel = (window.CSS && CSS.escape) ? CSS.escape(String(annId)) : String(annId);
+      var el = this._wrap.querySelector('.fc-pin[data-ann="' + sel + '"]');
+      if (el) { el.classList.toggle('fc-pin-active', !!on); if (on) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+    },
+    _layoutPins: function (anns) {
+      var layer = this._pinsLayer, img = this._img, api = this._api; if (!layer) return;
+      layer.innerHTML = '';
+      (anns || []).forEach(function (a, i) {
+        if (!a.pin || a.pin.xNorm == null || a.pin.page != null || a.pin.timestampSec != null) return; // enkel foto-pins
+        var el = document.createElement('button');
+        el.className = 'fc-pin';
+        el.setAttribute('data-ann', a.id);
+        el.style.left = (a.pin.xNorm * 100) + '%';
+        el.style.top = (a.pin.yNorm * 100) + '%';
+        el.style.background = annType(a.type).color;
+        el.innerHTML = '<span>' + (i + 1) + '</span>';
+        el.title = String(a.comment || '').slice(0, 140);
+        el.addEventListener('mouseenter', function () { if (api && api.highlightCard) api.highlightCard(a.id, true); });
+        el.addEventListener('mouseleave', function () { if (api && api.highlightCard) api.highlightCard(a.id, false); });
+        if (!a.locked && api && !api.locked) { el.classList.add('fc-pin-movable'); makePinDraggable(el, a, api, function () { return img.getBoundingClientRect(); }); }
+        else el.addEventListener('click', function (ev) { ev.stopPropagation(); if (api && api.highlightCard) { api.highlightCard(a.id, true); setTimeout(function () { if (api && api.highlightCard) api.highlightCard(a.id, false); }, 1500); } });
+        layer.appendChild(el);
+      });
+    },
+    onAnnotationsChanged: function (anns) { if (this._layoutPins) this._layoutPins(anns); },
+    goToPin: function () { if (this._wrap) this._wrap.scrollIntoView({ behavior: 'smooth', block: 'center' }); },
+    destroy: function () {
+      try { if (this._gst && this._gst.raf) cancelAnimationFrame(this._gst.raf); } catch (e) { }
+      try { if (this._ghost) this._ghost.remove(); } catch (e) { }
+      this._img = null; this._wrap = null;
+    },
+  };
+  registerReviewer('image', IMAGE_REVIEWER);
+
   /* ---- AUDIO-reviewer: native <audio controls> + 1 globale feedback-textarea
          (de gedeelde composer in de shell vervult de globale-feedback-rol) ---- */
   registerReviewer('audio', {
-    emptyHint: 'Beluister het fragment en schrijf je opmerking hieronder. Klik dan <strong>Toevoegen aan lijst</strong>.',
+    emptyHint: 'Beluister het fragment en klik op <strong>Opmerking op dit moment</strong> om je feedback aan de exacte tijd te koppelen — of schrijf hieronder een algemene opmerking.',
     init: function (api, ctx) {
       var box = document.createElement('div');
       box.className = 'fc-audio';
       box.innerHTML = '<div class="fc-audio-ic">🎧</div><audio controls preload="metadata" class="fc-audio-el"></audio>' +
-        '<p class="fc-audio-hint">Eén feedbackveld voor het hele fragment — schrijf gerust meerdere punten onder elkaar.</p>';
+        '<button type="button" class="fc-btn fc-primary fc-audio-mark">🕑 Opmerking op dit moment</button>' +
+        '<p class="fc-audio-hint">De opmerking wordt aan de huidige afspeeltijd gekoppeld. Klik later op een opmerking om er meteen naartoe te springen.</p>';
       var el = box.querySelector('audio');
       el.src = api.stream_url || api.url;
       api.host.appendChild(box);
       this._el = el;
+      var mark = box.querySelector('.fc-audio-mark');
+      if (api.locked) { mark.style.display = 'none'; }
+      mark.addEventListener('click', function () {
+        if (api.locked) { api.toast('Dit bestand is al doorgestuurd — feedback is vergrendeld.', 3200); return; }
+        var t = Math.max(0, el.currentTime || 0);
+        var r = mark.getBoundingClientRect();
+        api.commentAt({ timestampSec: Math.round(t * 1000) / 1000 }, r.left + r.width / 2, r.top);
+      });
+    },
+    goToPin: function (pin) {
+      if (!this._el || !pin || pin.timestampSec == null) return;
+      try { this._el.currentTime = pin.timestampSec; this._el.play().catch(function () { }); } catch (e) { }
+      try { this._el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { }
     },
     destroy: function () { try { if (this._el) { this._el.pause(); this._el.removeAttribute('src'); this._el.load(); } } catch (e) { } },
   });
