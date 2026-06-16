@@ -339,21 +339,28 @@
   /* INGEKLAPT: labels/teksten echt uit de flow (display:none) zodat icoon + avatar perfect
      centreren (opacity:0 hield breedte → uit het midden). Terug bij hover/focus. */
   body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-label,
-  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-glabel,
   body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-client-tx,
   body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-client .chev,
   body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-wordmark{display:none;}
+  /* groep-labels NIET uit de flow halen: visibility:hidden houdt hun hoogte gereserveerd zodat
+     elk item op EXACT dezelfde Y-positie staat als in de uitgeklapte balk (geen verticale sprong/groei). */
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-glabel{visibility:hidden;}
   body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-item{justify-content:center;gap:0;padding-left:0;padding-right:0;}
-  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-item .sb-badge{position:absolute;top:3px;right:12px;transform:scale(.72);transform-origin:top right;}
+  /* geen notificatie-badges in de ingeklapte rail (zweefden over de icoontjes = rommelig) */
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-item .sb-badge{display:none;}
   body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-client{justify-content:center;gap:0;padding-left:0;padding-right:0;}
   body.sb-rail .sidebar:not(:hover):not(:focus-within) .client-switch-wrap{padding-left:0;padding-right:0;}
-  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-group{margin-top:6px;}
+  /* GEEN afwijkende groep-marge in de rail (was margin-top:6px) — zo blijft de groep-spacing 1:1 met de uitgeklapte balk */
   /* mini-merk '27' i.p.v. het brede woordmerk in de rail */
   body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-head{padding-left:0;padding-right:0;text-align:center;}
   body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-mini-mark{display:block;font-family:var(--font-display);font-weight:800;font-size:18px;color:var(--ink);line-height:24px;}
   /* ingeklapte rail: alle iconen neutraal (zelfde grijs als de outline-icoontjes) */
   body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-item{color:var(--ink-3,#6B5B6B);}
   body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-ic{color:var(--ink-3,#6B5B6B);}
+  /* iets kleinere icoontjes in de ingeklapte rail; symmetrische scale houdt het centrum/de positie
+     identiek (het 24px-vak blijft, dus rijhoogtes 1:1) en animeert vloeiend mee bij het openklappen. */
+  body.sb-rail .sidebar .sb-item .sb-ic{transition:color 140ms, transform .26s cubic-bezier(.4,0,.2,1);}
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-item .sb-ic{transform:scale(.84);}
 }
 /* Brand-iconen = de eigen minimalistische redesign-iconen, ingelijnd met de overige
    outline-icoontjes: één neutrale kleur (var(--ink-4)), NOOIT ingekleurd — ook niet op
