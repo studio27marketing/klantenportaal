@@ -9,7 +9,7 @@
 "use strict";
 
 let currentTab = 'start';
-const SECTION_LABEL = { start:'Home', berichten:'Berichten', strategie:'Strategie', branding:'Branding', video:'Video- en fotografie', socials:'Socials', advertenties:'Adverteren', webprestaties:'Website', meetings:'Meetings', nieuwproject:'Nieuw project', offertes:'Offertes', facturatie:'Facturatie', instellingen:'Instellingen' };
+const SECTION_LABEL = { start:'Home', berichten:'Berichten', strategie:'Strategie', branding:'Branding', video:'Video- en fotografie', socials:'Socials', advertenties:'Adverteren', webprestaties:'Website', 'alle-projecten':'Alle projecten', meetings:'Meetings', nieuwproject:'Nieuw project', offertes:'Offertes', facturatie:'Facturatie', instellingen:'Instellingen' };
 
 function qsp(){ return new URLSearchParams(location.search); }
 function $id(x){ return document.getElementById(x); }
@@ -481,7 +481,7 @@ function logout(){ stopChatPoll(); try{ if(window.S27Auth) window.S27Auth.logout
    ============================================================================= */
 async function ensureTabData(name){
   if(state.demoMode) return;
-  if(['start','strategie','branding','video','berichten','socials','advertenties','webprestaties'].indexOf(name)>=0){ if(!state.data.dashboard) await S27DATA.loadDashboard(); }
+  if(['start','strategie','branding','video','berichten','socials','advertenties','webprestaties','alle-projecten'].indexOf(name)>=0){ if(!state.data.dashboard) await S27DATA.loadDashboard(); }
   // gedeelde keys via S27DATA.once -> een tab-klik tijdens de prefetch deelt dezelfde promise
   if(name==='meetings' && !state.data.meetings) await S27DATA.once('meetings', function(){ return S27DATA.loadMeetings(); });
   if(name==='huisstijl' && !state.data.huisstijl) await S27DATA.loadHuisstijl();
@@ -529,6 +529,16 @@ async function goTab(name){
     else {
       var _vps=(typeof _takProjects==='function'&&typeof TAK_TABS!=='undefined'&&TAK_TABS[name])?_takProjects(TAK_TABS[name].discIds):[];
       if(_vps.length===1){ openProject(_vps[0].id,name); return; }
+    }
+  }
+  // Website-tak: net als video -> precies één lopend project = meteen op dat detail landen
+  // (niet wanneer de klant bewust de Statistieken-subtab koos, en niet net na 'terug' uit het detail).
+  if(name==='webprestaties' && !state.demoMode && (typeof webTakTab!=='function' || webTakTab()==='projecten')){
+    state._skipAutoLand=state._skipAutoLand||{};
+    if(state._skipAutoLand['webprestaties']){ state._skipAutoLand['webprestaties']=false; }
+    else {
+      var _wps=(typeof _takProjects==='function'&&typeof TAK_WEBSITE!=='undefined')?_takProjects(TAK_WEBSITE.discIds).filter(function(p){return p.status!=='done';}):[];
+      if(_wps.length===1){ openProject(_wps[0].id,'webprestaties'); return; }
     }
   }
   renderPanel(name);

@@ -411,6 +411,21 @@ function panelTak(key){
   const lopend=zicht.length ? projDienst(all, key) : leeg;
   return takContactCard(key, T, zicht)+lopend+takArchiefSectie(key, T);
 }
+/* ---- 'Alle projecten' (dwarsdoorsnede: alle takken, lopend + afgerond) ---- */
+function panelAlleProjecten(){
+  var act=_projects().filter(function(p){ return p && _isProjectDisc(p) && !_isAdProject(p); });
+  var done=(window.S27DATA&&S27DATA.done&&S27DATA.done())||[];
+  var seen={}; act.forEach(function(p){ seen[p.id]=1; });
+  var afg=done.filter(function(p){ return p && !seen[p.id] && _isProjectDisc(p) && !_isAdProject(p); });
+  var lopend=act.filter(function(p){ return p.status!=='done'; });
+  var afgerond=act.filter(function(p){ return p.status==='done'; }).concat(afg);
+  if(!lopend.length && !afgerond.length){
+    return '<div class="empty"><div class="em-ic">'+ic('doc',56)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog geen projecten</b><p style="margin:6px 0 0">Zodra we voor je aan de slag gaan, verschijnen je projecten hier.</p></div>';
+  }
+  var byDate=function(a,b){ return (b.dateCreated||0)-(a.dateCreated||0); };
+  var sec=function(titel,arr,mt){ return arr.length?('<section><div class="section-head"'+(mt?' style="margin-top:24px"':'')+'><h2>'+titel+'</h2><span class="count">'+arr.length+'</span></div><div style="display:flex;flex-direction:column;gap:8px">'+arr.slice().sort(byDate).map(function(p){ return projCardFlat(p,'alle-projecten'); }).join('')+'</div></section>'):''; };
+  return sec('Lopend',lopend,false)+sec('Afgerond',afgerond,lopend.length>0);
+}
 
 /* ---- Socials (Metricool), netwerk/status-helpers + render ---- */
 const MC_NET={linkedin:['LinkedIn','#0a66c2'],facebook:['Facebook','#1877f2'],instagram:['Instagram','#d6336c'],tiktok:['TikTok','#111827'],twitter:['X','#111827'],x:['X','#111827'],youtube:['YouTube','#ff0000'],gbp:['Google','#1a73e8'],google:['Google','#1a73e8'],bluesky:['Bluesky','#1185fe'],pinterest:['Pinterest','#bd081c'],threads:['Threads','#111827']};
@@ -2914,7 +2929,7 @@ function panelMeetings(){
         <h3 class="meet2-plan-h">Plan een meeting</h3>
         <p class="meet2-plan-sub">Kies wat je wil bespreken — je prikt zelf een vrij moment.</p>
         <button class="planopt" onclick="openMeetingPlanner('algemeen')"><span class="planopt-ic br-blue">${ic('msg',20)}</span><span class="planopt-tx"><b>Algemene meeting</b><span>Bijpraten over de samenwerking</span></span>${ic('arrow',16)}</button>
-        <button class="planopt" onclick="openMeetingPlanner('project')"><span class="planopt-ic br-purple">${ic('video',20)}</span><span class="planopt-tx"><b>Projectmeeting</b><span>Over een lopend project</span></span>${ic('arrow',16)}</button>
+        ${isRichView()?`<button class="planopt" onclick="openMeetingPlanner('project')"><span class="planopt-ic br-purple">${ic('video',20)}</span><span class="planopt-tx"><b>Projectmeeting</b><span>Over een lopend project</span></span>${ic('arrow',16)}</button>`:''}
         <button class="planopt" onclick="openMeetingPlanner('nieuw')"><span class="planopt-ic br-orange">${ic('spark',20)}</span><span class="planopt-tx"><b>Nieuw project</b><span>Iets nieuws opstarten</span></span>${ic('arrow',16)}</button>
       </aside>
     </div>
@@ -4243,7 +4258,7 @@ function buildModal(id, from){
       <button class="soc-subtab${startTab==='overzicht'?' active':''}" data-mt="overzicht" onclick="switchModalTab('overzicht')">${ic('doc',15)} Overzicht</button>
       <button class="soc-subtab${startTab==='chat'?' active':''}" data-mt="chat" onclick="switchModalTab('chat')">${ic('msg',15)} Chat${chatWacht?'<span class="snav-dot"></span>':''}</button>
       <span class="detail-subnav-sep"></span>
-      <button class="detail-close detail-close--innav" title="Terug naar ${backLabel}" aria-label="Terug naar ${backLabel}" onclick="${(typeof _isContentTak==='function'&&_isContentTak(backTo))?`markSkipAutoLand('${backTo}');`:''}goTab('${backTo}')">${ic('plus',22)}</button>
+      <button class="detail-close detail-close--innav" title="Terug naar ${backLabel}" aria-label="Terug naar ${backLabel}" onclick="${(typeof _isContentTak==='function'&&(_isContentTak(backTo)||backTo==='webprestaties'))?`markSkipAutoLand('${backTo}');`:''}goTab('${backTo}')">${ic('plus',22)}</button>
     </div>
     <div class="detail-body">${overviewPane}${toonAccordions?deliverables.replace('class="mpane"','class="mpane mpane-sub'+(startTab==='overzicht'?' active':'')+'"'):''}${chatPane}</div>
   </div>`;
@@ -4407,9 +4422,12 @@ function panelWebprestaties(){
     var T=TAK_WEBSITE;
     var all=_takProjects(T.discIds);
     var actief=all.filter(function(p){return p.status!=='done';});
-    var lopend=actief.length?projDienst(all,'webprestaties')
+    // 1:1 met video & fotografie: vlakke chronologische lijst van lopende projecten (geen
+    // clusters/contactkaart/plan-meeting/archief). Bij precies 1 lopend project landt goTab
+    // meteen op het detail (zie portal.js).
+    var lopend=actief.length?('<div class="vrij-lijst">'+actief.slice().sort(function(a,b){return (a.dateCreated||0)-(b.dateCreated||0);}).map(function(p){return videoProjRij(p,'webprestaties');}).join('')+'</div>')
       :'<div class="empty"><div class="em-ic"><img src="assets/icon-webdesign.svg" width="56" height="56" alt=""></div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Geen lopende website-projecten</b><p style="margin:6px 0 14px">Een nieuwe site of aanpassing nodig?</p><button class="btn btn-branch br-green" onclick="openOfferteWizard(\'website\')">'+ic('plus',15)+' Start een aanvraag</button></div>';
-    return webTakSubnav()+takContactCard('webprestaties', T, actief)+lopend+takArchiefSectie('webprestaties', T);
+    return webTakSubnav()+lopend;
   }
   var head=webTakSubnav();
   var t=(window.S27DATA&&S27DATA.webTraffic&&S27DATA.webTraffic())||null;
@@ -4465,9 +4483,9 @@ function webSupportCard(){
 const PANELS={
   start:panelStart, berichten:panelBerichten,
   strategie:function(){return panelTak('strategie');}, branding:function(){return panelTak('branding');}, video:function(){return panelTak('video');},
-  socials:panelSocials, advertenties:panelAdvertenties, webprestaties:panelWebprestaties,
+  socials:panelSocials, advertenties:panelAdvertenties, webprestaties:panelWebprestaties, 'alle-projecten':panelAlleProjecten,
   meetings:panelMeetings, nieuwproject:panelOffertes, offertes:panelOffertes,
   huisstijl:panelHuisstijl, facturatie:panelFacturatie, instellingen:panelInstellingen,
 };
-const TAB_BRANCH={start:'blue',berichten:'blue',strategie:'blue',branding:'pink',video:'purple',socials:'yellow',advertenties:'orange',webprestaties:'green',meetings:'blue',nieuwproject:'blue',offertes:'purple',huisstijl:'pink',facturatie:'green',instellingen:'indigo'};
-const TAB_GROUP={projecten:'werk',socials:'werk',advertenties:'werk',webprestaties:'werk',meetings:'plannen',nieuwproject:'plannen',offertes:'plannen',huisstijl:'bedrijf',facturatie:'bedrijf',instellingen:'bedrijf'};
+const TAB_BRANCH={start:'blue',berichten:'blue',strategie:'blue',branding:'pink',video:'purple',socials:'yellow',advertenties:'orange',webprestaties:'green','alle-projecten':'blue',meetings:'blue',nieuwproject:'blue',offertes:'purple',huisstijl:'pink',facturatie:'green',instellingen:'indigo'};
+const TAB_GROUP={projecten:'werk',socials:'werk',advertenties:'werk',webprestaties:'werk','alle-projecten':'werk',meetings:'plannen',nieuwproject:'plannen',offertes:'plannen',huisstijl:'bedrijf',facturatie:'bedrijf',instellingen:'bedrijf'};
