@@ -160,6 +160,7 @@ body.vr-lift .vr-root{z-index:960;}   /* modal/composer/fullscreen open -> boven
 @media (min-width: 981px) {
   .vr-root { left: 264px; }
   body.sb-collapsed .vr-root { left: 0; }   /* ingeklapte dock = volle breedte */
+  body.sb-rail .vr-root { left: 64px; }     /* review naast de icoon-rail (item 18) */
 }
 /* verzend-modal: warme S27-stijl + volledigheids-bevestiging */
 .vr-modal { border-radius: 18px; padding: 22px 22px 18px; }

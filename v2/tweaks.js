@@ -122,31 +122,17 @@
    - state bewaard in localStorage (per toestel)
    ============================================================ */
 (function(){
-  var KEY='s27_sb_collapsed';
+  // RAIL-MODUS (item 18): de zijbalk is standaard ingeklapt tot een icoon-rail (~64px) en klapt
+  // bij hover puur via CSS uit naar volle breedte als overlay (content schuift niet). De topbar-
+  // knop wisselt tussen rail (icoontjes) en vastgepind (volle breedte). State per toestel.
+  var KEY='s27_sb_rail';
   var body=document.body;
-  function collapsed(){ return body.classList.contains('sb-collapsed'); }
-  function setCollapsed(on){
-    body.classList.toggle('sb-collapsed', !!on);
-    if(!on) body.classList.remove('sb-peek');
+  function rail(){ return body.classList.contains('sb-rail'); }
+  function setRail(on){
+    body.classList.toggle('sb-rail', !!on);
     try{ localStorage.setItem(KEY, on?'1':'0'); }catch(_){}
   }
-  // globale toggle (vanaf de topbar-knop)
-  window.toggleDock=function(){ setCollapsed(!collapsed()); };
-
-  // herstel bewaarde staat (alleen op desktop zinvol; CSS negeert het op mobiel)
-  try{ if(localStorage.getItem(KEY)==='1') body.classList.add('sb-collapsed'); }catch(_){}
-
-  // hover-reveal aan de linkerrand
-  var edge=document.getElementById('sbEdge');
-  var sidebar=document.getElementById('sidebar');
-  var peekTimer=null;
-  function peekOn(){ if(!collapsed())return; if(peekTimer){clearTimeout(peekTimer);peekTimer=null;} body.classList.add('sb-peek'); }
-  function peekOffSoon(){ if(peekTimer)clearTimeout(peekTimer); peekTimer=setTimeout(function(){ body.classList.remove('sb-peek'); peekTimer=null; }, 180); }
-  if(edge){ edge.addEventListener('mouseenter', peekOn); edge.addEventListener('mouseleave', peekOffSoon); }
-  if(sidebar){
-    sidebar.addEventListener('mouseenter', peekOn);
-    sidebar.addEventListener('mouseleave', peekOffSoon);
-    // klik op een menu-item terwijl de zijbalk zweeft: peek sluiten zodat content weer fullscreen gaat
-    sidebar.addEventListener('click', function(e){ if(collapsed() && e.target.closest && e.target.closest('.sb-item')){ setTimeout(function(){ body.classList.remove('sb-peek'); }, 60); } });
-  }
+  // standaard rail AAN, tenzij de gebruiker hem eerder vastpinde (CSS negeert sb-rail op mobiel)
+  try{ if(localStorage.getItem(KEY)==='0') body.classList.remove('sb-rail'); else body.classList.add('sb-rail'); }catch(_){ body.classList.add('sb-rail'); }
+  window.toggleDock=function(){ setRail(!rail()); };
 })();

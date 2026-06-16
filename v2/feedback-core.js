@@ -114,6 +114,14 @@
   // waardoor alle calls naar een relatieve URL op de Pages-host gingen (405 → 'kon niet inladen').
   function gwUrl(rel) { return rel ? (/^https?:/.test(rel) ? rel : GATEWAY_BASE + rel) : ''; }
   function fmtClock(sec) { sec = Math.max(0, Math.round(sec || 0)); var m = Math.floor(sec / 60), s = sec % 60; return m + ':' + (s < 10 ? '0' : '') + s; }
+  // projecttitel + tak-naam (fallback) via een door panels.js gepubliceerde helper, zodat de
+  // overlay-kop nooit op de bestandsnaam/'Open in Drive' hoeft terug te vallen.
+  function _projMeta(taskId) { try { return (typeof window.S27ProjectMeta === 'function') ? (window.S27ProjectMeta(taskId) || {}) : {}; } catch (e) { return {}; } }
+  function projectTitleFor(taskId) { return _projMeta(taskId).title || ''; }
+  function takLabelFor(taskId) { return _projMeta(taskId).tak || ''; }
+  // OFFLINE DRAFT (item 5): lokale opslag van lopende feedback per taak+bestand+ronde, zodat
+  // niets verloren gaat bij sluiten of verbindingsverlies. Gewist na indienen/goedkeuren/lock.
+  function draftKey(taskId, url, ronde) { return 'fcDraft:' + taskId + ':' + linkKeyOf(url) + ':r' + (ronde || 1); }
   function shapeIcon(k) { return k === 'arrow' ? '➜' : (k === 'box' ? '▢' : (k === 'highlight' ? '🖍️' : '📍')); }
   function shapeLabelF(k) { return k === 'arrow' ? 'Pijl' : (k === 'box' ? 'Kader' : (k === 'highlight' ? 'Markering' : 'Markup')); }
   // Sleep een bestaande pin naar een nieuwe plek. el = het pin-DOM, a = de annotatie,
@@ -145,8 +153,8 @@
       if (moved && el._nx != null && api && api.updatePin) {
         var np = Object.assign({}, a.pin, { xNorm: Math.round(el._nx * 1000) / 1000, yNorm: Math.round(el._ny * 1000) / 1000 });
         api.updatePin(a.id, np);
-      } else if (!moved && api && api.highlightCard) {
-        api.highlightCard(a.id, true); setTimeout(function () { if (api.highlightCard) api.highlightCard(a.id, false); }, 1500);
+      } else if (!moved && api && api.showComment) {
+        api.showComment(a.id, ev.clientX, ev.clientY);   // klik (geen sleep) → toon de opmerking (item 9)
       }
       down = null; moved = false; el._nx = el._ny = null;
     }
@@ -179,7 +187,7 @@
      ============================================================================= */
   var SVGNS = 'http://www.w3.org/2000/svg';
   function r3(n) { return Math.round(n * 1000) / 1000; }
-  function isMarkupTool(t) { return t === 'arrow' || t === 'box' || t === 'highlight'; }
+  function isMarkupTool(t) { return t === 'box'; }   // enkel Kader; pijl/markeerstift geschrapt (item 1). shapeNode/renderShapes blijven arrow/highlight tekenen voor oude bundels.
   function svgNode(name, attrs) { var e = document.createElementNS(SVGNS, name); for (var k in attrs) e.setAttribute(k, attrs[k]); return e; }
   function pct(n) { return (Math.max(0, Math.min(1, n)) * 100) + '%'; }
   // Eén SVG-overlay met pijlpunt-markers per type-kleur (+ draft-oranje).
@@ -218,7 +226,8 @@
     return p;
   }
   // Teken alle vastgelegde shapes voor dit oppervlak (pageNum = null voor één afbeelding).
-  function renderShapes(svgLayer, anns, pageNum) {
+  // api (optioneel) → klik op een kader toont de opmerking read-only (item 9).
+  function renderShapes(svgLayer, anns, pageNum, api) {
     if (!svgLayer) return;
     [].slice.call(svgLayer.querySelectorAll('.fc-shape')).forEach(function (n) { n.remove(); });
     (anns || []).forEach(function (a) {
@@ -226,6 +235,14 @@
       if (pageNum) { if ((a.shape.page || 1) !== pageNum) return; } else if (a.shape.page) { return; }
       var el = shapeNode(a.shape, annType(a.type).color, annType(a.type).key);
       el.setAttribute('class', 'fc-shape'); el.setAttribute('data-ann', a.id);
+      if (api && api.showComment) {
+        el.addEventListener('click', function (ev) {
+          if (api.tool && api.tool() === 'box') return;  // tijdens tekenen niet de bubble openen
+          ev.stopPropagation(); api.showComment(a.id, ev.clientX, ev.clientY);
+        });
+        el.addEventListener('mouseenter', function () { if (api.highlightCard) api.highlightCard(a.id, true); });
+        el.addEventListener('mouseleave', function () { if (api.highlightCard) api.highlightCard(a.id, false); });
+      }
       svgLayer.appendChild(el);
     });
   }
@@ -347,12 +364,12 @@
     root.innerHTML =
       '<div class="fc-shell" role="dialog" aria-label="Bestandsfeedback">' +
       '  <header class="fc-top">' +
-      '    <div class="fc-title"><div><h2 id="fcTitle"></h2><span class="fc-sub" id="fcSub">Feedbackronde</span></div></div>' +
+      '    <div class="fc-title"><div><h2 id="fcTitle"></h2><div class="fc-subline"><span class="fc-tak" id="fcTak"></span><span class="fc-sub" id="fcSub">Feedbackronde 1</span></div></div></div>' +
       '    <div class="fc-actions">' +
-      '      <a id="fcDownload" class="fc-btn fc-ghost" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 19h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="fc-dl-txt">Download</span></a>' +
-      '      <button id="fcApprove" class="fc-btn fc-approve">✓ Goedkeuren</button>' +
-      '      <button id="fcFeedback" class="fc-btn fc-primary">Feedback geven <span id="fcCount" class="fc-countbadge fc-hidden">0</span></button>' +
-      '      <button id="fcPanelToggle" class="fc-btn fc-ghost fc-paneltoggle" title="Opmerkingen tonen/verbergen" aria-label="Opmerkingen tonen/verbergen"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-11.7 7.7L3 21l1.8-6.3A8.4 8.4 0 1 1 21 11.5Z"/></svg><span class="fc-pt-n" id="fcPtN">0</span></button>' +
+      '      <button id="fcPanelToggle" class="fc-btn fc-ghost fc-paneltoggle" title="Opmerkingen tonen/verbergen" aria-label="Opmerkingen tonen/verbergen"><span class="fc-pt-lbl">Bekijk comments</span><span class="fc-pt-n" id="fcPtN">0</span></button>' +
+      '      <button id="fcFeedback" class="fc-btn fc-primary">Feedback indienen <span id="fcCount" class="fc-countbadge fc-hidden">0</span></button>' +
+      '      <button id="fcApprove" class="fc-btn fc-approve">Goedkeuren</button>' +
+      '      <a id="fcDownload" class="fc-btn fc-ghost fc-iconbtn" target="_blank" rel="noopener" aria-label="Download" title="Download"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 19h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>' +
       '      <button id="fcClose" class="fc-x" title="Sluiten" aria-label="Sluiten"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></button>' +
       '    </div>' +
       '  </header>' +
@@ -360,13 +377,18 @@
       '  <main class="fc-main fc-hidden" id="fcMain">' +
       '    <section class="fc-stagecol">' +
       '      <div class="fc-prevnote fc-hidden" id="fcPrev"></div>' +
-      '      <div class="fc-modebar fc-hidden" id="fcModebar" role="tablist" aria-label="Gereedschap">' +
-      '        <button class="fc-mode-opt fc-mode-active" id="fcModeComment" data-tool="comment" role="tab" title="Opmerking plaatsen"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.4 8.4 0 0 1-11.7 7.7L3 21l1.8-6.3A8.4 8.4 0 1 1 21 11.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span>Pin</span></button>' +
-      '        <button class="fc-mode-opt" id="fcToolArrow" data-tool="arrow" role="tab" title="Pijl tekenen"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M19 5h-7M19 5v7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Pijl</span></button>' +
-      '        <button class="fc-mode-opt" id="fcToolBox" data-tool="box" role="tab" title="Kader tekenen"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="14" rx="2" stroke="currentColor" stroke-width="2"/></svg><span>Kader</span></button>' +
-      '        <button class="fc-mode-opt" id="fcToolMark" data-tool="highlight" role="tab" title="Markeren"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 19h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M7 15 14 8l3 3-7 7H7v-3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span>Markeren</span></button>' +
-      '        <button class="fc-mode-opt" id="fcModeBrowse" data-tool="browse" role="tab" title="Vrij bekijken"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg><span>Bekijken</span></button>' +
-      '        <span class="fc-mode-hint" id="fcModeHint">Klik in het bestand om er een opmerking op te plaatsen.</span>' +
+      '      <div class="fc-toolrow fc-hidden" id="fcToolrow">' +
+      '        <div class="fc-modebar" id="fcModebar" role="tablist" aria-label="Gereedschap">' +
+      '          <button class="fc-mode-opt fc-mode-active" id="fcModeComment" data-tool="comment" role="tab" title="Pin plaatsen"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.4 8.4 0 0 1-11.7 7.7L3 21l1.8-6.3A8.4 8.4 0 1 1 21 11.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span>Pin</span></button>' +
+      '          <button class="fc-mode-opt" id="fcToolBox" data-tool="box" role="tab" title="Kader tekenen"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="14" rx="2" stroke="currentColor" stroke-width="2"/></svg><span>Kader</span></button>' +
+      '          <span class="fc-mode-hint" id="fcModeHint"></span>' +
+      '        </div>' +
+      '        <div class="fc-zoombar fc-hidden" id="fcZoom">' +
+      '          <button class="fc-zoom-btn" id="fcZoomOut" title="Uitzoomen" aria-label="Uitzoomen">−</button>' +
+      '          <span class="fc-zoom-lvl" id="fcZoomLvl">100%</span>' +
+      '          <button class="fc-zoom-btn" id="fcZoomIn" title="Inzoomen" aria-label="Inzoomen">+</button>' +
+      '          <button class="fc-zoom-btn fc-zoom-fit" id="fcZoomReset" title="Passend" aria-label="Passend">Passend</button>' +
+      '        </div>' +
       '      </div>' +
       '      <div class="fc-stage" id="fcStage"><div class="fc-viewer" id="fcViewer"></div></div>' +
       '    </section>' +
@@ -389,12 +411,12 @@
       '</div>' +
       '<div id="fcSendScrim" class="fc-scrim fc-hidden"></div>' +
       '<div id="fcSendModal" class="fc-modal fc-hidden">' +
-      '  <div class="fc-sendhead"><span class="fc-sendic">📝</span><div><b>Feedback doorsturen</b><span>We gaan er meteen mee aan de slag.</span></div></div>' +
+      '  <div class="fc-sendhead"><span class="fc-sendic">📝</span><div><b>Feedback indienen</b><span>Controleer of je feedback volledig is — daarna kun je in deze ronde niets meer toevoegen.</span></div></div>' +
       '  <div class="fc-sendsum" id="fcSendLine"></div>' +
       '  <label class="fc-field"><span>Algemene opmerking <em>(optioneel)</em></span><textarea id="fcSummary" rows="3" placeholder="Feedback die niet aan één punt hangt…"></textarea></label>' +
-      '  <label class="fc-confirm"><input type="checkbox" id="fcSendVolledig"><span>Mijn feedback voor dit bestand is <b>volledig</b> — Studio 27 mag starten met de verwerking.</span></label>' +
+      '  <label class="fc-confirm"><input type="checkbox" id="fcSendVolledig"><span>Mijn feedback is <b>volledig</b>. Ik begrijp dat ik in deze feedbackronde niets meer kan toevoegen en dat Studio 27 nu start met de verwerking.</span></label>' +
       '  <p id="fcSendErr" class="fc-err fc-hidden"></p>' +
-      '  <div class="fc-modalfoot"><button id="fcSendCancel" class="fc-btn fc-ghost">Terug</button><button id="fcSendGo" class="fc-btn fc-primary">Verzenden</button></div>' +
+      '  <div class="fc-modalfoot"><button id="fcSendCancel" class="fc-btn fc-ghost">Terug</button><button id="fcSendGo" class="fc-btn fc-primary">Feedback indienen</button></div>' +
       '</div>';
     document.body.appendChild(root);
     document.body.classList.add('fc-open');
@@ -409,6 +431,9 @@
     var taskId = String(opts.taskId || (window.state && state.activeProject) || '');
     var url = String(opts.url || '');
     var label = String(opts.label || 'Bestand');
+    // projecttitel + tak voor de overlay-kop (nooit 'Open in Drive'); fallback uit window.state
+    var projectTitle = String(opts.projectTitle || projectTitleFor(taskId) || label);
+    var takLabel = String(opts.takLabel || takLabelFor(taskId) || '');
     if (!url) return;
     if (!taskId) { toast('Dit bestand kan alleen binnen een project geopend worden.', 3600); return; }
 
@@ -421,7 +446,8 @@
 
     var root = buildShell(st);
     var $ = function (id) { return root.querySelector('#' + id); };
-    $('fcTitle').textContent = label;
+    $('fcTitle').textContent = projectTitle;
+    if (takLabel) $('fcTak').textContent = takLabel; else $('fcTak').classList.add('fc-hidden');
 
     function vrLift(on) { try { document.body.classList.toggle('fc-lift', !!on); } catch (e) { } }
 
@@ -431,9 +457,11 @@
 
     function close() {
       if (st.closed) return;
+      try { if (st._saveDraft) st._saveDraft(); } catch (e) { }   // item 5: bewaar lopende feedback bij sluiten
       st.closed = true;
       vrLift(false);
       try { closeInlinePopover(); } catch (e) { }
+      try { closeAnnBubble(); } catch (e) { }
       try { document.removeEventListener('click', navClose, true); } catch (e) { }
       try { if (st.reviewer && st.reviewer.destroy) st.reviewer.destroy(); } catch (e) { }
       try { document.body.classList.remove('fc-open'); } catch (e) { }
@@ -441,8 +469,12 @@
       current = null;
     }
     $('fcClose').addEventListener('click', function () {
-      if (!st.locked && (st.annotations.length || $('fcCompose').value.trim()) &&
-        !confirm('Je hebt nog niet-verzonden feedback. Sluiten?')) return;
+      // niet-ingediende feedback wordt automatisch bewaard (item 5) → geen blokkerende vraag,
+      // wel een korte geruststelling als er iets openstaat.
+      if (!st.locked && (st.annotations.length || ($('fcCompose') && $('fcCompose').value.trim()))) {
+        try { if (st._saveDraft) st._saveDraft(); } catch (e) { }
+        toast('Je feedback is bewaard — je kunt later verder.', 2600);
+      }
       close();
     });
     current = { close: close };
@@ -458,8 +490,9 @@
       $('fcMain').classList.remove('fc-hidden');
       var vfb = $('fcViewer');
       if (vfb) vfb.innerHTML = '<div class="fc-foto"><div class="fc-foto-card"><div class="fc-foto-ic">📄</div><b>Voorvertoning niet beschikbaar</b><p>' +
-        _esc((d && d.message) || 'We konden dit bestand niet in het portaal inladen. Probeer het zo opnieuw of open het origineel.') +
-        '</p><a class="fc-btn fc-primary" href="' + _esc((d && d.open_url) || url) + '" target="_blank" rel="noopener">Open origineel</a></div></div>';
+        _esc((d && d.message) || 'We konden dit bestand niet in het portaal inladen. Probeer het zo opnieuw.') +
+        '</p><button class="fc-btn fc-primary" id="fcRetry">Probeer opnieuw</button></div></div>';
+      var rt = $('fcRetry'); if (rt) rt.addEventListener('click', function () { close(); open(opts); });
       var sub = $('fcSub'); if (sub) sub.textContent = 'Kon niet inladen';
       return;
     }
@@ -480,31 +513,24 @@
     st.downloadUrl = gwUrl(d.download_url) || url;
     st.locked = d.is_read_only === true || d.lr_state === 'approved';
 
-    // download-knop is ALTIJD aanwezig; respecteer can_download (false → origineel openen)
+    // download-knop is ALTIJD aanwezig; respecteer can_download. Tooltip legt uit dat
+    // downloaden pas kan na goedkeuring (item 7).
     var dl = $('fcDownload');
     if (d.can_download === false) {
       dl.removeAttribute('href');
       dl.classList.add('fc-disabled');
-      dl.title = 'Beschikbaar na goedkeuring';
+      dl.setAttribute('aria-disabled', 'true');
+      dl.title = 'Download is enkel beschikbaar als je het bestand hebt goedgekeurd.';
     } else {
       dl.href = st.downloadUrl + (st.downloadUrl.indexOf('?') >= 0 ? '&' : '?') + 'name=' + encodeURIComponent(label);
+      dl.title = 'Download dit goedgekeurde bestand';
     }
 
-    // Native Google-doc/sheet/slides: knop om het in Google te openen/bewerken. Google
-    // dwingt de rechten zelf af (owner/gedeeld → bewerken, anders alleen-lezen), dus dit
-    // is meteen "bewerken als de klant edit-rechten heeft" zonder extra permissie-laag.
-    if (d.edit_url) {
-      var ed = document.createElement('a');
-      ed.className = 'fc-btn fc-ghost fc-edit';
-      ed.target = '_blank'; ed.rel = 'noopener';
-      ed.href = d.edit_url;
-      ed.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 20h16M5 19v-3.6L15.4 5l3.6 3.6L8.6 19H5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Bewerk in Google</span>';
-      dl.parentNode.insertBefore(ed, dl);
-    }
-
-    if (d.ronde) $('fcSub').textContent = 'Feedbackronde ' + d.ronde;
+    // Feedbackronde altijd tonen (item 6); veilige fallback als de server geen ronde meegeeft.
+    var ronde = Number(d.ronde) || (d.last_bundle ? 2 : 1);
+    $('fcSub').textContent = 'Feedbackronde ' + ronde;
     if (st.locked) {
-      $('fcSub').textContent = (d.lr_state === 'approved') ? 'Goedgekeurd ✓' : 'Feedback doorgestuurd';
+      $('fcSub').textContent = 'Feedbackronde ' + ronde + ' · ' + ((d.lr_state === 'approved') ? 'Goedgekeurd ✓' : 'Ingediend');
       root.classList.add('fc-locked');
       var prev = $('fcPrev');
       prev.classList.remove('fc-hidden');
@@ -526,6 +552,51 @@
       if (lb && lb.summary) { prev.innerHTML += '<br><span class="fc-locksum">Algemene opmerking: ' + _esc(lb.summary) + '</span>'; }
     }
 
+    /* ---- OFFLINE DRAFT (item 5): herstel lopende feedback van deze ronde; bij een
+           afgesloten (locked) ronde negeren + de wees-draft opruimen. ---- */
+    st._draftKey = draftKey(taskId, url, ronde);
+    if (st.locked) {
+      try { localStorage.removeItem(st._draftKey); } catch (e) { }
+    } else {
+      try {
+        var rawD = localStorage.getItem(st._draftKey);
+        if (rawD) {
+          var snap = JSON.parse(rawD);
+          if (snap && (Date.now() - (snap.savedAt || 0)) > 30 * 24 * 3600 * 1000) { localStorage.removeItem(st._draftKey); snap = null; }
+          if (snap && Array.isArray(snap.annotations)) {
+            snap.annotations.forEach(function (a) {
+              st.annotations.push({ id: a.id || rid('ann'), comment: a.comment || '', type: a.type || 'wijziging', pin: a.pin || null, shape: a.shape || null, replies: a.replies || [], attachments: a.attachments || [], createdAt: a.createdAt || new Date().toISOString() });
+            });
+            if (Array.isArray(snap.composerAtts)) st.composerAtts = snap.composerAtts.slice();
+            st._restoreComposer = snap.composer || '';
+            st._restoreSummary = snap.summary || '';
+          }
+        }
+      } catch (e) { }
+    }
+    function draftSnapshot() {
+      return {
+        v: 1, savedAt: Date.now(),
+        annotations: st.annotations.filter(function (a) { return !a.locked; }).map(function (a) {
+          return { id: a.id, comment: a.comment, type: a.type || 'wijziging', pin: a.pin || null, shape: a.shape || null, replies: (a.replies || []).map(function (r) { return { text: r.text, createdAt: r.createdAt || null }; }), attachments: (a.attachments || []).filter(function (x) { return x.uploadStatus === 'stored'; }).map(cleanAttPayload) };
+        }),
+        composer: ($('fcCompose') ? $('fcCompose').value : ''),
+        composerAtts: st.composerAtts.filter(function (x) { return x.uploadStatus === 'stored'; }).map(cleanAttPayload),
+        summary: ($('fcSummary') ? $('fcSummary').value : ''),
+      };
+    }
+    var _saveT = 0;
+    function scheduleSave() { if (st.locked) return; clearTimeout(_saveT); _saveT = setTimeout(saveDraft, 600); }
+    function saveDraft() {
+      if (st.locked) return;
+      try {
+        var snap = draftSnapshot();
+        if (!snap.annotations.length && !snap.composer.trim() && !snap.summary.trim() && !snap.composerAtts.length) { localStorage.removeItem(st._draftKey); return; }
+        localStorage.setItem(st._draftKey, JSON.stringify(snap));
+      } catch (e) { }
+    }
+    st._scheduleSave = scheduleSave; st._saveDraft = saveDraft;
+
     /* ---- INLINE POP-OVER-EDITOR (ruttl-stijl): typ je opmerking + bijlage exact op de
            klikplek; 'Plaats' commit de annotatie, 'Annuleren' gooit de draftpin weg. ---- */
     function closeInlinePopover() {
@@ -539,6 +610,7 @@
     function openInlinePopover(pin, cx, cy, existing, shape) {
       if (st.locked) { toast('Dit bestand is al doorgestuurd — feedback is vergrendeld.', 3600); return; }
       closeInlinePopover();
+      try { closeAnnBubble(); } catch (e) { }
       var selType = (existing && existing.type) || 'wijziging';
       var typeChips = ANN_TYPES.map(function (t) {
         return '<button type="button" class="fc-typechip' + (t.key === selType ? ' on' : '') + '" data-t="' + t.key + '" style="--tc:' + t.color + '">' + t.label + '</button>';
@@ -611,6 +683,52 @@
       document.addEventListener('keydown', pop._esc);
     }
 
+    /* ---- READ-ONLY COMMENT-BUBBLE (item 9): klik op een pin of kader → toon de opmerking
+           direct ter plaatse, met sluitknop. ---- */
+    function closeAnnBubble() {
+      if (!st._bubble) return;
+      try { document.removeEventListener('keydown', st._bubble._esc, true); } catch (e) { }
+      try { document.removeEventListener('mousedown', st._bubble._out, true); } catch (e) { }
+      try { st._bubble.remove(); } catch (e) { }
+      st._bubble = null;
+    }
+    function showAnnBubble(annId, cx, cy) {
+      closeAnnBubble(); closeInlinePopover();
+      var a = st.annotations.filter(function (x) { return x.id === annId; })[0];
+      if (!a) return;
+      var t = annType(a.type);
+      var idx = st.annotations.indexOf(a);
+      var b = document.createElement('div');
+      b.className = 'fc-bubble';
+      b.innerHTML =
+        '<div class="fc-bubble-head"><span class="fc-pop-dot" style="background:' + t.color + '">' + (idx + 1) + '</span>' +
+        '<span class="fc-typetag" style="--tc:' + t.color + '">' + t.label + '</span>' +
+        '<button class="fc-pop-x" title="Sluiten" aria-label="Sluiten">×</button></div>' +
+        '<div class="fc-bubble-tx"></div><div class="fc-attrow fc-bubble-atts"></div><div class="fc-bubble-reps"></div>';
+      b.querySelector('.fc-bubble-tx').textContent = a.comment || '';
+      var ar = b.querySelector('.fc-bubble-atts');
+      (a.attachments || []).forEach(function (att) { ar.appendChild(attChip(att, null)); });
+      var rp = b.querySelector('.fc-bubble-reps');
+      (a.replies || []).forEach(function (r) {
+        var rEl = document.createElement('div'); rEl.className = 'fc-reply';
+        rEl.innerHTML = '<span class="fc-reply-dot" style="background:' + t.color + '"></span><span class="fc-reply-tx"></span>';
+        rEl.querySelector('.fc-reply-tx').textContent = r.text || '';
+        rp.appendChild(rEl);
+      });
+      document.body.appendChild(b);
+      st._bubble = b;
+      var BW = 280, BH = b.offsetHeight || 160;
+      var x = Math.min(Math.max(10, (cx || window.innerWidth / 2) + 14), window.innerWidth - BW - 10);
+      var y = Math.min(Math.max(70, (cy || window.innerHeight / 2) - 10), window.innerHeight - BH - 12);
+      b.style.left = x + 'px'; b.style.top = y + 'px';
+      b.querySelector('.fc-pop-x').addEventListener('click', closeAnnBubble);
+      b._esc = function (e) { if (e.key === 'Escape') closeAnnBubble(); };
+      b._out = function (e) { if (st._bubble && !st._bubble.contains(e.target) && !(e.target.closest && e.target.closest('.fc-pin,.fc-shape'))) closeAnnBubble(); };
+      document.addEventListener('keydown', b._esc, true);
+      setTimeout(function () { document.addEventListener('mousedown', b._out, true); }, 0);
+      if (st.reviewer && st.reviewer.highlightPin) try { st.reviewer.highlightPin(annId, true); } catch (e) { }
+    }
+
     /* ---- viewer-api die de reviewer mag aanspreken ---- */
     var viewerApi = {
       host: $('fcViewer'),
@@ -627,6 +745,9 @@
         if (st.locked) { toast('Dit bestand is al doorgestuurd — feedback is vergrendeld.', 3600); return; }
         openInlinePopover(pin, cx, cy, null, shape);
       },
+      // klik op een pin/kader → toon de opmerking read-only ter plaatse (item 9)
+      showComment: function (annId, cx, cy) { showAnnBubble(annId, cx, cy); },
+      closeComment: function () { try { closeAnnBubble(); } catch (e) { } },
       // back-compat: oude reviewers die enkel een pin doorgeven → pop-over centraal
       composeWithPin: function (pin) { openInlinePopover(pin, null, null); },
       addAnnotation: function (a) {
@@ -670,41 +791,48 @@
     $('fcMain').classList.remove('fc-hidden');
     $('fcEmpty').innerHTML = def.emptyHint || 'Nog geen feedback. Typ hieronder je opmerking en klik <strong>Toevoegen aan lijst</strong>.';
 
-    /* ---- gereedschap: Pin / Pijl / Kader / Markeren / Bekijken (pin-viewers: pdf/image/office/pptx) ---- */
+    /* ---- gereedschap: enkel Pin + Kader (pin-viewers: pdf/image/office/pptx) ---- */
     if (def.pins && !st.locked) {
-      var mb = $('fcModebar'); mb.classList.remove('fc-hidden');
-      var TOOL_HINT = {
-        comment: 'Klik in het bestand om er een opmerking op te plaatsen.',
-        arrow: 'Sleep om een pijl te tekenen — je opmerking koppelt eraan vast.',
-        box: 'Sleep om een kader rond een zone te tekenen.',
-        highlight: 'Sleep om een zone te markeren.',
-        browse: 'Je kan vrij scrollen en lezen — kies een gereedschap om feedback te geven.',
-      };
+      $('fcToolrow').classList.remove('fc-hidden');
+      var mb = $('fcModebar');
       var toolBtns = mb.querySelectorAll('.fc-mode-opt');
       var setTool = function (t) {
         st.tool = t; st.mode = t; // mode = back-compat-alias
         toolBtns.forEach(function (b) { b.classList.toggle('fc-mode-active', b.getAttribute('data-tool') === t); });
-        $('fcModeHint').textContent = TOOL_HINT[t] || '';
         try {
           viewerApi.host.classList.toggle('fc-commenting', t === 'comment');
-          viewerApi.host.classList.toggle('fc-marking', t === 'arrow' || t === 'box' || t === 'highlight');
+          viewerApi.host.classList.toggle('fc-marking', t === 'box');
         } catch (e) { }
-        if (t === 'browse') closeInlinePopover();
       };
       toolBtns.forEach(function (b) { b.addEventListener('click', function () { setTool(b.getAttribute('data-tool')); }); });
       setTool('comment');
+      // zoom (item 13) — enkel voor viewers met setZoom (pdf/office/pptx)
+      if (def.setZoom) {
+        $('fcZoom').classList.remove('fc-hidden');
+        st.zoom = 1;
+        var applyZoom = function (z) {
+          st.zoom = Math.max(0.5, Math.min(3, Math.round(z * 100) / 100));
+          try { if (st.reviewer && st.reviewer.setZoom) st.reviewer.setZoom(st.zoom); } catch (e) { }
+          var lv = $('fcZoomLvl'); if (lv) lv.textContent = Math.round(st.zoom * 100) + '%';
+        };
+        $('fcZoomIn').addEventListener('click', function () { applyZoom(st.zoom + 0.25); });
+        $('fcZoomOut').addEventListener('click', function () { applyZoom(st.zoom - 0.25); });
+        $('fcZoomReset').addEventListener('click', function () { applyZoom(1); });
+      }
     }
-    /* ---- comment-paneel in-/uitklappen (desktop) + zwevende knop (mobiel) ---- */
-    var _collapsed = false;
+    /* ---- comment-paneel tonen/verbergen — STANDAARD DICHT (item 8/14) ---- */
+    var _collapsed = true;
     function setCollapsed(c) {
       _collapsed = c;
       $('fcPanel').classList.toggle('fc-panel-collapsed', c);
       document.body.classList.toggle('fc-panel-hidden', c);
-      $('fcPanelToggle').classList.toggle('fc-pt-on', !c);   // knop rechtsboven licht op als het paneel open is
+      $('fcPanelToggle').classList.toggle('fc-pt-on', !c);   // 'verberg'-staat licht op
+      var lbl = $('fcPanelToggle').querySelector('.fc-pt-lbl');
+      if (lbl) lbl.textContent = c ? 'Bekijk comments' : 'Verberg comments';
     }
     $('fcCollapse').addEventListener('click', function () { setCollapsed(true); });
     $('fcPanelToggle').addEventListener('click', function () { setCollapsed(!_collapsed); });
-    setCollapsed(false);
+    setCollapsed(true);
 
     /* ---- composer (lijst van losse feedbackpunten) ---- */
     function renderComposeAtts() {
@@ -862,6 +990,7 @@
         list.appendChild(card);
       });
       if (st.reviewer && st.reviewer.onAnnotationsChanged) try { st.reviewer.onAnnotationsChanged(st.annotations); } catch (er) { }
+      if (st._scheduleSave) st._scheduleSave();   // item 5: bewaar na elke mutatie
     }
     function pinLabel(pin) {
       if (!pin) return '';
@@ -879,13 +1008,14 @@
       var ab = $('fcApprove'); ab.disabled = true; ab.textContent = 'Goedkeuren…';
       var res = await authedPost('linkApprove', { task_id: st.taskId, url: st.url, klant_naam: klantNaam() });
       if (res.ok && res.data && res.data.ok) {
+        try { localStorage.removeItem(st._draftKey); } catch (e) { }   // item 5: draft opruimen bij goedkeuren
         close();
         toast(res.data.all_approved
           ? '🎉 Goedgekeurd — bedankt! Alles van dit onderdeel is nu af.'
           : '🎉 Goedgekeurd! Keur je de overige bestanden van dit onderdeel ook goed, dan ronden we het af.', 4600);
         refreshDetail();
       } else {
-        ab.disabled = false; ab.textContent = '✓ Goedkeuren';
+        ab.disabled = false; ab.textContent = 'Goedkeuren';
         toast((res.data && res.data.message) || 'Goedkeuren lukte net niet — probeer zo opnieuw.', 3600);
       }
     });
@@ -919,7 +1049,7 @@
         st.annotations.push({ id: rid('ann'), comment: pending, pin: st.pendingPin || null, attachments: st.composerAtts.filter(function (x) { return x.uploadStatus === 'stored'; }) });
         st.pendingPin = null; st.composerAtts = []; $('fcCompose').value = '';
       }
-      var btn = $('fcSendGo'); btn.disabled = true; btn.textContent = 'Verzenden…';
+      var btn = $('fcSendGo'); btn.disabled = true; btn.textContent = 'Indienen…';
       var res = await authedPost('linkFeedback', {
         task_id: st.taskId, url: st.url, klant_naam: klantNaam(),
         comment: $('fcSummary').value.trim(),
@@ -932,11 +1062,12 @@
         }),
         attachments: st.reviewAttachments.filter(function (a) { return a.uploadStatus === 'stored'; }),
       });
-      btn.disabled = false; btn.textContent = 'Verzenden';
+      btn.disabled = false; btn.textContent = 'Feedback indienen';
       var rd = res.data || {};
-      if (!res.ok || !rd.ok) { showSendErr(rd.message || 'Verzenden lukte niet — probeer het zo opnieuw.'); return; }
+      if (!res.ok || !rd.ok) { showSendErr(rd.message || 'Indienen lukte niet — probeer het zo opnieuw.'); return; }
+      try { localStorage.removeItem(st._draftKey); } catch (e) { }   // ingediende ronde-draft opruimen (item 5)
       closeSend(); close();
-      toast('🎉 Feedback verzonden — het team gaat ermee aan de slag!', 4200);
+      toast('🎉 Feedback ingediend — het team gaat ermee aan de slag!', 4200);
       markSentSource();
       refreshDetail();
     });
@@ -947,10 +1078,10 @@
       if (!el || !el.isConnected) return;
       if (el.tagName === 'BUTTON') {
         el.classList.remove('btn-branch'); el.classList.add('btn-outline');
-        el.innerHTML = '✓ Feedback gegeven';
+        el.innerHTML = '✓ Feedback ingediend';
       } else if (el.parentElement && !el.parentElement.querySelector('.fc-sentpill')) {
         var pill = document.createElement('span');
-        pill.className = 'fc-sentpill'; pill.textContent = '✓ Feedback verzonden';
+        pill.className = 'fc-sentpill'; pill.textContent = '✓ Feedback ingediend';
         el.insertAdjacentElement('afterend', pill);
       }
     }
@@ -963,6 +1094,13 @@
         }
       } catch (e) { }
     }
+
+    // herstel tekstvelden uit de offline-draft (item 5) + bewaar bij verder typen
+    if (st._restoreComposer && $('fcCompose')) $('fcCompose').value = st._restoreComposer;
+    if (st._restoreSummary && $('fcSummary')) $('fcSummary').value = st._restoreSummary;
+    if ($('fcCompose')) $('fcCompose').addEventListener('input', function () { if (st._scheduleSave) st._scheduleSave(); });
+    if ($('fcSummary')) $('fcSummary').addEventListener('input', function () { if (st._scheduleSave) st._scheduleSave(); });
+    if (!st.locked && st.annotations.length) toast('Je eerdere feedback is teruggezet.', 2600);
 
     renderComposeAtts();
     renderAll();
@@ -1084,8 +1222,12 @@
         canvas.className = 'fc-pdf-canvas';
         canvas.width = Math.floor(vp.width * dpr);
         canvas.height = Math.floor(vp.height * dpr);
-        canvas.style.width = vp.width + 'px';
-        canvas.style.height = vp.height + 'px';
+        // natuurlijke CSS-maat onthouden zodat zoom (CSS-resample) een later-gerenderde pagina
+        // op het juiste niveau zet zonder de pin-%-coördinaten te breken (item 13).
+        canvas._cssW = vp.width; canvas._cssH = vp.height;
+        var z = this._zoom || 1;
+        canvas.style.width = (vp.width * z) + 'px';
+        canvas.style.height = (vp.height * z) + 'px';
         var cctx = canvas.getContext('2d');
         cctx.scale(dpr, dpr);
         await page.render({ canvasContext: cctx, viewport: vp }).promise;
@@ -1099,7 +1241,7 @@
     _layoutPins: function (anns) {
       var api = this._api;
       this._pages.forEach(function (ph, idx) {
-        renderShapes(ph.querySelector('.fc-markup'), anns, idx + 1);
+        renderShapes(ph.querySelector('.fc-markup'), anns, idx + 1, api);
         var layer = ph.querySelector('.fc-pdf-pins'); if (!layer) return;
         layer.innerHTML = '';
         (anns || []).forEach(function (a, i) {
@@ -1116,12 +1258,25 @@
           el.addEventListener('mouseleave', function () { if (api && api.highlightCard) api.highlightCard(a.id, false); });
           // klik = highlight, slepen = pin verplaatsen (gedeelde helper)
           if (!a.locked && api && !api.locked) { el.classList.add('fc-pin-movable'); makePinDraggable(el, a, api, function () { return ph.getBoundingClientRect(); }); }
-          else el.addEventListener('click', function (ev) { ev.stopPropagation(); if (api && api.highlightCard) { api.highlightCard(a.id, true); setTimeout(function () { if (api && api.highlightCard) api.highlightCard(a.id, false); }, 1500); } });
+          else el.addEventListener('click', function (ev) { ev.stopPropagation(); if (api && api.showComment) api.showComment(a.id, ev.clientX, ev.clientY); });
           layer.appendChild(el);
         });
       });
     },
     onAnnotationsChanged: function (anns) { if (this._layoutPins) this._layoutPins(anns); },
+    // ZOOM (item 13): CSS-resample van de canvassen — de pagina-box groeit mee, dus de
+    // bestaande overflow geeft scrollbars en de genormaliseerde pins/shapes blijven kloppen.
+    setZoom: function (z) {
+      this._zoom = z;
+      // de max-width:100%-klem opheffen zodra je inzoomt, anders groeit de canvas niet
+      // (en blijft horizontaal scrollen uit). flex-start zodat je naar de linkerrand kunt scrollen.
+      if (this._wrap) this._wrap.classList.toggle('fc-zoomed', z > 1);
+      if (!this._pages) return;
+      this._pages.forEach(function (ph) {
+        var c = ph.querySelector('.fc-pdf-canvas');
+        if (c && c._cssW) { c.style.width = (c._cssW * z) + 'px'; c.style.height = (c._cssH * z) + 'px'; }
+      });
+    },
     goToPin: function (pin) {
       if (!pin || !this._pages) return;
       var ph = this._pages[(pin.page || 1) - 1];
@@ -1201,7 +1356,7 @@
     },
     _layoutPins: function (anns) {
       var layer = this._pinsLayer, img = this._img, api = this._api; if (!layer) return;
-      renderShapes(this._markup, anns, null);
+      renderShapes(this._markup, anns, null, this._api);
       layer.innerHTML = '';
       (anns || []).forEach(function (a, i) {
         if (!a.pin || a.pin.xNorm == null || a.pin.page != null || a.pin.timestampSec != null) return; // enkel foto-pins
@@ -1216,7 +1371,7 @@
         el.addEventListener('mouseenter', function () { if (api && api.highlightCard) api.highlightCard(a.id, true); });
         el.addEventListener('mouseleave', function () { if (api && api.highlightCard) api.highlightCard(a.id, false); });
         if (!a.locked && api && !api.locked) { el.classList.add('fc-pin-movable'); makePinDraggable(el, a, api, function () { return img.getBoundingClientRect(); }); }
-        else el.addEventListener('click', function (ev) { ev.stopPropagation(); if (api && api.highlightCard) { api.highlightCard(a.id, true); setTimeout(function () { if (api && api.highlightCard) api.highlightCard(a.id, false); }, 1500); } });
+        else el.addEventListener('click', function (ev) { ev.stopPropagation(); if (api && api.showComment) api.showComment(a.id, ev.clientX, ev.clientY); });
         layer.appendChild(el);
       });
     },
@@ -1289,9 +1444,62 @@
          stream_url. We hergebruiken dus exact de pdf.js-viewer: 1 PDF-pagina = 1 slide
          / 1 documentpagina, mét dezelfde klik-to-comment. Valt het renderen weg (bv.
          een niet-converteerbaar .key-bestand), dan degradeert open() naar 'other'. ---- */
-  registerReviewer('pptx', Object.assign({}, PDF_REVIEWER, {
-    emptyHint: 'Blader door de slides en klik op een plek in een slide om er een opmerking aan te koppelen (of typ je opmerking en verwijs naar het slidenummer). Klik dan <strong>Toevoegen aan lijst</strong>.',
-  }));
+  // PPTX = single-slide PAGER (item 15): één dia tegelijk + liquid-glass ‹ › overlay onder de dia.
+  // Hergebruikt de volledige PDF-mechaniek per dia (pins/kader/zoom); enkel de presentatie i.p.v.
+  // de scroll-stack. 'office' (Word/Excel/lange docs) houdt de scroll-stack.
+  var PPTX_REVIEWER = Object.assign({}, PDF_REVIEWER, {
+    emptyHint: 'Blader met de pijlen door de presentatie en klik op een plek in een dia om er een opmerking aan te koppelen.',
+    init: async function (api, ctx) {
+      await PDF_REVIEWER.init.call(this, api, ctx);   // bouwt alle .fc-pdf-page + handlers
+      var self = this;
+      this._slide = 1;
+      this._wrap.classList.add('fc-pager');
+      try { if (this._io) this._io.disconnect(); } catch (e) { }   // pager stuurt zelf welke dia rendert
+      this._pages.forEach(function (ph, i) { ph.classList.toggle('fc-slide-hidden', i !== 0); });
+      var total = this._pages.length;
+      var nav = document.createElement('div');
+      nav.className = 'fc-pager-nav';
+      nav.innerHTML = '<button class="fc-pager-btn fc-prev" aria-label="Vorige dia">‹</button>' +
+        '<span class="fc-pager-lbl" id="fcSlideLbl">1 / ' + total + '</span>' +
+        '<button class="fc-pager-btn fc-next" aria-label="Volgende dia">›</button>';
+      api.host.appendChild(nav);
+      this._nav = nav;
+      nav.querySelector('.fc-prev').addEventListener('click', function () { self.showSlide(self._slide - 1); });
+      nav.querySelector('.fc-next').addEventListener('click', function () { self.showSlide(self._slide + 1); });
+      this._key = function (e) {
+        if (e.target && /^(textarea|input)$/i.test(e.target.tagName)) return;
+        if (api.host && api.host.closest && !document.body.contains(api.host)) return;
+        if (e.key === 'ArrowRight') { self.showSlide(self._slide + 1); }
+        else if (e.key === 'ArrowLeft') { self.showSlide(self._slide - 1); }
+      };
+      document.addEventListener('keydown', this._key);
+      this.showSlide(1);
+    },
+    showSlide: function (n) {
+      var total = this._pages.length; if (!total) return;
+      try { if (this._api && this._api.closeComment) this._api.closeComment(); } catch (e) { }   // bubble van vorige dia sluiten
+      n = Math.max(1, Math.min(total, n));
+      this._slide = n;
+      this._pages.forEach(function (ph, i) { ph.classList.toggle('fc-slide-hidden', (i + 1) !== n); });
+      this._renderPage(n);
+      if (n + 1 <= total) this._renderPage(n + 1);
+      if (n - 1 >= 1) this._renderPage(n - 1);
+      var lbl = this._nav && this._nav.querySelector('#fcSlideLbl'); if (lbl) lbl.textContent = n + ' / ' + total;
+      if (this._nav) {
+        this._nav.querySelector('.fc-prev').disabled = (n <= 1);
+        this._nav.querySelector('.fc-next').disabled = (n >= total);
+      }
+      try { this._wrap.scrollTop = 0; } catch (e) { }
+      this._layoutPins(this._api.getAnnotations());
+    },
+    goToPin: function (pin) { if (pin && pin.page) this.showSlide(pin.page); },
+    destroy: function () {
+      try { PDF_REVIEWER.destroy.call(this); } catch (e) { }
+      try { if (this._nav) this._nav.remove(); } catch (e) { }
+      try { document.removeEventListener('keydown', this._key); } catch (e) { }
+    },
+  });
+  registerReviewer('pptx', PPTX_REVIEWER);
   registerReviewer('office', Object.assign({}, PDF_REVIEWER, {
     emptyHint: 'Bekijk het document en klik op een plek om er een opmerking aan te koppelen, of typ je opmerking hieronder. Klik dan <strong>Toevoegen aan lijst</strong>.',
   }));

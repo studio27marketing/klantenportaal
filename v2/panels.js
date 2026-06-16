@@ -87,6 +87,18 @@ const PROJECTS = [
   {id:'p10',name:'Huisstijl-refresh 2026',br:'pink',disc:'Branding',discId:'branding',status:'prog',deliv:false},
 ];
 const STATUS_LABEL = {todo:['Nog in te plannen','pill-todo'],prog:['In productie','pill-prog'],wait:['Klaar voor feedback','pill-wait'],sent:['Klaar voor feedback','pill-wait'],done:['Goedgekeurd','pill-done']};
+// Uniforme subtaak-sublabels (item 17): te starten (to do/startklaar) / wordt aan gewerkt (in progress) /
+// vraagt verduidelijking (on hold) / klaar voor feedback (feedback klant) / afgewerkt (done+facturatie+gefactureerd).
+// Leest bij voorkeur de RUWE ClickUp-status (s.statusRaw); valt terug op de platgeslagen key.
+function ondSublabel(s){
+  var raw=String((s&&s.statusRaw)||'').toLowerCase().replace(/\s+/g,'_');
+  if(/on_?hold|verduidelijk/.test(raw)) return ['Vraagt verduidelijking','ond-chip-hold'];
+  if(/feedback_?klant|doorgestuur|klaar_voor_feedback/.test(raw) || s&&(s.status==='wait'||s.status==='sent')) return ['Klaar voor feedback','ond-chip-wait'];
+  if(/goedgekeur|^done$|facturat|gefactureerd|afgerond/.test(raw) || s&&s.status==='done') return ['Afgewerkt','ond-chip-ok'];
+  if(/in_?progress|in_productie|bezig/.test(raw) || s&&s.status==='prog') return ['Wordt aan gewerkt','ond-chip-prog'];
+  return ['Te starten','ond-chip-todo'];
+}
+function ondChip(s){ var l=ondSublabel(s); return '<span class="ond-chip '+l[1]+'">'+esc(l[0])+'</span>'; }
 const DISC = {
   'Video- en fotografie':{icon:'video',br:'purple',stamp:'icon-video-fotografie.svg'},
   'Website en SEO':{icon:'website',br:'green',stamp:'icon-webdesign.svg'},
@@ -149,6 +161,24 @@ function takOfProject(p){
   if(TAK_WEBSITE.discIds.indexOf(p.discId)>=0) return 'webprestaties';
   return 'berichten';
 }
+// label van een tak-key (voor de review-overlay-kop, item 11)
+function takLabelOf(key){
+  if(TAK_TABS[key]) return TAK_TABS[key].label;
+  if(key==='webprestaties'||key==='website') return TAK_WEBSITE.label;
+  var M={social:'Social media',adverteren:'Adverteren',berichten:'Projecten'};
+  return M[key]||'';
+}
+// projecttitel + tak voor een taak (root of subtaak) — door feedback-core gebruikt zodat de
+// review-overlay altijd de PROJECTNAAM + TAK toont i.p.v. de bestandsnaam/'Open in Drive' (item 11).
+window.S27ProjectMeta = function(taskId){
+  try{
+    var list=_projects()||[];
+    var p=list.find(function(x){ return x.id===taskId; });
+    if(!p && window.state && state.activeProject) p=list.find(function(x){ return x.id===state.activeProject; });
+    if(!p) return {};
+    return { title: p.name||'', tak: takLabelOf(takOfProject(p)) };
+  }catch(e){ return {}; }
+};
 // JS-string-veilige escape voor inline onclick-args (esc() zet ' om naar &#39; dat in een
 // dubbel-quoted attribuut weer ' wordt en de JS-string breekt; \x27 heeft geen HTML-betekenis).
 function jsEsc(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,'\\x27').replace(/"/g,'\\x22').replace(/</g,'\\x3c'); }
@@ -3797,7 +3827,7 @@ function deliverOpenLabel(type){ return type==='video'?'Bekijk video':type==='im
 function deliverFileRow(d, opts){
   opts=opts||{}; const t=d.type==='video'?'video':d.type==='img'?'img':'doc';
   const open = d.url ? `<a class="btn btn-branch br-${opts.br||'blue'} btn-sm" href="${esc(d.url)}" target="_blank" rel="noopener">${ic(t==='video'?'play':'arrow',14)} ${deliverOpenLabel(t)}</a>` : '';
-  const actions = opts.done ? spill('done') : `${open}${opts.review!==false?`<button class="btn btn-outline btn-sm" onclick="fileFeedback(this)">Feedback geven</button><button class="btn btn-branch btn-sm br-green" onclick="fileApprove(this)">Goedkeuren</button>`:''}`;
+  const actions = opts.done ? spill('done') : `${open}${opts.review!==false?`<button class="btn btn-outline btn-sm" onclick="fileFeedback(this)">Feedback indienen</button><button class="btn btn-branch btn-sm br-green" onclick="fileApprove(this)">Goedkeuren</button>`:''}`;
   return `<div class="deliv-file" data-label="${esc(d.label||'Bestand')}"${opts.taskId?` data-task="${esc(opts.taskId)}"`:''}>
     <span class="df-ic">${ic(t,18)}</span>
     <div class="df-tx"><b>${esc(d.label||'Bestand')}</b>${d.url?`<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:42ch;display:inline-block">${esc((d.url||'').replace(/^https?:\/\//,''))}</span>`:''}</div>
@@ -3875,7 +3905,7 @@ function feedbackCard(s){
     +'<div class="fbc-views">'+views+'</div>'
     +'<div class="fbc-act" id="fbcact-'+tid+'">'
       +'<button class="btn btn-branch br-green btn-sm" onclick="procesApprove(\''+tid+'\')">'+ic('check',15)+' Goedkeuren</button>'
-      +'<button class="btn btn-outline btn-sm" onclick="procesFeedbackToggle(\''+tid+'\')">'+ic('msg',15)+' Feedback geven</button>'
+      +'<button class="btn btn-outline btn-sm" onclick="procesFeedbackToggle(\''+tid+'\')">'+ic('msg',15)+' Feedback indienen</button>'
     +'</div>'
     +'<div class="fbc-fb" id="fbcfb-'+tid+'" style="display:none">'
       +'<textarea id="fbctx-'+tid+'" rows="3" placeholder="Wat mag er anders? Opmerkingen passen we volledig gratis aan."></textarea>'
@@ -3954,21 +3984,16 @@ function _ondEditRij(s, br){
   var fotoMaps=alle.filter(function(f){ return /drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\//.test(f.url||''); });
   var files=alle.filter(function(f){ return fotoMaps.indexOf(f)<0; });
   var gegeven=(s.fbRondes&&s.fbRondes.length)?true:false;
-  var inner='';
+  // uniforme sublabel (item 17) altijd zichtbaar; daarnaast max 1 actieknop afhankelijk van de status.
+  var inner=ondChip(s);
   if(s.status==='wait'||s.status==='sent'){
     if(files.length===1){
-      inner=gegeven
-        ? '<button class="btn btn-outline btn-sm" onclick="openVideoFeedback(\''+esc(s.id)+'\',\''+esc(files[0].url)+'\',\''+esc(files[0].label||s.naam)+'\',this)">'+ic('check',13)+' Feedback gegeven</button>'
-        : '<button class="btn btn-branch br-'+br+' btn-sm" onclick="openVideoFeedback(\''+esc(s.id)+'\',\''+esc(files[0].url)+'\',\''+esc(files[0].label||s.naam)+'\',this)">'+ic('st_feedback',14)+' Feedback geven</button>';
+      inner+=gegeven
+        ? '<button class="btn btn-outline btn-sm" onclick="openVideoFeedback(\''+esc(s.id)+'\',\''+esc(files[0].url)+'\',\''+esc(files[0].label||s.naam)+'\',this)">'+ic('check',13)+' Feedback ingediend</button>'
+        : '<button class="btn btn-branch br-'+br+' btn-sm" onclick="openVideoFeedback(\''+esc(s.id)+'\',\''+esc(files[0].url)+'\',\''+esc(files[0].label||s.naam)+'\',this)">'+ic('st_feedback',14)+' Feedback indienen</button>';
     } else if(files.length>1){
-      inner='<button class="btn btn-branch br-'+br+' btn-sm" onclick="ondToggleInfo(this)">'+ic('doc',14)+' Alle bestanden bekijken ('+files.length+')</button>';
-    } else {
-      inner='<span class="ond-chip ond-chip-wait">Klaar voor feedback</span>';
+      inner+='<button class="btn btn-branch br-'+br+' btn-sm" onclick="ondToggleInfo(this)">'+ic('doc',14)+' Alle bestanden bekijken ('+files.length+')</button>';
     }
-  } else if(s.status==='done'){
-    inner='<span class="ond-chip ond-chip-ok">'+ic('check',12)+' Goedgekeurd</span>';
-  } else {
-    inner='<span class="ond-chip ond-chip-prog">'+esc(s.status==='todo'?'Te starten':'Aan het werken')+'</span>';
   }
   var lijst='';
   if(files.length>1 && (s.status==='wait'||s.status==='sent')){
@@ -4073,10 +4098,7 @@ function _ondTaakRij(s, br){
   var fotoMaps=alle.filter(function(f){ return /drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\//.test(f.url||''); });
   var files=alle.filter(function(f){ return fotoMaps.indexOf(f)<0; });
   var isWait=(s.status==='wait'||s.status==='sent');
-  var chip;
-  if(s.status==='done') chip='<span class="ond-chip ond-chip-ok">'+ic('check',12)+' Goedgekeurd</span>';
-  else if(isWait) chip='<span class="ond-chip ond-chip-wait">Klaar voor feedback</span>';
-  else chip='<span class="ond-chip ond-chip-prog">'+esc(s.status==='todo'?'Te starten':'Aan het werken')+'</span>';
+  var chip=ondChip(s);   // uniforme sublabel (item 17)
   var head='<div class="ond-head">'+ic(_ondTaakIcoon(files,fotoMaps),16)+'<span class="ond-naam">'+esc(s.naam)+'</span>'+chip+'</div>';
   var body='';
   // bestanden klaar voor feedback: in-portal feedbackmodule per bestand

@@ -245,11 +245,11 @@
     root.innerHTML =
       '<div class="vr-shell" role="dialog" aria-label="Video-feedback">' +
       '  <header class="vr-top">' +
-      '    <div class="vr-title"><div><h2 id="vrTitle"></h2><span class="vr-sub" id="vrSub">Feedbackronde</span></div></div>' +
+      '    <div class="vr-title"><div><h2 id="vrTitle"></h2><span class="vr-sub" id="vrSub">Feedbackronde 1</span></div></div>' +
       '    <div class="vr-actions">' +
       '      <a id="vrDownload" class="vr-btn vr-ghost vr-hidden" download><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 19h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="vr-dl-txt">Download</span></a>' +
       '      <button id="vrApprove" class="vr-btn">✓ Video goedkeuren</button>' +
-      '      <button id="vrSend" class="vr-btn vr-primary">Feedback verzenden <span id="vrCount" class="vr-countbadge vr-hidden">0</span></button>' +
+      '      <button id="vrSend" class="vr-btn vr-primary">Feedback indienen <span id="vrCount" class="vr-countbadge vr-hidden">0</span></button>' +
       '      <button id="vrClose" class="vr-x" title="Sluiten" aria-label="Sluiten"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></button>' +
       '    </div>' +
       '  </header>' +
@@ -297,12 +297,12 @@
       '</div>' +
       '<div id="vrSendScrim" class="vr-scrim vr-hidden"></div>' +
       '<div id="vrSendModal" class="vr-modal vr-hidden">' +
-      '  <div class="vr-sendhead"><span class="vr-sendic">🎬</span><div><b>Feedback doorsturen</b><span>We gaan er meteen mee aan de slag.</span></div></div>' +
+      '  <div class="vr-sendhead"><span class="vr-sendic">🎬</span><div><b>Feedback indienen</b><span>Controleer of je feedback volledig is — daarna kun je in deze ronde niets meer toevoegen.</span></div></div>' +
       '  <div class="vr-sendsum" id="vrSendLine"></div>' +
       '  <label class="vr-field"><span>Algemene opmerking <em>(optioneel)</em></span><textarea id="vrSummary" rows="3" placeholder="Feedback die niet aan één punt hangt…"></textarea></label>' +
-      '  <label class="vr-confirm"><input type="checkbox" id="vrSendVolledig"><span>Mijn feedback voor deze video is <b>volledig</b> — Studio 27 mag starten met de verwerking.</span></label>' +
+      '  <label class="vr-confirm"><input type="checkbox" id="vrSendVolledig"><span>Mijn feedback is <b>volledig</b>. Ik begrijp dat ik in deze feedbackronde niets meer kan toevoegen en dat Studio 27 nu start met de verwerking.</span></label>' +
       '  <p id="vrSendErr" class="vr-err vr-hidden"></p>' +
-      '  <div class="vr-modalfoot"><button id="vrSendCancel" class="vr-btn vr-ghost">Terug</button><button id="vrSendGo" class="vr-btn vr-primary">Verzenden</button></div>' +
+      '  <div class="vr-modalfoot"><button id="vrSendCancel" class="vr-btn vr-ghost">Terug</button><button id="vrSendGo" class="vr-btn vr-primary">Feedback indienen</button></div>' +
       '</div>';
     document.body.appendChild(root);
     document.body.classList.add('vr-open');
@@ -374,7 +374,7 @@
     }
 
     if (d.video.title) $('vrTitle').textContent = d.video.title;
-    if (d.ronde) $('vrSub').textContent = 'Feedbackronde ' + d.ronde;
+    $('vrSub').textContent = 'Feedbackronde ' + (Number(d.ronde) || 1);
     if (d.is_approved) { $('vrSub').textContent = 'Goedgekeurd ✓'; }
     if (st.locked) {
       var prevL = $('vrPrev');
@@ -824,7 +824,7 @@
         return;
       }
       var btn = $('vrSendGo');
-      btn.disabled = true; btn.textContent = 'Verzenden…';
+      btn.disabled = true; btn.textContent = 'Indienen…';
       var res = await authedPost('videoReviewSubmit', {
         task_id: st.taskId,
         klant_naam: (window.S27DATA && S27DATA.bedrijfsnaam) ? S27DATA.bedrijfsnaam() : 'Klant',
@@ -833,10 +833,10 @@
         annotations: st.annotations,
         reviewAttachments: st.reviewAttachments.filter(function (a) { return a.uploadStatus === 'stored'; }),
       });
-      btn.disabled = false; btn.textContent = 'Verzenden';
+      btn.disabled = false; btn.textContent = 'Feedback indienen';
       var rd = res.data || {};
       if (!res.ok || !rd.ok) {
-        $('vrSendErr').textContent = rd.message || 'Verzenden lukte niet — probeer het zo opnieuw.';
+        $('vrSendErr').textContent = rd.message || 'Indienen lukte niet — probeer het zo opnieuw.';
         $('vrSendErr').classList.remove('vr-hidden');
         return;
       }
@@ -850,10 +850,10 @@
         pill.textContent = '✓ Feedback verzonden';
         opts.sourceEl.insertAdjacentElement('afterend', pill);
       }
-      // bron-knop wordt 'Feedback gegeven' (klik = naslag-weergave via de lock)
+      // bron-knop wordt 'Feedback ingediend' (klik = naslag-weergave via de lock)
       if (opts.sourceEl && opts.sourceEl.isConnected && opts.sourceEl.tagName === 'BUTTON') {
         opts.sourceEl.classList.remove('btn-branch'); opts.sourceEl.classList.add('btn-outline');
-        opts.sourceEl.innerHTML = '✓ Feedback gegeven';
+        opts.sourceEl.innerHTML = '✓ Feedback ingediend';
       }
     });
 

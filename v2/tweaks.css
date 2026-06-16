@@ -312,33 +312,56 @@
    ============================================================ */
 .sb-dock-toggle{display:none;}
 .sb-edge{display:none;}
+.sb-mini-mark{display:none;}
 @media(min-width:981px){
-  /* vloeiende dock-overgangen */
-  .sidebar{transition:transform .34s cubic-bezier(.4,0,.2,1),box-shadow .30s ease;will-change:transform;}
-  .topbar{transition:margin-left .34s cubic-bezier(.4,0,.2,1);}
-  .page{transition:margin-left .34s cubic-bezier(.4,0,.2,1),padding .30s ease;}
+  /* vloeiende overgangen */
+  .sidebar{transition:width .26s cubic-bezier(.4,0,.2,1),box-shadow .26s ease;will-change:width;}
+  .topbar{transition:margin-left .26s cubic-bezier(.4,0,.2,1);}
+  .page{transition:margin-left .26s cubic-bezier(.4,0,.2,1),padding .30s ease;}
 
-  /* toggle-knop links in de topbar */
+  /* toggle-knop links in de topbar (wisselt rail <-> vastgepind) */
   .sb-dock-toggle{display:flex;width:40px;height:40px;border-radius:11px;align-items:center;justify-content:center;
     color:var(--ink-2);flex:none;transition:background 150ms,color 150ms,transform 200ms var(--bounce,cubic-bezier(.34,1.56,.64,1));}
   .sb-dock-toggle:hover{background:var(--paper-3);color:var(--ink);}
   .sb-dock-toggle:active{transform:scale(.92);}
   .sb-dock-toggle svg{width:22px;height:22px;}
 
-  /* INGEKLAPT: zijbalk weg, topbar + content fullscreen */
-  body.sb-collapsed .sidebar{transform:translateX(-100%);box-shadow:none;}
-  body.sb-collapsed .topbar{margin-left:0;}
-  body.sb-collapsed .page{margin-left:0;}
-
-  /* hover-reveal strip aan de linkerrand (enkel zichtbaar wanneer ingeklapt) */
-  body.sb-collapsed .sb-edge{display:block;position:fixed;top:0;left:0;bottom:0;width:16px;z-index:58;cursor:e-resize;}
-
-  /* PEEK: zijbalk zweeft als overlay terug in beeld */
-  body.sb-collapsed.sb-peek .sidebar{transform:none;box-shadow:0 22px 70px rgba(35,15,35,.30);z-index:62;}
-  body.sb-collapsed.sb-peek .sb-edge{width:280px;} /* houd reveal-zone open zolang je in de buurt bent */
+  /* RAIL: zijbalk ingeklapt tot icoon-rail (64px); hover/focus = uitklap naar 264px als
+     OVERLAY (content schuift niet want de marges blijven op de railbreedte). */
+  body.sb-rail{--rail-w:64px;--sb-full:264px;}
+  body.sb-rail .sidebar{width:var(--rail-w);overflow:hidden;}
+  body.sb-rail .topbar{margin-left:var(--rail-w);}
+  body.sb-rail .page{margin-left:var(--rail-w);}
+  body.sb-rail .sidebar:hover,
+  body.sb-rail .sidebar:focus-within{width:var(--sb-full);z-index:62;box-shadow:0 22px 70px rgba(35,15,35,.22);overflow:visible;}
+  /* labels/teksten verbergen in rail; terug bij hover/focus */
+  body.sb-rail .sidebar .sb-label,
+  body.sb-rail .sidebar .sb-glabel,
+  body.sb-rail .sidebar .sb-client-tx,
+  body.sb-rail .sidebar .sb-client .chev,
+  body.sb-rail .sidebar .sb-wordmark{opacity:0;white-space:nowrap;pointer-events:none;transition:opacity .14s ease;}
+  body.sb-rail .sidebar:hover .sb-label,
+  body.sb-rail .sidebar:hover .sb-glabel,
+  body.sb-rail .sidebar:hover .sb-client-tx,
+  body.sb-rail .sidebar:hover .sb-client .chev,
+  body.sb-rail .sidebar:hover .sb-wordmark,
+  body.sb-rail .sidebar:focus-within .sb-label,
+  body.sb-rail .sidebar:focus-within .sb-glabel,
+  body.sb-rail .sidebar:focus-within .sb-client-tx,
+  body.sb-rail .sidebar:focus-within .sb-client .chev,
+  body.sb-rail .sidebar:focus-within .sb-wordmark{opacity:1;pointer-events:auto;}
+  /* iconen gecentreerd in de rail (alleen ingeklapt) */
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-item{justify-content:center;padding-left:0;padding-right:0;}
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-item .sb-badge{position:absolute;top:3px;right:12px;transform:scale(.72);transform-origin:top right;}
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-client{justify-content:center;padding-left:0;padding-right:0;}
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .client-switch-wrap{padding-left:0;padding-right:0;}
+  /* mini-merk '27' i.p.v. het brede woordmerk in de rail */
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-head{padding-left:0;padding-right:0;text-align:center;}
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-wordmark{display:none;}
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-mini-mark{display:block;font-family:var(--font-display);font-weight:800;font-size:18px;color:var(--ink);line-height:24px;}
 }
-/* op tablet/mobiel telt het bestaande hamburger-patroon: dock-elementen verbergen */
-@media(max-width:980px){ .sb-dock-toggle{display:none!important;} .sb-edge{display:none!important;} }
+/* op tablet/mobiel telt het bestaande hamburger-patroon: rail negeren */
+@media(max-width:980px){ .sb-dock-toggle{display:none!important;} .sb-edge{display:none!important;} body.sb-rail .sidebar{width:264px;} body.sb-rail .topbar,body.sb-rail .page{margin-left:0;} }
 
 /* scheidingsregel in Instellingen (Huisstijl-sectie) */
 .set-divider{display:flex;align-items:center;gap:12px;margin:30px 0 6px;}
@@ -1077,6 +1100,7 @@ button.ond-head{cursor:pointer;}
 .ond-chip-todo{background:#FFF1E2;color:#A05A12;}
 .ond-chip-wait{background:#FFF1E2;color:#A05A12;}
 .ond-chip-prog{background:#E9EFF9;color:#2D5FA8;}
+.ond-chip-hold{background:#FBE4E4;color:#B5402F;}
 .ond-row .chev{color:var(--ink-4,#9E919E);transition:transform .18s;flex:none;}
 .ond-row.open .chev{transform:rotate(180deg);}
 .ond-info{display:none;padding:2px 16px 14px;border-top:1px dashed var(--line,#E7DFD3);margin:0 0 0;}

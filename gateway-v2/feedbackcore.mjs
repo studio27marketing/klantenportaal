@@ -308,10 +308,16 @@ export async function fileReviewContext(bedrijfId, body, env) {
   const lr = await lrGet(env, taskId, linkKey);
   const taakGoedgekeurd = isAfgerondStatus(g.task && g.task.status);
   const lrState = (lr && lr.state) || null;
-  // read-only zodra de taak afgerond is óf deze link al goedgekeurd werd.
-  const isReadOnly = taakGoedgekeurd || lrState === 'approved';
+  // read-only zodra de taak afgerond is, deze link al goedgekeurd werd, óf de klant deze ronde
+  // al feedback INDIENDE (Vincent's eis: na indienen enkel nog bekijken; een nieuwe ronde =
+  // een nieuwe deliverable-link = nieuwe linkKey, net als de video-review-lock).
+  const isReadOnly = taakGoedgekeurd || lrState === 'approved' || lrState === 'feedback';
   // downloaden mag pas na goedkeuring (Vincent: content pas vrij na akkoord)
   const canDownload = taakGoedgekeurd || lrState === 'approved';
+  // feedbackronde-nummer (item 6): de ingediende/afgesloten ronde voor een vergrendeld bestand,
+  // anders de eerstvolgende open ronde.
+  const submittedRonde = (lr && Number(lr.ronde)) || 0;
+  const ronde = isReadOnly ? (submittedRonde || 1) : (submittedRonde + 1);
 
   const vimeo = parseVimeoUrl(url);
   const drive = vimeo ? null : (parseDriveUrl(url) || parseGoogleDocUrl(url));
@@ -323,7 +329,7 @@ export async function fileReviewContext(bedrijfId, body, env) {
       body: {
         ok: true, mediaType: 'video', route: 'videoReview', open_url: url,
         stream_url: null, download_url: null, is_read_only: isReadOnly,
-        lr_state: lrState, can_download: canDownload,
+        lr_state: lrState, can_download: canDownload, ronde,
       },
     };
   }
@@ -376,6 +382,7 @@ export async function fileReviewContext(bedrijfId, body, env) {
         is_read_only: isReadOnly,
         lr_state: lrState,
         can_download: canDownload,
+        ronde,
         last_bundle: await signBundleAtts(env, lr && lr.bundle ? lr.bundle : null),
       },
     };
@@ -393,6 +400,7 @@ export async function fileReviewContext(bedrijfId, body, env) {
       is_read_only: isReadOnly,
       lr_state: lrState,
       can_download: canDownload,
+      ronde,
     },
   };
 }
@@ -635,6 +643,16 @@ export async function linkFeedback(bedrijfId, body, env) {
 
   const klantNaam = str(body && body.klant_naam) || 'Klant';
   const linkKey = linkKeyOf(url);
+  // ronde-lock (zoals video-review): heeft de klant deze link al ingediend/goedgekeurd, dan
+  // geen tweede ronde op dezelfde versie — het team levert een nieuwe deliverable-link voor de
+  // volgende ronde. Voorkomt dubbele FB-subtaken en een voortijdig oplopend rondenummer.
+  {
+    const lrNow = await lrGet(env, taskId, linkKey);
+    const lrSt = lrNow && lrNow.state;
+    if (lrSt === 'feedback' || lrSt === 'approved') {
+      return { status: 409, body: { ok: false, error: 'review_locked', message: 'Je feedback voor deze versie is al ingediend. Het team bezorgt je een nieuwe versie zodra die klaar is.' } };
+    }
+  }
   const mediaType = mediaTypeOf(url, '');
   const summary = str(body && body.summary || body && body.comment).slice(0, 5000);
   const annotations = Array.isArray(body && body.annotations) ? body.annotations : [];

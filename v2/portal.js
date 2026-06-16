@@ -521,26 +521,8 @@ async function goTab(name){
   setActiveNav(name);
   if(!state.demoMode && needsLoad(name)) renderLoading(name);
   await ensureTabData(name);
-  // video-tak met exact één actief project: meteen op dat project landen (terug-knop uit het
-  // detail zet _skipVideoAuto zodat de klant wél bewust naar de lijst kan)
-  if(typeof _isContentTak==='function' && _isContentTak(name) && !state.demoMode){
-    state._skipAutoLand=state._skipAutoLand||{};
-    if(state._skipAutoLand[name]){ state._skipAutoLand[name]=false; }   // per-tak: terug uit detail = bewust naar de lijst (review v85 #1)
-    else {
-      var _vps=(typeof _takProjects==='function'&&typeof TAK_TABS!=='undefined'&&TAK_TABS[name])?_takProjects(TAK_TABS[name].discIds):[];
-      if(_vps.length===1){ openProject(_vps[0].id,name); return; }
-    }
-  }
-  // Website-tak: net als video -> precies één lopend project = meteen op dat detail landen
-  // (niet wanneer de klant bewust de Statistieken-subtab koos, en niet net na 'terug' uit het detail).
-  if(name==='webprestaties' && !state.demoMode && (typeof webTakTab!=='function' || webTakTab()==='projecten')){
-    state._skipAutoLand=state._skipAutoLand||{};
-    if(state._skipAutoLand['webprestaties']){ state._skipAutoLand['webprestaties']=false; }
-    else {
-      var _wps=(typeof _takProjects==='function'&&typeof TAK_WEBSITE!=='undefined')?_takProjects(TAK_WEBSITE.discIds).filter(function(p){return p.status!=='done';}):[];
-      if(_wps.length===1){ openProject(_wps[0].id,'webprestaties'); return; }
-    }
-  }
+  // ITEM 17: GEEN auto-landing meer op één project — de klant komt ALTIJD eerst op de
+  // projectenlijst en klikt zelf door naar de detail (uniform over alle takken).
   renderPanel(name);
   if(name==='advertenties' && typeof adsChatMount==='function') adsChatMount();   // ads-chat koppelen aan de huidige-maand-advertentietaak
   if(name==='socials' && typeof socialChatMount==='function') socialChatMount();   // social-chat koppelen aan de sociale-media-taak
