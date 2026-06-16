@@ -369,6 +369,13 @@
 .sb-item:hover .sb-ic.brand-ic,
 .sb-item.active .sb-ic.brand-ic{color:var(--ink-4);}
 .sb-ic svg{display:block;}
+/* offerte-wizard: verplichte (automatisch inbegrepen) items — preproductie + opstart-fees */
+.off-prow--mand{background:var(--paper-2,#FAF7F2);}
+.off-mandtag{font-family:var(--font-display);font-weight:700;font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;color:#fff;background:var(--ink-4,#9E919E);border-radius:6px;padding:2px 6px;margin-left:6px;}
+.off-mand{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-display);font-weight:700;font-size:12px;color:var(--ink-4,#9E919E);border:1px solid var(--line,#E7DFD3);border-radius:10px;padding:7px 11px;white-space:nowrap;}
+.off-mand svg{color:var(--ink-4,#9E919E);}
+.off-mand.on{color:var(--s27-green-ink,#0B7A38);border-color:var(--s27-green,#12AC4E);background:rgba(18,172,78,.10);}
+.off-mand.on svg{color:var(--s27-green,#12AC4E);}
 /* brand-iconen tekenen tot aan de viewBox-rand; de geometrische stroke steekt een halve lijndikte
    buiten de rand uit. Zonder overflow:visible knipt de svg-viewport die buitenste helft vierkant af
    (lijnen ogen dan afgesneden/ongelijk). overflow:visible toont de volledige, overal even dikke lijn. */
@@ -569,11 +576,14 @@
    gepinde .ads-stickytop onder de topbar (60px). Geen losse offset-rekensom meer → geen verticale gaten. */
 .panel[data-screen-label="advertenties"] .ads-stickytop{position:sticky;top:60px;z-index:9;background:var(--paper,#faf9f5);margin-top:-20px;padding-top:6px;}
 .panel[data-screen-label="advertenties"] .ads-stickytop .soc-subnav-row{position:static;margin:0 0 10px;}
-/* relative (niet static/sticky): de periode-popover (position:absolute) ankert zo op de periode-knop zelf,
-   niet op de hele gepinde header. De .ads-stickytop verzorgt het pinnen. */
-.panel[data-screen-label="advertenties"] .ads-stickytop .soc-period{position:relative;margin:0;}
-.ads-ctrlrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 16px;}
-.ads-ctrlrow .soc-period{margin:0;}
+/* TEAM-view: de periode-knop zit nu RECHTSBOVEN in de menubalk-rij (.soc-subnav-act). Hij moet daar als
+   gewone inline-knop staan — position:static, zodat de erfde top:60px géén effect heeft (top werkt enkel op
+   gepositioneerde elementen). De popover (.ads-perpop, position:absolute) ankert op .ads-perwrap (relative). */
+.panel[data-screen-label="advertenties"] .ads-stickytop .soc-period{position:static;top:auto;margin:0;}
+/* periode-popover rechts uitlijnen wanneer de knop in het rechter actiecluster staat (anders loopt 'm van het scherm) */
+.soc-subnav-act .ads-perpop{left:auto;right:0;}
+/* rij onder de menubalk met enkel de Meta/Google-schakelaar — wat lucht boven & onder */
+.ads-ctrlrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 18px;}
 /* CLIENT-view (geen .ads-stickytop): de losse periodebalk pint zelf onder de topbar */
 .panel[data-screen-label="advertenties"] .soc-period{top:60px;z-index:8;}
 @media(max-width:760px){ .panel[data-screen-label="advertenties"] .ads-stickytop{position:static;margin-top:0;} }

@@ -1587,9 +1587,10 @@ function metaAdsBodyRich(){
   var body=(adsActivePlatform()==='google')?googleAdsBodyRich():(adsRichChrome(adsRichSubnav())+'<div id="adsBody">'+adsRichTabBody()+'</div>'+adsRichPdfFooter());
   return body+adsNotepadMount();
 }
-// menubalk (tabs) bovenaan + controls-rij (platform-keuze + periode) er net onder; samen gepind onder de topbar.
+// menubalk (tabs + rechts de periode-knop & notities) bovenaan + platform-keuze-rij er net onder; samen gepind onder de topbar.
 function adsRichChrome(subnavHtml){ return '<div class="ads-stickytop">'+subnavHtml+adsControlsRow()+'</div>'; }
-function adsControlsRow(){ return '<div class="ads-ctrlrow">'+adsPlatformPicker()+adsPeriodBar()+'</div>'; }
+// rij onder de menubalk: enkel de Meta/Google-schakelaar (met wat padding). De periode-knop staat nu rechtsboven in de menubalk.
+function adsControlsRow(){ return '<div class="ads-ctrlrow">'+adsPlatformPicker()+'</div>'; }
 /* ---- ads-menubalk (team-weergave): Samengevat / Campagnes / Uitgebreide gegevens / Aanbevelingen ---- */
 function adsRichTab(){ return state._adsTab||'samengevat'; }
 function adsRichSubnav(){
@@ -1597,8 +1598,8 @@ function adsRichSubnav(){
   var tabs=[['samengevat','Samengevat','st_progress'],['campagnes','Campagnes','cal'],['gegevens','Uitgebreide gegevens','st_approved'],['aanbevelingen','Aanbevelingen','msg']];
   if(isRichView()) tabs.push(['meeting','Meeting','img']);
   var tabsHtml=tabs.map(function(x){ return '<button class="soc-subtab'+(t===x[0]?' active':'')+'" data-atab="'+x[0]+'" onclick="adsRichSetTab(\''+x[0]+'\')">'+ic(x[2],17)+'<span>'+esc(x[1])+'</span></button>'; }).join('');
-  // platform-keuze staat nu in de controls-rij eronder; in de menubalk-rij blijft enkel de notitie-knop.
-  return '<div class="soc-subnav-row"><div class="soc-subnav" id="adsSubnav">'+tabsHtml+'</div><div class="soc-subnav-act">'+adsNoteBtn()+'</div></div>';
+  // rechts op de menubalk-rij: notitie-knop + periode-keuze (rechtsboven). Platform-keuze staat in de rij eronder.
+  return '<div class="soc-subnav-row"><div class="soc-subnav" id="adsSubnav">'+tabsHtml+'</div><div class="soc-subnav-act">'+adsNoteBtn()+adsPeriodBar()+'</div></div>';
 }
 // item 6: notitie-toggle als knop in de menubalk (i.p.v. de zwevende FAB rechtsonder)
 function adsNoteBtn(){ if(!isRichView()) return ''; var n=adsNoteState(); return '<button id="adsNoteBtn" class="soc-subnav-act-btn'+(n.open?' on':'')+'" onclick="adsNotepadToggle()" title="Meeting-kladblok">'+ic('msg',16)+'<span>Notities</span></button>'; }
@@ -2366,7 +2367,7 @@ function googleRichSubnav(){
   var tabs=[['samengevat','Samengevat','st_progress'],['maand','Maandoverzicht','cal'],['campagnes','Campagnes','cal'],['gegevens','Zoekwoorden','st_approved'],['aanbevelingen','Aanbevelingen','msg']];
   if(isRichView()) tabs.push(['meeting','Meeting','img']);
   var tabsHtml=tabs.map(function(x){ return '<button class="soc-subtab'+(t===x[0]?' active':'')+'" data-atab="'+x[0]+'" onclick="adsRichSetTab(\''+x[0]+'\')">'+ic(x[2],17)+'<span>'+esc(x[1])+'</span></button>'; }).join('');
-  return '<div class="soc-subnav-row"><div class="soc-subnav" id="adsSubnav">'+tabsHtml+'</div><div class="soc-subnav-act">'+adsNoteBtn()+'</div></div>';
+  return '<div class="soc-subnav-row"><div class="soc-subnav" id="adsSubnav">'+tabsHtml+'</div><div class="soc-subnav-act">'+adsNoteBtn()+adsPeriodBar()+'</div></div>';
 }
 function googleRichTabBody(){
   if(adsRichTab()==='meeting') return adsWsMeetingTab();
@@ -3243,9 +3244,9 @@ function offEur(n){ return '€ '+(Number(n)||0).toLocaleString('nl-BE',{minimum
 function offCart(){ if(!state._offerteCart) state._offerteCart={}; return state._offerteCart; }
 function offBySku(sku){ var c=offCatalog(); for(var i=0;i<c.length;i++){ if(String(c[i].sku)===String(sku)) return c[i]; } return null; }
 // vaste tabvolgorde (meest gevraagde groepen vooraan); alleen groepen die echt bestaan worden getoond
-const OFF_GROUP_ORDER=['Content & video','Social media','Fotografie','Branding & grafisch','Webdesign','Adverteren','Audio','Strategie','Opleidingen','Overig'];
+const OFF_GROUP_ORDER=['Strategie','Branding','Video & fotografie','SEO & GEO','Social media','Adverteren'];
 // Studio 27-branding per offerte-tak: kleur (br-*) + icoon, zodat de klant de takken meteen herkent.
-const OFF_GROUP_BRAND={'Content & video':{br:'purple',icon:'video'},'Social media':{br:'yellow',icon:'social'},'Fotografie':{br:'purple',icon:'video'},'Branding & grafisch':{br:'pink',icon:'branding'},'Webdesign':{br:'green',icon:'website'},'Adverteren':{br:'orange',icon:'ads'},'Audio':{br:'indigo',icon:'spark'},'Strategie':{br:'blue',icon:'strategie'},'Opleidingen':{br:'indigo',icon:'opleiding'},'Overig':{br:'indigo',icon:'doc'}};
+const OFF_GROUP_BRAND={'Strategie':{br:'blue',icon:'strategie'},'Branding':{br:'pink',icon:'branding'},'Video & fotografie':{br:'purple',icon:'video'},'SEO & GEO':{br:'green',icon:'website'},'Social media':{br:'yellow',icon:'social'},'Adverteren':{br:'orange',icon:'ads'}};
 function offGroupBrand(g){ return OFF_GROUP_BRAND[g]||{br:'purple',icon:'doc'}; }
 function offGroups(){
   var seen={}, cat=offCatalog(); cat.forEach(function(p){ seen[p.group]=1; });
@@ -3461,13 +3462,15 @@ function goOffertes(){ state._offTab='overzicht'; if(typeof goTab==='function') 
    Hergebruikt offCart/offBySku/offEur + de off-prow-stijlen; output = ENDPOINTS.offerteGenereren
    (PandaDoc blijft server-side uit zolang PANDADOC_CREATE_ENABLED != 'true').
    ============================================================================= */
+// Volgorde + aanbod 1:1 met het gecureerde catalog-data.js (Strategie → Branding → Video & fotografie
+// → SEO & GEO → Social media → Adverteren). Elke tak = exact één catalogus-groep.
 const OW_TAKKEN=[
-  {key:'strategie',label:'Strategie',br:'blue',stamp:'icon-strategie.svg',groups:['Strategie','Opleidingen'],sub:'Strategiesessies & opleidingen'},
-  {key:'branding',label:'Branding',br:'pink',stamp:'icon-branding-heart.svg',groups:['Branding & grafisch','Overig'],sub:'Logo, huisstijl & drukwerk'},
-  {key:'video',label:'Video- en fotografie',br:'purple',stamp:'icon-video-fotografie.svg',groups:['Content & video','Fotografie','Audio'],sub:'Shoots, montage, foto & audio'},
-  {key:'website',label:'Website en SEO',br:'green',stamp:'icon-webdesign.svg',groups:['Webdesign'],sub:'Website, CMS & vindbaarheid'},
-  {key:'ads',label:'Online adverteren',br:'orange',stamp:'icon-adverteren.svg',groups:['Adverteren'],sub:'Meta & Google campagnes'},
+  {key:'strategie',label:'Strategie',br:'blue',stamp:'icon-strategie.svg',groups:['Strategie'],sub:'Strategiesessie'},
+  {key:'branding',label:'Branding',br:'pink',stamp:'icon-branding-heart.svg',groups:['Branding'],sub:'Logo & stylesheet'},
+  {key:'video',label:'Video & fotografie',br:'purple',stamp:'icon-video-fotografie.svg',groups:['Video & fotografie'],sub:'Shoots, montage & foto'},
+  {key:'website',label:'SEO & GEO',br:'green',stamp:'icon-webdesign.svg',groups:['SEO & GEO'],sub:'Vindbaarheid (Google + AI)'},
   {key:'social',label:'Social media',br:'yellow',stamp:'icon-socialmedia.svg',groups:['Social media'],sub:'Beheer & content'},
+  {key:'ads',label:'Online adverteren',br:'orange',stamp:'icon-adverteren.svg',groups:['Adverteren'],sub:'Meta & Google'},
 ];
 function owTak(){ var k=state.ow&&state.ow.takKey; for(var i=0;i<OW_TAKKEN.length;i++){ if(OW_TAKKEN[i].key===k) return OW_TAKKEN[i]; } return null; }
 function owEl(){
@@ -3530,11 +3533,18 @@ function owProductRow(p, showGroup){
   var sku=String(p.sku||'').replace(/[^A-Za-z0-9_-]/g,'');   // whitelist vóór inline-onclick (quote-breakout-proof)
   var sub=(showGroup? (p.group+(p.sub?(' · '+p.sub):'')) : (p.sub||''));
   var priceTxt=(Number(p.price)>0)?offEur(p.price):'op maat';
-  var stepper=qty>0
-    ? '<div class="off-step"><button class="off-stepbtn" aria-label="Minder" onclick="owQty(\''+sku+'\',-1)">'+ic('minus',15)+'</button><span class="off-qty">'+qty+'</span><button class="off-stepbtn" aria-label="Meer" onclick="owQty(\''+sku+'\',1)">'+ic('plus',15)+'</button></div>'
-    : '<button class="btn btn-branch br-purple btn-sm off-addbtn" onclick="owAdd(\''+sku+'\')">'+ic('plus',14)+' Toevoegen</button>';
-  return '<div class="off-prow'+(qty>0?' in-cart':'')+'" data-sku="'+esc(p.sku)+'">'
-    +'<div class="off-pinfo"><div class="off-pname">'+esc(p.name)+'</div>'
+  // verplicht item: geen knop/stepper maar een vaste 'Verplicht'/'Inbegrepen'-badge (kan niet manueel weg)
+  var stepper;
+  if(p.mand){
+    var tk=owTakForGroup(p.group); var tlabel=(tk&&tk.label)||'deze tak';
+    stepper='<div class="off-mand'+(qty>0?' on':'')+'" title="Verplicht — automatisch inbegrepen zodra je iets uit '+esc(tlabel)+' kiest">'+ic(qty>0?'check':'lock',13)+'<span>'+(qty>0?'Inbegrepen':'Verplicht')+'</span></div>';
+  } else {
+    stepper=qty>0
+      ? '<div class="off-step"><button class="off-stepbtn" aria-label="Minder" onclick="owQty(\''+sku+'\',-1)">'+ic('minus',15)+'</button><span class="off-qty">'+qty+'</span><button class="off-stepbtn" aria-label="Meer" onclick="owQty(\''+sku+'\',1)">'+ic('plus',15)+'</button></div>'
+      : '<button class="btn btn-branch br-purple btn-sm off-addbtn" onclick="owAdd(\''+sku+'\')">'+ic('plus',14)+' Toevoegen</button>';
+  }
+  return '<div class="off-prow'+(qty>0?' in-cart':'')+(p.mand?' off-prow--mand':'')+'" data-sku="'+esc(p.sku)+'">'
+    +'<div class="off-pinfo"><div class="off-pname">'+esc(p.name)+(p.mand?' <span class="off-mandtag">verplicht</span>':'')+'</div>'
     +(sub?'<div class="off-psub">'+esc(sub)+'</div>':'')
     +(offDescShort(p.desc_html)?'<div class="off-pdesc">'+esc(offDescShort(p.desc_html))+'</div>':'')
     +'</div><div class="off-pright"><div class="off-pprice">'+priceTxt+'</div>'+stepper+'</div></div>';
@@ -3557,6 +3567,7 @@ function owTakBlock(tak, withTakHead){
 }
 function owListHTML(){
   var s=state.ow||{}; var cat=offCatalog();
+  owReconcileMandatory();   // verplichte items in sync met de gekozen takken
   var q=String(s.search||'').trim().toLowerCase();
   if(q){
     var hits=cat.filter(function(p){ return (p.name||'').toLowerCase().indexOf(q)>=0 || (p.sub||'').toLowerCase().indexOf(q)>=0 || (p.group||'').toLowerCase().indexOf(q)>=0; });
@@ -3593,19 +3604,19 @@ function owSearchInput(v){
   clearTimeout(state._owSearchT);
   state._owSearchT=setTimeout(function(){ var l=$id('owList'); if(l) l.innerHTML=owListHTML(); },120);
 }
-function owRefreshRow(sku){
-  var l=$id('owList'); if(!l) return;
-  var safe=(window.CSS&&CSS.escape)?CSS.escape(sku):String(sku).replace(/"/g,'\\"');
-  var row=l.querySelector('.off-prow[data-sku="'+safe+'"]'); if(!row) return;
-  var p=offBySku(sku); if(!p) return;
-  var t=document.createElement('template'); t.innerHTML=owProductRow(p, !!String(state.ow&&state.ow.search||'').trim());
-  row.replaceWith(t.content.firstChild);
-}
 function owRefreshFoot(){ var f=$id('owFoot'); if(f) f.innerHTML=owFootInner(); }
 // "Alles"-filtertab toont het lopende mand-aantal -> mee verversen bij elke wijziging
 function owRefreshAllesBadge(){ var t=document.querySelector('#owFilters .off-tab[data-of="alles"] .off-tabn'); if(t) t.textContent=offCartCount(); }
-function owAdd(sku){ var c=offCart(); c[sku]=(c[sku]||0)+1; owRefreshRow(sku); owRefreshFoot(); owRefreshAllesBadge(); }
-function owQty(sku,d){ var c=offCart(); var n=(c[sku]||0)+d; if(n<=0) delete c[sku]; else c[sku]=n; owRefreshRow(sku); owRefreshFoot(); owRefreshAllesBadge(); }
+// verplichte items (mand) staan present zodra de mand ≥1 NIET-verplicht item van dezelfde tak/groep
+// bevat — en verdwijnen weer zodra het laatste echte item van die tak weg is. Idempotent.
+function owReconcileMandatory(){
+  var cat=offCatalog(), c=offCart(); var real={};
+  Object.keys(c).forEach(function(s){ if(c[s]>0){ var p=offBySku(s); if(p && !p.mand) real[p.group]=true; } });
+  cat.forEach(function(p){ if(!p.mand) return; if(real[p.group]){ if(!(c[p.sku]>0)) c[p.sku]=1; } else if(c[p.sku]){ delete c[p.sku]; } });
+}
+function owAfterCart(){ owReconcileMandatory(); var l=$id('owList'); if(l) l.innerHTML=owListHTML(); owRefreshFoot(); owRefreshAllesBadge(); }
+function owAdd(sku){ var p=offBySku(sku); if(!p||p.mand) return; var c=offCart(); c[sku]=(c[sku]||0)+1; owAfterCart(); }
+function owQty(sku,d){ var p=offBySku(sku); if(!p||p.mand) return; var c=offCart(); var n=(c[sku]||0)+d; if(n<=0) delete c[sku]; else c[sku]=n; owAfterCart(); }
 const OW_CONTACT={
   verzenden:'Stuur me de offerte direct',
   akkoord:'Zet in planning — ik ga akkoord',
@@ -3635,7 +3646,7 @@ function owTakForGroup(group){
   return null;
 }
 function owStep4(){
-  var s=state.ow||{}; var c=offCart();
+  var s=state.ow||{}; owReconcileMandatory(); var c=offCart();
   var skus=Object.keys(c).filter(function(k){return c[k]>0;});
   // de mand groeperen PER tak: één tussenkop per tak, daaronder de gekozen producten
   var byTak={}, order=[];
