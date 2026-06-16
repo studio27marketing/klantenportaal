@@ -355,13 +355,13 @@
      zelfde stijl als de Facturatie/Meetings-icoontjes (currentColor stroke). */
   body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-item{color:var(--ink-3,#6B5B6B);}
   body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-ic{color:var(--ink-3,#6B5B6B);}
-  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-ic img{display:none;}
-  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-ic .sb-ic-line{display:block;}
+  /* ingeklapt: gekleurde brand-stamp verbergen, het neutrale CONTOUR-icoon (zelfde vorm, uitlijn
+     met de andere outline-icoontjes) tonen */
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-ic img:not(.sb-ic-line){display:none;}
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-ic img.sb-ic-line{display:block;}
 }
-/* outline-icoon standaard verborgen (de gekleurde brand-stamp toont in uitgeklapte/non-rail-weergave) */
-.sb-ic-line{display:none;}
-.sb-ic-line svg{display:block;}
-.sb-ic img{display:block;}   /* baseline-gat vermijden (verving de inline style="display:block") */
+.sb-ic img{display:block;}              /* baseline-gat vermijden (verving inline style=display:block) */
+.sb-ic img.sb-ic-line{display:none;}    /* contour-icoon standaard verborgen; toont enkel in de ingeklapte rail */
 /* op tablet/mobiel telt het bestaande hamburger-patroon: rail negeren */
 @media(max-width:980px){ .sb-dock-toggle{display:none!important;} .sb-edge{display:none!important;} body.sb-rail .sidebar{width:264px;} body.sb-rail .topbar,body.sb-rail .page{margin-left:0;} }
 
