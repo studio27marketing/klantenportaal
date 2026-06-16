@@ -275,6 +275,16 @@ body.fc-panel-hidden .fc-main{grid-template-columns:minmax(0,1fr)}
 /* audio: tijdmarker-knop */
 .fc-audio-mark{margin-top:2px}
 
+/* markup-overlay (pijl/kader/markeerstift) — SVG over de viewer, klikken gaan eronderdoor */
+.fc-markup{position:absolute;inset:0;pointer-events:none;overflow:visible;z-index:2}
+.fc-markup .fc-shape{vector-effect:non-scaling-stroke}
+.fc-markup .fc-shape-draft{opacity:.95}
+.fc-pdf-pins,.fc-img-pins{z-index:3}
+.fc-pdf-draft,.fc-img-draft{z-index:4}
+.fc-viewer.fc-marking .fc-pdf-page,.fc-viewer.fc-marking .fc-imgstage{cursor:crosshair}
+/* shape-label op de kaart */
+.fc-shapechip{font-family:var(--font-display);font-weight:700;font-size:11.5px;color:var(--s27-purple-ink,#7A2BC0);background:var(--s27-purple-soft,#F1E6FB);padding:2px 8px;border-radius:999px}
+
 /* ---- mobiel layout ---- */
 @media (max-width:880px){
   .fc-main{grid-template-columns:1fr;padding:13px}

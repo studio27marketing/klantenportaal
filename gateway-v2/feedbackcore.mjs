@@ -558,6 +558,17 @@ function cleanReplies(r) {
   return r.slice(0, 30).map((x) => ({ text: str(x && x.text).slice(0, 2000), createdAt: str(x && x.createdAt).slice(0, 40) || null }))
     .filter((x) => x.text);
 }
+const SHAPE_KINDS = { arrow: 'pijl', box: 'kader', highlight: 'markering' };
+const num01 = (n) => (typeof n === 'number' && isFinite(n)) ? Math.round(Math.max(0, Math.min(1, n)) * 1e4) / 1e4 : null;
+function cleanShape(s) {
+  if (!s || typeof s !== 'object' || !SHAPE_KINDS[s.kind]) return null;
+  const x1 = num01(s.x1), y1 = num01(s.y1), x2 = num01(s.x2), y2 = num01(s.y2);
+  if (x1 == null || y1 == null || x2 == null || y2 == null) return null;
+  const out = { kind: s.kind, x1, y1, x2, y2 };
+  if (typeof s.page === 'number') out.page = s.page;
+  return out;
+}
+function shapeLabel(s) { return s && SHAPE_KINDS[s.kind] ? SHAPE_KINDS[s.kind] : ''; }
 
 /* =============================================================================
  * createFeedbackSubtask — feedbackronde als SUBTAAK onder de deliverable-taak.
@@ -674,6 +685,7 @@ export async function linkFeedback(bedrijfId, body, env) {
         yPct: hasPin ? Math.round(pin.yNorm * 1000) / 10 : null,
         comment: str(a && a.comment).slice(0, 5000),
         status: 'open',
+        shape: cleanShape(a && a.shape),
         replies: cleanReplies(a && a.replies),
         attachments: (Array.isArray(a && a.attachments) ? a.attachments : []).filter((x) => x && x.uploadStatus === 'stored').map(cleanAtt),
       };
@@ -697,8 +709,9 @@ export async function linkFeedback(bedrijfId, body, env) {
   lines.push(`${bundle.counts.annotations} feedbackpunt${bundle.counts.annotations === 1 ? '' : 'en'}${attCount ? ` · ${attCount} bijlage${attCount === 1 ? '' : 'n'}` : ''} · via het portaal`);
   lines.push('');
   for (const a of bundle.annotations) {
-    const loc = a.page != null ? `pagina ${a.page}` : (a.timestampSec != null ? fmtTime(a.timestampSec) : (a.hasPin ? 'pin' : ''));
-    lines.push(`#${a.sequenceNumber} · ${annTypeLabel(a.type)}${loc ? ` · ${loc}` : ''}`);
+    const mk = a.shape ? shapeLabel(a.shape) : '';
+    const loc = a.page != null ? `pagina ${a.page}` : (a.timestampSec != null ? fmtTime(a.timestampSec) : (a.hasPin ? (mk || 'pin') : ''));
+    lines.push(`#${a.sequenceNumber} · ${annTypeLabel(a.type)}${mk ? ` · ${mk}` : ''}${loc && loc !== mk ? ` · ${loc}` : ''}`);
     lines.push(a.comment);
     for (const att of a.attachments) lines.push(`   📎 ${att.filename}`);
     for (const r of (a.replies || [])) lines.push(`   ↳ ${r.text}`);
@@ -722,7 +735,7 @@ export async function linkFeedback(bedrijfId, body, env) {
   //   het indienen de feedback nog kan BEKIJKEN (read-only naslag). Bijlagen als
   //   {filename,key}; fileReviewContext her-ondertekent de key → tijdelijke URL.
   const naslagAnnotations = bundle.annotations.slice(0, 60).map((a) => ({
-    comment: a.comment, type: a.type, pin: a.pin || null,
+    comment: a.comment, type: a.type, pin: a.pin || null, shape: a.shape || null,
     replies: a.replies || [],
     attachments: a.attachments.map((x) => ({ filename: x.filename, key: x.key })),
   }));

@@ -114,6 +114,8 @@
   // waardoor alle calls naar een relatieve URL op de Pages-host gingen (405 → 'kon niet inladen').
   function gwUrl(rel) { return rel ? (/^https?:/.test(rel) ? rel : GATEWAY_BASE + rel) : ''; }
   function fmtClock(sec) { sec = Math.max(0, Math.round(sec || 0)); var m = Math.floor(sec / 60), s = sec % 60; return m + ':' + (s < 10 ? '0' : '') + s; }
+  function shapeIcon(k) { return k === 'arrow' ? '➜' : (k === 'box' ? '▢' : (k === 'highlight' ? '🖍️' : '📍')); }
+  function shapeLabelF(k) { return k === 'arrow' ? 'Pijl' : (k === 'box' ? 'Kader' : (k === 'highlight' ? 'Markering' : 'Markup')); }
   // Sleep een bestaande pin naar een nieuwe plek. el = het pin-DOM, a = de annotatie,
   // getBox levert de huidige bounding-rect van de container (pagina/afbeelding), api.updatePin
   // commit de nieuwe genormaliseerde positie. Onder de drempel = gewone klik (highlight).
@@ -167,6 +169,107 @@
     if (e === 'zip') return '📦';
     if (e === 'pdf') return '📕';
     return '📄';
+  }
+
+  /* =============================================================================
+     MARKUP-LAAG (Fase 3b): pijl/kader/markeerstift als SVG-overlay op een viewer.
+     Coördinaten zijn genormaliseerd (0..1) en getekend met percentage-coördinaten
+     + px-stroke (non-scaling) zodat ze niet vervormen bij responsive schalen. Elke
+     markup-annotatie krijgt óók een afgeleide pin → kaartnummering blijft kloppen.
+     ============================================================================= */
+  var SVGNS = 'http://www.w3.org/2000/svg';
+  function r3(n) { return Math.round(n * 1000) / 1000; }
+  function isMarkupTool(t) { return t === 'arrow' || t === 'box' || t === 'highlight'; }
+  function svgNode(name, attrs) { var e = document.createElementNS(SVGNS, name); for (var k in attrs) e.setAttribute(k, attrs[k]); return e; }
+  function pct(n) { return (Math.max(0, Math.min(1, n)) * 100) + '%'; }
+  // Eén SVG-overlay met pijlpunt-markers per type-kleur (+ draft-oranje).
+  function makeMarkupLayer() {
+    var svg = svgNode('svg', { 'class': 'fc-markup', width: '100%', height: '100%', preserveAspectRatio: 'none' });
+    var defs = svgNode('defs', {});
+    var heads = ANN_TYPES.map(function (t) { return { key: t.key, color: t.color }; }).concat([{ key: 'draft', color: '#F66131' }]);
+    heads.forEach(function (h) {
+      var m = svgNode('marker', { id: 'fcah-' + h.key, markerUnits: 'userSpaceOnUse', markerWidth: 13, markerHeight: 13, refX: 9.5, refY: 6, orient: 'auto' });
+      m.appendChild(svgNode('path', { d: 'M0,1 L10,6 L0,11 Z', fill: h.color }));
+      defs.appendChild(m);
+    });
+    svg.appendChild(defs);
+    return svg;
+  }
+  function shapeNode(shape, color, markerKey) {
+    if (shape.kind === 'arrow') {
+      return svgNode('line', { x1: pct(shape.x1), y1: pct(shape.y1), x2: pct(shape.x2), y2: pct(shape.y2), stroke: color, 'stroke-width': 3, 'stroke-linecap': 'round', 'marker-end': 'url(#fcah-' + markerKey + ')' });
+    }
+    var x = Math.min(shape.x1, shape.x2), y = Math.min(shape.y1, shape.y2), w = Math.abs(shape.x2 - shape.x1), h = Math.abs(shape.y2 - shape.y1);
+    if (shape.kind === 'highlight') {
+      return svgNode('rect', { x: pct(x), y: pct(y), width: pct(w), height: pct(h), rx: 4, fill: color, 'fill-opacity': 0.22, stroke: color, 'stroke-opacity': 0.55, 'stroke-width': 1.5 });
+    }
+    return svgNode('rect', { x: pct(x), y: pct(y), width: pct(w), height: pct(h), rx: 4, fill: 'none', stroke: color, 'stroke-width': 2.5 });
+  }
+  function updateShapeNode(el, shape) {
+    if (shape.kind === 'arrow') { el.setAttribute('x1', pct(shape.x1)); el.setAttribute('y1', pct(shape.y1)); el.setAttribute('x2', pct(shape.x2)); el.setAttribute('y2', pct(shape.y2)); return; }
+    var x = Math.min(shape.x1, shape.x2), y = Math.min(shape.y1, shape.y2), w = Math.abs(shape.x2 - shape.x1), h = Math.abs(shape.y2 - shape.y1);
+    el.setAttribute('x', pct(x)); el.setAttribute('y', pct(y)); el.setAttribute('width', pct(w)); el.setAttribute('height', pct(h));
+  }
+  function derivePin(shape) {
+    var p = {};
+    if (shape.page) p.page = shape.page;
+    if (shape.kind === 'arrow') { p.xNorm = r3(shape.x2); p.yNorm = r3(shape.y2); }
+    else { p.xNorm = r3(Math.min(shape.x1, shape.x2)); p.yNorm = r3(Math.min(shape.y1, shape.y2)); }
+    return p;
+  }
+  // Teken alle vastgelegde shapes voor dit oppervlak (pageNum = null voor één afbeelding).
+  function renderShapes(svgLayer, anns, pageNum) {
+    if (!svgLayer) return;
+    [].slice.call(svgLayer.querySelectorAll('.fc-shape')).forEach(function (n) { n.remove(); });
+    (anns || []).forEach(function (a) {
+      if (!a.shape) return;
+      if (pageNum) { if ((a.shape.page || 1) !== pageNum) return; } else if (a.shape.page) { return; }
+      var el = shapeNode(a.shape, annType(a.type).color, annType(a.type).key);
+      el.setAttribute('class', 'fc-shape'); el.setAttribute('data-ann', a.id);
+      svgLayer.appendChild(el);
+    });
+  }
+  // Vrij tekenen op een oppervlak: pointerdown→sleep→pointerup tekent een shape en
+  // opent meteen de opmerking-pop-over (draft blijft staan tot opslaan/annuleren).
+  function attachMarkup(surfaceEl, svgLayer, getBox, api, pageNum, draftHolder) {
+    var cur = null;
+    function down(ev) {
+      var t = api.tool();
+      if (api.locked || !isMarkupTool(t)) return;
+      if (ev.target && ev.target.closest && ev.target.closest('.fc-pin')) return;
+      if (ev.button != null && ev.button !== 0) return;
+      var box = getBox(); if (!box.width || !box.height) return;
+      var x = Math.min(1, Math.max(0, (ev.clientX - box.left) / box.width));
+      var y = Math.min(1, Math.max(0, (ev.clientY - box.top) / box.height));
+      cur = { kind: t, x1: x, y1: y, x2: x, y2: y };
+      if (draftHolder.el) { try { draftHolder.el.remove(); } catch (e) { } }
+      cur.el = shapeNode(cur, '#F66131', 'draft'); cur.el.setAttribute('class', 'fc-shape fc-shape-draft');
+      svgLayer.appendChild(cur.el); draftHolder.el = cur.el;
+      try { surfaceEl.setPointerCapture(ev.pointerId); } catch (e) { }
+      ev.preventDefault(); ev.stopPropagation();
+    }
+    function move(ev) {
+      if (!cur) return; var box = getBox(); if (!box.width) return;
+      cur.x2 = Math.min(1, Math.max(0, (ev.clientX - box.left) / box.width));
+      cur.y2 = Math.min(1, Math.max(0, (ev.clientY - box.top) / box.height));
+      updateShapeNode(cur.el, cur);
+    }
+    function up(ev) {
+      if (!cur) return; try { surfaceEl.releasePointerCapture(ev.pointerId); } catch (e) { }
+      var c = cur; cur = null;
+      if (Math.abs(c.x2 - c.x1) + Math.abs(c.y2 - c.y1) < 0.02) { if (draftHolder.el) { try { draftHolder.el.remove(); } catch (e) { } draftHolder.el = null; } return; }
+      var shape = { kind: c.kind, x1: r3(c.x1), y1: r3(c.y1), x2: r3(c.x2), y2: r3(c.y2) };
+      if (pageNum) shape.page = pageNum;
+      api.commentAt(derivePin(shape), ev.clientX, ev.clientY, shape);
+      // de pop-over (openInlinePopover→closeInlinePopover) wist de live-draft → teken hem
+      // er meteen weer bij zodat de vorm zichtbaar blijft terwijl je de opmerking typt.
+      var dEl = shapeNode(shape, '#F66131', 'draft'); dEl.setAttribute('class', 'fc-shape fc-shape-draft');
+      svgLayer.appendChild(dEl); draftHolder.el = dEl;
+    }
+    surfaceEl.addEventListener('pointerdown', down);
+    surfaceEl.addEventListener('pointermove', move);
+    surfaceEl.addEventListener('pointerup', up);
+    surfaceEl.addEventListener('pointercancel', up);
   }
   function klantNaam() {
     if (window.S27DATA && S27DATA.bedrijfsnaam) return S27DATA.bedrijfsnaam();
@@ -257,10 +360,13 @@
       '  <main class="fc-main fc-hidden" id="fcMain">' +
       '    <section class="fc-stagecol">' +
       '      <div class="fc-prevnote fc-hidden" id="fcPrev"></div>' +
-      '      <div class="fc-modebar fc-hidden" id="fcModebar" role="tablist" aria-label="Modus">' +
-      '        <button class="fc-mode-opt fc-mode-active" id="fcModeComment" role="tab"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.4 8.4 0 0 1-11.7 7.7L3 21l1.8-6.3A8.4 8.4 0 1 1 21 11.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span>Opmerking plaatsen</span></button>' +
-      '        <button class="fc-mode-opt" id="fcModeBrowse" role="tab"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg><span>Bekijken</span></button>' +
-      '        <span class="fc-mode-hint" id="fcModeHint">Klik in het document om er een opmerking op te plaatsen.</span>' +
+      '      <div class="fc-modebar fc-hidden" id="fcModebar" role="tablist" aria-label="Gereedschap">' +
+      '        <button class="fc-mode-opt fc-mode-active" id="fcModeComment" data-tool="comment" role="tab" title="Opmerking plaatsen"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.4 8.4 0 0 1-11.7 7.7L3 21l1.8-6.3A8.4 8.4 0 1 1 21 11.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span>Pin</span></button>' +
+      '        <button class="fc-mode-opt" id="fcToolArrow" data-tool="arrow" role="tab" title="Pijl tekenen"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 19 19 5M19 5h-7M19 5v7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Pijl</span></button>' +
+      '        <button class="fc-mode-opt" id="fcToolBox" data-tool="box" role="tab" title="Kader tekenen"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="14" rx="2" stroke="currentColor" stroke-width="2"/></svg><span>Kader</span></button>' +
+      '        <button class="fc-mode-opt" id="fcToolMark" data-tool="highlight" role="tab" title="Markeren"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 19h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M7 15 14 8l3 3-7 7H7v-3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span>Markeren</span></button>' +
+      '        <button class="fc-mode-opt" id="fcModeBrowse" data-tool="browse" role="tab" title="Vrij bekijken"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg><span>Bekijken</span></button>' +
+      '        <span class="fc-mode-hint" id="fcModeHint">Klik in het bestand om er een opmerking op te plaatsen.</span>' +
       '      </div>' +
       '      <div class="fc-stage" id="fcStage"><div class="fc-viewer" id="fcViewer"></div></div>' +
       '    </section>' +
@@ -310,7 +416,7 @@
       taskId: taskId, url: url, annotations: [], reviewAttachments: [],
       composerAtts: [], uploadsBusy: 0, closed: false, locked: false,
       streamUrl: null, downloadUrl: null, mediaType: opts.mediaType || guessType(url),
-      reviewer: null, mode: 'comment', _pop: null, filter: 'all', sort: 'new',
+      reviewer: null, mode: 'comment', tool: 'comment', _pop: null, filter: 'all', sort: 'new',
     };
 
     var root = buildShell(st);
@@ -411,7 +517,7 @@
       if (lb && Array.isArray(lb.annotations)) {
         st.annotations = lb.annotations.map(function (a, i) {
           return {
-            id: 'prev_' + i, comment: String(a.comment || ''), type: a.type || 'wijziging', pin: a.pin || null, locked: true,
+            id: 'prev_' + i, comment: String(a.comment || ''), type: a.type || 'wijziging', pin: a.pin || null, shape: a.shape || null, locked: true,
             replies: Array.isArray(a.replies) ? a.replies.map(function (r) { return { text: String(r.text || ''), createdAt: r.createdAt || null }; }) : [],
             attachments: (a.attachments || []).map(function (x) { return { filename: String(x.filename || 'bijlage'), url: gwUrl(x.url), uploadStatus: 'stored' }; }),
           };
@@ -428,8 +534,9 @@
       try { st._pop.remove(); } catch (e) { }
       st._pop = null;
       try { if (st.reviewer && st.reviewer.clearDraftPin) st.reviewer.clearDraftPin(); } catch (e) { }
+      try { if (st.reviewer && st.reviewer.clearDraftShape) st.reviewer.clearDraftShape(); } catch (e) { }
     }
-    function openInlinePopover(pin, cx, cy, existing) {
+    function openInlinePopover(pin, cx, cy, existing, shape) {
       if (st.locked) { toast('Dit bestand is al doorgestuurd — feedback is vergrendeld.', 3600); return; }
       closeInlinePopover();
       var selType = (existing && existing.type) || 'wijziging';
@@ -492,10 +599,11 @@
         if (existing) {
           existing.comment = text; existing.type = selType; existing.attachments = stored;
         } else {
-          st.annotations.push({ id: rid('ann'), comment: text, type: selType, pin: pin || null, attachments: stored, replies: [], createdAt: new Date().toISOString() });
+          st.annotations.push({ id: rid('ann'), comment: text, type: selType, pin: pin || null, shape: shape || null, attachments: stored, replies: [], createdAt: new Date().toISOString() });
         }
         st._pop = null; try { pop.remove(); } catch (e) { }
         try { if (st.reviewer && st.reviewer.clearDraftPin) st.reviewer.clearDraftPin(); } catch (e) { }
+        try { if (st.reviewer && st.reviewer.clearDraftShape) st.reviewer.clearDraftShape(); } catch (e) { }
         renderAll();
         toast(existing ? 'Opmerking bijgewerkt ✓' : 'Opmerking geplaatst ✓');
       });
@@ -512,10 +620,12 @@
       locked: st.locked,
       // huidige modus ('comment' = klik plaatst een opmerking, 'browse' = vrij bekijken)
       mode: function () { return st.mode; },
-      // klik-to-comment: open de inline pop-over-editor exact op de klikplek
-      commentAt: function (pin, cx, cy) {
+      // actief gereedschap: 'comment' | 'arrow' | 'box' | 'highlight' | 'browse'
+      tool: function () { return st.tool || 'comment'; },
+      // klik-to-comment: open de inline pop-over-editor exact op de klikplek; optionele markup-shape
+      commentAt: function (pin, cx, cy, shape) {
         if (st.locked) { toast('Dit bestand is al doorgestuurd — feedback is vergrendeld.', 3600); return; }
-        openInlinePopover(pin, cx, cy);
+        openInlinePopover(pin, cx, cy, null, shape);
       },
       // back-compat: oude reviewers die enkel een pin doorgeven → pop-over centraal
       composeWithPin: function (pin) { openInlinePopover(pin, null, null); },
@@ -560,22 +670,29 @@
     $('fcMain').classList.remove('fc-hidden');
     $('fcEmpty').innerHTML = def.emptyHint || 'Nog geen feedback. Typ hieronder je opmerking en klik <strong>Toevoegen aan lijst</strong>.';
 
-    /* ---- comment/bekijk-modus (enkel voor pin-viewers: pdf/office/pptx) ---- */
+    /* ---- gereedschap: Pin / Pijl / Kader / Markeren / Bekijken (pin-viewers: pdf/image/office/pptx) ---- */
     if (def.pins && !st.locked) {
       var mb = $('fcModebar'); mb.classList.remove('fc-hidden');
-      var setMode = function (m) {
-        st.mode = m;
-        $('fcModeComment').classList.toggle('fc-mode-active', m === 'comment');
-        $('fcModeBrowse').classList.toggle('fc-mode-active', m === 'browse');
-        $('fcModeHint').textContent = m === 'comment'
-          ? 'Klik in het document om er een opmerking op te plaatsen.'
-          : 'Je kan vrij scrollen en lezen — schakel naar “Opmerking plaatsen” om feedback te geven.';
-        try { viewerApi.host.classList.toggle('fc-commenting', m === 'comment'); } catch (e) { }
-        if (m === 'browse') closeInlinePopover();
+      var TOOL_HINT = {
+        comment: 'Klik in het bestand om er een opmerking op te plaatsen.',
+        arrow: 'Sleep om een pijl te tekenen — je opmerking koppelt eraan vast.',
+        box: 'Sleep om een kader rond een zone te tekenen.',
+        highlight: 'Sleep om een zone te markeren.',
+        browse: 'Je kan vrij scrollen en lezen — kies een gereedschap om feedback te geven.',
       };
-      $('fcModeComment').addEventListener('click', function () { setMode('comment'); });
-      $('fcModeBrowse').addEventListener('click', function () { setMode('browse'); });
-      setMode('comment');
+      var toolBtns = mb.querySelectorAll('.fc-mode-opt');
+      var setTool = function (t) {
+        st.tool = t; st.mode = t; // mode = back-compat-alias
+        toolBtns.forEach(function (b) { b.classList.toggle('fc-mode-active', b.getAttribute('data-tool') === t); });
+        $('fcModeHint').textContent = TOOL_HINT[t] || '';
+        try {
+          viewerApi.host.classList.toggle('fc-commenting', t === 'comment');
+          viewerApi.host.classList.toggle('fc-marking', t === 'arrow' || t === 'box' || t === 'highlight');
+        } catch (e) { }
+        if (t === 'browse') closeInlinePopover();
+      };
+      toolBtns.forEach(function (b) { b.addEventListener('click', function () { setTool(b.getAttribute('data-tool')); }); });
+      setTool('comment');
     }
     /* ---- comment-paneel in-/uitklappen (desktop) + zwevende knop (mobiel) ---- */
     var _collapsed = false;
@@ -702,7 +819,7 @@
         card.innerHTML =
           '<div class="fc-cardtop"><span class="fc-pindot" style="background:' + t.color + '">' + num + '</span>' +
           '<span class="fc-typetag">' + t.label + '</span>' +
-          (a.pin ? '<span class="fc-timechip">' + _esc(pinLabel(a.pin)) + '</span>' : '') +
+          (a.shape ? '<span class="fc-shapechip">' + shapeIcon(a.shape.kind) + ' ' + shapeLabelF(a.shape.kind) + '</span>' : (a.pin ? '<span class="fc-timechip">' + _esc(pinLabel(a.pin)) + '</span>' : '')) +
           (a.locked ? '' : '<button class="fc-edit-c" title="Bewerken" aria-label="Bewerken"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L18 10l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></button><button class="fc-del" title="Verwijderen">×</button>') +
           '</div>' +
           '<div class="fc-cardtxt"></div><div class="fc-attrow"></div>' +
@@ -877,7 +994,7 @@
       var src = api.stream_url || api.url;
       var loadingTask = lib.getDocument({ url: src, withCredentials: false });
       var pdf = await loadingTask.promise;
-      this._pdf = pdf; this._api = api; this._pages = [];
+      this._pdf = pdf; this._api = api; this._pages = []; this._draftShape = { el: null };
       var wrap = document.createElement('div');
       wrap.className = 'fc-pdf';
       api.host.appendChild(wrap);
@@ -914,17 +1031,18 @@
         ph.className = 'fc-pdf-page';
         ph.dataset.page = p;
         ph.innerHTML = '<div class="fc-pdf-ph">Pagina ' + p + '…</div><div class="fc-pdf-pins"></div><div class="fc-pdf-draft"></div>';
-        // klik-to-comment (enkel in comment-modus): pin + inline pop-over op de klikplek
-        (function (pageNum, pageEl) {
+        var mk = makeMarkupLayer(); ph.insertBefore(mk, ph.querySelector('.fc-pdf-pins'));
+        // klik-to-comment (comment-tool) + vrij tekenen (markup-tools): pin/shape + pop-over
+        (function (pageNum, pageEl, mkLayer) {
           pageEl.addEventListener('mousemove', function (ev) {
-            if (api.locked || api.mode() !== 'comment' || ev.target.closest('.fc-pin')) { ghost.classList.remove('show'); return; }
+            if (api.locked || api.tool() !== 'comment' || ev.target.closest('.fc-pin')) { ghost.classList.remove('show'); return; }
             gst.tx = ev.clientX; gst.ty = ev.clientY;
             if (!ghost.classList.contains('show')) { gst.gx = ev.clientX; gst.gy = ev.clientY; ghost.classList.add('show'); }
             if (!gst.raf) gst.raf = requestAnimationFrame(ghostTick);
           });
           pageEl.addEventListener('mouseleave', function () { ghost.classList.remove('show'); });
           pageEl.addEventListener('click', function (ev) {
-            if (api.locked || api.mode() !== 'comment' || ev.target.closest('.fc-pin')) return;
+            if (api.locked || api.tool() !== 'comment' || ev.target.closest('.fc-pin')) return;
             var box = pageEl.getBoundingClientRect();
             if (!box.width || !box.height) return;
             var xNorm = Math.min(1, Math.max(0, (ev.clientX - box.left) / box.width));
@@ -935,7 +1053,8 @@
             var dl = pageEl.querySelector('.fc-pdf-draft');   // NA commentAt: nieuwe draftpin tonen
             if (dl) dl.innerHTML = '<span class="fc-pin fc-pin-draft" style="left:' + (xNorm * 100) + '%;top:' + (yNorm * 100) + '%"><span>+</span></span>';
           });
-        })(p, ph);
+          attachMarkup(pageEl, mkLayer, function () { return pageEl.getBoundingClientRect(); }, api, pageNum, self._draftShape);
+        })(p, ph, mk);
         wrap.appendChild(ph);
         io.observe(ph);
         this._pages.push(ph);
@@ -944,6 +1063,7 @@
     clearDraftPin: function () {
       if (this._pages) this._pages.forEach(function (ph) { var d = ph.querySelector('.fc-pdf-draft'); if (d) d.innerHTML = ''; });
     },
+    clearDraftShape: function () { if (this._draftShape && this._draftShape.el) { try { this._draftShape.el.remove(); } catch (e) { } this._draftShape.el = null; } },
     highlightPin: function (annId, on) {
       if (!this._wrap) return;
       var sel = (window.CSS && CSS.escape) ? CSS.escape(String(annId)) : String(annId);
@@ -979,6 +1099,7 @@
     _layoutPins: function (anns) {
       var api = this._api;
       this._pages.forEach(function (ph, idx) {
+        renderShapes(ph.querySelector('.fc-markup'), anns, idx + 1);
         var layer = ph.querySelector('.fc-pdf-pins'); if (!layer) return;
         layer.innerHTML = '';
         (anns || []).forEach(function (a, i) {
@@ -1023,15 +1144,17 @@
     pins: true,
     emptyHint: 'Klik op de foto op de plek waar je iets wil aanduiden — er opent een venstertje om je opmerking te typen en (optioneel) een bijlage toe te voegen. Sleep een bestaande pin om hem te verplaatsen.',
     init: function (api, ctx) {
-      var self = this; this._api = api;
+      var self = this; this._api = api; this._draftShape = { el: null };
       var wrap = document.createElement('div'); wrap.className = 'fc-imgwrap';
       var stage = document.createElement('div'); stage.className = 'fc-imgstage';
       var img = document.createElement('img'); img.className = 'fc-img'; img.alt = ''; img.decoding = 'async';
+      var mk = makeMarkupLayer();
       var pins = document.createElement('div'); pins.className = 'fc-img-pins';
       var draft = document.createElement('div'); draft.className = 'fc-img-draft';
-      stage.appendChild(img); stage.appendChild(pins); stage.appendChild(draft);
+      stage.appendChild(img); stage.appendChild(mk); stage.appendChild(pins); stage.appendChild(draft);
       wrap.appendChild(stage); api.host.appendChild(wrap);
-      this._wrap = wrap; this._stage = stage; this._img = img; this._pinsLayer = pins; this._draft = draft;
+      this._wrap = wrap; this._stage = stage; this._img = img; this._markup = mk; this._pinsLayer = pins; this._draft = draft;
+      attachMarkup(stage, mk, function () { return img.getBoundingClientRect(); }, api, null, this._draftShape);
 
       // cursor-volgende ghost-pin (rAF-lerp, zoals de PDF-reviewer)
       var ghost = document.createElement('div'); ghost.className = 'fc-ghostpin';
@@ -1051,14 +1174,14 @@
       img.src = api.stream_url || api.url;
 
       stage.addEventListener('mousemove', function (ev) {
-        if (api.locked || api.mode() !== 'comment' || ev.target.closest('.fc-pin')) { ghost.classList.remove('show'); return; }
+        if (api.locked || api.tool() !== 'comment' || ev.target.closest('.fc-pin')) { ghost.classList.remove('show'); return; }
         gst.tx = ev.clientX; gst.ty = ev.clientY;
         if (!ghost.classList.contains('show')) { gst.gx = ev.clientX; gst.gy = ev.clientY; ghost.classList.add('show'); }
         if (!gst.raf) gst.raf = requestAnimationFrame(ghostTick);
       });
       stage.addEventListener('mouseleave', function () { ghost.classList.remove('show'); });
       stage.addEventListener('click', function (ev) {
-        if (api.locked || api.mode() !== 'comment' || ev.target.closest('.fc-pin')) return;
+        if (api.locked || api.tool() !== 'comment' || ev.target.closest('.fc-pin')) return;
         var box = img.getBoundingClientRect(); if (!box.width || !box.height) return;
         var xN = Math.min(1, Math.max(0, (ev.clientX - box.left) / box.width));
         var yN = Math.min(1, Math.max(0, (ev.clientY - box.top) / box.height));
@@ -1069,6 +1192,7 @@
       });
     },
     clearDraftPin: function () { if (this._draft) this._draft.innerHTML = ''; },
+    clearDraftShape: function () { if (this._draftShape && this._draftShape.el) { try { this._draftShape.el.remove(); } catch (e) { } this._draftShape.el = null; } },
     highlightPin: function (annId, on) {
       if (!this._wrap) return;
       var sel = (window.CSS && CSS.escape) ? CSS.escape(String(annId)) : String(annId);
@@ -1077,6 +1201,7 @@
     },
     _layoutPins: function (anns) {
       var layer = this._pinsLayer, img = this._img, api = this._api; if (!layer) return;
+      renderShapes(this._markup, anns, null);
       layer.innerHTML = '';
       (anns || []).forEach(function (a, i) {
         if (!a.pin || a.pin.xNorm == null || a.pin.page != null || a.pin.timestampSec != null) return; // enkel foto-pins
