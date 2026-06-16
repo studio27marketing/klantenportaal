@@ -131,11 +131,11 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;}
 
 .sb-nav{flex:1;padding:4px 12px 12px;display:flex;flex-direction:column;gap:13px;}
 .sb-group{display:flex;flex-direction:column;gap:2px;}
-.sb-glabel{font-family:var(--font-display);font-weight:700;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-4);padding:6px 12px 4px;}
+.sb-glabel{font-family:var(--font-display);font-weight:700;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-4);padding:6px 12px 4px;white-space:nowrap;overflow:hidden;}
 .sb-item{display:flex;align-items:center;gap:12px;width:100%;padding:9px 12px;border-radius:var(--r-md);text-align:left;
   font-family:var(--font-display);font-weight:700;font-size:14px;color:var(--ink-3);position:relative;transition:background 140ms,color 140ms;}
 .sb-item .sb-ic{width:24px;height:24px;display:flex;align-items:center;justify-content:center;color:var(--ink-4);flex:none;transition:color 140ms;}
-.sb-item .sb-label{flex:1;min-width:0;}
+.sb-item .sb-label{flex:1;min-width:0;white-space:nowrap;overflow:hidden;}
 .sb-item .sb-badge{font-family:var(--font-display);font-weight:800;font-size:11px;min-width:20px;height:20px;padding:0 6px;border-radius:var(--r-pill);background:var(--s27-orange);color:#fff;display:flex;align-items:center;justify-content:center;}
 .sb-item:hover{background:var(--paper-2);color:var(--ink);}
 .sb-item:hover .sb-ic{color:var(--c);}
