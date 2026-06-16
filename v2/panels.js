@@ -1357,7 +1357,7 @@ function adsPeriodBar(){
   var presets=[['today','Vandaag'],['7d','7 dagen'],['30d','30 dagen'],['90d','90 dagen'],['custom','Aangepast']];
   var comps=[['none','Geen vergelijking'],['previous','Vorige periode'],['month','Vorige maand'],['year','Vorig jaar']];
   var chips=presets.map(function(o){ return '<button class="soc-perchip'+(pp.preset===o[0]?' active':'')+'" onclick="adsSetPeriod(\''+o[0]+'\')">'+esc(o[1])+'</button>'; }).join('');
-  var custom = pp.preset==='custom' ? '<div class="soc-percustom"><input type="date" id="adsFrom" value="'+esc(pp.from||'')+'" onchange="adsCustomPeriod()"><span>tot</span><input type="date" id="adsTo" value="'+esc(pp.to||'')+'" onchange="adsCustomPeriod()"></div>' : '';
+  var custom = pp.preset==='custom' ? adsCalBlock() : '';
   var comp=comps.map(function(o){ return '<button class="soc-perchip'+(pp.compare===o[0]?' active':'')+'" onclick="adsSetCompare(\''+o[0]+'\')">'+esc(o[1])+'</button>'; }).join('');
   return '<div class="soc-period ads-perwrap">'
     +'<button class="ads-perbtn'+(open?' open':'')+'" onclick="adsPeriodToggle()" aria-expanded="'+(open?'true':'false')+'">'+ic('cal',15)+'<span class="ads-perbtn-tx">'+esc(_adsPeriodSummary(pp))+'</span>'+_adsChevDown()+'</button>'
@@ -1375,6 +1375,52 @@ function _adsPeriodSummary(pp){
   var base=(pp.preset==='custom' && pp.from && pp.to) ? (_adsDateShort(pp.from)+' – '+_adsDateShort(pp.to)) : _adsPeriodLabel(pp.preset);
   var cl=_adsCompareLabel(pp.compare);
   return base+(cl?' · vs '+cl:'');
+}
+// item 1: eigen huisstijl-kalender (range-selectie) i.p.v. de native datumkiezer-popup.
+function _adsDateNice(ymd){ var p=String(ymd||'').split('-'); if(p.length<3) return ymd||''; var mn=['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec']; return (+p[2])+' '+mn[(+p[1])-1]+' '+p[0]; }
+function adsCalBlock(){
+  var pp=adsPeriod();
+  var sel='<div class="ads-cal-sel"><span class="'+(pp.from?'on':'')+'">'+(pp.from?_adsDateNice(pp.from):'startdatum')+'</span><span class="ads-cal-arrow">→</span><span class="'+(pp.to?'on':'')+'">'+(pp.to?_adsDateNice(pp.to):'einddatum')+'</span></div>';
+  return '<div class="ads-cal-block">'+sel+adsCalHtml()+'</div>';
+}
+function _adsCalState(){ if(!state._adsCal){ var pp=adsPeriod(); var base=(pp.to||pp.from||_adsYmd(new Date())); state._adsCal={ym:String(base).slice(0,7)}; } return state._adsCal; }
+function adsCalNav(d){ var c=_adsCalState(); var p=c.ym.split('-'); var dt=new Date(+p[0],(+p[1]-1)+d,1); c.ym=_adsYmd(dt).slice(0,7); var el=document.getElementById('adsCalWrap'); if(el) el.outerHTML=adsCalHtml(); }
+function _adsCalMax(){ return _adsYmd(new Date()); }   // geen toekomst: advertentiedata bestaat enkel t/m vandaag
+function adsCalPick(ymd){
+  if(ymd>_adsCalMax()) return;                          // toekomstige dag → negeren (geen lege/scheve data)
+  var pp=adsPeriod(); pp.preset='custom';
+  if(!pp.from || (pp.from && pp.to)){ pp.from=ymd; pp.to=''; }          // nieuwe selectie starten
+  else if(ymd < pp.from){ pp.to=pp.from; pp.from=ymd; }                  // omgekeerd → wisselen
+  else { pp.to=ymd; }
+  var blk=document.querySelector('.ads-cal-block'); if(blk) blk.outerHTML=adsCalBlock();
+  var b=document.querySelector('.ads-perwrap .ads-perbtn-tx'); if(b) b.textContent=_adsPeriodSummary(pp);
+  if(pp.from && pp.to) adsReload();
+}
+function adsCalHtml(){
+  var c=_adsCalState(); var pp=adsPeriod();
+  var p=c.ym.split('-'); var y=+p[0], m=+p[1];
+  var startDow=(new Date(y,m-1,1).getDay()+6)%7;                          // maandag = 0
+  var dim=new Date(y,m,0).getDate();
+  var mn=['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
+  var today=_adsYmd(new Date());
+  var maxYmd=_adsCalMax();
+  var atMaxMonth=(c.ym>=maxYmd.slice(0,7));   // huidige maand bereikt → '›' uitschakelen
+  var head='<div class="ads-cal-head"><button type="button" class="ads-cal-nav" onclick="adsCalNav(-1)" aria-label="Vorige maand">‹</button><span>'+mn[m-1]+' '+y+'</span><button type="button" class="ads-cal-nav"'+(atMaxMonth?' disabled':'')+' onclick="adsCalNav(1)" aria-label="Volgende maand">›</button></div>';
+  var dows=['M','D','W','D','V','Z','Z'].map(function(x){return '<span class="ads-cal-dow">'+x+'</span>';}).join('');
+  var cells=''; var i;
+  for(i=0;i<startDow;i++) cells+='<span class="ads-cal-day empty"></span>';
+  for(var d=1;d<=dim;d++){
+    var ymd=y+'-'+(m<10?'0':'')+m+'-'+(d<10?'0':'')+d;
+    var cls='ads-cal-day';
+    var future=ymd>maxYmd;
+    if(future){ cells+='<span class="ads-cal-day disabled">'+d+'</span>'; continue; }   // toekomst: niet kiesbaar
+    if(ymd===pp.from) cls+=' sel start';
+    if(ymd===pp.to) cls+=' sel end';
+    if(pp.from && pp.to && ymd>pp.from && ymd<pp.to) cls+=' inrange';
+    if(ymd===today) cls+=' today';
+    cells+='<button type="button" class="'+cls+'" onclick="adsCalPick(\''+ymd+'\')">'+d+'</button>';
+  }
+  return '<div class="ads-cal" id="adsCalWrap">'+head+'<div class="ads-cal-grid">'+dows+cells+'</div></div>';
 }
 function adsPeriodToggle(){
   state._adsPerOpen=!state._adsPerOpen;
@@ -1412,7 +1458,7 @@ function adsReload(){
   if(state.demoMode || !(window.S27DATA&&S27DATA.loadMetaAds)){ var b0=document.getElementById('adsBody'); if(b0){ b0.innerHTML=adsOverviewInner(); adsClientMountChart(); } return; }
   S27DATA.loadMetaAds({from:pp.from,to:pp.to,compare:pp.compare}).then(function(){ var b=document.getElementById('adsBody'); if(b){ b.innerHTML=adsOverviewInner(); adsClientMountChart(); } }).catch(function(){ var b=document.getElementById('adsBody'); if(b){ b.innerHTML=adsOverviewInner(); adsClientMountChart(); } });
 }
-function adsSetPeriod(preset){ var pp=adsPeriod(); pp.preset=preset; if(preset!=='custom'){ var w=adsPeriodWindow(preset); if(w){ pp.from=w.from; pp.to=w.to; } } _adsRerenderPeriodBar(); if(preset!=='custom') adsReload(); }
+function adsSetPeriod(preset){ var pp=adsPeriod(); pp.preset=preset; if(preset!=='custom'){ var w=adsPeriodWindow(preset); if(w){ pp.from=w.from; pp.to=w.to; } } else { state._adsCal=null; } _adsRerenderPeriodBar(); if(preset!=='custom') adsReload(); }
 function adsCustomPeriod(){ var f=document.getElementById('adsFrom'),t=document.getElementById('adsTo'); if(!f||!t||!f.value||!t.value) return; var pp=adsPeriod(); pp.from=f.value; pp.to=t.value; _adsRerenderPeriodBar(); adsReload(); }
 function adsSetCompare(mode){ var pp=adsPeriod(); pp.compare=mode; _adsRerenderPeriodBar(); adsReload(); }
 function refreshMetaAds(){ adsReload(); }
@@ -1457,7 +1503,7 @@ function _metaCampExpRender(id){
   exp.innerHTML='<div class="meta-camp-exp-in"><div class="section-head" style="margin-top:8px"><h2>Advertenties &amp; visuals</h2><span class="count">'+ads.length+'</span></div>'+(ads.length?('<div class="ads-adtable"><div class="ads-adhead"><span>Advertentie</span><span>Besteed</span><span>Klikken</span><span>CTR</span><span>CPC</span><span></span></div>'+ads.map(function(a,i){return metaAdRow(a,i,cur);}).join('')+'</div>'):'<div class="card" style="padding:18px;text-align:center;color:var(--ink-3)">Geen actieve advertenties in deze campagne.</div>')+'</div>';
 }
 /* ---- Multi-series toggle-trend: besteding/klikken/vertoningen per dag, aan/uit te klikken ---- */
-var ADS_TREND_META={ spend:['Besteding','#C44514'], clicks:['Klikken','#147A50'], impressions:['Vertoningen','#1F5FA8'] };
+var ADS_TREND_META={ spend:['Besteding','#F66131'], clicks:['Klikken','#12AC4E'], impressions:['Vertoningen','#3083DC'] };
 function adsTrendOn(){ if(!state._adsTrendOn) state._adsTrendOn={spend:true,clicks:true,impressions:false}; return state._adsTrendOn; }
 function adsToggleTrend(metric){ var on=adsTrendOn(); on[metric]=!on[metric]; var box=document.getElementById('adsTrendBox'); if(box) box.outerHTML=adsTrendBlock(); }
 function adsTrendSVG(tr, on){
@@ -1538,10 +1584,12 @@ function adsClientMountChart(){
    ============================================================================= */
 function metaAdsBodyRich(){
   metaEnsureStyles();
-  // platform-keuze zit nu in de subnav (adsRichSubnav/googleRichSubnav), niet meer als losse pill-rij bovenaan.
-  var body=(adsActivePlatform()==='google')?googleAdsBodyRich():(adsPeriodBar()+adsRichSubnav()+'<div id="adsBody">'+adsRichTabBody()+'</div>'+adsRichPdfFooter());
+  var body=(adsActivePlatform()==='google')?googleAdsBodyRich():(adsRichChrome(adsRichSubnav())+'<div id="adsBody">'+adsRichTabBody()+'</div>'+adsRichPdfFooter());
   return body+adsNotepadMount();
 }
+// menubalk (tabs) bovenaan + controls-rij (platform-keuze + periode) er net onder; samen gepind onder de topbar.
+function adsRichChrome(subnavHtml){ return '<div class="ads-stickytop">'+subnavHtml+adsControlsRow()+'</div>'; }
+function adsControlsRow(){ return '<div class="ads-ctrlrow">'+adsPlatformPicker()+adsPeriodBar()+'</div>'; }
 /* ---- ads-menubalk (team-weergave): Samengevat / Campagnes / Uitgebreide gegevens / Aanbevelingen ---- */
 function adsRichTab(){ return state._adsTab||'samengevat'; }
 function adsRichSubnav(){
@@ -1549,8 +1597,8 @@ function adsRichSubnav(){
   var tabs=[['samengevat','Samengevat','st_progress'],['campagnes','Campagnes','cal'],['gegevens','Uitgebreide gegevens','st_approved'],['aanbevelingen','Aanbevelingen','msg']];
   if(isRichView()) tabs.push(['meeting','Meeting','img']);
   var tabsHtml=tabs.map(function(x){ return '<button class="soc-subtab'+(t===x[0]?' active':'')+'" data-atab="'+x[0]+'" onclick="adsRichSetTab(\''+x[0]+'\')">'+ic(x[2],17)+'<span>'+esc(x[1])+'</span></button>'; }).join('');
-  // item 5+6: platform-dropdown + notitie-knop in de tweede menubalk (action-cluster rechts).
-  return '<div class="soc-subnav-row"><div class="soc-subnav" id="adsSubnav">'+tabsHtml+'</div><div class="soc-subnav-act">'+adsPlatformPicker()+adsNoteBtn()+'</div></div>';
+  // platform-keuze staat nu in de controls-rij eronder; in de menubalk-rij blijft enkel de notitie-knop.
+  return '<div class="soc-subnav-row"><div class="soc-subnav" id="adsSubnav">'+tabsHtml+'</div><div class="soc-subnav-act">'+adsNoteBtn()+'</div></div>';
 }
 // item 6: notitie-toggle als knop in de menubalk (i.p.v. de zwevende FAB rechtsonder)
 function adsNoteBtn(){ if(!isRichView()) return ''; var n=adsNoteState(); return '<button id="adsNoteBtn" class="soc-subnav-act-btn'+(n.open?' on':'')+'" onclick="adsNotepadToggle()" title="Meeting-kladblok">'+ic('msg',16)+'<span>Notities</span></button>'; }
@@ -1713,30 +1761,34 @@ function adsRichMountTabCharts(){
 // Plotbare reeksen per platform (key MOET matchen met de KPI-kaart-key zodat een klik op de kaart de juiste reeks schakelt).
 // axis-GROEP per metric: 'money' (€), 'count' (#), 'ratio' (% / verhouding). Bepaalt links/rechts-as (taak 2).
 // Volgorde = CANONIEKE METRIEK-VOLGORDE — wordt overal in dit document gespiegeld.
+// item 4: grafiek-paletten uit de Studio 27-huisstijl, per platform getint. Meta = koel/blauw-geleid,
+// Google = warm/oranje-geleid; de dominante 'spend'-balk draagt telkens de platformkleur (blauw/oranje).
+// Alle tinten komen uit de huisstijl: blauw #3083DC, donkerblauw #1F5FA8, paars #9441DB, groen #12AC4E,
+// teal #0EA5A5, goud #F8C028, oranje #F66131, roze #F697CE, ink #230F23, grijs #6B5B6B.
 var ADS_SEL_METRICS = {
   meta: [
     { key:'spend',       label:'Besteed bedrag', color:'#3083DC', axis:'money', daily:'spend',       kind:'bar'  },
     { key:'impressions', label:'Vertoningen',    color:'#1F5FA8', axis:'count', daily:'impressions', kind:'line' },
     { key:'reach',       label:'Bereik',         color:'#0EA5A5', axis:'count', daily:'reach',       kind:'line' },
-    { key:'cpm',         label:'CPM',            color:'#C28E0E', axis:'money', daily:'cpm',         kind:'line' },
+    { key:'cpm',         label:'CPM',            color:'#9441DB', axis:'money', daily:'cpm',         kind:'line' },
     { key:'linkClicks',  label:'Klikken',        color:'#230F23', axis:'count', daily:'linkClicks',  kind:'line' },
-    { key:'ctr',         label:'CTR',            color:'#E07A1E', axis:'ratio', daily:'ctr',         kind:'line' },
-    { key:'cpc',         label:'CPC',            color:'#7A8794', axis:'money', daily:'cpc',         kind:'line' },
-    { key:'leads',       label:'Leads',          color:'#9441DB', axis:'count', daily:'leads',       kind:'line' },
-    { key:'cpl',         label:'CPL',            color:'#B4540B', axis:'money', daily:'cpl',         kind:'line' },
-    { key:'frequency',   label:'Frequentie',     color:'#6B5B6B', axis:'ratio', daily:'frequency',   kind:'line' }
+    { key:'ctr',         label:'CTR',            color:'#F8C028', axis:'ratio', daily:'ctr',         kind:'line' },
+    { key:'cpc',         label:'CPC',            color:'#6B5B6B', axis:'money', daily:'cpc',         kind:'line' },
+    { key:'leads',       label:'Leads',          color:'#12AC4E', axis:'count', daily:'leads',       kind:'line' },
+    { key:'cpl',         label:'CPL',            color:'#F697CE', axis:'money', daily:'cpl',         kind:'line' },
+    { key:'frequency',   label:'Frequentie',     color:'#9A8B9A', axis:'ratio', daily:'frequency',   kind:'line' }
   ],
   google: [
     { key:'spend',       label:'Besteed',     color:'#F66131', axis:'money', daily:'spend',       kind:'bar'  },
-    { key:'impressions', label:'Vertoningen', color:'#1F5FA8', axis:'count', daily:'impressions', kind:'line' },
-    { key:'cpm',         label:'CPM',         color:'#3083DC', axis:'money', daily:'cpm',         kind:'line' },
+    { key:'impressions', label:'Vertoningen', color:'#F8C028', axis:'count', daily:'impressions', kind:'line' },
+    { key:'cpm',         label:'CPM',         color:'#9441DB', axis:'money', daily:'cpm',         kind:'line' },
     { key:'clicks',      label:'Klikken',     color:'#230F23', axis:'count', daily:'clicks',      kind:'line' },
-    { key:'ctr',         label:'CTR',         color:'#E07A1E', axis:'ratio', daily:'ctr',         kind:'line' },
-    { key:'cpc',         label:'CPC',         color:'#7A8794', axis:'money', daily:'cpc',         kind:'line' },
+    { key:'ctr',         label:'CTR',         color:'#0EA5A5', axis:'ratio', daily:'ctr',         kind:'line' },
+    { key:'cpc',         label:'CPC',         color:'#6B5B6B', axis:'money', daily:'cpc',         kind:'line' },
     { key:'conversions', label:'Leads',  color:'#12AC4E', axis:'count', daily:'conversions', kind:'line' },
-    { key:'costPerConv', label:'CPL',  color:'#B4540B', axis:'money', daily:'costPerConv', kind:'line' },
-    { key:'convValue',   label:'Waarde',      color:'#9441DB', axis:'money', daily:'convValue',   kind:'line' },
-    { key:'convRate',    label:'Leadratio',  color:'#0EA5A5', axis:'ratio', daily:'convRate',    kind:'line' }
+    { key:'costPerConv', label:'CPL',  color:'#3083DC', axis:'money', daily:'costPerConv', kind:'line' },
+    { key:'convValue',   label:'Waarde',      color:'#F697CE', axis:'money', daily:'convValue',   kind:'line' },
+    { key:'convRate',    label:'Leadratio',  color:'#1F5FA8', axis:'ratio', daily:'convRate',    kind:'line' }
   ]
 };
 // axis-groep van een metric (voor links/rechts-as-toewijzing).
@@ -2308,13 +2360,13 @@ function googleRichNotLinked(){ return '<div class="card" style="padding:30px 26
 function _gCur(){ var g=(window.S27DATA&&S27DATA.googleAdsRich&&S27DATA.googleAdsRich()); return (g&&g.currency)||'EUR'; }
 function _gFindCamp(cid){ var g=(window.S27DATA&&S27DATA.googleAdsRich&&S27DATA.googleAdsRich()); if(!g||!g.campaigns) return null; for(var i=0;i<g.campaigns.length;i++){ if(String(g.campaigns[i].id)===String(cid)) return g.campaigns[i]; } return null; }
 function _gMatch(mt){ return ({EXACT:'Exact',PHRASE:'Zinsdeel',BROAD:'Breed',BROAD_MATCH_MODIFIER:'Breed+'})[String(mt||'').toUpperCase()]||(mt?_titleCase(mt):'–'); }
-function googleAdsBodyRich(){ return adsPeriodBar()+googleRichSubnav()+'<div id="adsBody">'+googleRichTabBody()+'</div>'+googleRichPdfFooter(); }
+function googleAdsBodyRich(){ return adsRichChrome(googleRichSubnav())+'<div id="adsBody">'+googleRichTabBody()+'</div>'+googleRichPdfFooter(); }
 function googleRichSubnav(){
   var t=adsRichTab();
   var tabs=[['samengevat','Samengevat','st_progress'],['maand','Maandoverzicht','cal'],['campagnes','Campagnes','cal'],['gegevens','Zoekwoorden','st_approved'],['aanbevelingen','Aanbevelingen','msg']];
   if(isRichView()) tabs.push(['meeting','Meeting','img']);
   var tabsHtml=tabs.map(function(x){ return '<button class="soc-subtab'+(t===x[0]?' active':'')+'" data-atab="'+x[0]+'" onclick="adsRichSetTab(\''+x[0]+'\')">'+ic(x[2],17)+'<span>'+esc(x[1])+'</span></button>'; }).join('');
-  return '<div class="soc-subnav-row"><div class="soc-subnav" id="adsSubnav">'+tabsHtml+'</div><div class="soc-subnav-act">'+adsPlatformPicker()+adsNoteBtn()+'</div></div>';
+  return '<div class="soc-subnav-row"><div class="soc-subnav" id="adsSubnav">'+tabsHtml+'</div><div class="soc-subnav-act">'+adsNoteBtn()+'</div></div>';
 }
 function googleRichTabBody(){
   if(adsRichTab()==='meeting') return adsWsMeetingTab();

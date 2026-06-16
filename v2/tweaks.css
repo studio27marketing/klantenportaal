@@ -565,16 +565,18 @@
    exact zo uit als in rust; content beweegt eronder door. (Was 108 → balken plakten tegen elkaar.) */
 .soc-period{position:sticky; top:127px; z-index:7;}
 @media(max-width:760px){.soc-period{top:127px;}}
-/* Adverteren heeft de OMGEKEERDE volgorde (periodebalk bovenaan, sub-nav eronder in team-view;
-   klant-view heeft enkel de periodebalk) → daar plakt de periodebalk bovenaan en de sub-nav eronder.
-   top sub-nav = 60 + 39 (periodebalk-hoogte) + 18 (flow-marge) = 117. */
+/* TEAM-view: menubalk (tabs) bovenaan + controls-rij (platform + periode) er net onder, samen in één
+   gepinde .ads-stickytop onder de topbar (60px). Geen losse offset-rekensom meer → geen verticale gaten. */
+.panel[data-screen-label="advertenties"] .ads-stickytop{position:sticky;top:60px;z-index:9;background:var(--paper,#faf9f5);margin-top:-20px;padding-top:6px;}
+.panel[data-screen-label="advertenties"] .ads-stickytop .soc-subnav-row{position:static;margin:0 0 10px;}
+/* relative (niet static/sticky): de periode-popover (position:absolute) ankert zo op de periode-knop zelf,
+   niet op de hele gepinde header. De .ads-stickytop verzorgt het pinnen. */
+.panel[data-screen-label="advertenties"] .ads-stickytop .soc-period{position:relative;margin:0;}
+.ads-ctrlrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 16px;}
+.ads-ctrlrow .soc-period{margin:0;}
+/* CLIENT-view (geen .ads-stickytop): de losse periodebalk pint zelf onder de topbar */
 .panel[data-screen-label="advertenties"] .soc-period{top:60px;z-index:8;}
-.panel[data-screen-label="advertenties"] .soc-subnav{top:117px;z-index:7;}
-/* tweede menubalk zit nu in een .soc-subnav-row (tabs + platform-dropdown + notitie-knop) → die rij pint */
-.panel[data-screen-label="advertenties"] .soc-subnav-row{position:sticky;top:117px;z-index:7;}
-/* mobiel wrapt de periodebalk naar meerdere regels (hoogte > 39px) -> sub-nav daar niet pinnen (geen overlap) */
-@media(max-width:760px){ .panel[data-screen-label="advertenties"] .soc-subnav,
-  .panel[data-screen-label="advertenties"] .soc-subnav-row{position:static;} }
+@media(max-width:760px){ .panel[data-screen-label="advertenties"] .ads-stickytop{position:static;margin-top:0;} }
 .soc-percompare select, .soc-percustom input[type=date]{background:linear-gradient(180deg,rgba(255,255,255,.74),rgba(255,255,255,.40));-webkit-backdrop-filter:blur(10px) saturate(1.3);backdrop-filter:blur(10px) saturate(1.3);border:1px solid var(--glass-border,rgba(255,255,255,.6));box-shadow:0 4px 14px rgba(60,40,80,.08),inset 0 1px 0 rgba(255,255,255,.7);}
 /* Berichten-chat schermvullender + scrollbaar */
 #berichtChat .chat-list{height:calc(100vh - 340px);min-height:280px;max-height:none;overflow-y:auto;}
@@ -605,6 +607,28 @@
 .ads-perpop-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--line,#EFE7DC);padding-top:11px;}
 .ads-perpop-foot .seg-btn{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--ink-3,#6B5B6B);background:transparent;border:0;cursor:pointer;padding:4px 6px;}
 .ads-perpop-foot .seg-btn:hover{color:var(--ink,#230F23);}
+/* item 1: eigen huisstijl-kalender (range) i.p.v. de native datumkiezer */
+.ads-cal-block{margin-top:8px;}
+.ads-cal-sel{display:flex;align-items:center;gap:8px;font-family:var(--font-display);font-weight:700;font-size:12.5px;color:var(--ink-4,#9E919E);margin-bottom:9px;}
+.ads-cal-sel .on{color:var(--ink-2,#3A2A3A);}
+.ads-cal-sel .ads-cal-arrow{color:var(--ink-4,#9E919E);font-weight:600;}
+.ads-cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-family:var(--font-display);font-weight:700;font-size:13px;color:var(--ink,#230F23);}
+.ads-cal-nav{width:28px;height:28px;border-radius:8px;border:1px solid var(--line,#E7DFD3);background:var(--paper-2,#FAF7F2);color:var(--ink-2,#3A2A3A);cursor:pointer;font-size:17px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;}
+.ads-cal-nav:hover{border-color:var(--ads-accent,#3083DC);color:var(--ads-accent,#3083DC);}
+.ads-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+.ads-cal-dow{text-align:center;font-size:10px;font-weight:700;color:var(--ink-4,#9E919E);padding:2px 0 4px;}
+.ads-cal-day{height:30px;border:0;background:transparent;border-radius:8px;font:inherit;font-size:12.5px;font-weight:600;color:var(--ink-2,#3A2A3A);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;}
+.ads-cal-day.empty{visibility:hidden;cursor:default;}
+.ads-cal-day.disabled{color:var(--ink-4,#9E919E);opacity:.4;cursor:not-allowed;}
+.ads-cal-nav:disabled{opacity:.35;cursor:not-allowed;}
+.ads-cal-nav:disabled:hover{border-color:var(--line,#E7DFD3);color:var(--ink-2,#3A2A3A);}
+.ads-cal-day:hover:not(.empty):not(.sel){background:var(--paper-2,#FAF7F2);}
+.ads-cal-day.today{box-shadow:inset 0 0 0 1.5px var(--ads-accent,#3083DC);}
+.ads-cal-day.inrange{background:color-mix(in srgb,var(--ads-accent,#3083DC) 15%,transparent);border-radius:0;}
+.ads-cal-day.sel{background:var(--ads-accent,#3083DC);color:#fff;}
+.ads-cal-day.sel.start{border-radius:8px 0 0 8px;}
+.ads-cal-day.sel.end{border-radius:0 8px 8px 0;}
+.ads-cal-day.sel.start.end{border-radius:8px;}
 /* item 5: platform-dropdown */
 .ads-platpick{position:relative;display:inline-flex;}
 .ads-platpick-btn{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-display);font-weight:700;font-size:12.5px;color:var(--ink-2,#3A2A3A);
