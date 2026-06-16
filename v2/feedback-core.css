@@ -285,6 +285,10 @@ body.fc-panel-hidden .fc-main{grid-template-columns:minmax(0,1fr)}
 .fc-viewer.fc-marking .fc-pdf-page,.fc-viewer.fc-marking .fc-imgstage{cursor:crosshair}
 /* shape-label op de kaart */
 .fc-shapechip{font-family:var(--font-display);font-weight:700;font-size:11.5px;color:var(--s27-purple-ink,#7A2BC0);background:var(--s27-purple-soft,#F1E6FB);padding:2px 8px;border-radius:999px}
+/* comment-auteur (item 6): initialen-avatar + voornaam, zodat het team ziet wie commentte */
+.fc-author{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-display);font-weight:700;font-size:11px;color:var(--ink-3,#6B5B6B);max-width:130px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.fc-author-ini{flex:none;width:18px;height:18px;border-radius:50%;background:var(--s27-purple,#9441DB);color:#fff;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:800;letter-spacing:.02em}
+.fc-reply-au{font-family:var(--font-display);font-weight:700;font-size:11px;color:var(--ink-3,#6B5B6B);margin-right:4px}
 
 /* =============================================================================
    FEEDBACKRONDE-REWORK: titel/tak, herordende topbar, gereedschapsrij + zoom,
@@ -349,4 +353,16 @@ body.fc-panel-hidden .fc-main{grid-template-columns:minmax(0,1fr)}
   .fc-office-frame{height:60vh}
   .fc-mode-hint{display:none}
   .fc-pop{width:calc(100vw - 20px)}
+}
+
+/* DESKTOP (item 2): de overlay scrollt NIET op paginaniveau — enkel het bestand scrollt intern,
+   zodat de gereedschapsbalk (Pin/Kader/zoom) nooit achter de bovenbalk verdwijnt. */
+@media (min-width:881px){
+  .fc-root{overflow:hidden}
+  .fc-shell{height:100%}
+  .fc-main{min-height:0;align-items:stretch}
+  .fc-stagecol{min-height:0}
+  .fc-stage{flex:1;min-height:0;display:flex;flex-direction:column}
+  .fc-viewer{flex:1;min-height:0;display:flex;flex-direction:column}
+  .fc-pdf,.fc-imgwrap{max-height:none;flex:1;min-height:0}
 }

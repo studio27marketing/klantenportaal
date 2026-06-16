@@ -253,6 +253,7 @@
     function down(ev) {
       var t = api.tool();
       if (api.locked || !isMarkupTool(t)) return;
+      if (api.busy && api.busy()) return;   // pop-over open → geen tweede kader starten
       if (ev.target && ev.target.closest && ev.target.closest('.fc-pin')) return;
       if (ev.button != null && ev.button !== 0) return;
       var box = getBox(); if (!box.width || !box.height) return;
@@ -277,11 +278,10 @@
       if (Math.abs(c.x2 - c.x1) + Math.abs(c.y2 - c.y1) < 0.02) { if (draftHolder.el) { try { draftHolder.el.remove(); } catch (e) { } draftHolder.el = null; } return; }
       var shape = { kind: c.kind, x1: r3(c.x1), y1: r3(c.y1), x2: r3(c.x2), y2: r3(c.y2) };
       if (pageNum) shape.page = pageNum;
+      // de live-draft (c.el = draftHolder.el) BLIJFT staan tijdens de pop-over; bij Opslaan
+      // tekent renderShapes de echte shape, bij Annuleren/× wist clearDraftShape draftHolder.el.
+      // (Niet opnieuw tekenen — dat orphant de originele draft en laat 'm achter na annuleren.)
       api.commentAt(derivePin(shape), ev.clientX, ev.clientY, shape);
-      // de pop-over (openInlinePopover→closeInlinePopover) wist de live-draft → teken hem
-      // er meteen weer bij zodat de vorm zichtbaar blijft terwijl je de opmerking typt.
-      var dEl = shapeNode(shape, '#F66131', 'draft'); dEl.setAttribute('class', 'fc-shape fc-shape-draft');
-      svgLayer.appendChild(dEl); draftHolder.el = dEl;
     }
     surfaceEl.addEventListener('pointerdown', down);
     surfaceEl.addEventListener('pointermove', move);
@@ -291,6 +291,25 @@
   function klantNaam() {
     if (window.S27DATA && S27DATA.bedrijfsnaam) return S27DATA.bedrijfsnaam();
     return 'Klant';
+  }
+  // auteur van een comment = de INGELOGDE contactpersoon (item 6, meerdere contacten per bedrijf
+  // kunnen elk comments zetten). klantNaam() = bedrijfsnaam; dit is de persoon.
+  function commentAuthor() {
+    // staff/admin bekijkt als klant → geen klant-attributie op zijn comments
+    try { if (window.state && state.adminMode) return ''; } catch (e) { }
+    try {
+      if (window.S27DATA && S27DATA.klantNaam) {
+        var n = String(S27DATA.klantNaam() || '').trim();
+        // 'daar' is de groet-fallback van DATA.klantNaam — geen echte naam
+        return (n && n.toLowerCase() !== 'daar') ? n : '';
+      }
+    } catch (e) { }
+    return '';
+  }
+  function initials(name) {
+    var p = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!p.length) return '?';
+    return (p[0].charAt(0) + (p.length > 1 ? p[p.length - 1].charAt(0) : '')).toUpperCase();
   }
   function toast(msg, ms) {
     var t = document.getElementById('fcToast');
@@ -364,7 +383,7 @@
     root.innerHTML =
       '<div class="fc-shell" role="dialog" aria-label="Bestandsfeedback">' +
       '  <header class="fc-top">' +
-      '    <div class="fc-title"><div><h2 id="fcTitle"></h2><div class="fc-subline"><span class="fc-tak" id="fcTak"></span><span class="fc-sub" id="fcSub">Feedbackronde 1</span></div></div></div>' +
+      '    <div class="fc-title"><span class="fc-sub" id="fcSub">Feedbackronde 1</span></div>' +
       '    <div class="fc-actions">' +
       '      <button id="fcPanelToggle" class="fc-btn fc-ghost fc-paneltoggle" title="Opmerkingen tonen/verbergen" aria-label="Opmerkingen tonen/verbergen"><span class="fc-pt-lbl">Bekijk comments</span><span class="fc-pt-n" id="fcPtN">0</span></button>' +
       '      <button id="fcFeedback" class="fc-btn fc-primary">Feedback indienen <span id="fcCount" class="fc-countbadge fc-hidden">0</span></button>' +
@@ -446,8 +465,10 @@
 
     var root = buildShell(st);
     var $ = function (id) { return root.querySelector('#' + id); };
-    $('fcTitle').textContent = projectTitle;
-    if (takLabel) $('fcTak').textContent = takLabel; else $('fcTak').classList.add('fc-hidden');
+    // item 1: de taaktitel hoort thuis in de PORTAAL-topbar (de bovenste menubalk, blijft zichtbaar
+    // boven de overlay) — niet nóg eens in de overlay-balk. De overlay-balk toont enkel 'Feedbackronde N'.
+    var _tb = document.getElementById('topbarTitle');
+    if (_tb) { st._prevTopbar = _tb.textContent; _tb.textContent = projectTitle || _tb.textContent; }
 
     function vrLift(on) { try { document.body.classList.toggle('fc-lift', !!on); } catch (e) { } }
 
@@ -462,6 +483,7 @@
       vrLift(false);
       try { closeInlinePopover(); } catch (e) { }
       try { closeAnnBubble(); } catch (e) { }
+      try { var _tb = document.getElementById('topbarTitle'); if (_tb && st._prevTopbar != null) _tb.textContent = st._prevTopbar; } catch (e) { }
       try { document.removeEventListener('click', navClose, true); } catch (e) { }
       try { if (st.reviewer && st.reviewer.destroy) st.reviewer.destroy(); } catch (e) { }
       try { document.body.classList.remove('fc-open'); } catch (e) { }
@@ -543,8 +565,8 @@
       if (lb && Array.isArray(lb.annotations)) {
         st.annotations = lb.annotations.map(function (a, i) {
           return {
-            id: 'prev_' + i, comment: String(a.comment || ''), type: a.type || 'wijziging', pin: a.pin || null, shape: a.shape || null, locked: true,
-            replies: Array.isArray(a.replies) ? a.replies.map(function (r) { return { text: String(r.text || ''), createdAt: r.createdAt || null }; }) : [],
+            id: 'prev_' + i, comment: String(a.comment || ''), type: a.type || 'wijziging', pin: a.pin || null, shape: a.shape || null, author: a.author || '', locked: true,
+            replies: Array.isArray(a.replies) ? a.replies.map(function (r) { return { text: String(r.text || ''), author: r.author || '', createdAt: r.createdAt || null }; }) : [],
             attachments: (a.attachments || []).map(function (x) { return { filename: String(x.filename || 'bijlage'), url: gwUrl(x.url), uploadStatus: 'stored' }; }),
           };
         });
@@ -565,7 +587,7 @@
           if (snap && (Date.now() - (snap.savedAt || 0)) > 30 * 24 * 3600 * 1000) { localStorage.removeItem(st._draftKey); snap = null; }
           if (snap && Array.isArray(snap.annotations)) {
             snap.annotations.forEach(function (a) {
-              st.annotations.push({ id: a.id || rid('ann'), comment: a.comment || '', type: a.type || 'wijziging', pin: a.pin || null, shape: a.shape || null, replies: a.replies || [], attachments: a.attachments || [], createdAt: a.createdAt || new Date().toISOString() });
+              st.annotations.push({ id: a.id || rid('ann'), comment: a.comment || '', type: a.type || 'wijziging', pin: a.pin || null, shape: a.shape || null, author: a.author || '', replies: a.replies || [], attachments: a.attachments || [], createdAt: a.createdAt || new Date().toISOString() });
             });
             if (Array.isArray(snap.composerAtts)) st.composerAtts = snap.composerAtts.slice();
             st._restoreComposer = snap.composer || '';
@@ -578,7 +600,7 @@
       return {
         v: 1, savedAt: Date.now(),
         annotations: st.annotations.filter(function (a) { return !a.locked; }).map(function (a) {
-          return { id: a.id, comment: a.comment, type: a.type || 'wijziging', pin: a.pin || null, shape: a.shape || null, replies: (a.replies || []).map(function (r) { return { text: r.text, createdAt: r.createdAt || null }; }), attachments: (a.attachments || []).filter(function (x) { return x.uploadStatus === 'stored'; }).map(cleanAttPayload) };
+          return { id: a.id, comment: a.comment, type: a.type || 'wijziging', pin: a.pin || null, shape: a.shape || null, author: a.author || '', replies: (a.replies || []).map(function (r) { return { text: r.text, author: r.author || '', createdAt: r.createdAt || null }; }), attachments: (a.attachments || []).filter(function (x) { return x.uploadStatus === 'stored'; }).map(cleanAttPayload) };
         }),
         composer: ($('fcCompose') ? $('fcCompose').value : ''),
         composerAtts: st.composerAtts.filter(function (x) { return x.uploadStatus === 'stored'; }).map(cleanAttPayload),
@@ -671,7 +693,7 @@
         if (existing) {
           existing.comment = text; existing.type = selType; existing.attachments = stored;
         } else {
-          st.annotations.push({ id: rid('ann'), comment: text, type: selType, pin: pin || null, shape: shape || null, attachments: stored, replies: [], createdAt: new Date().toISOString() });
+          st.annotations.push({ id: rid('ann'), comment: text, type: selType, pin: pin || null, shape: shape || null, author: commentAuthor(), attachments: stored, replies: [], createdAt: new Date().toISOString() });
         }
         st._pop = null; try { pop.remove(); } catch (e) { }
         try { if (st.reviewer && st.reviewer.clearDraftPin) st.reviewer.clearDraftPin(); } catch (e) { }
@@ -703,7 +725,8 @@
       b.innerHTML =
         '<div class="fc-bubble-head"><span class="fc-pop-dot" style="background:' + t.color + '">' + (idx + 1) + '</span>' +
         '<span class="fc-typetag" style="--tc:' + t.color + '">' + t.label + '</span>' +
-        '<button class="fc-pop-x" title="Sluiten" aria-label="Sluiten">×</button></div>' +
+        (a.author ? '<span class="fc-author" title="' + _esc(a.author) + '"><span class="fc-author-ini" style="background:' + t.color + '">' + _esc(initials(a.author)) + '</span>' + _esc(a.author) + '</span>' : '') +
+        '<button class="fc-pop-x" title="Sluiten" aria-label="Sluiten" style="margin-left:auto">×</button></div>' +
         '<div class="fc-bubble-tx"></div><div class="fc-attrow fc-bubble-atts"></div><div class="fc-bubble-reps"></div>';
       b.querySelector('.fc-bubble-tx').textContent = a.comment || '';
       var ar = b.querySelector('.fc-bubble-atts');
@@ -711,8 +734,8 @@
       var rp = b.querySelector('.fc-bubble-reps');
       (a.replies || []).forEach(function (r) {
         var rEl = document.createElement('div'); rEl.className = 'fc-reply';
-        rEl.innerHTML = '<span class="fc-reply-dot" style="background:' + t.color + '"></span><span class="fc-reply-tx"></span>';
-        rEl.querySelector('.fc-reply-tx').textContent = r.text || '';
+        rEl.innerHTML = '<span class="fc-reply-dot" style="background:' + t.color + '"></span><span class="fc-reply-tx">' + (r.author ? '<span class="fc-reply-au">' + _esc(r.author) + ':</span> ' : '') + '<span class="fc-reply-body"></span></span>';
+        rEl.querySelector('.fc-reply-body').textContent = r.text || '';
         rp.appendChild(rEl);
       });
       document.body.appendChild(b);
@@ -740,6 +763,9 @@
       mode: function () { return st.mode; },
       // actief gereedschap: 'comment' | 'arrow' | 'box' | 'highlight' | 'browse'
       tool: function () { return st.tool || 'comment'; },
+      // er staat al een opmerking-pop-over open → geen nieuw kader beginnen (anders wist het
+      // openen van de nieuwe pop-over de vers getekende draft).
+      busy: function () { return !!st._pop; },
       // klik-to-comment: open de inline pop-over-editor exact op de klikplek; optionele markup-shape
       commentAt: function (pin, cx, cy, shape) {
         if (st.locked) { toast('Dit bestand is al doorgestuurd — feedback is vergrendeld.', 3600); return; }
@@ -752,7 +778,7 @@
       composeWithPin: function (pin) { openInlinePopover(pin, null, null); },
       addAnnotation: function (a) {
         if (st.locked) { toast('Dit bestand is al doorgestuurd — feedback is vergrendeld.', 3600); return; }
-        st.annotations.push({ id: rid('ann'), comment: String(a && a.comment || ''), pin: (a && a.pin) || null, attachments: (a && a.attachments) || [], createdAt: new Date().toISOString() });
+        st.annotations.push({ id: rid('ann'), comment: String(a && a.comment || ''), pin: (a && a.pin) || null, author: commentAuthor(), attachments: (a && a.attachments) || [], createdAt: new Date().toISOString() });
         renderAll();
       },
       // pin↔kaart-koppeling: viewer meldt hover op een pin → wij lichten de kaart op
@@ -891,7 +917,7 @@
       if (!text) { toast('Schrijf eerst je opmerking.'); return; }
       if (st.uploadsBusy > 0) { toast('Even wachten tot de bijlage klaar is…'); return; }
       st.annotations.push({
-        id: rid('ann'), comment: text, pin: st.pendingPin || null,
+        id: rid('ann'), comment: text, pin: st.pendingPin || null, author: commentAuthor(),
         attachments: st.composerAtts.filter(function (x) { return x.uploadStatus === 'stored'; }),
         createdAt: new Date().toISOString(),
       });
@@ -947,6 +973,7 @@
         card.innerHTML =
           '<div class="fc-cardtop"><span class="fc-pindot" style="background:' + t.color + '">' + num + '</span>' +
           '<span class="fc-typetag">' + t.label + '</span>' +
+          (a.author ? '<span class="fc-author" title="' + _esc(a.author) + '"><span class="fc-author-ini" style="background:' + t.color + '">' + _esc(initials(a.author)) + '</span>' + _esc(a.author) + '</span>' : '') +
           (a.shape ? '<span class="fc-shapechip">' + shapeIcon(a.shape.kind) + ' ' + shapeLabelF(a.shape.kind) + '</span>' : (a.pin ? '<span class="fc-timechip">' + _esc(pinLabel(a.pin)) + '</span>' : '')) +
           (a.locked ? '' : '<button class="fc-edit-c" title="Bewerken" aria-label="Bewerken"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L18 10l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></button><button class="fc-del" title="Verwijderen">×</button>') +
           '</div>' +
@@ -959,8 +986,8 @@
         var repWrap = card.querySelector('.fc-replies');
         (a.replies || []).forEach(function (r) {
           var rEl = document.createElement('div'); rEl.className = 'fc-reply';
-          rEl.innerHTML = '<span class="fc-reply-dot"></span><span class="fc-reply-tx"></span>';
-          rEl.querySelector('.fc-reply-tx').textContent = r.text || '';
+          rEl.innerHTML = '<span class="fc-reply-dot"></span><span class="fc-reply-tx">' + (r.author ? '<span class="fc-reply-au">' + _esc(r.author) + ':</span> ' : '') + '<span class="fc-reply-body"></span></span>';
+          rEl.querySelector('.fc-reply-body').textContent = r.text || '';
           repWrap.appendChild(rEl);
         });
         if (a.pin) {
@@ -983,7 +1010,7 @@
           box.innerHTML = '<input type="text" placeholder="Reactie of verduidelijking…"><button class="fc-btn fc-primary fc-sm">Plaats</button>';
           repWrap.appendChild(box);
           var inp = box.querySelector('input'); inp.focus();
-          function add() { var v = inp.value.trim(); if (!v) { inp.focus(); return; } a.replies = a.replies || []; a.replies.push({ text: v, createdAt: new Date().toISOString() }); renderAll(); }
+          function add() { var v = inp.value.trim(); if (!v) { inp.focus(); return; } a.replies = a.replies || []; a.replies.push({ text: v, author: commentAuthor(), createdAt: new Date().toISOString() }); renderAll(); }
           box.querySelector('button').addEventListener('click', add);
           inp.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') add(); });
         });
@@ -1046,7 +1073,7 @@
       // los composer-veld als extra punt meenemen
       var pending = $('fcCompose').value.trim();
       if (pending) {
-        st.annotations.push({ id: rid('ann'), comment: pending, pin: st.pendingPin || null, attachments: st.composerAtts.filter(function (x) { return x.uploadStatus === 'stored'; }) });
+        st.annotations.push({ id: rid('ann'), comment: pending, pin: st.pendingPin || null, author: commentAuthor(), attachments: st.composerAtts.filter(function (x) { return x.uploadStatus === 'stored'; }) });
         st.pendingPin = null; st.composerAtts = []; $('fcCompose').value = '';
       }
       var btn = $('fcSendGo'); btn.disabled = true; btn.textContent = 'Indienen…';
@@ -1055,8 +1082,8 @@
         comment: $('fcSummary').value.trim(),
         annotations: st.annotations.map(function (a) {
           return {
-            comment: a.comment, type: a.type || 'wijziging', pin: a.pin || null,
-            replies: (a.replies || []).map(function (r) { return { text: r.text, createdAt: r.createdAt || null }; }),
+            comment: a.comment, type: a.type || 'wijziging', pin: a.pin || null, author: a.author || commentAuthor(),
+            replies: (a.replies || []).map(function (r) { return { text: r.text, author: r.author || '', createdAt: r.createdAt || null }; }),
             attachments: (a.attachments || []).map(cleanAttPayload)
           };
         }),
@@ -1150,8 +1177,8 @@
       var gst = { gx: 0, gy: 0, tx: 0, ty: 0, raf: 0 };
       this._gst = gst;
       function ghostTick() {
-        gst.gx += (gst.tx - gst.gx) * 0.32;
-        gst.gy += (gst.ty - gst.gy) * 0.32;
+        gst.gx += (gst.tx - gst.gx) * 0.6;
+        gst.gy += (gst.ty - gst.gy) * 0.6;
         ghost.style.transform = 'translate3d(' + (gst.gx - 13) + 'px,' + (gst.gy - 13) + 'px,0) rotate(-45deg)';
         gst.raf = ghost.classList.contains('show') ? requestAnimationFrame(ghostTick) : 0;
       }
@@ -1317,7 +1344,7 @@
       document.body.appendChild(ghost); this._ghost = ghost;
       var gst = { gx: 0, gy: 0, tx: 0, ty: 0, raf: 0 }; this._gst = gst;
       function ghostTick() {
-        gst.gx += (gst.tx - gst.gx) * 0.32; gst.gy += (gst.ty - gst.gy) * 0.32;
+        gst.gx += (gst.tx - gst.gx) * 0.6; gst.gy += (gst.ty - gst.gy) * 0.6;
         ghost.style.transform = 'translate3d(' + (gst.gx - 13) + 'px,' + (gst.gy - 13) + 'px,0) rotate(-45deg)';
         gst.raf = ghost.classList.contains('show') ? requestAnimationFrame(ghostTick) : 0;
       }

@@ -329,37 +329,39 @@
   /* RAIL: zijbalk ingeklapt tot icoon-rail (64px); hover/focus = uitklap naar 264px als
      OVERLAY (content schuift niet want de marges blijven op de railbreedte). */
   body.sb-rail{--rail-w:64px;--sb-full:264px;}
-  body.sb-rail .sidebar{width:var(--rail-w);overflow:hidden;}
+  /* overflow-x clipt de labels; overflow-y blijft scrollbaar zodat ALLE items (incl. Instellingen
+     onderaan) bereikbaar blijven en de bedrijf-switcher-dropdown in beeld scrolt. */
+  body.sb-rail .sidebar{width:var(--rail-w);overflow-x:hidden;overflow-y:auto;}
   body.sb-rail .topbar{margin-left:var(--rail-w);}
   body.sb-rail .page{margin-left:var(--rail-w);}
   body.sb-rail .sidebar:hover,
-  body.sb-rail .sidebar:focus-within{width:var(--sb-full);z-index:62;box-shadow:0 22px 70px rgba(35,15,35,.22);overflow:visible;}
-  /* labels/teksten verbergen in rail; terug bij hover/focus */
-  body.sb-rail .sidebar .sb-label,
-  body.sb-rail .sidebar .sb-glabel,
-  body.sb-rail .sidebar .sb-client-tx,
-  body.sb-rail .sidebar .sb-client .chev,
-  body.sb-rail .sidebar .sb-wordmark{opacity:0;white-space:nowrap;pointer-events:none;transition:opacity .14s ease;}
-  body.sb-rail .sidebar:hover .sb-label,
-  body.sb-rail .sidebar:hover .sb-glabel,
-  body.sb-rail .sidebar:hover .sb-client-tx,
-  body.sb-rail .sidebar:hover .sb-client .chev,
-  body.sb-rail .sidebar:hover .sb-wordmark,
-  body.sb-rail .sidebar:focus-within .sb-label,
-  body.sb-rail .sidebar:focus-within .sb-glabel,
-  body.sb-rail .sidebar:focus-within .sb-client-tx,
-  body.sb-rail .sidebar:focus-within .sb-client .chev,
-  body.sb-rail .sidebar:focus-within .sb-wordmark{opacity:1;pointer-events:auto;}
-  /* iconen gecentreerd in de rail (alleen ingeklapt) */
-  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-item{justify-content:center;padding-left:0;padding-right:0;}
+  body.sb-rail .sidebar:focus-within{width:var(--sb-full);z-index:62;box-shadow:0 22px 70px rgba(35,15,35,.22);}
+  /* INGEKLAPT: labels/teksten echt uit de flow (display:none) zodat icoon + avatar perfect
+     centreren (opacity:0 hield breedte → uit het midden). Terug bij hover/focus. */
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-label,
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-glabel,
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-client-tx,
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-client .chev,
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-wordmark{display:none;}
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-item{justify-content:center;gap:0;padding-left:0;padding-right:0;}
   body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-item .sb-badge{position:absolute;top:3px;right:12px;transform:scale(.72);transform-origin:top right;}
-  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-client{justify-content:center;padding-left:0;padding-right:0;}
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-client{justify-content:center;gap:0;padding-left:0;padding-right:0;}
   body.sb-rail .sidebar:not(:hover):not(:focus-within) .client-switch-wrap{padding-left:0;padding-right:0;}
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-group{margin-top:6px;}
   /* mini-merk '27' i.p.v. het brede woordmerk in de rail */
   body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-head{padding-left:0;padding-right:0;text-align:center;}
-  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-wordmark{display:none;}
   body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-mini-mark{display:block;font-family:var(--font-display);font-weight:800;font-size:18px;color:var(--ink);line-height:24px;}
+  /* CONTOUR-iconen in de rail (item 5): neutrale outline i.p.v. de gekleurde brand-stamps,
+     zelfde stijl als de Facturatie/Meetings-icoontjes (currentColor stroke). */
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-item{color:var(--ink-3,#6B5B6B);}
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-ic{color:var(--ink-3,#6B5B6B);}
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-ic img{display:none;}
+  body.sb-rail .sidebar:not(:hover):not(:focus-within) .sb-ic .sb-ic-line{display:block;}
 }
+/* outline-icoon standaard verborgen (de gekleurde brand-stamp toont in uitgeklapte/non-rail-weergave) */
+.sb-ic-line{display:none;}
+.sb-ic-line svg{display:block;}
+.sb-ic img{display:block;}   /* baseline-gat vermijden (verving de inline style="display:block") */
 /* op tablet/mobiel telt het bestaande hamburger-patroon: rail negeren */
 @media(max-width:980px){ .sb-dock-toggle{display:none!important;} .sb-edge{display:none!important;} body.sb-rail .sidebar{width:264px;} body.sb-rail .topbar,body.sb-rail .page{margin-left:0;} }
 

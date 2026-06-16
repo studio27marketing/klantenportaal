@@ -4093,21 +4093,42 @@ function _ondVideoFileRow(s, f, br){
     +'<div class="df-tx"><b>'+esc(f.label||'Video')+'</b></div>'
     +'<div class="df-act"><button class="btn btn-branch br-'+br+' btn-sm" onclick="openVideoFeedback(\''+jsEsc(s.id)+'\',\''+jsEsc(f.url)+'\',\''+jsEsc(f.label||'Video')+'\',this)">'+ic('play',14)+' Bekijk &amp; geef feedback</button></div></div>';
 }
+// opent een bestand in de juiste reviewer (video → frame-accurate S27VideoReview, rest → dispatcher).
+function ondOpenFile(btn, taskId, url, label){
+  try{
+    if(window.S27VideoReview && typeof S27VideoReview.isReviewable==='function' && S27VideoReview.isReviewable(String(url))){
+      S27VideoReview.open({ taskId:String(taskId), url:String(url), label:String(label||'Video'), sourceEl:btn }); return;
+    }
+    if(window.S27Review && S27Review.pickReviewer){ S27Review.pickReviewer(String(url), {taskId:String(taskId), label:String(label||'Bestand'), sourceEl:btn}); return; }
+  }catch(e){}
+  window.open(url,'_blank','noopener');
+}
+// één bestand-regel in de 'Alle bestanden bekijken'-dropdown: naam + 'Bekijk & geef feedback'.
+function _ondFileFeedbackRow(s, f, br){
+  return '<div class="ond-file"><span class="df-ic">'+ic(f.type==='video'?'play':f.type==='img'?'img':'doc',16)+'</span>'
+    +'<span class="ond-file-nm">'+esc(f.label||'Bestand')+'</span>'
+    +'<button class="btn btn-branch br-'+br+' btn-sm" onclick="ondOpenFile(this,\''+jsEsc(s.id)+'\',\''+jsEsc(f.url)+'\',\''+jsEsc(f.label||'Bestand')+'\')">'+ic('st_feedback',14)+' Bekijk &amp; geef feedback</button></div>';
+}
 function _ondTaakRij(s, br){
   var alle=s.bestanden||[];
   var fotoMaps=alle.filter(function(f){ return /drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\//.test(f.url||''); });
   var files=alle.filter(function(f){ return fotoMaps.indexOf(f)<0; });
-  var isWait=(s.status==='wait'||s.status==='sent');
   var chip=ondChip(s);   // uniforme sublabel (item 17)
-  var head='<div class="ond-head">'+ic(_ondTaakIcoon(files,fotoMaps),16)+'<span class="ond-naam">'+esc(s.naam)+'</span>'+chip+'</div>';
+  // max 1 actieknop (item 7): 'Alle bestanden bekijken' → klap een dropdown open met per bestand
+  // een 'Bekijk & geef feedback'-knop. Toon dit voor ELKE niet-afgewerkte status met bestanden
+  // (anders verdwijnen opgeleverde bestanden van een in-productie-project). Geel/beige proces-
+  // banner valt weg (zie onderdelenBlokAlg).
+  var showFb=(s.status!=='done' && files.length>0);
+  var act='';
+  if(showFb){
+    act='<button class="btn btn-branch br-'+br+' btn-sm ond-actbtn" onclick="ondToggleInfo(this)">'+ic('doc',14)+' Alle bestanden bekijken ('+files.length+')</button>';
+  }
+  var head='<div class="ond-head">'+ic(_ondTaakIcoon(files,fotoMaps),16)+'<span class="ond-naam">'+esc(s.naam)+'</span>'+chip+act+'</div>';
   var body='';
-  // bestanden klaar voor feedback: in-portal feedbackmodule per bestand
-  if(isWait && files.length){
-    body+='<div class="ond-info open-static"><div class="subtask-files">'+files.map(function(f){
-      return f.type==='video' ? _ondVideoFileRow(s,f,br) : deliverFileRow(f,{br:br,done:false,taskId:s.id});
-    }).join('')+'</div></div>';
+  if(showFb){
+    body+='<div class="ond-info"><div class="ond-files">'+files.map(function(f){ return _ondFileFeedbackRow(s,f,br); }).join('')+'</div></div>';
   } else if(s.status==='done' && files.length){
-    // na goedkeuring: downloadlinks
+    // na goedkeuring: downloadlinks (blijven direct zichtbaar)
     body+='<div class="ond-info open-static"><div class="subtask-files">'+files.map(function(f){
       return deliverFileRow(f,{br:br,done:true,taskId:s.id});
     }).join('')+'</div></div>';
@@ -4123,7 +4144,6 @@ function _ondTaakRij(s, br){
 }
 function onderdelenBlokAlg(det, p){
   var subs=(det&&det.subtasks)||[];
-  if(!subs.length) return null;
   var br=p.br||'blue';
   // pure projectmanagement-subtaken zonder oplevering zijn intern proceswerk -> niet tonen
   var rows=subs.filter(function(s){
@@ -4132,7 +4152,19 @@ function onderdelenBlokAlg(det, p){
     if(isPM && !hasF) return false;
     return true;
   });
-  if(!rows.length) return null;
+  // FALLBACK (item 7): geen opleverbare subtaken maar wél deliverables op de hoofdtaak →
+  // toon één 'project'-regel met status + 'Alle bestanden bekijken'-dropdown, zodat de
+  // geel/beige proces-banner nooit verschijnt en alle takken dezelfde look krijgen.
+  if(!rows.length){
+    var rootDelivs=(det&&det.deliverables)||[];
+    if(!rootDelivs.length) return null;
+    var synth={ id:(p.id||(det&&det.id)||''), naam:(p.name||det&&det.name||'Opgeleverde bestanden'),
+      status:(p.status||(det&&det.status)||'wait'), statusRaw:(p.statusRaw||(det&&det.statusRaw)||''),
+      bestanden:rootDelivs };
+    return '<div class="section-head ond-kop"><h2>Onderdelen</h2></div>'
+      +'<p class="sdesc" style="margin:-2px 0 12px">Hier zie je de status van je project. Zodra er iets klaarstaat, bekijk je het en geef je je akkoord of feedback &mdash; rechtstreeks hier.</p>'
+      +_ondTaakRij(synth,br);
+  }
   var h='<div class="section-head ond-kop"><h2>Onderdelen</h2><span class="count">'+rows.length+'</span></div>';
   h+='<p class="sdesc" style="margin:-2px 0 12px">Hier zie je de status van elk onderdeel. Zodra er iets klaarstaat, bekijk je het en geef je je akkoord of feedback &mdash; rechtstreeks hier.</p>';
   h+=rows.map(function(s){ return _ondTaakRij(s,br); }).join('');
