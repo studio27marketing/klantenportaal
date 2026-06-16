@@ -574,7 +574,9 @@
 @media(max-width:760px){.soc-period{top:127px;}}
 /* TEAM-view: menubalk (tabs) bovenaan + controls-rij (platform + periode) er net onder, samen in één
    gepinde .ads-stickytop onder de topbar (60px). Geen losse offset-rekensom meer → geen verticale gaten. */
-.panel[data-screen-label="advertenties"] .ads-stickytop{position:sticky;top:60px;z-index:9;background:var(--paper,#faf9f5);margin-top:-20px;padding-top:6px;}
+/* achtergrond = ZELFDE als de pagina (--paper-2 crème, NIET --paper=wit) zodat de gepinde header geen
+   zichtbaar wit kader vormt achter de menubalk; blijft opaak zodat content er bij scrollen niet doorheen schijnt. */
+.panel[data-screen-label="advertenties"] .ads-stickytop{position:sticky;top:60px;z-index:9;background:var(--paper-2,#FAF7F2);margin-top:-20px;padding-top:6px;}
 .panel[data-screen-label="advertenties"] .ads-stickytop .soc-subnav-row{position:static;margin:0 0 10px;}
 /* TEAM-view: de periode-knop zit nu RECHTSBOVEN in de menubalk-rij (.soc-subnav-act). Hij moet daar als
    gewone inline-knop staan — position:static, zodat de erfde top:60px géén effect heeft (top werkt enkel op
