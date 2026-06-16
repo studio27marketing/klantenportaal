@@ -362,6 +362,10 @@
 .sb-item:hover .sb-ic.brand-ic,
 .sb-item.active .sb-ic.brand-ic{color:var(--ink-4);}
 .sb-ic svg{display:block;}
+/* brand-iconen tekenen tot aan de viewBox-rand; de geometrische stroke steekt een halve lijndikte
+   buiten de rand uit. Zonder overflow:visible knipt de svg-viewport die buitenste helft vierkant af
+   (lijnen ogen dan afgesneden/ongelijk). overflow:visible toont de volledige, overal even dikke lijn. */
+.sb-ic.brand-ic svg{overflow:visible;}
 /* op tablet/mobiel telt het bestaande hamburger-patroon: rail negeren */
 @media(max-width:980px){ .sb-dock-toggle{display:none!important;} .sb-edge{display:none!important;} body.sb-rail .sidebar{width:264px;} body.sb-rail .topbar,body.sb-rail .page{margin-left:0;} }
 
