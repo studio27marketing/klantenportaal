@@ -532,21 +532,9 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;}
 .bot-fab svg{width:28px;height:28px;animation:sparklePulse 2.4s var(--ease-out) infinite;filter:drop-shadow(0 1px 3px rgba(0,0,0,.25));}
 @keyframes fabHalo{0%{box-shadow:0 0 0 0 rgba(48,131,220,.5);}70%{box-shadow:0 0 0 16px rgba(48,131,220,0);}100%{box-shadow:0 0 0 0 rgba(48,131,220,0);}}
 
-/* ---------- Login loader ---------- */
-#loader{position:fixed;inset:0;z-index:300;background:var(--paper-2);display:none;flex-direction:column;align-items:center;justify-content:center;gap:24px;transition:opacity .45s var(--ease-out);}
-#loader.show{display:flex;}
-/* Liquid-glass "27" met een real-time voortgangsring eromheen. GEEN achtergrond-bol/halo. */
-.loader-stage{position:relative;width:120px;height:120px;display:grid;place-items:center;}
-/* witte voortgangsring — plakt op de rand van de cirkel, ligt erbovenop (z-index) */
-.loader-prog{position:absolute;inset:0;transform:rotate(-90deg);z-index:2;}   /* start bovenaan */
-.loader-prog .lp-track{fill:none;stroke:rgba(35,15,35,.07);stroke-width:6;}
-.loader-prog .lp-fill{fill:none;stroke:#fff;stroke-width:6;stroke-linecap:round;
-  stroke-dasharray:339.292;stroke-dashoffset:319;transition:stroke-dashoffset .5s var(--ease-out);}
-/* volle, VLAKKE gekleurde cirkel — geen schaduwen/glans (frisser, niet oudbollig) */
-.loader-badge{position:relative;z-index:1;width:108px;height:108px;border-radius:50%;overflow:hidden;display:grid;place-items:center;
-  background:linear-gradient(150deg,#4F9BEA 0%,var(--s27-blue) 46%,#7C49D0 100%);}
-.loader-27{width:55%;height:auto;fill:#fff;}
-.loader-text{font-family:var(--font-display);font-weight:700;font-size:14.5px;color:var(--ink-3);letter-spacing:-0.01em;}
+/* ---------- Boot/loading: video-loader (morph "27") — vervangt de oude splash + ring ---------- */
+#loader{position:fixed;inset:0;z-index:9000;background:#bcccee;display:block;opacity:1;transition:opacity .5s var(--ease-out);}
+#loader video{width:100%;height:100%;object-fit:cover;display:block;background:#bcccee;}
 .bot-panel{position:fixed;bottom:26px;right:26px;width:min(380px,calc(100vw - 32px));height:min(560px,80vh);background:var(--paper);
   border-radius:var(--r-lg);box-shadow:var(--sh-lg);z-index:85;display:none;flex-direction:column;overflow:hidden;
   animation:popIn .3s var(--bounce);transform-origin:bottom right;}

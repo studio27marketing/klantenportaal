@@ -170,6 +170,7 @@ async function initRealAuth(){
   try { await import(AUTH_JS_URL); } catch(e){ loginErr('Kon de loginmodule niet laden. Ververs de pagina.'); return; }
   if(!window.S27Auth){ loginErr('Loginmodule niet beschikbaar.'); return; }
   window.S27Auth.subscribe(async function(s){
+    if(s.phase && s.phase!=='ready'){ try{ hideLoader(); }catch(e){} }   // niet (meer) ingelogd → boot-video weg, login tonen
     if(s.phase==='signed_out'){ _enrollStarted=false; renderLogin('v2'); loginErr(s.error||''); }
     else if(s.phase==='email_sent'){ renderLoginEmailSent(); }
     else if(s.phase==='mfa_challenge'){ renderLoginMfa(); loginErr(s.error||''); }
@@ -356,7 +357,7 @@ async function enterAdminMode(){
   var bewaar=function(list){ try{ localStorage.setItem('s27_admin_companies', JSON.stringify({_t:Date.now(), list:list})); }catch(e){} };
   if(cached){
     state.adminCompanies=cached;
-    openAdminPicker();
+    openAdminPicker(); hideLoader();   // kiezer staat er meteen → boot-video uitfaden
     S27DATA.loadAdminCompanies().then(function(list){
       if(!Array.isArray(list)||!list.length) return;
       state.adminCompanies=list; bewaar(list);
@@ -450,20 +451,11 @@ async function adminEnterCompany(id){
 /* ---- app/login tonen + loader ---- */
 function showApp(){ $id('app').classList.add('show'); const l=$id('login'); l.classList.add('hide'); l.style.opacity=''; window.scrollTo(0,0); }
 function showLogin(){ $id('app').classList.remove('show'); const l=$id('login'); l.classList.remove('hide'); l.style.opacity='1'; }
-function playLoader(){ const loader=$id('loader'); if(!loader) return; state._loaderAt=Date.now(); loader.style.opacity='1'; loader.classList.add('show'); loaderStep(6,'Je portaal wordt klaargezet…'); }
-// laadfase: vult de voortgangsring (rond de 27) naar pct% + optioneel label.
-// Volgt de échte progressie (geen fake animatie). 2*PI*r met r=54 => omtrek 339.292.
-function loaderStep(pct,label){
-  try{
-    var l=$id('loader'); if(!l) return;
-    var pc=Math.max(4,Math.min(100,pct));
-    var r=l.querySelector('.lp-fill'); if(r) r.style.strokeDashoffset=(339.292*(1-pc/100)).toFixed(2);
-    var b=l.querySelector('.loader-bar i'); if(b) b.style.width=pc+'%';   // legacy-balk (indien aanwezig)
-    if(label){ var t=l.querySelector('.loader-text'); if(t) t.textContent=label; }
-  }catch(e){}
-}
-// Loader pas verbergen wanneer de inhoud écht klaar is (geen mock-flits meer). Min. 450ms tegen geflikker.
-function hideLoader(){ const loader=$id('loader'); if(!loader) return; loaderStep(100); const wait=Math.max(0, 450-(Date.now()-(state._loaderAt||0))); setTimeout(()=>{ loader.style.opacity='0'; setTimeout(()=>{ try{loader.classList.remove('show');}catch(e){} },460); }, wait); }
+// Video-loader (de "27"-morph in index.html). playLoader toont 'm, loaderStep stuurt de
+// VIDEOPOSITIE op basis van de laadvoortgang (pct), hideLoader speelt 'm uit + fadet weg.
+function playLoader(){ state._loaderAt=Date.now(); try{ if(window.__vidLoader) window.__vidLoader.show(); }catch(e){} }
+function loaderStep(pct,label){ try{ if(window.__vidLoader) window.__vidLoader.step(pct); }catch(e){} }   // pct (0-100) => videopositie; label genegeerd (geen tekst meer)
+function hideLoader(){ try{ if(window.__vidLoader) window.__vidLoader.finish(); }catch(e){} }
 function onSessionExpired(msg){
   stopChatPoll();
   const b=document.createElement('div');

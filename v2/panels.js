@@ -1306,6 +1306,12 @@ function metaEnsureStyles(){
 .meta-lb-load .brand-spinner{width:40px;height:40px}
 .meta-lb-load span{font-family:var(--font-display);font-weight:700;font-size:13px;opacity:.92}
 .meta-lb-permalink{display:inline-flex;align-items:center;gap:6px;color:#fff;background:#3083DC;border-radius:999px;padding:8px 16px;font-weight:700;font-size:13px;text-decoration:none;margin:22px auto}
+/* laad-gating: spinner blijft OVER het beeld tot het echt geladen is (geen zwart kader), + nette fout-fallback */
+.meta-lb-stage .meta-lb-load.spin,.meta-car-slide .meta-lb-load.spin{position:absolute;inset:0;justify-content:center;padding:0;z-index:2}
+.meta-lb-stage:not(.is-loading) .meta-lb-load.spin,.meta-car-slide:not(.is-loading) .meta-lb-load.spin{display:none}
+.meta-lb-stage.is-loading img.meta-lb-media,.meta-car-slide.is-loading img{opacity:0}
+.meta-lb-box img.meta-lb-media,.meta-car-slide img{transition:opacity .22s ease}
+.meta-lb-err{position:absolute;inset:0;justify-content:center;padding:0;z-index:3;background:#000}
 /* Carrousel met klik-doorklik (pijlen + dots), per kaart in correcte verhouding */
 .meta-car{position:relative;background:#000;overflow:hidden}
 .meta-car-track{display:flex;transition:transform .32s cubic-bezier(.4,0,.2,1);touch-action:pan-y}
@@ -2970,18 +2976,22 @@ function _metaLbMedia(a){
     // is kort geldig, dus toon ALTIJD ook de permalink-fallback zodat de klant bij een verlopen video kan doorklikken.
     var flink=plink?'<a class="meta-lb-permalink" href="'+esc(plink)+'" target="_blank" rel="noopener">'+ic('play',14)+' Bekijk op Facebook</a>':'';
     // kolom-wrapper zodat de permalink-fallback ONDER de video/poster komt (niet ernaast in de flex-row van .meta-lb-stage)
-    if(vsrc) return '<div class="meta-lb-stage"><div class="meta-lb-col"><video class="meta-lb-vid" controls autoplay muted playsinline preload="metadata" poster="'+esc(poster)+'" src="'+esc(vsrc)+'"></video>'+flink+'</div></div>';
-    if(plink) return '<div class="meta-lb-stage"><div class="meta-lb-col">'+(poster?'<img class="meta-lb-media" src="'+esc(poster)+'" alt="" referrerpolicy="no-referrer">':'')+flink+'</div></div>';
+    if(vsrc) return '<div class="meta-lb-stage"><div class="meta-lb-col"><video class="meta-lb-vid" controls autoplay muted playsinline preload="metadata" poster="'+esc(poster)+'" src="'+esc(vsrc)+'" data-fb="'+esc(plink)+'" onerror="metaMediaErr(this)"></video>'+flink+'</div></div>';
+    if(plink) return '<div class="meta-lb-stage"><div class="meta-lb-col">'+(poster?'<img class="meta-lb-media" src="'+esc(poster)+'" alt="" referrerpolicy="no-referrer" data-fb="'+esc(plink)+'" onerror="metaMediaErr(this)">':'')+flink+'</div></div>';
     var pf=poster||a.image||a.thumb||'';
-    return pf?'<div class="meta-lb-stage"><img class="meta-lb-media" src="'+esc(pf)+'" alt="" referrerpolicy="no-referrer"></div>':'<div class="meta-lb-stage"><div class="meta-lb-load"><span>Video niet beschikbaar</span></div></div>';
+    return pf?_lbImgStage(pf,plink):'<div class="meta-lb-stage"><div class="meta-lb-load"><span>Video niet beschikbaar</span></div></div>';
   }
   var cards=(cm.cards&&cm.cards.length)?cm.cards:(a.cards||[]);
-  if(type==='carousel' && cards.length){
+  if(type==='carousel' && cards.length>1){
     _metaLbCar={idx:0,n:cards.length};
-    var slides=cards.map(function(c){
-      var inner=c.video?'<video src="'+esc(c.video)+'" controls playsinline preload="metadata" poster="'+esc(c.image||'')+'"></video>'
-                       :'<img src="'+esc(c.image||'')+'" alt="" referrerpolicy="no-referrer">';
-      return '<div class="meta-car-slide">'+inner+(c.title?'<div class="meta-car-t">'+esc(c.title)+'</div>':'')+'</div>';
+    // lazy: enkel de actieve kaart krijgt direct een src; de rest data-src (gehydrateerd bij navigeren) zodat
+    // we nooit alle full-res fbcdn-beelden tegelijk laden. Spinner-gate + onerror-fallback per kaart.
+    var slides=cards.map(function(c,j){
+      var act=(j===0); var fb=esc(c.permalink||'');
+      var inner = c.video
+        ? '<video '+(act?'src="'+esc(c.video)+'"':'data-src="'+esc(c.video)+'"')+' controls playsinline preload="none" poster="'+esc(c.image||'')+'" data-fb="'+fb+'" onerror="metaMediaErr(this)"></video>'
+        : _lbSpin()+'<img '+(act?'src="'+esc(c.image||'')+'"':'data-src="'+esc(c.image||'')+'" loading="lazy"')+' alt="" referrerpolicy="no-referrer" data-fb="'+fb+'" onload="_lbImgLoaded(this)" onerror="metaMediaErr(this)">';
+      return '<div class="meta-car-slide'+(c.video?'':' is-loading')+'">'+inner+(c.title?'<div class="meta-car-t">'+esc(c.title)+'</div>':'')+'</div>';
     }).join('');
     var dots=cards.map(function(c,j){ return '<button class="meta-car-dot'+(j===0?' on':'')+'" onclick="metaCarTo('+j+')" aria-label="Kaart '+(j+1)+'"></button>'; }).join('');
     return '<div class="meta-car" id="metaCar" ontouchstart="metaCarTouchStart(event)" ontouchend="metaCarTouchEnd(event)">'
@@ -2991,15 +3001,43 @@ function _metaLbMedia(a){
       +'<button class="meta-car-nav next" id="metaCarNext"'+(cards.length<2?' disabled':'')+' onclick="metaCarGo(1)" aria-label="Volgende">'+_metaChevR()+'</button>'
       +'<div class="meta-car-dots">'+dots+'</div></div>';
   }
+  // single image (ook een carrousel met exact 1 bruikbare kaart = gewone foto/video, geen overbodige nav-chrome)
+  if(type==='carousel' && cards.length===1){
+    var c0=cards[0];
+    if(c0.video) return _metaLbMedia({creativeMedia:{type:'video',video:c0.video,poster:c0.image||'',permalink:c0.permalink||''}});
+    if(!c0.image) return '<div class="meta-lb-stage"><div class="meta-lb-load"><span>Geen voorbeeld beschikbaar</span></div></div>';
+    return _lbImgStage(c0.image, c0.permalink||'');
+  }
   var src=cm.image||a.image||a.poster||a.thumb||'';
   if(!src) return '<div class="meta-lb-stage"><div class="meta-lb-load"><span>Geen voorbeeld beschikbaar</span></div></div>';
-  return '<div class="meta-lb-stage"><img class="meta-lb-media" src="'+esc(src)+'" alt="" referrerpolicy="no-referrer"></div>';
+  return _lbImgStage(src,'');
+}
+// spinner-overlay (blijft tot het beeld geladen is) + onload/onerror-helpers voor de lightbox-media
+function _lbSpin(){ return '<div class="meta-lb-load spin"><div class="brand-spinner"></div></div>'; }
+function _lbImgLoaded(el){ try{ var s=(el.closest&&(el.closest('.meta-car-slide')||el.closest('.meta-lb-stage'))); if(s) s.classList.remove('is-loading'); }catch(e){} }
+function _lbImgStage(src,plink){
+  return '<div class="meta-lb-stage is-loading">'+_lbSpin()+'<img class="meta-lb-media" src="'+esc(src)+'" alt="" referrerpolicy="no-referrer" data-fb="'+esc(plink||'')+'" onload="_lbImgLoaded(this)" onerror="metaMediaErr(this)"></div>';
+}
+// fbcdn-URL's verlopen snel -> nette fout-fallback i.p.v. een kapot/garbled kader, met permalink-doorklik indien beschikbaar
+function metaMediaErr(el){
+  if(!el || el.__err) return; el.__err=1;
+  var plink=(el.getAttribute && el.getAttribute('data-fb'))||'';
+  var host=(el.closest && (el.closest('.meta-car-slide')||el.closest('.meta-lb-col')||el.closest('.meta-lb-stage')))||el.parentNode;
+  try{ el.style.display='none'; }catch(e){}
+  if(host){
+    if(host.classList) host.classList.remove('is-loading');
+    if(!host.querySelector('.meta-lb-err')){
+      host.insertAdjacentHTML('beforeend','<div class="meta-lb-load meta-lb-err"><span>Voorbeeld niet meer beschikbaar</span>'+(plink?'<a class="meta-lb-permalink" style="margin-top:14px" href="'+esc(plink)+'" target="_blank" rel="noopener">Bekijk op Facebook</a>':'')+'</div>');
+    }
+  }
 }
 function _metaChevL(){ return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>'; }
 function _metaChevR(){ return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>'; }
 function metaCarTo(j){
   if(!_metaLbCar) return; j=Math.max(0,Math.min(_metaLbCar.n-1,j)); _metaLbCar.idx=j;
   var tr=document.getElementById('metaCarTrack'); if(tr) tr.style.transform='translateX(-'+(j*100)+'%)';
+  // lazy-hydrateer de actieve kaart + directe buren (data-src -> src), nooit alle full-res beelden tegelijk
+  if(tr){ var sl=tr.children; [j-1,j,j+1].forEach(function(kk){ if(kk<0||kk>=sl.length) return; var el=sl[kk].querySelector('[data-src]'); if(el){ el.src=el.getAttribute('data-src'); el.removeAttribute('data-src'); } }); }
   var pos=document.getElementById('metaCarPos'); if(pos) pos.textContent=(j+1);
   var prev=document.getElementById('metaCarPrev'); if(prev) prev.disabled=(j<=0);
   var next=document.getElementById('metaCarNext'); if(next) next.disabled=(j>=_metaLbCar.n-1);
@@ -3027,6 +3065,7 @@ function openMetaCreative(i){
     var cur=document.getElementById('metaLightbox'); if(!cur || cur.style.display==='none') return;
     var note=((a.creativeMedia&&a.creativeMedia.type==='video')||a.format==='video') && !((a.creativeMedia&&a.creativeMedia.video)||a.videoSrc||(a.creativeMedia&&a.creativeMedia.permalink)||a.videoPermalink)?' — video niet beschikbaar':'';
     cur.innerHTML='<div class="meta-lb-box" onclick="event.stopPropagation()">'+_metaLbMedia(a)+'<div class="meta-lb-cap"><span>'+esc(a.name||'Advertentie')+note+'</span><button class="btn btn-ghost btn-sm" onclick="metaCloseLightbox()">Sluiten</button></div></div>';
+    if(_metaLbCar) metaCarTo(0);   // pre-hydrateer kaart 1 (+buur 2) zodat eerste bladeren vlot is
   });
 }
 
@@ -4457,14 +4496,7 @@ function buildModal(id, from){
    ========================================================= */
 function buildOverlays(){
   return `
-  <!-- Login loader -->
-  <div id="loader">
-    <div class="loader-stage">
-      <svg class="loader-prog" viewBox="0 0 120 120" aria-hidden="true"><defs><linearGradient id="lpGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3083DC"/><stop offset="1" stop-color="#9441DB"/></linearGradient></defs><circle class="lp-track" cx="60" cy="60" r="54"/><circle class="lp-fill" cx="60" cy="60" r="54"/></svg>
-      <div class="loader-badge"><svg class="loader-27" viewBox="782 34 210 130" xmlns="http://www.w3.org/2000/svg"><path d="M788.07,158.63v-24.58l42.88-39.66c2.71-2.6,4.71-4.86,6.02-6.78,1.3-1.92,2.17-3.64,2.63-5.17,.45-1.52,.68-2.97,.68-4.32,0-2.94-.96-5.22-2.88-6.86-1.92-1.64-4.8-2.46-8.64-2.46-3.5,0-6.84,.93-10,2.8-3.16,1.86-5.65,4.61-7.46,8.22l-30.17-15.08c4.29-8.13,10.73-14.74,19.32-19.83,8.59-5.09,19.26-7.63,32.03-7.63,9.38,0,17.68,1.53,24.91,4.58,7.23,3.05,12.88,7.35,16.95,12.88,4.07,5.54,6.1,12.09,6.1,19.66,0,3.84-.48,7.68-1.44,11.52-.96,3.84-2.91,7.88-5.85,12.12-2.94,4.24-7.29,8.96-13.05,14.15l-32.2,29.32-6.27-13.9h61.52v31.01h-95.08Z"/><path d="M908.23,158.63l44.74-104.4,10.68,16.78h-56.27l15.59-18.13v35.42h-33.05V40h101.52v24.58l-39.49,94.06h-43.72Z"/></svg></div>
-    </div>
-    <div class="loader-text">Je portaal wordt klaargezet…</div>
-  </div>
+  <!-- (de loader staat nu statisch als video-loader in index.html — #loader/#vidload) -->
 
   <!-- Notification panel -->
   <div class="notif-panel" id="notifPanel">
