@@ -411,7 +411,7 @@ function takContactCard(key, T, actief){
   var rol=hc?'Werkt aan jouw '+T.label.toLowerCase()+'-projecten':'Jouw accountmanager';
   return '<div class="takcontact card br-'+T.br+'"><span class="dc-av" style="background:var(--s27-'+T.br+')">'+esc(ini)+'</span>'
     +'<div class="takcontact-tx"><b>'+esc(naam)+'</b><span>'+esc(rol)+'</span></div>'
-    +((state&&state.adminMode)?'<button class="btn btn-branch br-'+T.br+' btn-sm" onclick="openMeetingPlannerForTak(\''+key+'\')">'+ic('cal',15)+' Plan een meeting</button>':'')+'</div>';
+    +((typeof isRichView==='function'&&isRichView())?'<button class="btn btn-branch br-'+T.br+' btn-sm" onclick="openMeetingPlannerForTak(\''+key+'\')">'+ic('cal',15)+' Plan een meeting</button>':'')+'</div>';
 }
 function takArchiefSectie(key, T){
   if(state.demoMode){
@@ -1038,7 +1038,9 @@ function _socAccountName(net){
    recht op de bedrijf-taak (worker gate't dezelfde regel server-side — dit is enkel UI). */
 function socialsEditable(){
   if(state.demoMode) return true;
-  if(state.adminMode) return true;
+  // In ClientView (staff bekijkt als klant) spiegelen we exact wat de klant ziet: enkel het
+  // module-recht, niet het automatische staff-recht. isRichView() = teamweergave -> altijd bewerkbaar.
+  if(typeof isRichView==='function' && isRichView()) return true;
   var d=state.data&&state.data.dashboard;
   return !!(d&&d.modules&&d.modules.socials_bewerkbaar===true);
 }

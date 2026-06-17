@@ -318,8 +318,16 @@ function toggleClientView(){
   if(state.data){ state.data.metaAds=null; state.data.metaAdsRich=null; state.data.googleAds=null; state.data.googleAdsRich=null; state.data.metricoolStats=null; state.data.metricoolStatsRich=null; state.data.metricoolPostStats=null; }
   // team<->client wisselt het periodevenster (team = t/m vandaag, client = t/m gisteren) -> herbereken
   if(state._adsPeriod && typeof adsPeriodWindow==='function'){ var _w=adsPeriodWindow(state._adsPeriod.preset); if(_w){ state._adsPeriod.from=_w.from; state._adsPeriod.to=_w.to; } }
-  if(typeof currentTab==='string' && currentTab) goTab(currentTab);   // huidige tab in de juiste weergave herladen
+  // ZIJBALK-/CHROME-gating meteen aanpassen aan de nieuwe weergave (bv. Offertes-tab verdwijnt in ClientView).
+  // goTab() hertekent enkel het PANEEL; de sidebar-nav + topbar-chrome moeten apart herzet worden.
+  if(typeof applyTakVisibility==='function') applyTakVisibility();
+  // In ClientView nooit op een TEAM-ONLY tab blijven staan (bv. Offertes) -> val terug op Home zoals een klant ziet.
+  var _tab=currentTab;
+  if(state._adminClientView && ADMIN_ONLY_TABS.indexOf(_tab)>=0) _tab='start';
+  if(typeof _tab==='string' && _tab) goTab(_tab);   // (huidige of veilige) tab in de juiste weergave herladen
 }
+// tabs die ENKEL in de teamweergave bestaan (niet zichtbaar/relevant voor een klant)
+var ADMIN_ONLY_TABS=['offertes'];
 function updateAdminViewToggle(){
   var b=$id('adminViewToggle'); if(!b) return;
   var client=!!(state.adminMode && state._adminClientView);
