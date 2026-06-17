@@ -632,17 +632,19 @@
   // Google Ads real-time (direct via Google Ads API, geen Make) — zelfde periode-contract als Meta.
   DATA.loadGoogleAds = async function(opts){
     var o = (typeof opts === 'string') ? { period:opts } : (opts || {});
-    if(!live()){ state.data.googleAds={linked:false}; return false; }
+    if(!live()){ state.data.googleAds={linked:false}; return false; }   // demo/niet-live = legitiem geen Google
     var bid = state.activeBedrijf || '';
-    if(!bid){ state.data.googleAds={linked:false}; return false; }
+    if(!bid){ state.data.googleAds=null; return false; }               // bedrijf nog niet klaar -> null = opnieuw proberen zodra wel
     try{
       var payload = (o.from && o.to) ? base({ from:o.from, to:o.to, compare:o.compare||'none' }) : base({ period:(o.period||'last_7d') });
       var res = await api(ENDPOINTS.googleAds, payload);
       var j = (res && res.ok && res.data) ? res.data : null;
-      if(!j || !j.ok){ state.data.googleAds={linked:false}; return false; }
+      // TRANSIENTE fout (geen geldige response / !ok) -> NIET als sticky {linked:false} cachen, maar null zodat de trigger
+      // bij switch/navigatie opnieuw probeert. Enkel een ECHTE worker-respons (ook {ok:true,linked:false}) wordt bewaard.
+      if(!j || !j.ok || (j.error && !(j.campaigns&&j.campaigns.length))){ state.data.googleAds=null; return false; }   // ook een lege error-respons = transient -> retry
       state.data.googleAds = j;   // { linked, account, currency, period, kpis, prevKpis, campaigns, trend, error }
       return true;
-    }catch(e){ state.data.googleAds={linked:false}; return false; }
+    }catch(e){ state.data.googleAds=null; return false; }              // netwerk/parse-fout = transient -> retry toelaten
   };
   DATA.googleAds = function(){ return state.data.googleAds; };
 
@@ -672,17 +674,18 @@
   // ADMIN (staff): uitgebreide Google-rapportage (team-weergave). Acting-as-scoping via de gateway.
   DATA.loadGoogleAdsRich = async function(opts){
     var o = (typeof opts === 'string') ? { period:opts } : (opts || {});
-    if(!live()){ state.data.googleAdsRich={linked:false}; return false; }
+    if(!live()){ state.data.googleAdsRich={linked:false}; return false; }   // demo/niet-live = legitiem geen Google
     var bid = state.activeBedrijf || '';
-    if(!bid){ state.data.googleAdsRich={linked:false}; return false; }
+    if(!bid){ state.data.googleAdsRich=null; return false; }               // bedrijf nog niet klaar -> retry zodra wel
     try{
       var payload = (o.from && o.to) ? base({ from:o.from, to:o.to, compare:o.compare||'none' }) : base({ period:(o.period||'last_30d') });
       var res = await api(ENDPOINTS.googleAdsRich, payload);
       var j = (res && res.ok && res.data) ? res.data : null;
-      if(!j || !j.ok){ state.data.googleAdsRich={linked:false}; return false; }
+      // TRANSIENTE fout -> null (geen sticky 'niet gekoppeld'); enkel een echte respons (ook {ok:true,linked:false}) bewaren
+      if(!j || !j.ok || (j.error && !(j.campaigns&&j.campaigns.length))){ state.data.googleAdsRich=null; return false; }   // lege error-respons = transient -> retry
       state.data.googleAdsRich = j;   // { linked, account, currency, kpis, prevKpis, campaigns, keywords, error }
       return true;
-    }catch(e){ state.data.googleAdsRich={linked:false}; return false; }
+    }catch(e){ state.data.googleAdsRich=null; return false; }              // netwerk/parse-fout = transient -> retry toelaten
   };
   DATA.googleAdsRich = function(){ return state.data.googleAdsRich; };
 

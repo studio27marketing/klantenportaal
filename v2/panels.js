@@ -1254,7 +1254,15 @@ function adsPlat(p){ p=String(p||'').toLowerCase(); return ADS_PLAT[p]||[(p?p.ch
 function adsObjective(o){ o=String(o||'').toUpperCase(); var m={OUTCOME_LEADS:'Leads',OUTCOME_SALES:'Verkoop',OUTCOME_TRAFFIC:'Verkeer',OUTCOME_AWARENESS:'Naamsbekendheid',OUTCOME_ENGAGEMENT:'Betrokkenheid',OUTCOME_APP_PROMOTION:'App-promotie',LINK_CLICKS:'Klikken',LEAD_GENERATION:'Leads',CONVERSIONS:'Conversies'}; return m[o]||(o?o.replace(/^OUTCOME_/,'').replace(/_/g,' ').toLowerCase():''); }
 function adsNum(n){ return (Number(n)||0).toLocaleString('nl-BE'); }
 function adsEur(n){ return '€ '+(Number(n)||0).toLocaleString('nl-BE',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-function setAdsPlatform(p){ state._adsPlatform=p; state._adsPlatMenuOpen=false; if(p!=='google' && state._adsTab==='maand') state._adsTab='samengevat'; renderPanel('advertenties'); _adsApplyAccent(); if(isRichView()){ if(adsActivePlatform()==='google') googleRichMountTabCharts(); else adsRichMountTabCharts(); } else adsClientMountChart(); }
+function setAdsPlatform(p){ state._adsPlatform=p; state._adsPlatMenuOpen=false; if(p!=='google' && state._adsTab==='maand') state._adsTab='samengevat'; if(p==='google') adsGoogleResetLoad(); renderPanel('advertenties'); _adsApplyAccent(); if(isRichView()){ if(adsActivePlatform()==='google') googleRichMountTabCharts(); else adsRichMountTabCharts(); } else adsClientMountChart(); }
+// Reset de Google-laadstaat: backoff-timestamps + retry-tellers + een stale FAILURE/error-respons wissen, zodat de
+// eerstvolgende render gegarandeerd een verse load probeert (na switch naar Google of de 'Opnieuw proberen'-knop).
+// GOEDE data (linked:true met campagnes) blijft staan -> geen onnodige herlaad.
+function adsGoogleResetLoad(){
+  state._gadsRichAt=0; state._gadsAt=0; state._gadsRichTries=0; state._gadsTries=0;
+  ['googleAdsRich','googleAds'].forEach(function(k){ try{ var d=state.data&&state.data[k]; if(d && (d.linked===false || (d.error && !(d.campaigns&&d.campaigns.length)))) state.data[k]=null; }catch(e){} });
+}
+function adsGoogleRetry(){ adsGoogleResetLoad(); renderPanel('advertenties'); }
 function campaignCard(c){
   var pl=adsPlat(c.platform);
   var metrics=[['Besteed',adsEur(c.budget)],['Vertoningen',adsNum(c.impressies)],['Klikken',adsNum(c.klikken)],['CTR',(Number(c.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%'],['Bereik',adsNum(c.bereik)]];
@@ -2318,11 +2326,20 @@ function adsPlatformSwitch(){ return adsPlatformPicker(); }
 function googleAdsBody(){
   var g=(window.S27DATA&&S27DATA.googleAds&&S27DATA.googleAds())||null;
   if(g===null){
-    if(!state._gadsLoading && !state.demoMode && window.S27DATA && S27DATA.loadGoogleAds){
-      state._gadsLoading=true; var pp=adsPeriod();
-      S27DATA.loadGoogleAds({from:pp.from,to:pp.to,compare:pp.compare}).then(function(){ state._gadsLoading=false; if(adsActivePlatform()==='google' && document.querySelector('.panel[data-screen-label="advertenties"]')) renderPanel('advertenties'); }).catch(function(){ state._gadsLoading=false; });
+    var tries=state._gadsTries||0;
+    if(!state.demoMode && window.S27DATA && S27DATA.loadGoogleAds && tries<4){
+      var _now=Date.now();
+      if(!state._gadsAt || _now-state._gadsAt>2500){
+        state._gadsAt=_now; var pp=adsPeriod();
+        S27DATA.loadGoogleAds({from:pp.from,to:pp.to,compare:pp.compare}).then(function(loaded){
+          if(!(adsActivePlatform()==='google' && document.querySelector('.panel[data-screen-label="advertenties"]'))) return;
+          if(loaded){ state._gadsTries=0; renderPanel('advertenties'); }
+          else { state._gadsTries=(state._gadsTries||0)+1; setTimeout(function(){ if(adsActivePlatform()==='google' && document.querySelector('.panel[data-screen-label="advertenties"]')) renderPanel('advertenties'); }, 2600); }
+        }).catch(function(){ state._gadsTries=(state._gadsTries||0)+1; });
+      }
+      return '<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je Google Ads-campagnes worden real-time opgehaald…</p></div>';
     }
-    return '<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je Google Ads-campagnes worden real-time opgehaald…</p></div>';
+    return '<div class="card" style="padding:26px;text-align:center;color:var(--ink-3)">Je Google Ads-campagnes konden even niet geladen worden.<br><button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="adsGoogleRetry()">'+ic('arrow',14)+' Opnieuw proberen</button></div>';
   }
   if(!g.linked){ return '<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen Google Ads-account gekoppeld</div><div style="color:var(--ink-3);max-width:470px;margin:0 auto;line-height:1.55">Zodra je Google Ads-account aan je portaal gekoppeld is, zie je hier real-time je campagnes en cijfers. Vraag gerust je contactpersoon bij Studio&nbsp;27.</div></div>'; }
   return '<div id="adsBody">'+googleOverviewInner()+'</div>';   // periode zit nu in de client-menubalk (adsClientChrome)
@@ -2388,11 +2405,22 @@ function googleRichTabBody(){
   if(adsRichTab()==='meeting') return adsWsMeetingTab();
   var g=(window.S27DATA&&S27DATA.googleAdsRich&&S27DATA.googleAdsRich());
   if(g===undefined||g===null){
-    if(!state._gadsRichLoading && !state.demoMode && window.S27DATA && S27DATA.loadGoogleAdsRich){
-      state._gadsRichLoading=true; var pp=adsPeriod();
-      S27DATA.loadGoogleAdsRich({from:pp.from,to:pp.to,compare:pp.compare}).then(function(){ state._gadsRichLoading=false; if(isRichView()&&adsActivePlatform()==='google'&&document.querySelector('.panel[data-screen-label="advertenties"]')){ var b=document.getElementById('adsBody'); if(b){ b.innerHTML=googleRichTabBody(); googleRichMountTabCharts(); } } }).catch(function(){ state._gadsRichLoading=false; });
+    var tries=state._gadsRichTries||0;
+    if(!state.demoMode && window.S27DATA && S27DATA.loadGoogleAdsRich && tries<4){
+      var _now=Date.now();
+      // timestamp-backoff i.p.v. een boolean die kan blijven hangen; transiente fout -> data=null -> hier opnieuw proberen
+      if(!state._gadsRichAt || _now-state._gadsRichAt>2500){
+        state._gadsRichAt=_now; var pp=adsPeriod();
+        S27DATA.loadGoogleAdsRich({from:pp.from,to:pp.to,compare:pp.compare}).then(function(loaded){
+          if(!(isRichView()&&adsActivePlatform()==='google'&&document.querySelector('.panel[data-screen-label="advertenties"]'))) return;
+          var b=document.getElementById('adsBody'); if(!b) return;
+          if(loaded){ state._gadsRichTries=0; b.innerHTML=googleRichTabBody(); googleRichMountTabCharts(); }
+          else { state._gadsRichTries=(state._gadsRichTries||0)+1; setTimeout(function(){ if(isRichView()&&adsActivePlatform()==='google'){ var bb=document.getElementById('adsBody'); if(bb){ bb.innerHTML=googleRichTabBody(); googleRichMountTabCharts(); } } }, 2600); }
+        }).catch(function(){ state._gadsRichTries=(state._gadsRichTries||0)+1; });
+      }
+      return '<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>De uitgebreide Google-rapportage wordt opgehaald…</p></div>';
     }
-    return '<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>De uitgebreide Google-rapportage wordt opgehaald…</p></div>';
+    return '<div class="card" style="padding:26px;text-align:center;color:var(--ink-3)">De Google-data kon even niet opgehaald worden.<br><button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="adsGoogleRetry()">'+ic('arrow',14)+' Opnieuw proberen</button></div>';
   }
   if(!g.linked) return googleRichNotLinked();
   if(g.error && !(g.campaigns&&g.campaigns.length) && !(g.kpis&&g.kpis.spend)) return '<div class="card" style="padding:26px;text-align:center;color:var(--ink-3)">De Google-data kon even niet opgehaald worden. Klik op verversen om opnieuw te proberen.</div>';
