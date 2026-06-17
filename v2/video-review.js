@@ -117,7 +117,7 @@
      ============================================================================= */
   function createPlayer() {
     var mode = 'vimeo', player = null, videoEl = null, containerEl = null;
-    var videoW = 1920, videoH = 1080, duration = 0, lastTime = 0, paused = true;
+    var videoW = 1920, videoH = 1080, duration = 0, lastTime = 0, paused = true, loopOn = false;
     var timeL = [], stateL = [];
     var emitTime = function () { timeL.forEach(function (f) { f(lastTime, duration); }); };
     var emitState = function (p) { stateL.forEach(function (f) { f(p); }); };
@@ -206,6 +206,14 @@
       play: function () { return mode === 'drive' ? videoEl.play() : player.play(); },
       toggle: function () { return paused ? (mode === 'drive' ? videoEl.play() : player.play()) : (mode === 'drive' ? videoEl.pause() : player.pause()); },
       isPaused: function () { return paused; },
+      // terug naar het begin + meteen verder spelen (Vimeo-stijl 'replay').
+      restart: async function () { await seekTo(0); try { return mode === 'drive' ? videoEl.play() : player.play(); } catch (e) { } },
+      // loop aan/uit (native): Vimeo player.setLoop, drive <video>.loop.
+      setLoop: function (b) { loopOn = !!b; if (mode === 'drive') { if (videoEl) videoEl.loop = loopOn; } else { try { player.setLoop(loopOn); } catch (e) { } } return loopOn; },
+      getLoop: function () { return loopOn; },
+      // kwaliteit: enkel zinvol voor Vimeo (meerdere renditions). Drive = 1 MP4 -> lege lijst (geen verzonnen opties).
+      getQualities: async function () { if (mode === 'drive') return []; try { return (await player.getQualities()) || []; } catch (e) { return []; } },
+      setQuality: async function (q) { if (mode === 'drive') return; try { await player.setQuality(q); } catch (e) { } },
       onTime: function (f) { timeL.push(f); },
       onState: function (f) { stateL.push(f); },
       getVisibleRect: getVisibleRect,
@@ -258,7 +266,7 @@
       '    <section class="vr-stagecol">' +
       '      <div class="vr-prevnote vr-hidden" id="vrPrev"></div>' +
       '      <div class="vr-stage" id="vrStage">' +
-      '        <div class="vr-wrap" id="vrWrap"><div id="vrHost"></div><div id="vrPins"></div><div id="vrOverlay"></div>' +
+      '        <div class="vr-wrap" id="vrWrap"><div id="vrHost"></div><div id="vrPins"></div><div id="vrOverlay"></div><div id="vrHoverHint" class="vr-hoverhint">klik om feedback te geven</div>' +
       '          <button id="vrFs" class="vr-fsbtn" title="Volledig scherm"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
       '        </div>' +
       '        <div class="vr-ctrl">' +
@@ -266,8 +274,11 @@
       '            <svg id="vrIcoPlay" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5Z"/></svg>' +
       '            <svg id="vrIcoPause" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="vr-hidden"><path d="M7 5h3.6v14H7zM13.4 5H17v14h-3.6z"/></svg>' +
       '          </button>' +
+      '          <button id="vrRestart" class="vr-ctrlbtn" title="Terug naar het begin" aria-label="Terug naar het begin"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg></button>' +
+      '          <button id="vrLoop" class="vr-ctrlbtn" title="Herhalen (loop)" aria-label="Herhalen" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg></button>' +
       '          <div id="vrBar"><div id="vrProg"></div></div>' +
       '          <span id="vrTime" class="vr-time">0:00.0</span>' +
+      '          <select id="vrQual" class="vr-qual vr-hidden" title="Videokwaliteit" aria-label="Videokwaliteit"></select>' +
       '        </div>' +
       '        <p class="vr-hint">📍 Klik of tik op de video om een feedbackpunt te plaatsen — de video pauzeert vanzelf.</p>' +
       '      </div>' +
@@ -420,6 +431,27 @@
       $('vrIcoPause').classList.toggle('vr-hidden', isPaused);
     });
     $('vrPlay').addEventListener('click', function () { P.toggle(); });
+    // terug naar het begin (replay) + loop-toggle
+    $('vrRestart').addEventListener('click', function () { try { P.restart(); } catch (e) { } });
+    (function () {
+      var lb = $('vrLoop');
+      lb.addEventListener('click', function () { var on = P.setLoop(!P.getLoop()); lb.classList.toggle('vr-on', on); lb.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+    })();
+    // kwaliteitskeuze: ENKEL tonen als de speler echt meerdere resoluties aanbiedt (Vimeo).
+    // Drive/R2 = 1 MP4 -> geen menu (geen verzonnen sd/hd/4k die niet bestaan). Default = 'auto'
+    // (Vimeo adaptief = snelste laadtijd), de klant kan zelf naar een hogere resolutie schakelen.
+    (function () {
+      var sel = $('vrQual'); if (!sel) return;
+      P.getQualities().then(function (qs) {
+        if (!qs || qs.length < 2) return;   // 1 bron -> geen keuze
+        sel.innerHTML = qs.map(function (q) {
+          var lab = q.label || (q.id === 'auto' ? 'Auto' : q.id);
+          return '<option value="' + esc(q.id) + '"' + (q.active ? ' selected' : '') + '>' + esc(lab) + '</option>';
+        }).join('');
+        sel.classList.remove('vr-hidden');
+        sel.addEventListener('change', function () { P.setQuality(sel.value); });
+      }).catch(function () { });
+    })();
 
     /* ---- fullscreen (eigen element-fullscreen: pins blijven zichtbaar) ---- */
     $('vrFs').addEventListener('click', function () {

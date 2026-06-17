@@ -118,7 +118,7 @@ const spill = (st)=>{const m=STATUS_LABEL[st]||STATUS_LABEL.prog;return `<span c
 
 /* ===== live-data brug (S27DATA) met mock-fallback ===== */
 function _live(){ return !!(window.S27DATA && typeof state!=='undefined' && !state.demoMode && state.session); }
-function _projects(){ const p = window.S27DATA && S27DATA.projects(); return (p && p.length!==undefined) ? p : PROJECTS; }
+function _projects(){ const p = window.S27DATA && S27DATA.projects(); if(p && p.length!==undefined) return p; return state.demoMode ? PROJECTS : []; }   // LIVE: nooit terugvallen op voorbeeld-projecten
 // advertentie-taak = primaire discipline 'ads' OF uitsluitend ads-labels. Die leven ENKEL op de Ads-pagina.
 function _isAdProject(p){ if(!p) return false; if(p.discId==='ads') return true; var ls=p.labels||[]; return ls.length>0 && ls.every(function(l){return l.discId==='ads';}); }
 function _adProject(){ return _projects().filter(_isAdProject)[0] || null; }   // huidige-maand ads-taak (worker filtert al op due deze maand)
@@ -243,8 +243,6 @@ const _COCKPIT_MOCK = [
   {br:'purple',cat:'Video- en fotografie',title:'Klaar om in te plannen',ctx:'Je <b>productshoot</b> is klaar om ingepland te worden. Prik een datum die jou past.',cta:'Plan shoot',action:"openProject('p3')",tag:'binnenkort',urgent:true,icon:'st_plan'},
   {br:'green',cat:'Webdesign',title:'Bericht wacht op jou',ctx:'We hebben een vraag in de chat van je <b>nieuwe website</b>. Laat iets weten zodat we verder kunnen.',cta:'Open chat',action:"openProject('p2','berichten')",urgent:false,icon:'msg'}
 ];
-const _RUN_MOCK = [{br:'green',disc:'Website en SEO',name:'Nieuwe website & webshop',pct:62,status:'prog',label:'In productie'},{br:'blue',disc:'Strategie',name:'Merkstrategie 2026',pct:40,status:'wait',label:'Klaar voor feedback'},{br:'orange',disc:'Online adverteren',name:'Leadcampagne Q2',pct:78,status:'prog',label:'Live'}];
-const _DONE_MOCK = [{br:'yellow',name:'Contentkalender mei',disc:'Social media',when:'2 dagen geleden'},{br:'orange',name:'TikTok lentepromo',disc:'Online adverteren',when:'5 dagen geleden'},{br:'purple',name:'Sfeerreportage event',disc:'Video- en fotografie',when:'vorige week'}];
 function _cockpitCard(a){
   return `<div class="action-card ${a.urgent?'urgent':''} br-${a.br}">
     <div class="ac-top"><div class="ac-ico">${ic(a.icon||'st_feedback',19)}</div><div class="ac-titles"><span class="ac-cat">${esc(a.cat)}</span><h4>${esc(a.title)}</h4></div></div>
@@ -270,8 +268,11 @@ function panelStart(){
     cockHtml = cock.length
       ? `<div class="section-head"><h2>Voor jou te doen</h2><span class="count">${cock.length} ${cock.length===1?'item':'items'}</span></div><div class="cockpit-row">${cock.map(_cockpitCard).join('')}</div>`
       : `<div class="empty" style="margin-top:24px"><div class="em-ic">${ic('st_approved',64)}</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Alles is bij!</b><p style="margin:6px 0 0">Er staat momenteel niets op jou te wachten, wij werken ondertussen verder.</p></div>`;
-  } else {
+  } else if(state.demoMode){
     cockHtml = `<div class="section-head"><h2>Voor jou te doen</h2><span class="count">${_COCKPIT_MOCK.length} items</span></div><div class="cockpit-row">${_COCKPIT_MOCK.map(_cockpitCard).join('')}</div>`;
+  } else {
+    // LIVE zonder geladen cockpit -> laad-indicator, NOOIT de voorbeeld-actiekaarten.
+    cockHtml = `<div class="section-head"><h2>Voor jou te doen</h2></div><div class="empty" style="padding:40px 18px"><div class="brand-spinner" style="margin:0 auto"></div><p style="text-align:center;margin-top:10px">Je overzicht wordt geladen…</p></div>`;
   }
   return head + cockHtml;
 }
@@ -3159,13 +3160,17 @@ function panelMeetings(){
     upCount=up.length;
     listHtml = up.length ? up.map(m=>meetCard(m)).join('')
       : `<div class="mcard-empty"><div class="mcard-empty-ic">${ic('cal',32)}</div><b>Geen meetings gepland</b><p>Je hebt momenteel geen afspraken staan met Studio 27. Plan er hiernaast vlot eentje in, helemaal wanneer het jou past.</p></div>`;
-  } else {
+  } else if(state.demoMode){
     // demo: twee mock-afspraken in de nabije toekomst (zodat het overzicht leeft).
     const d1=new Date(Date.now()+6*86400000); d1.setHours(10,0,0,0);
     const d2=new Date(Date.now()+13*86400000); d2.setHours(14,0,0,0);
     upCount=2;
     listHtml = meetCard({dt:d1,titel:'Maandelijkse rapportage',link:'https://meet.google.com/'})
              + meetCard({dt:d2,titel:'Kick-off recruitmentvideo',link:''},'Kick-off');
+  } else {
+    // LIVE zonder geladen meetings -> eerlijke lege-staat, NOOIT verzonnen afspraken.
+    upCount=0;
+    listHtml = `<div class="mcard-empty"><div class="mcard-empty-ic">${ic('cal',32)}</div><b>Geen meetings gepland</b><p>Je hebt momenteel geen afspraken staan met Studio 27. Plan er hiernaast vlot eentje in, helemaal wanneer het jou past.</p></div>`;
   }
   // "Nog in te plannen": projecten met een wachtende meeting-plan-taak (cockpit plan_items, type meeting).
   const todo=_meetingsTodo();
@@ -4291,15 +4296,36 @@ function onderdelenBlok(det, p){
     }).join('');
   }
   if(shoots.length){ h+=kop(shoots.length===1?'Shoot':'Shoots',shoots.length)+shoots.map(function(s){ return _ondShootRij(s,br); }).join(''); }
-  if(edits.length){ h+=kop('Montage',edits.length)+edits.map(function(s){ return _ondEditRij(s,br); }).join(''); }
-  if(nab.length){ h+=kop('Nabewerking',nab.length)+nab.map(function(s){ return _ondEditRij(s,br); }).join(''); }
-  if(fb.length){
-    h+=kop('Feedbackrondes',fb.length);
-    h+=fb.map(function(s){
-      return '<div class="ond-row card br-'+br+'"><div class="ond-head">'+ic('st_feedback',15)+'<span class="ond-naam">'+esc(s.naam)+'</span><span class="ond-chip '+(s.status==='done'?'ond-chip-ok':'ond-chip-prog')+'">'+(s.status==='done'?'Verwerkt':'Ontvangen')+'</span></div></div>';
-    }).join('');
+  if(edits.length){
+    h+=kop('Montage',edits.length)+edits.map(function(s){ return _ondEditRij(s,br); }).join('');
+    // Feedbackrondes horen BIJ de montage (Vincent: 'onder het juiste onderdeel, niet apart') —
+    // WhatsApp-stijl in/uitklapbaar blok direct onder de montage-rijen.
+    if(fb.length) h+=_fbRondesBlock(fb,br);
   }
+  if(nab.length){ h+=kop('Nabewerking',nab.length)+nab.map(function(s){ return _ondEditRij(s,br); }).join(''); }
+  // Fallback: feedbackrondes zonder montage om onder te nesten -> toch tonen (eigen kop).
+  if(fb.length && !edits.length){ h+=kop('Feedbackrondes',fb.length)+_fbRondesBlock(fb,br); }
   return h||null;
+}
+// Naam van een feedbackronde opschonen: 'FB - Montage' -> 'Montage'. Nooit verzinnen, enkel prefix strippen.
+function _fbRondeNaam(n){ return String(n||'').replace(/^\s*fb\s*[-–]\s*/i,'').trim()||'Feedback'; }
+// WhatsApp-stijl feedbackronde-blok: in/uitklapbaar, chronologisch genummerd (Ronde 1 = oudste),
+// zodat de klant ziet om de hoeveelste ronde het gaat én alles kan terugkijken. Data 1:1 uit ClickUp.
+function _fbRondesBlock(fb, br){
+  var sorted=fb.slice().sort(function(a,b){ return (_ondMs(a.dateCreated)||_ondMs(a.startDate)||0)-(_ondMs(b.dateCreated)||_ondMs(b.startDate)||0); });
+  var rows=sorted.map(function(s,i){
+    var done=s.status==='done';
+    return '<div class="fbr-ronde'+(done?' is-done':'')+'">'
+      +'<span class="fbr-num">'+(i+1)+'</span>'
+      +'<div class="fbr-tx"><b>Ronde '+(i+1)+'</b><span>'+esc(_fbRondeNaam(s.naam))+'</span></div>'
+      +'<span class="ond-chip '+(done?'ond-chip-ok':'ond-chip-prog')+'">'+(done?'Verwerkt':'Ontvangen')+'</span></div>';
+  }).join('');
+  return '<div class="ond-row fbr-wrap card br-'+br+'">'
+    +'<button class="ond-head fbr-head" onclick="ondToggleInfo(this)">'+ic('st_feedback',15)
+    +'<span class="ond-naam">Feedbackrondes</span>'
+    +'<span class="ond-chip ond-chip-prog">'+sorted.length+'</span>'
+    +'<svg class="chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>'
+    +'<div class="ond-info"><div class="fbr-list">'+rows+'</div></div></div>';
 }
 // demo-onderdelen voor het voorbeeldportaal (video-project zonder live data)
 function demoVideoDet(){
@@ -4429,7 +4455,10 @@ function buildModal(id, from){
   const backLabel=(backTo==='berichten')?'berichten'
     :(typeof TAK_TABS!=='undefined'&&TAK_TABS[backTo])?TAK_TABS[backTo].label
     :(backTo==='webprestaties')?'Website':'overzicht';
-  let SUBTASKS = isVideo ? [
+  // KRITIEK (Vincent/PFL): in LIVE NOOIT verzonnen onderdelen/taken. Deze mock-arrays zijn
+  // UITSLUITEND de showcase voor het demo-portaal (?demo=1). In live starten ze leeg en worden
+  // ze enkel gevuld met echte ClickUp-data (det.deliverables/det.subtasks) hieronder.
+  let SUBTASKS = !state.demoMode ? [] : isVideo ? [
     {t:'Montage',st:'wait',files:[['Montage v1, volledige film','MP4 · 02:14','video'],['Korte teaser (15s)','MP4 · 00:15','video']]},
     {t:'Fotografie',st:'wait',files:[['Still, openingsshot','JPG · hoge resolutie','img'],['Still, teamportret','JPG · hoge resolutie','img']]},
     {t:'Audio &amp; muziek',st:'done',files:[['Soundtrack, gelicentieerd','MP3','doc']]},
@@ -4437,9 +4466,9 @@ function buildModal(id, from){
     {t:'Strategiedeck',st:'wait',files:[['Strategiedeck v1.pdf','PDF · 24 pagina\'s','doc']]},
     {t:'Vooronderzoek',st:'done',files:[['Marktanalyse.pdf','PDF · 12 pagina\'s','doc']]},
   ];
-  let approved = isVideo ? ['Concept &amp; scenario','Locatie &amp; opnameplanning','Audio &amp; muziekselectie'] : ['Marktonderzoek &amp; analyse','Positioneringsworkshop'];
+  let approved = !state.demoMode ? [] : isVideo ? ['Concept &amp; scenario','Locatie &amp; opnameplanning','Audio &amp; muziekselectie'] : ['Marktonderzoek &amp; analyse','Positioneringsworkshop'];
   // delivList = de deliverables met directe link (overzicht); approvedTasks = goedgekeurde taken (klikbaar mits bestanden)
-  let delivList = null;       // [{label,url,type}] of null (=demo)
+  let delivList = state.demoMode ? null : [];   // null=demo (toont mock-deliverables); in LIVE start leeg -> nooit verzonnen deliverables
   let approvedTasks = null;   // [{naam, heeftBestanden, bestanden:[...]}]
   if(det){
     if(det.deliverables && det.deliverables.length){
@@ -4481,10 +4510,16 @@ function buildModal(id, from){
   const OND = (p.discId==='video_fotografie') ? onderdelenBlok(detOnd, p)
             : onderdelenBlokAlg(detOnd, p);
   const hasProces = !!(det && det.proces && det.proces.aantal_stappen);
+  // EERLIJKE LEGE-STAAT (Vincent/PFL): een LIVE-project zonder onderdelen, proces, deliverables,
+  // feedback of goedgekeurde taken toont een nette lege boodschap i.p.v. een halflege/mock-sectie.
+  // Nooit in demo (daar hoort de showcase) en nooit als er ECHTE data is.
+  const _leegLive = !state.demoMode && !OND && !hasProces && !(delivList && delivList.length)
+                    && !needsFeedback && !(approvedTasks && approvedTasks.length);
   // content-takken branding/strategie: nooit shoot/meeting-planning tonen (Vincent: 'geen meetings
   // aanvragen'). Als OND null is (project zonder subtaken) valt de generieke overview terug, maar
   // dan zonder scheduleBlock en zonder de plan-aankondiging in procesBlock (review v85 #5).
   const overview = OND ? `<div class="mpane active" data-mpane="overzicht"><div class="ond-wrap">${OND}</div></div>`
+   : _leegLive ? `<div class="mpane active" data-mpane="overzicht"><div class="empty" style="padding:44px 18px;text-align:center"><div class="em-ic">${ic('st_approved',56)}</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog niets klaar voor jou</b><p style="margin:6px 0 0">Voor dit project staan nog geen onderdelen of bestanden klaar. Zodra er iets is, verschijnt het hier en laten we het je weten.</p></div></div>`
    : `<div class="mpane active" data-mpane="overzicht">
     ${procesBlock(det,p,{noPlan:true})}
     ${showDeliv?`<h4 style="font-family:var(--font-display);font-size:15px;margin:0 0 4px">${(delivList&&delivList.length>1)||(delivList===null)?'Jouw deliverables':'Jouw deliverable'}</h4>
@@ -4708,7 +4743,7 @@ function panelWebprestaties(){
     // meteen op het detail (zie portal.js).
     var lopend=actief.length?('<div class="vrij-lijst">'+actief.slice().sort(function(a,b){return (a.dateCreated||0)-(b.dateCreated||0);}).map(function(p){return videoProjRij(p,'webprestaties');}).join('')+'</div>')
       :'<div class="empty"><div class="em-ic"><img src="assets/icon-webdesign.svg" width="56" height="56" alt=""></div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Geen lopende website-projecten</b><p style="margin:6px 0 14px">Een nieuwe site of aanpassing nodig?</p><button class="btn btn-branch br-green" onclick="openOfferteWizard(\'website\')">'+ic('plus',15)+' Start een aanvraag</button></div>';
-    return webTakSubnav()+lopend;
+    return webTakSubnav()+webEditorCard()+lopend;
   }
   var head=webTakSubnav();
   var t=(window.S27DATA&&S27DATA.webTraffic&&S27DATA.webTraffic())||null;
@@ -4761,6 +4796,28 @@ function webSupportCard(){
     +'<div style="flex:1;min-width:200px"><h3 style="margin:0 0 4px">Hulp nodig met je website?</h3>'
     +'<div style="color:#6B5B6B;font:600 13px Nunito,sans-serif;line-height:1.5">Een bug, een aanpassing of een vraag over je site? Stuur ons een ticket — we pakken het op en je krijgt een melding zodra de status verandert.</div></div>'
     +'<button class="btn btn-branch br-green btn-sm" onclick="openWebTicket()">'+ic('msg',16)+' Ticket aanvragen</button></div>';
+}
+/* Instructievideo's over zelf je website aanpassen — Studio 27-brede set (tool-uitleg, GEEN klantdata).
+   LEEG tot Vincent echte Vimeo/YouTube-URLs aanlevert; een lege lijst rendert niets (geen dode links). */
+const WEB_INSTRUCTIE_VIDEOS = [
+  // { titel:'Tekst aanpassen op een pagina', duur:'2:14', url:'https://...' },
+];
+/* Website-editor-blok: knop naar de site-editor van de klant (bedrijf-veld 'Website editor link',
+   doorgegeven door de worker als dashboard.website_editor_link) + de gecentraliseerde instructievideo's.
+   De knop verschijnt ENKEL als de klant een editor-link heeft (nooit een dode knop); het hele blok
+   verdwijnt als er geen link én geen video's zijn. */
+function webEditorCard(){
+  var d=(state.data&&state.data.dashboard)||null;
+  var link=(d&&d.website_editor_link)?String(d.website_editor_link).trim():'';
+  var vids=(typeof WEB_INSTRUCTIE_VIDEOS!=='undefined'&&WEB_INSTRUCTIE_VIDEOS.length)?WEB_INSTRUCTIE_VIDEOS:[];
+  if(!link && !vids.length) return '';
+  var btn=link?'<a class="btn btn-branch br-green btn-sm" href="'+esc(link)+'" target="_blank" rel="noopener">'+ic('website',16)+' Open je website-editor</a>':'';
+  var vlist=vids.length?('<div style="margin-top:'+(btn?'14px':'2px')+';display:flex;flex-direction:column">'+vids.map(function(v){
+    return '<a href="'+esc(v.url||'#')+'" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;padding:9px 2px;border-top:1px solid rgba(231,223,211,.6);color:var(--ink-2);font:600 13px Nunito,sans-serif;text-decoration:none">'+ic('play',15)+'<span style="flex:1">'+esc(v.titel||'Instructievideo')+'</span>'+(v.duur?'<span style="color:#9E919E">'+esc(v.duur)+'</span>':'')+ic('arrow',14)+'</a>';
+  }).join('')+'</div>'):'';
+  return '<div class="wp-card" style="margin-bottom:14px"><h3 style="margin:0 0 4px">Je website beheren</h3>'
+    +'<div style="color:#6B5B6B;font:600 13px Nunito,sans-serif;line-height:1.5;margin-bottom:'+((btn||vlist)?'12px':'0')+'">Pas zelf snel iets aan op je site, of bekijk hoe het werkt.</div>'
+    +btn+vlist+'</div>';
 }
 
 /* ---- panel registry ---- */

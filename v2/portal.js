@@ -297,6 +297,9 @@ async function prefetchAdjacent(){
     if(gen!==state._bootGen) return;
     await new Promise(function(r){ setTimeout(r, 350); });   // spreiding: nooit een burst
   }
+  // meetings (en co) zijn nu geladen -> badges hertekenen zodat de ECHTE Meetings-telling verschijnt
+  // (of verborgen blijft bij 0). gen-guard: een trage prefetch van een vorig bedrijf mag niet overschrijven.
+  if(gen===state._bootGen){ try{ updateNavBadges(); }catch(e){} }
 }
 function afterEnter(){
   applyTakVisibility();
@@ -548,7 +551,10 @@ function updateNavBadges(){
       setB('webprestaties', _takProjects(TAK_WEBSITE.discIds).filter(function(p){return p.status!=='done';}).length);
     }
     var mt=(window.S27DATA&&S27DATA.meetings());
+    // Meetings-teller: ENKEL bij echte aankomende/recente afspraken (zelfde telling als panelMeetings upCount).
+    // Geen data geladen -> badge verbergen (setB(.,0)=display:none), nooit de hardgecodeerde index.html-waarde laten staan.
     if(mt){ setB('meetings', (mt.list||[]).filter(function(m){return m.dt&&m.dt.getTime()>=Date.now()-86400000;}).length); }
+    else { setB('meetings', 0); }
     // berichten + topbar-bel: geen betrouwbare ongelezen-telling -> mock-badge verbergen
     var bb=document.querySelector('.sb-item[data-tab="berichten"] .sb-badge'); if(bb) bb.style.display='none';
     var topBer=document.querySelector('.icon-btn[data-topnav="berichten"] .badge'); if(topBer) topBer.style.display='none';
