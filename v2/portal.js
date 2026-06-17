@@ -571,6 +571,10 @@ function setActiveNav(name){
 // (Socials + advertenties blijven altijd zichtbaar: hun koppeling staat los van projecten; de panels
 //  tonen zelf een "nog niet gekoppeld"-staat.)
 function applyTakVisibility(){
+  // Offertes-tab ENKEL in teamview — nooit voor klanten of in de ClientView-preview. Boven de vroege return zodat
+  // hij ook in demo/pre-load verborgen blijft (de querySelector werkt los van dashboard-data).
+  const off=document.querySelector('.sb-item[data-tab="offertes"]');
+  if(off) off.style.display = (typeof isRichView==='function' && isRichView()) ? '' : 'none';
   if(state.demoMode || !state.data.dashboard) return;
   const d=state.data.dashboard;
   const pf=document.querySelector('.sb-item[data-tab="performance"]');

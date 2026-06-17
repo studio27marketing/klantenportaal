@@ -1469,13 +1469,15 @@ function adsCustomPeriod(){ var f=document.getElementById('adsFrom'),t=document.
 function adsSetCompare(mode){ var pp=adsPeriod(); pp.compare=mode; _adsRerenderPeriodBar(); adsReload(); }
 function refreshMetaAds(){ adsReload(); }
 function metaCreativeCard(a,i,cur){
-  var fm=metaFmt(a.format); var thumb=(a.format==='video'?(a.poster||a.image):a.image)||a.thumb||'';
+  var fm=metaFmt(a.format); var cm=a.creativeMedia||{};
+  // lichte preview-bron eerst (cr.thumbnail_url / url_128) i.p.v. een full-res still -> grid laadt snel
+  var thumb=a.thumb||cm.thumb||(a.format==='video'?(a.poster||a.image):(cm.image||a.image))||'';
   var img = thumb
-    ? '<img src="'+esc(thumb)+'" alt="" loading="lazy" referrerpolicy="no-referrer" style="width:100%;height:142px;object-fit:cover;display:block;background:#f1ebe2">'
+    ? '<img src="'+esc(thumb)+'" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" width="196" height="142" style="width:100%;height:142px;object-fit:cover;display:block;background:#f1ebe2">'
     : '<div style="width:100%;height:142px;display:flex;align-items:center;justify-content:center;background:#f1ebe2;color:var(--ink-4);font-size:12px;font-weight:600">geen voorbeeld</div>';
   var badge='<span class="meta-fmt br-'+fm[1]+'">'+(a.format==='video'?ic('play',11):'')+esc(fm[0])+'</span>';
   var mtr='<div class="meta-cre-m"><span class="metric"><b>'+metaEur(a.spend,cur)+'</b><i>besteed</i></span><span class="metric"><b>'+adsNum(a.impressions)+'</b><i>vertoningen</i></span><span class="metric"><b>'+(Number(a.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%</b><i>CTR</i></span></div>';
-  return '<div class="meta-cre-card" onclick="openMetaCreative('+i+')"><div style="position:relative">'+img+badge+'</div><div class="meta-cre-t">'+esc(a.name||'Advertentie')+'</div>'+mtr+'</div>';
+  return '<div class="meta-cre-card" onclick="openMetaCreative('+i+')" onmouseenter="metaPreloadCreative('+i+')"><div style="position:relative">'+img+badge+'</div><div class="meta-cre-t">'+esc(a.name||'Advertentie')+'</div>'+mtr+'</div>';
 }
 function metaCampaignCard(c,cur){
   var obj=adsObjective(c.objective);
@@ -1533,19 +1535,28 @@ function adsTrendBlock(){
   var svg=(tr.length<2)?'<div class="ads-tempty">Nog te weinig data voor een trend in deze periode.</div>':adsTrendSVG(tr,on);
   return '<div class="card ads-trend" id="adsTrendBox" style="padding:15px 18px 12px"><div class="ads-thead"><h3>Evolutie per dag</h3><div class="ads-tchips">'+chips+'</div></div>'+svg+'</div>';
 }
+// Client-view ads-chrome: ÉÉN doorlopende menubalk (zoals team) — links de Meta/Google-switcher, rechts periode + chat.
+// Vervangt de oude losse 'Live overzicht'-kop + zwevende switcher + aparte periodebalk (die over elkaar vielen).
+function adsClientChrome(){
+  return '<div class="ads-stickytop"><div class="soc-subnav-row">'+adsPlatformPicker()
+    +'<div class="soc-subnav-act">'+adsPeriodBar()+adsClientChatBtn()+'</div></div></div>';
+}
+function adsClientChatBtn(){
+  var ad=_adProject(); if(!ad) return '';   // enkel een chat-knop als er een advertentietaak van deze maand is
+  return '<button class="soc-subnav-act-btn" onclick="adsClientChatOpen()" title="Chat over je advertenties. Je bericht komt als opmerking op je advertentietaak.">'+ic('msg',16)+'<span>Chat</span></button>';
+}
+function adsClientChatOpen(){ var el=document.querySelector('.ads-chat'); if(el){ el.scrollIntoView({behavior:'smooth',block:'start'}); setTimeout(function(){ var ta=el.querySelector('textarea,[contenteditable],.chat-input'); try{ ta&&ta.focus(); }catch(e){} },380); } }
 function metaAdsBody(){
   if(isRichView()) return metaAdsBodyRich();   // team-weergave: uitgebreide Meta-rapportage
   metaEnsureStyles();
-  var head='<div class="section-head" style="margin-bottom:4px"><h2 style="display:flex;align-items:center;gap:9px"><span class="live-dot"></span>Live overzicht</h2></div>';
-  var sw=adsPlatformSwitch();
-  // Google-tak: eigen beknopte real-time weergave (zelfde periodebalk, geen creatives). Meta-flow blijft ongewijzigd.
-  if(adsActivePlatform()==='google'){ return head+sw+googleAdsBody(); }
+  var chrome=adsClientChrome();
+  // Google-tak: eigen beknopte real-time weergave (zelfde menubalk, geen creatives). Meta-flow blijft ongewijzigd.
+  if(adsActivePlatform()==='google'){ return chrome+googleAdsBody()+adsChatSection(); }
   var m=(window.S27DATA&&S27DATA.metaAds&&S27DATA.metaAds())||null;
-  if(m===null){ return head+sw+'<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je advertenties worden real-time opgehaald…</p></div>'; }
-  if(!m.linked){ return head+sw+statNotLinked('ads'); }
-  var cur=m.currency||'EUR';
+  if(m===null){ return chrome+'<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je advertenties worden real-time opgehaald…</p></div>'; }
+  if(!m.linked){ return chrome+statNotLinked('ads'); }
   state._metaCampaign=null;   // item 9: campagnes openen nu INLINE (toggleMetaCampaign), geen paginavervanging meer
-  return head+sw+adsPeriodBar()+'<div id="adsBody">'+adsOverviewInner()+'</div>'+adsChatSection();
+  return chrome+'<div id="adsBody">'+adsOverviewInner()+'</div>'+adsChatSection();
 }
 // Ads-chat: enkel zichtbaar als er een advertentietaak van de HUIDIGE MAAND bestaat (worker filtert
 // ad-taken al op due-date deze maand). Berichten/uploads gaan als comments naar die taak.
@@ -1641,7 +1652,7 @@ function adsRichSamengevatTab(m,cur){
 function adsRichCampagnesTab(m,cur){
   var camps=(m.campaigns||[]);
   if(!camps.length) return '<div class="card" style="padding:24px;text-align:center;color:var(--ink-3)">Geen campagnes met activiteit in deze periode.</div>';
-  return '<div class="section-head" style="margin-top:2px"><h2>Campagnes</h2><span class="count">'+camps.length+'</span></div>'+camps.map(function(c){ return adsRichCampaign(c,cur); }).join('');
+  return camps.map(function(c){ return adsRichCampaign(c,cur); }).join('');
 }
 /* Uitgebreide gegevens: alle ads over alle campagnes, eigen filterregels + drill naar de visual. */
 var ADS_FILTER_METRICS=[['linkClicks','Klikken'],['spend','Besteed (€)'],['impressions','Vertoningen'],['ctr','CTR (%)'],['cpc','CPC (€)'],['leads','Leads']];
@@ -1651,9 +1662,7 @@ function adsRichGegevensTab(m,cur){
   var all=[];
   (m.campaigns||[]).forEach(function(c){ adsRichMergeAds(c.ads||[]).forEach(function(a){ var x=Object.assign({},a); x.campaign=c.name||''; x.campaignId=c.id; all.push(x); }); });
   state._adsGegevensAll=all;
-  return '<div class="section-head" style="margin-top:2px"><h2>Advertenties — alle campagnes</h2><span class="count" id="adsGegCount">'+all.length+'</span></div>'
-    +'<p class="sdesc" style="margin:-2px 0 10px;max-width:66ch">Alle advertenties samen, met gelijke namen samengeteld (★). Stel eigen filterregels in (bv. enkel ads met meer dan 50 klikken) en klik op het oog om de visual te bekijken.</p>'
-    +'<div id="adsGegWrap">'+adsGegInner()+'</div>';
+  return '<div class="card ads-card" style="padding:14px 16px"><div id="adsGegWrap">'+adsGegInner()+'</div></div>';
 }
 function adsGegInner(){ return adsGegevensControls()+'<div id="adsGegBody">'+adsGegevensTable()+'</div>'; }
 function adsGegevensControls(){
@@ -2316,7 +2325,7 @@ function googleAdsBody(){
     return '<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je Google Ads-campagnes worden real-time opgehaald…</p></div>';
   }
   if(!g.linked){ return '<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen Google Ads-account gekoppeld</div><div style="color:var(--ink-3);max-width:470px;margin:0 auto;line-height:1.55">Zodra je Google Ads-account aan je portaal gekoppeld is, zie je hier real-time je campagnes en cijfers. Vraag gerust je contactpersoon bij Studio&nbsp;27.</div></div>'; }
-  return adsPeriodBar()+'<div id="adsBody">'+googleOverviewInner()+'</div>';
+  return '<div id="adsBody">'+googleOverviewInner()+'</div>';   // periode zit nu in de client-menubalk (adsClientChrome)
 }
 function googleClientBuildChart(g,cur){
   var camps=(g.campaigns||[]); var hasDaily=camps.some(function(c){return (c.daily||[]).length;});
@@ -2444,7 +2453,7 @@ function adsKpiGridGeneric(plat,k,p,cur,cmpLabel){
     cards.push(card('Frequentie', arDec(k.frequency,2), 'frequency', true, fD));
   }
   var note=(p && cmpLabel)?'<div class="arkpi-note">Vergeleken met '+esc(cmpLabel)+'</div>':'';
-  return '<div class="ar-summary"><div class="ar-kpigrid">'+cards.join('')+'</div>'+note+'<div class="ads-mhint">Klik op een KPI om de bijbehorende reeks in de grafiek hieronder aan of uit te zetten.</div></div>';
+  return '<div class="ar-summary"><div class="ar-kpigrid">'+cards.join('')+'</div>'+note+'</div>';
 }
 function googleRichSamengevat(g,cur){
   var camps=(g.campaigns||[]);
@@ -2472,7 +2481,7 @@ function googleRichCampaign(c,cur){
 function googleRichCampagnes(g,cur){
   var camps=(g.campaigns||[]);
   if(!camps.length) return '<div class="card" style="padding:24px;text-align:center;color:var(--ink-3)">Geen campagnes met activiteit in deze periode.</div>';
-  return '<div class="section-head" style="margin-top:2px"><h2>Campagnes</h2><span class="count">'+camps.length+'</span></div>'+camps.map(function(c){ return googleRichCampaign(c,cur); }).join('');
+  return camps.map(function(c){ return googleRichCampaign(c,cur); }).join('');
 }
 // CANONIEKE Google-kolomvolgorde: Besteed → Vert. → CPM → Klikken → CTR → CPC → Leads → CPL → Waarde → Leadratio.
 var G_AG_COLS=[['name','Advertentiegroep',0],['status','Status',0],['spend','Besteed',1],['impressions','Vert.',1],['cpm','CPM',1],['clicks','Klikken',1],['ctr','CTR',1],['cpc','CPC',1],['conversions','Leads',1],['costPerConv','CPL',1],['convValue','Waarde',1],['convRate','Leadratio',1]];
@@ -2491,16 +2500,13 @@ function googleRichKwInner(){ var f=_gKwCampFilter(); var rows=(state._gKw||[]).
 function gKwSetCamp(v){ state._gKwCamp=v||''; var w=document.getElementById('gart_kw_all'); if(w) w.outerHTML=googleRichKwInner(); }
 function googleRichKeywords(g,cur){
   state._gKw=(g.keywords||[]);
-  if(!state._gKw.length){ state._gKwCamp=''; return '<div class="section-head" style="margin-top:2px"><h2>Zoekwoorden</h2></div><div class="card" style="padding:24px;text-align:center;color:var(--ink-3)">Geen zoekwoord-data in deze periode (enkel zoekcampagnes leveren zoekwoorden).</div>'; }
+  if(!state._gKw.length){ state._gKwCamp=''; return '<div class="card" style="padding:24px;text-align:center;color:var(--ink-3)">Geen zoekwoord-data in deze periode (enkel zoekcampagnes leveren zoekwoorden).</div>'; }
   var camps=[],seen={}; state._gKw.forEach(function(k){ var n=k.campaign||''; if(n&&!seen[n]){ seen[n]=1; camps.push(n); } }); camps.sort();
   if(state._gKwCamp && camps.indexOf(state._gKwCamp)<0) state._gKwCamp='';   // stale filter (ander bedrijf/periode) opruimen
   var filterUi = camps.length>1
     ? '<div class="ads-kwfilter"><span class="ads-kwfilter-lab">Campagne</span><select onchange="gKwSetCamp(this.value)" aria-label="Filter op campagne"><option value="">Alle campagnes</option>'+camps.map(function(n){ return '<option value="'+esc(n)+'"'+(_gKwCampFilter()===n?' selected':'')+'>'+esc(n)+'</option>'; }).join('')+'</select></div>'
     : '';
-  return '<div class="section-head" style="margin-top:2px"><h2>Zoekwoorden</h2><span class="count">'+state._gKw.length+'</span></div>'
-    +'<p class="sdesc" style="margin:-2px 0 10px;max-width:66ch">De zoekwoorden die je advertenties triggerden in deze periode (top 250 op besteding). Klik op een kolomtitel om te sorteren.</p>'
-    +filterUi
-    +'<div id="gKwWrap">'+googleRichKwInner()+'</div>';
+  return '<div class="card ads-card" style="padding:14px 16px">'+filterUi+'<div id="gKwWrap">'+googleRichKwInner()+'</div></div>';
 }
 function googleRichSort(cid,which,key){
   if(which==='kw'){ var sk=_gKwSort(); if(sk.key===key){ sk.dir=-sk.dir; } else { sk.key=key; sk.dir=(key==='text'||key==='matchType'||key==='campaign')?1:-1; } var w=document.getElementById('gart_kw_all'); if(w) w.outerHTML=googleRichKwInner(); return; }
@@ -2650,8 +2656,8 @@ function adsWsRecsRender(seedList){
   // Lege categorieën blijven beschikbaar via een toevoegrij onderaan, zodat elke categorie bruikbaar blijft.
   var emptyCats=ADS_WS_CATS.filter(function(c){ return !recs.some(function(r){ return (r.cat||'overig')===c[0]; }); });
   var emptyAdd=emptyCats.length?('<div class="ws-grp"><div class="ws-grp-head"><span class="ws-grp-ic">'+ic('plus',16)+'</span><span class="ws-grp-ttl">Nog een aanbeveling toevoegen</span></div><div class="ws-addrow">'+emptyCats.map(function(c){ return '<button class="ws-btn" onclick="adsWsRecAdd(\''+c[0]+'\')">'+ic(c[2],14)+' '+esc(c[1])+'</button>'; }).join('')+'</div></div>'):'';
-  return '<div class="section-head" style="margin-top:22px"><h2>Aanbevelingen</h2><span class="count" id="adsWsCount">'+recs.length+'</span><span class="ws-save" id="adsWsSave" style="margin-left:auto"></span></div>'
-    +'<p class="sdesc" style="margin:-2px 0 12px;max-width:70ch">Bewerk de aanbevelingen rechtstreeks — klik op een titel of tekst om aan te passen. Ze worden per bedrijf bewaard en verschijnen zo terug bij de volgende meeting.</p>'
+  return '<span class="ws-save" id="adsWsSave" style="display:block;text-align:right;min-height:1px;margin-top:2px"></span>'
+    +'<span id="adsWsCount" style="display:none">'+recs.length+'</span>'
     +'<div class="ws-recs" id="adsWsRecs">'+groups.join('')+emptyAdd+'</div>';
 }
 function adsWsRerenderRecs(){
@@ -2934,8 +2940,9 @@ function googleAdsPdf(){
 // campagnes openen nu inline via toggleMetaCampaign().
 function _adsChev(){ return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>'; }
 function metaAdRow(a,i,cur){
-  var fm=metaFmt(a.format); var thumb=(a.format==='video'?(a.poster||a.image):a.image)||a.thumb||'';
-  var th = thumb?'<img class="ads-adth" src="'+esc(thumb)+'" alt="" loading="lazy" referrerpolicy="no-referrer" onclick="event.stopPropagation();openMetaCreative('+i+')">':'<span class="ads-adth ads-adth-none">'+ic('img',16)+'</span>';
+  var fm=metaFmt(a.format); var cm=a.creativeMedia||{};
+  var thumb=a.thumb||cm.thumb||(a.format==='video'?(a.poster||a.image):(cm.image||a.image))||'';
+  var th = thumb?'<img class="ads-adth" src="'+esc(thumb)+'" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onmouseenter="metaPreloadCreative('+i+')" onclick="event.stopPropagation();openMetaCreative('+i+')">':'<span class="ads-adth ads-adth-none">'+ic('img',16)+'</span>';
   return '<div class="ads-adrow" onclick="adsToggleAdRow('+i+')">'
     +'<div class="ads-adcell ads-adname">'+th+'<div class="ads-adnm"><b>'+esc(a.name||'Advertentie')+'</b><span class="ads-adfmt br-'+fm[1]+'">'+(a.format==='video'?ic('play',10):'')+esc(fm[0])+'</span></div></div>'
     +'<div class="ads-adcell"><span class="ads-adm-lab">Besteed</span><b>'+metaEur(a.spend,cur)+'</b></div>'
@@ -2970,7 +2977,7 @@ function _metaLbMedia(a){
   var cm=a.creativeMedia||{};
   var type=cm.type||a.format||'image';
   if(type==='video'){
-    var vsrc=cm.video||a.videoSrc||''; var poster=cm.poster||a.poster||'';
+    var vsrc=cm.video||a.videoSrc||''; var poster=cm.thumb||cm.poster||a.thumb||a.poster||'';   // lichte thumb-poster = direct zichtbaar terwijl de video buffert
     var plink=cm.permalink||a.videoPermalink||'';
     // item 8b: 'muted' houdt autoplay toegestaan (anders blokkeert de browser → zwart kader). De fbcdn-source
     // is kort geldig, dus toon ALTIJD ook de permalink-fallback zodat de klant bij een verlopen video kan doorklikken.
@@ -2988,9 +2995,11 @@ function _metaLbMedia(a){
     // we nooit alle full-res fbcdn-beelden tegelijk laden. Spinner-gate + onerror-fallback per kaart.
     var slides=cards.map(function(c,j){
       var act=(j===0); var fb=esc(c.permalink||'');
+      // lichte thumb (url_128) eerst = snelle preview; full-res wordt erna geruisloos ingeladen via _lbUpgrade
+      var prev=esc(c.thumb||c.image||''); var dataFull=(c.thumb&&c.image&&c.thumb!==c.image)?(' data-full="'+esc(c.image)+'"'):'';
       var inner = c.video
-        ? '<video '+(act?'src="'+esc(c.video)+'"':'data-src="'+esc(c.video)+'"')+' controls playsinline preload="none" poster="'+esc(c.image||'')+'" data-fb="'+fb+'" onerror="metaMediaErr(this)"></video>'
-        : _lbSpin()+'<img '+(act?'src="'+esc(c.image||'')+'"':'data-src="'+esc(c.image||'')+'" loading="lazy"')+' alt="" referrerpolicy="no-referrer" data-fb="'+fb+'" onload="_lbImgLoaded(this)" onerror="metaMediaErr(this)">';
+        ? '<video '+(act?'src="'+esc(c.video)+'"':'data-src="'+esc(c.video)+'"')+' controls playsinline preload="none" poster="'+esc(c.thumb||c.image||'')+'" data-fb="'+fb+'" onerror="metaMediaErr(this)"></video>'
+        : _lbSpin()+'<img '+(act?'src="'+prev+'"'+dataFull:'data-src="'+prev+'"'+dataFull+' loading="lazy"')+' alt="" referrerpolicy="no-referrer" data-fb="'+fb+'" onload="_lbImgLoaded(this);_lbUpgrade(this)" onerror="metaMediaErr(this)">';
       return '<div class="meta-car-slide'+(c.video?'':' is-loading')+'">'+inner+(c.title?'<div class="meta-car-t">'+esc(c.title)+'</div>':'')+'</div>';
     }).join('');
     var dots=cards.map(function(c,j){ return '<button class="meta-car-dot'+(j===0?' on':'')+'" onclick="metaCarTo('+j+')" aria-label="Kaart '+(j+1)+'"></button>'; }).join('');
@@ -3004,20 +3013,24 @@ function _metaLbMedia(a){
   // single image (ook een carrousel met exact 1 bruikbare kaart = gewone foto/video, geen overbodige nav-chrome)
   if(type==='carousel' && cards.length===1){
     var c0=cards[0];
-    if(c0.video) return _metaLbMedia({creativeMedia:{type:'video',video:c0.video,poster:c0.image||'',permalink:c0.permalink||''}});
+    if(c0.video) return _metaLbMedia({creativeMedia:{type:'video',video:c0.video,thumb:c0.thumb||'',poster:c0.image||'',permalink:c0.permalink||''}});
     if(!c0.image) return '<div class="meta-lb-stage"><div class="meta-lb-load"><span>Geen voorbeeld beschikbaar</span></div></div>';
-    return _lbImgStage(c0.image, c0.permalink||'');
+    return _lbImgStage(c0.image, c0.permalink||'', c0.thumb||'');
   }
   var src=cm.image||a.image||a.poster||a.thumb||'';
   if(!src) return '<div class="meta-lb-stage"><div class="meta-lb-load"><span>Geen voorbeeld beschikbaar</span></div></div>';
-  return _lbImgStage(src,'');
+  return _lbImgStage(src,'',cm.thumb||a.thumb||'');
 }
 // spinner-overlay (blijft tot het beeld geladen is) + onload/onerror-helpers voor de lightbox-media
 function _lbSpin(){ return '<div class="meta-lb-load spin"><div class="brand-spinner"></div></div>'; }
 function _lbImgLoaded(el){ try{ var s=(el.closest&&(el.closest('.meta-car-slide')||el.closest('.meta-lb-stage'))); if(s) s.classList.remove('is-loading'); }catch(e){} }
-function _lbImgStage(src,plink){
-  return '<div class="meta-lb-stage is-loading">'+_lbSpin()+'<img class="meta-lb-media" src="'+esc(src)+'" alt="" referrerpolicy="no-referrer" data-fb="'+esc(plink||'')+'" onload="_lbImgLoaded(this)" onerror="metaMediaErr(this)"></div>';
+function _lbImgStage(src,plink,thumb){
+  thumb=(thumb&&thumb!==src)?thumb:'';
+  var initial=thumb||src; var dataFull=thumb?(' data-full="'+esc(src)+'"'):'';
+  return '<div class="meta-lb-stage is-loading">'+_lbSpin()+'<img class="meta-lb-media" src="'+esc(initial)+'"'+dataFull+' alt="" referrerpolicy="no-referrer" data-fb="'+esc(plink||'')+'" onload="_lbImgLoaded(this);_lbUpgrade(this)" onerror="metaMediaErr(this)"></div>';
 }
+// blur-up: zodra de lichte thumb getoond is, laad de full-res in de achtergrond en swap geruisloos
+function _lbUpgrade(el){ try{ var full=el.getAttribute&&el.getAttribute('data-full'); if(!full||full===el.getAttribute('src')) return; var hi=new Image(); hi.referrerPolicy='no-referrer'; hi.onload=function(){ try{ el.src=full; el.removeAttribute('data-full'); }catch(e){} }; hi.onerror=function(){ try{ el.removeAttribute('data-full'); }catch(e){} }; hi.src=full; }catch(e){} }
 // fbcdn-URL's verlopen snel -> nette fout-fallback i.p.v. een kapot/garbled kader, met permalink-doorklik indien beschikbaar
 function metaMediaErr(el){
   if(!el || el.__err) return; el.__err=1;
@@ -3067,6 +3080,18 @@ function openMetaCreative(i){
     cur.innerHTML='<div class="meta-lb-box" onclick="event.stopPropagation()">'+_metaLbMedia(a)+'<div class="meta-lb-cap"><span>'+esc(a.name||'Advertentie')+note+'</span><button class="btn btn-ghost btn-sm" onclick="metaCloseLightbox()">Sluiten</button></div></div>';
     if(_metaLbCar) metaCarTo(0);   // pre-hydrateer kaart 1 (+buur 2) zodat eerste bladeren vlot is
   });
+}
+// preload bij hover: trek de full-res image/poster van deze ad alvast in cache zodat de lightbox bijna instant opent.
+// NIET de .mp4 (te zwaar) — enkel de poster/foto. Eénmalig per ad (a.__pl).
+function metaPreloadCreative(i){
+  try{
+    var a=(state._metaAdsView||[])[i]; if(!a||a.__pl) return; a.__pl=1;
+    var cm=a.creativeMedia||{}; var urls=[];
+    if(cm.type==='carousel'){ var c0=(cm.cards&&cm.cards[0])||null; if(c0) urls.push(c0.image||c0.thumb); }
+    else if(cm.type==='video'){ urls.push(cm.poster||cm.thumb||a.poster); }
+    else { urls.push(cm.image||a.image); }
+    urls.filter(Boolean).forEach(function(u){ var im=new Image(); im.referrerPolicy='no-referrer'; im.src=u; });
+  }catch(e){}
 }
 
 // (Resultaten-tab verwijderd — alle advertentiedata staat nu real-time op de Advertenties-tab via metaAds.)
@@ -3876,7 +3901,7 @@ function contactFormHTML(c){
 function panelInstellingen(){
   const demo=!_live();
   // team-beheer (alleen Studio 27): nieuwe portaal-versie hard doorduwen naar alle clients
-  const beheer=(state&&state.adminMode)
+  const beheer=(typeof isRichView==='function' && isRichView())
     ? '<section class="card" style="padding:18px 20px;margin-bottom:18px;border-left:4px solid var(--s27-blue)">'
       +'<h2 style="font-family:var(--font-display);font-size:15px;margin:0 0 4px">Team \u00b7 versiebeheer</h2>'
       +'<p class="sdesc" style="margin:0 0 12px">Duwt de versie van dit scherm als minimum naar \u00e1lle klanten en teamleden \u2014 ook ge\u00efnstalleerde apps herladen automatisch (binnen \u00b15 minuten of meteen bij openen).</p>'
@@ -4572,12 +4597,11 @@ function webEnsureStyles(){
 function _wpDay(ymd){ var m=String(ymd||'').match(/(\d{4})-?(\d{2})-?(\d{2})/); return m?(m[3]+'/'+m[2]):String(ymd||''); }
 function _wpNum(n){ return (Number(n)||0).toLocaleString('nl-BE'); }
 function webPeriod(){ return state._webPeriod || 'last_30d'; }
-function webPeriodBar(){
+// Periode-pills (Vandaag/7/30/90 dagen) — nu in de menubalk (zoals Adverteren), niet meer in een aparte rij.
+function webPeriodPills(){
   var p=webPeriod();
   var b=function(k,l){ return '<button class="'+(p===k?'on':'')+'" onclick="webSetPeriod(\''+k+'\')">'+l+'</button>'; };
-  // Periode-pills + prominente support-knop rechts op dezelfde sticky rij (altijd in beeld).
-  return '<div class="wp-perrow"><div class="wp-per">'+b('today','Vandaag')+b('last_7d','7 dagen')+b('last_30d','30 dagen')+b('last_90d','90 dagen')+'</div>'
-    +'<button class="btn btn-branch br-green btn-sm wp-support" onclick="openWebTicket()" title="Vraag of probleem met je website? Maak een supportticket aan">'+ic('msg',15)+' Support aanvragen</button></div>';
+  return '<div class="wp-per">'+b('today','Vandaag')+b('last_7d','7 dagen')+b('last_30d','30 dagen')+b('last_90d','90 dagen')+'</div>';
 }
 async function webSetPeriod(p){
   state._webPeriod=p;
@@ -4589,7 +4613,10 @@ async function webSetPeriod(p){
 function webMountCharts(){
   var t=(window.S27DATA&&S27DATA.webTraffic&&S27DATA.webTraffic())||null;
   if(!t||!t.linked) return;
-  adsRichLoadChart().then(function(ok){ if(!ok||!window.Chart) return; webBuildSplitChart(t.split||{}); webBuildTrendChart(t.trend||[]); });
+  adsRichLoadChart().then(function(ok){ if(!ok||!window.Chart) return;
+    var sp=t.split||{}; var spTot=(sp.paid||0)+(sp.organic||0)+(sp.direct||0)+(sp.overig||0);
+    if(spTot>0 && document.getElementById('wp_split')) webBuildSplitChart(sp);   // geen lege doughnut tekenen
+    webBuildTrendChart(t.trend||[]); });
 }
 function webBuildSplitChart(split){
   var cv=document.getElementById('wp_split'); if(!cv||!window.Chart) return;
@@ -4633,7 +4660,11 @@ function webSetTakTab(t){ state._webTakTab=t; renderPanel('webprestaties'); }
 function webTakSubnav(){
   var t=webTakTab();
   var mk=function(key,label,icn){ return '<button class="soc-subtab'+(t===key?' active':'')+'" onclick="webSetTakTab(\''+key+'\')">'+ic(icn,17)+'<span>'+label+'</span></button>'; };
-  return '<div class="soc-subnav" id="webTakNav">'+mk('projecten','Projecten','doc')+mk('stats','Statistieken','st_progress')+'</div>';
+  // op de Statistieken-tab staan de periode-pills + Support rechts in de menubalk (uniform met Adverteren)
+  var act=(t==='stats')
+    ? '<div class="soc-subnav-act">'+webPeriodPills()+'<button class="soc-subnav-act-btn" onclick="openWebTicket()" title="Vraag of probleem met je website?">'+ic('msg',16)+'<span>Support</span></button></div>'
+    : '';
+  return '<div class="soc-subnav-row"><div class="soc-subnav" id="webTakNav">'+mk('projecten','Projecten','doc')+mk('stats','Statistieken','st_progress')+'</div>'+act+'</div>';
 }
 function panelWebprestaties(){
   webEnsureStyles();
@@ -4672,10 +4703,13 @@ function webBody(t,s){
     +'<div class="wp-kpi"><div class="l">Organische clicks</div><div class="v">'+_wpNum(st.clicks||0)+'</div><div class="s">'+_wpNum(st.impressions||0)+' vertoningen in Google</div></div>'
     +'<div class="wp-kpi"><div class="l">Top zoekterm</div><div class="v" style="font-size:17px">'+esc(topQ)+'</div><div class="s">gem. positie '+((st.position||0).toFixed(1))+'</div></div>'
     +'</div>';
-  var charts='<div class="wp-row" style="margin-bottom:14px">'
-    +'<div class="wp-card"><h3>Verkeer per bron</h3><div class="wp-canwrap"><canvas id="wp_split"></canvas></div></div>'
-    +'<div class="wp-card"><h3>Sessies per dag</h3><div class="wp-canwrap"><canvas id="wp_trend"></canvas></div></div>'
-    +'</div>';
+  // 'Verkeer per bron'-kaart ENKEL tonen als er effectief verkeersbron-data is (anders een lege/rare doughnut bij bv. ABW)
+  var splitTot=(split.paid||0)+(split.organic||0)+(split.direct||0)+(split.overig||0);
+  var splitCard=splitTot>0?'<div class="wp-card"><h3>Verkeer per bron</h3><div class="wp-canwrap"><canvas id="wp_split"></canvas></div></div>':'';
+  var trendCard='<div class="wp-card"><h3>Sessies per dag</h3><div class="wp-canwrap"><canvas id="wp_trend"></canvas></div></div>';
+  var charts=splitTot>0
+    ? '<div class="wp-row" style="margin-bottom:14px">'+splitCard+trendCard+'</div>'
+    : '<div style="margin-bottom:14px">'+trendCard+'</div>';
   var chans=(t.channels||[]).slice(0,8);
   var maxc=chans.reduce(function(a,c){return Math.max(a,c.sessions||0);},1);
   var chList=chans.map(function(c){ var w=Math.round((c.sessions||0)/maxc*120); return '<div class="wp-ch"><span class="bar" style="width:'+Math.max(w,6)+'px"></span><span class="nm">'+esc(c.channel)+'</span><span class="n">'+_wpNum(c.sessions)+'</span></div>'; }).join('');
@@ -4689,7 +4723,7 @@ function webBody(t,s){
   var qtbl='<div class="wp-card"><h3>Zoektermen (Google Search Console)</h3>'
     +(qrows?('<table class="wp-tbl"><thead><tr><th>Zoekterm</th><th class="r">Clicks</th><th class="r">Vert.</th><th class="r">CTR</th><th class="r">Positie</th></tr></thead><tbody>'+qrows+'</tbody></table>'):'<div style="color:#9E919E">Geen zoekdata in deze periode</div>')
     +'</div>';
-  return webPeriodBar()+kpis+charts+row2+qtbl;   // support-ingang zit nu prominent op de periode-rij (wp-support)
+  return kpis+charts+row2+qtbl;   // periode-pills + Support staan nu in de menubalk (webTakSubnav)
 }
 /* Website-support (Cluster K): ticket-ingang onderaan de Website-tab — ook zichtbaar zonder GA4/GSC-koppeling. */
 function webSupportCard(){
