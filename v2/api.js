@@ -83,6 +83,9 @@ const ENDPOINTS = {
   // Offerte-samensteller: klant stelt zelf een offerte samen (catalogus -> PandaDoc via Make).
   // BE-contract: { items:[{sku,naam,prijs,aantal}], opmerking } -> { ok, offerte_task_id, offerte_task_url, pandadoc_id, message }.
   offerteGenereren:  GATEWAY_BASE + '/offerteGenereren',
+  // Klantvriendelijke offerte-AANVRAAG (clientview): vrije tekst + diensten i.p.v. budgetten.
+  // BE-contract: { korte, bericht, diensten:[key,...] } -> { ok, offerte_task_id, pandadoc_id, message }.
+  offerteAanvraag:   GATEWAY_BASE + '/offerteAanvraag',
   // Metricool (geplande social posts) via de gateway i.p.v. de directe Make-hook.
   // BE-contract: { ok, linked, posts:[{id,datum,tekst,media,netwerken:[{netwerk,status}]}] }.
   metricool:         GATEWAY_BASE + '/metricool',

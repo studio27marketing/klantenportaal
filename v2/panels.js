@@ -3678,6 +3678,9 @@ function owEl(){
 }
 function owEsc(e){ if(e.key==='Escape') closeOfferteWizard(); }
 function openOfferteWizard(takKey){
+  // Klanten (clientview) doen GEEN budget/product-aanvraag meer: zij beschrijven in vrije tekst wat
+  // ze nodig hebben + kiezen diensten (Vincent). Het team behoudt de volledige budget-wizard.
+  if(typeof isRichView==='function' && !isRichView()) return openOfferteAanvraag(takKey);
   state.ow={ step:(takKey?2:1), takKey:(takKey||''), filter:(takKey||'alles'), search:'', note:(state._offerteOpm||''), contact:'verzenden', submitting:false, _doneHTML:'' };
   // off-stijlen in <head> injecteren: de overlay leeft buiten #page, waar offStyle normaal landt
   var s=offBuilderStyleOnce();
@@ -3692,6 +3695,96 @@ function closeOfferteWizard(){
   document.body.classList.remove('mp-lock');
   if(state.ow && state.ow.note!=null) state._offerteOpm=state.ow.note;   // notitie net zo persistent als de mand
   state.ow=null;   // selectie (state._offerteCart) blijft bewust bewaard — heropenen = verder waar je was
+}
+
+/* =============================================================================
+   OFFERTE-AANVRAAG (KLANT/CLIENTVIEW) — vrije tekst + diensten i.p.v. de budget-wizard.
+   Korte omschrijving (verplicht) = de taaktitel; bericht (verplicht) = de taakomschrijving;
+   diensten (≥1) bepalen welke offerte-blokken meekomen. Submit -> ENDPOINTS.offerteAanvraag.
+   ============================================================================= */
+var DIENSTEN_AANVRAAG=[
+  ['strategie','Strategie'],['branding','Branding'],['video','Video & fotografie'],
+  ['website','Website (webdesign)'],['seo','SEO'],['ads','Online adverteren'],['social','Social media']
+];
+// tak-pagina waarvan je komt -> dienst voorselecteren
+var TAK_TO_DIENST={ strategie:'strategie', branding:'branding', video:'video', webprestaties:'website', website:'website', socials:'social', social:'social', advertenties:'ads', ads:'ads', seo:'seo' };
+function offAanvraagState(){ if(!state._offAanvraag) state._offAanvraag={ korte:'', bericht:'', diensten:{}, busy:false, doneHTML:'' }; return state._offAanvraag; }
+function offAanvraagStyleOnce(){
+  if($id('ofa-styles')) return;
+  var st=document.createElement('style'); st.id='ofa-styles'; st.textContent=''
+    +'#offAanvraag{position:fixed;inset:0;z-index:8000;display:none;align-items:flex-start;justify-content:center;overflow-y:auto;background:rgba(35,15,35,.42);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);padding:max(24px,5vh) 16px}'
+    +'#offAanvraag.show{display:flex}'
+    +'.ofa-card{position:relative;width:100%;max-width:560px;background:var(--paper,#fff);border-radius:20px;box-shadow:0 24px 70px rgba(35,15,35,.30);padding:30px 28px 24px;margin:auto}'
+    +'.ofa-x{position:absolute;top:14px;right:14px;width:34px;height:34px;border:0;border-radius:10px;background:var(--paper-3,#F1EBE2);color:var(--ink-3);display:flex;align-items:center;justify-content:center;cursor:pointer;transform:rotate(45deg)}'
+    +'.ofa-x:hover{color:var(--ink)}'
+    +'.ofa-h{font-family:var(--font-display);font-weight:800;font-size:21px;color:var(--ink);margin:0 0 6px}'
+    +'.ofa-sub{color:var(--ink-3);font-size:13.5px;line-height:1.5;margin:0 0 18px;max-width:46ch}'
+    +'.ofa-lab{display:block;font-family:var(--font-display);font-weight:700;font-size:13px;color:var(--ink-2);margin:14px 0 6px}'
+    +'.ofa-lab em{font-style:normal;font-weight:600;color:var(--ink-4);font-size:12px}'
+    +'.ofa-in,.ofa-ta{width:100%;border:1.5px solid var(--line,#E7DFD3);border-radius:12px;padding:11px 13px;font:600 14px Nunito,sans-serif;color:var(--ink);background:var(--paper-2,#FAF7F2);box-sizing:border-box}'
+    +'.ofa-in:focus,.ofa-ta:focus{outline:none;border-color:var(--s27-blue,#3083DC);background:#fff}'
+    +'.ofa-ta{resize:vertical;min-height:96px;line-height:1.5}'
+    +'.ofa-chips{display:flex;flex-wrap:wrap;gap:8px}'
+    +'.ofa-chip{display:inline-flex;align-items:center;gap:7px;border:1.5px solid var(--line,#E7DFD3);background:var(--paper-2,#FAF7F2);color:var(--ink-2);font:700 13px Montserrat,sans-serif;padding:8px 13px;border-radius:999px;cursor:pointer;transition:all .15s}'
+    +'.ofa-chip:hover{border-color:var(--s27-blue,#3083DC)}'
+    +'.ofa-chip.on{background:var(--s27-blue,#3083DC);border-color:var(--s27-blue,#3083DC);color:#fff}'
+    +'.ofa-err{color:#C0392B;font-size:13px;font-weight:600;margin:12px 0 0}'
+    +'.ofa-foot{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}'
+    +'.ofa-done{text-align:center}.ofa-done-ic{width:64px;height:64px;border-radius:50%;background:var(--s27-green-soft,rgba(18,172,78,.12));color:#12AC4E;display:flex;align-items:center;justify-content:center;margin:6px auto 14px}';
+  document.head.appendChild(st);
+}
+function openOfferteAanvraag(takKey){
+  var s=offAanvraagState();
+  var d=TAK_TO_DIENST[takKey||'']; if(d) s.diensten[d]=true;
+  offAanvraagStyleOnce();
+  var el=$id('offAanvraag');
+  if(!el){ el=document.createElement('div'); el.id='offAanvraag'; document.body.appendChild(el); el.addEventListener('click',function(e){ if(e.target===el) closeOffAanvraag(); }); }
+  el.classList.add('show'); document.body.classList.add('mp-lock');
+  document.addEventListener('keydown',offAanvraagEsc);
+  offAanvraagRender();
+}
+function offAanvraagEsc(e){ if(e.key==='Escape') closeOffAanvraag(); }
+function closeOffAanvraag(){ var el=$id('offAanvraag'); if(el){ el.classList.remove('show'); el.innerHTML=''; } document.removeEventListener('keydown',offAanvraagEsc); document.body.classList.remove('mp-lock'); }
+function offAanvraagSyncInputs(){ var s=offAanvraagState(); var k=$id('ofaKorte'), b=$id('ofaBericht'); if(k) s.korte=k.value; if(b) s.bericht=b.value; }
+function offAanvraagToggleDienst(k){ offAanvraagSyncInputs(); var s=offAanvraagState(); s.diensten[k]=!s.diensten[k]; offAanvraagRender(); }
+function offAanvraagRender(){
+  var el=$id('offAanvraag'); if(!el) return; var s=offAanvraagState();
+  if(s.doneHTML){ el.innerHTML=s.doneHTML; return; }
+  var chips=DIENSTEN_AANVRAAG.map(function(d){ var on=!!s.diensten[d[0]]; return '<button type="button" class="ofa-chip'+(on?' on':'')+'" onclick="offAanvraagToggleDienst(\''+d[0]+'\')">'+ic(on?'check':'plus',14)+'<span>'+esc(d[1])+'</span></button>'; }).join('');
+  el.innerHTML='<div class="ofa-card" role="dialog" aria-modal="true">'
+    +'<button class="ofa-x" onclick="closeOffAanvraag()" aria-label="Sluiten">'+ic('plus',22)+'</button>'
+    +'<h2 class="ofa-h">Wat heb je nodig?</h2>'
+    +'<p class="ofa-sub">Beschrijf kort je vraag, dan stellen wij persoonlijk een offerte op maat voor je op. Kies één of meerdere diensten.</p>'
+    +'<label class="ofa-lab">Korte omschrijving <em>(verplicht)</em></label>'
+    +'<input id="ofaKorte" class="ofa-in" type="text" maxlength="120" placeholder="Bv. nieuwe website + SEO" value="'+esc(s.korte)+'">'
+    +'<label class="ofa-lab">Welke diensten? <em>(minstens één)</em></label>'
+    +'<div class="ofa-chips">'+chips+'</div>'
+    +'<label class="ofa-lab">Vertel ons meer <em>(verplicht)</em></label>'
+    +'<textarea id="ofaBericht" class="ofa-ta" rows="5" placeholder="Waar ben je naar op zoek? Wat wil je bereiken, tegen wanneer, en heb je al voorbeelden of voorkeuren?">'+esc(s.bericht)+'</textarea>'
+    +'<p id="ofaErr" class="ofa-err" style="display:none"></p>'
+    +'<div class="ofa-foot"><button class="btn btn-ghost" onclick="closeOffAanvraag()">Annuleren</button>'
+    +'<button class="btn btn-primary" id="ofaSend" onclick="offAanvraagSubmit()"'+(s.busy?' disabled':'')+'>'+(s.busy?'Versturen…':(ic('send',16)+' Aanvraag versturen'))+'</button></div></div>';
+}
+function offAanvraagSubmit(){
+  offAanvraagSyncInputs(); var s=offAanvraagState();
+  s.korte=String(s.korte||'').trim(); s.bericht=String(s.bericht||'').trim();
+  var diensten=Object.keys(s.diensten).filter(function(k){return s.diensten[k];});
+  var err=$id('ofaErr'); function showErr(m){ if(err){ err.textContent=m; err.style.display='block'; } }
+  if(!s.korte) return showErr('Geef een korte omschrijving van je aanvraag.');
+  if(!diensten.length) return showErr('Kies minstens één dienst.');
+  if(!s.bericht) return showErr('Vertel ons kort wat je nodig hebt.');
+  if(state.demoMode){
+    s.doneHTML='<div class="ofa-card ofa-done" role="dialog"><div class="ofa-done-ic">'+ic('check',40)+'</div><h2 class="ofa-h">Aanvraag verzonden</h2><p class="ofa-sub" style="margin:0 auto 18px">In je echte portaal sturen we je aanvraag meteen door naar Studio&nbsp;27. Dit is de voorbeeldweergave.</p><button class="btn btn-primary" onclick="closeOffAanvraag();state._offAanvraag=null">Sluiten</button></div>';
+    offAanvraagRender(); return;
+  }
+  s.busy=true; offAanvraagRender();
+  api(ENDPOINTS.offerteAanvraag, { korte:s.korte, bericht:s.bericht, diensten:diensten }).then(function(res){
+    s.busy=false;
+    if(res && res.ok){
+      s.doneHTML='<div class="ofa-card ofa-done" role="dialog"><div class="ofa-done-ic">'+ic('check',40)+'</div><h2 class="ofa-h">Aanvraag verzonden</h2><p class="ofa-sub" style="margin:0 auto 18px">'+esc(res.message||'We stellen je offerte op en bezorgen ze je binnenkort.')+'</p><button class="btn btn-primary" onclick="closeOffAanvraag();state._offAanvraag=null">Sluiten</button></div>';
+      offAanvraagRender();
+    } else { offAanvraagRender(); showErr((res&&res.message)||'Er ging iets mis. Probeer het later opnieuw.'); }
+  }).catch(function(){ s.busy=false; offAanvraagRender(); showErr('Er ging iets mis. Probeer het later opnieuw.'); });
 }
 function owHeader(){
   var s=state.ow||{}; var tak=owTak(); var br=(tak&&tak.br)||'blue';
