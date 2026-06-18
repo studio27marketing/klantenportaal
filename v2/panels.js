@@ -2630,7 +2630,14 @@ function adsWsStyles(){ if(document.getElementById('adsWsStyles'))return; var s=
   +'.ws-chip-tx{font-size:12.5px;font-weight:600;line-height:1.3;word-break:break-all;flex:1}'
   +'.ws-tile-x{position:absolute;top:6px;right:6px;width:24px;height:24px;border:0;border-radius:7px;background:rgba(255,255,255,.86);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);color:var(--ink-3);cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(35,15,35,.16)}'
   +'.ws-tile-x:hover{color:#DC2626}'
-  +'.ws-empty{border:1px dashed var(--line,#E7DFD3);border-radius:12px;padding:22px;text-align:center;color:var(--ink-4);font-size:13px}';
+  +'.ws-empty{border:1px dashed var(--line,#E7DFD3);border-radius:12px;padding:22px;text-align:center;color:var(--ink-4);font-size:13px}'
+  +'.ws-grp-empty{font-size:12.5px;color:var(--ink-4);padding:2px 2px 4px}'
+  +'.ws-cat-mat{margin-top:13px;padding-top:12px;border-top:1px dashed var(--line,#E7DFD3)}'
+  +'.ws-cat-mat-h{font-family:var(--font-display);font-weight:800;font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:6px;margin-bottom:9px}'
+  +'.ws-cat-mat-h svg{flex:none}'
+  +'.ws-catgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px;margin-bottom:10px}'
+  +'.ws-catgrid .ws-tile-img{height:96px}'
+  +'.ws-cat-add input[type=text]{min-width:150px}';
   document.head.appendChild(s);
 }
 // Aanbevelingen worden per SCOPE getagd (Vincent): één uniforme lijst waarin elke aanbeveling
@@ -2695,9 +2702,10 @@ function adsWsRecsRender(seedList){
     ws.seeded=true;
   }
   var recs=ws.recs||[];
+  // Alle 3 categorieën ALTIJD tonen, zodat elke categorie ook zonder aanbeveling een
+  // eigen materiaal-zone (uploads voor de klant) heeft.
   var groups=ADS_WS_CATS.map(function(c){
-    var items=recs.filter(function(r){ return (r.cat||'overig')===c[0]; });
-    if(!items.length) return '';
+    var items=recs.filter(function(r){ return (ADS_WS_SCOPES[r.cat]?r.cat:'algemeen')===c[0]; });
     var cards=items.map(function(r){
       return '<div class="ws-rec" data-rid="'+esc(r.id)+'">'
         +'<button class="ws-rec-x" onclick="adsWsRecDel(\''+esc(r.id)+'\')" title="Verwijderen" aria-label="Verwijderen">'+ic('trash',15)+'</button>'
@@ -2705,20 +2713,80 @@ function adsWsRecsRender(seedList){
         +'<div class="ws-rec-b" contenteditable="true" data-ph="Beschrijving…" oninput="adsWsRecEdit(\''+esc(r.id)+'\',\'body\',this)">'+esc(r.body||'')+'</div>'
         +'</div>';
     }).join('');
-    var ac=c[3]||['rgba(100,116,139,.13)','#475569']; // [tint-achtergrond, ink-kleur] per categorie (taak 10)
+    var ac=c[3]||['rgba(100,116,139,.13)','#475569']; // [tint-achtergrond, ink-kleur] per categorie
     return '<div class="ws-grp">'
       +'<div class="ws-grp-head"><span class="ws-grp-ic" style="background:'+ac[0]+';border-color:'+ac[0]+';color:'+ac[1]+'">'+ic(c[2],17)+'</span><span class="ws-grp-ttl">'+esc(c[1])+'</span><span class="ws-grp-n">'+items.length+'</span></div>'
-      +cards
-      +'<button class="ws-grp-add" onclick="adsWsRecAdd(\''+c[0]+'\')">'+ic('plus',14)+' Toevoegen</button>'
+      +(cards||'<div class="ws-grp-empty">Nog geen aanbevelingen in deze categorie.</div>')
+      +'<button class="ws-grp-add" onclick="adsWsRecAdd(\''+c[0]+'\')">'+ic('plus',14)+' Aanbeveling toevoegen</button>'
+      +adsWsCatMaterial(c[0])
       +'</div>';
-  }).filter(Boolean);
-  // Lege categorieën blijven beschikbaar via een toevoegrij onderaan, zodat elke categorie bruikbaar blijft.
-  var emptyCats=ADS_WS_CATS.filter(function(c){ return !recs.some(function(r){ return (r.cat||'overig')===c[0]; }); });
-  var emptyAdd=emptyCats.length?('<div class="ws-grp"><div class="ws-grp-head"><span class="ws-grp-ic">'+ic('plus',16)+'</span><span class="ws-grp-ttl">Nog een aanbeveling toevoegen</span></div><div class="ws-addrow">'+emptyCats.map(function(c){ return '<button class="ws-btn" onclick="adsWsRecAdd(\''+c[0]+'\')">'+ic(c[2],14)+' '+esc(c[1])+'</button>'; }).join('')+'</div></div>'):'';
-  var emptyState=recs.length?'':'<div class="ws-empty">Nog geen aanbevelingen toegevoegd. Voeg er hieronder een toe en kies of het over Meta Ads, Google Ads of iets algemeens gaat.</div>';
+  });
   return '<span class="ws-save" id="adsWsSave" style="display:block;text-align:right;min-height:1px;margin-top:2px"></span>'
     +'<span id="adsWsCount" style="display:none">'+recs.length+'</span>'
-    +'<div class="ws-recs" id="adsWsRecs">'+groups.join('')+emptyState+emptyAdd+'</div>';
+    +'<div class="ws-recs" id="adsWsRecs">'+groups.join('')+'</div>';
+}
+/* Materiaal-zone per categorie: uploads (visuals/foto's/pdf's) + links die we aan de klant
+   willen tonen. Bestaande uploads zonder categorie vallen onder 'Algemeen'. */
+function adsWsUploadsByCat(cat){ return adsWsUploads().filter(function(u){ return (ADS_WS_SCOPES[u.cat]?u.cat:'algemeen')===cat; }); }
+function adsWsTileHtml(u){
+  var del='<button class="ws-tile-x" onclick="adsWsCatUploadDel(\''+esc(u.id||'')+'\')" title="Verwijderen" aria-label="Verwijderen">'+ic('trash',13)+'</button>';
+  if(u.type==='image'){
+    return '<div class="ws-tile">'+del
+      +'<a href="'+esc(u.url||'#')+'" target="_blank" rel="noopener"><img class="ws-tile-img" src="'+esc(u.url||'')+'" alt="'+esc(u.name||'')+'" loading="lazy"></a>'
+      +(u.name?'<div class="ws-tile-cap">'+esc(u.name)+'</div>':'')+'</div>';
+  }
+  var icn=(u.type==='link')?adsWsLinkIcon():ic('doc',16);
+  return '<div class="ws-tile">'+del
+    +'<a class="ws-chip" href="'+esc(u.url||'#')+'" target="_blank" rel="noopener"><span class="ws-chip-ic">'+icn+'</span><span class="ws-chip-tx">'+esc(u.name||u.url||'Link')+'</span></a></div>';
+}
+function adsWsCatMaterial(cat){
+  var ups=adsWsUploadsByCat(cat);
+  var grid=ups.length?('<div class="ws-catgrid">'+ups.map(adsWsTileHtml).join('')+'</div>'):'';
+  return '<div class="ws-cat-mat">'
+    +'<div class="ws-cat-mat-h">'+ic('img',14)+' Materiaal voor de klant'+(ups.length?(' <span class="ws-grp-n">'+ups.length+'</span>'):'')+'</div>'
+    +grid
+    +'<div class="ws-addrow ws-cat-add">'
+      +'<span class="ws-btn ws-file">'+ic('upload',13)+' Bestand<input type="file" onchange="adsWsCatFileUpload(this,\''+cat+'\')" accept="image/*,application/pdf,video/*"></span>'
+      +'<input type="text" id="wsCatLink_'+cat+'" placeholder="of plak een link (Drive, WeTransfer…)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();adsWsCatLinkAdd(\''+cat+'\');}">'
+      +'<button class="ws-btn" onclick="adsWsCatLinkAdd(\''+cat+'\')">'+ic('plus',13)+' Link</button>'
+    +'</div>'
+    +'<div class="ws-upmsg" id="wsCatMsg_'+cat+'"></div>'
+  +'</div>';
+}
+function adsWsCatLinkAdd(cat){
+  var inp=document.getElementById('wsCatLink_'+cat); if(!inp) return;
+  var v=String(inp.value||'').trim(); if(!v) return;
+  var url=/^https?:\/\//i.test(v)?v:('https://'+v);
+  inp.value='';
+  if(window.S27DATA&&S27DATA.adsUploadAdd) S27DATA.adsUploadAdd({type:'link',name:v,url:url,cat:cat}).then(function(list){ if(list) adsWsRerenderRecs(); });
+}
+function adsWsCatFileUpload(input,cat){
+  var msg=document.getElementById('wsCatMsg_'+cat);
+  var f=input&&input.files&&input.files[0]; if(!f) return;
+  if(f.size>22*1024*1024){ if(msg) msg.innerHTML='<span class="err">Dit bestand is te groot (max 22 MB). Plak liever een link (bv. WeTransfer of Drive).</span>'; input.value=''; return; }
+  if(msg) msg.innerHTML='<span style="display:inline-flex;align-items:center;gap:6px">'+ic('upload',13)+' Uploaden…</span>';
+  var isImg=/^image\//i.test(f.type||'');
+  var rdr=new FileReader();
+  rdr.onerror=function(){ if(msg) msg.innerHTML='<span class="err">Lezen mislukt. Probeer opnieuw.</span>'; input.value=''; };
+  rdr.onload=function(){
+    var dataUrl=String(rdr.result||'');
+    var b64=dataUrl.indexOf(',')>=0?dataUrl.slice(dataUrl.indexOf(',')+1):dataUrl;
+    if(state.demoMode || typeof api!=='function' || !ENDPOINTS.metricoolMediaUpload){ if(msg) msg.innerHTML='<span class="err">Upload is enkel beschikbaar in de live-omgeving.</span>'; input.value=''; return; }
+    api(ENDPOINTS.metricoolMediaUpload, { filename:f.name, content_type:f.type, file_data:b64 }).then(function(r){
+      var d=(r&&r.ok&&r.data)?r.data:(r&&r.ok!==undefined?r:null);
+      if(d&&d.ok&&d.url){
+        if(window.S27DATA&&S27DATA.adsUploadAdd){ S27DATA.adsUploadAdd({type:isImg?'image':'file',name:f.name,url:d.url,cat:cat}).then(function(list){ if(list){ if(msg) msg.innerHTML='<span class="ok">'+ic('check',13)+' Toegevoegd.</span>'; adsWsRerenderRecs(); } else if(msg){ msg.innerHTML='<span class="err">Opslaan mislukte.</span>'; } }); }
+      } else { var det=(d&&d.message)?(' '+esc(String(d.message))):''; if(msg) msg.innerHTML='<span class="err">Upload lukte niet.'+det+'</span>'; }
+    }).catch(function(){ if(msg) msg.innerHTML='<span class="err">Upload lukte niet. Probeer opnieuw.</span>'; });
+    input.value='';
+  };
+  rdr.readAsDataURL(f);
+}
+function adsWsCatUploadDel(id){
+  if(!id) return;
+  var ups=adsWsUploads().filter(function(u){ return u.id!==id; });
+  if(window.S27DATA&&S27DATA.saveAdsWorkspace){ S27DATA.saveAdsWorkspace({uploads:ups}).then(function(){ if(state.data.adsWorkspace) state.data.adsWorkspace.uploads=ups; adsWsRerenderRecs(); }); }
+  else { if(state.data.adsWorkspace) state.data.adsWorkspace.uploads=ups; adsWsRerenderRecs(); }
 }
 function adsWsRerenderRecs(){
   var box=document.getElementById('adsBody'); if(!box) return;
