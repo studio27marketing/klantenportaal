@@ -1258,6 +1258,7 @@ function adsObjective(o){ o=String(o||'').toUpperCase(); var m={OUTCOME_LEADS:'L
 function adsNum(n){ return (Number(n)||0).toLocaleString('nl-BE'); }
 function adsEur(n){ return '€ '+(Number(n)||0).toLocaleString('nl-BE',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function setAdsPlatform(p){ state._adsPlatform=p; state._adsPlatMenuOpen=false; if(state._adsTab==='maand') state._adsTab='samengevat';   // 'Maandoverzicht' bestaat niet meer
+  if(p==='meta' && state._adsTab==='gegevens') state._adsTab='samengevat';   // 'Uitgebreide gegevens' bestaat niet meer voor Meta (Google houdt 'gegevens' = Zoektermen)
   // Meeting-materiaal is gedeeld per bedrijf (KV adsws:<bedrijf>, platform-loos). Bij platformwissel de
   // workspace herladen zodat Meta en Google ALTIJD exact dezelfde bijlagen/links/notities tonen (geen stale render).
   if(isRichView() && adsRichTab()==='meeting' && window.S27DATA && S27DATA.loadAdsWorkspace){ try{ adsWsState().loaded=false; }catch(e){} }
@@ -1627,7 +1628,7 @@ function adsControlsRow(){ return '<div class="ads-ctrlrow">'+adsPlatformPicker(
 function adsRichTab(){ return state._adsTab||'samengevat'; }
 function adsRichSubnav(){
   var t=adsRichTab();
-  var tabs=[['samengevat','Samengevat','st_progress'],['campagnes','Campagnes','cal'],['gegevens','Uitgebreide gegevens','st_approved'],['aanbevelingen','Aanbevelingen','msg']];
+  var tabs=[['samengevat','Samengevat','st_progress'],['campagnes','Campagnes','cal'],['aanbevelingen','Aanbevelingen','msg']];   // 'Uitgebreide gegevens' verwijderd (Vincent) — niet meer beschikbaar voor Meta
   if(isRichView()) tabs.push(['meeting','Meeting','img']);
   var tabsHtml=tabs.map(function(x){ return '<button class="soc-subtab'+(t===x[0]?' active':'')+'" data-atab="'+x[0]+'" onclick="adsRichSetTab(\''+x[0]+'\')">'+ic(x[2],17)+'<span>'+esc(x[1])+'</span></button>'; }).join('');
   // rechts op de menubalk-rij: notitie-knop + periode-keuze (rechtsboven). Platform-keuze staat in de rij eronder.
@@ -1653,7 +1654,6 @@ function adsRichTabBody(){
   var cur=m.currency||'EUR', t=adsRichTab();
   if(t==='meeting') return adsWsMeetingTab();
   if(t==='campagnes') return adsRichCampagnesTab(m,cur);
-  if(t==='gegevens') return adsRichGegevensTab(m,cur);
   if(t==='aanbevelingen') return adsRichOptim(m.campaigns||[],cur);
   return adsRichSamengevatTab(m,cur);
 }
@@ -2633,14 +2633,16 @@ function adsWsStyles(){ if(document.getElementById('adsWsStyles'))return; var s=
   +'.ws-empty{border:1px dashed var(--line,#E7DFD3);border-radius:12px;padding:22px;text-align:center;color:var(--ink-4);font-size:13px}';
   document.head.appendChild(s);
 }
-// Taak 10: elke categorie een subtiele, eigen accentkleur (4e element [tint,ink]) — blauw/teal/amber/violet/leisteen. NOOIT rood.
+// Aanbevelingen worden per SCOPE getagd (Vincent): één uniforme lijst waarin elke aanbeveling
+// gekoppeld is aan Meta Ads, Google Ads of iets algemeens (website e.d.). Bij het toevoegen kies
+// je de scope. (Het 'cat'-veld op een rec bevat nu de scope — backward-compatibel met de opslag.)
+// 4e element = [tint-achtergrond, ink-kleur]: Meta=blauw, Google=oranje, Algemeen=leisteen. NOOIT rood.
 var ADS_WS_CATS=[
-  ['content','Content & creatives','img',['rgba(48,131,220,.12)','#1F5FA8']],
-  ['landingspagina','Landingspagina','doc',['rgba(14,165,165,.13)','#0B7A7A']],
-  ['budget','Budget & bieden','st_progress',['rgba(224,138,30,.14)','#B4540B']],
-  ['doelgroep','Doelgroep','msg',['rgba(148,65,219,.12)','#6D28C9']],
-  ['overig','Overig','st_approved',['rgba(100,116,139,.13)','#475569']]
+  ['meta','Meta Ads','st_progress',['rgba(48,131,220,.12)','#1F5FA8']],
+  ['google','Google Ads','st_progress',['rgba(224,138,30,.14)','#B4540B']],
+  ['algemeen','Algemeen','doc',['rgba(100,116,139,.13)','#475569']]
 ];
+var ADS_WS_SCOPES={meta:1,google:1,algemeen:1};   // geldige scopes; onbekende/oude categorieën vallen terug op 'algemeen'
 function adsWsGuessCat(title,body){
   var s=((title||'')+' '+(body||'')).toLowerCase();
   if(/landingspag|formulier|landing|website|pagina|tracking|conversie-track|conversie track/.test(s)) return 'landingspagina';
@@ -2681,7 +2683,7 @@ function adsWsRecsRender(seedList){
   if(!ws.seeded){
     var saved=(window.S27DATA&&S27DATA.adsWorkspace&&S27DATA.adsWorkspace())||state.data.adsWorkspace||null;
     if(saved && Array.isArray(saved.recs) && saved.recs.length){
-      ws.recs=saved.recs.map(function(r){ return { id:r.id||adsWsRid(), cat:r.cat||'overig', title:r.title||'', body:r.body||'' }; });
+      ws.recs=saved.recs.map(function(r){ return { id:r.id||adsWsRid(), cat:(ADS_WS_SCOPES[r.cat]?r.cat:'algemeen'), title:r.title||'', body:r.body||'' }; });   // oude categorie-recs -> 'Algemeen'
       ws.seededFromSaved=true;
     } else {
       // Vincent: GEEN automatische standaard-aanbevelingen meer — de tab start LEEG (Meta én Google),
@@ -2713,7 +2715,7 @@ function adsWsRecsRender(seedList){
   // Lege categorieën blijven beschikbaar via een toevoegrij onderaan, zodat elke categorie bruikbaar blijft.
   var emptyCats=ADS_WS_CATS.filter(function(c){ return !recs.some(function(r){ return (r.cat||'overig')===c[0]; }); });
   var emptyAdd=emptyCats.length?('<div class="ws-grp"><div class="ws-grp-head"><span class="ws-grp-ic">'+ic('plus',16)+'</span><span class="ws-grp-ttl">Nog een aanbeveling toevoegen</span></div><div class="ws-addrow">'+emptyCats.map(function(c){ return '<button class="ws-btn" onclick="adsWsRecAdd(\''+c[0]+'\')">'+ic(c[2],14)+' '+esc(c[1])+'</button>'; }).join('')+'</div></div>'):'';
-  var emptyState=recs.length?'':'<div class="ws-empty">Nog geen aanbevelingen toegevoegd. Voeg er hieronder een toe per categorie.</div>';
+  var emptyState=recs.length?'':'<div class="ws-empty">Nog geen aanbevelingen toegevoegd. Voeg er hieronder een toe en kies of het over Meta Ads, Google Ads of iets algemeens gaat.</div>';
   return '<span class="ws-save" id="adsWsSave" style="display:block;text-align:right;min-height:1px;margin-top:2px"></span>'
     +'<span id="adsWsCount" style="display:none">'+recs.length+'</span>'
     +'<div class="ws-recs" id="adsWsRecs">'+groups.join('')+emptyState+emptyAdd+'</div>';
@@ -2731,7 +2733,7 @@ function adsWsRecEdit(id,field,el){
 }
 function adsWsRecAdd(cat){
   var ws=adsWsState(); if(!ws.recs) ws.recs=[]; ws.dirty=true;
-  ws.recs.push({ id:adsWsRid(), cat:cat||'overig', title:'', body:'' });
+  ws.recs.push({ id:adsWsRid(), cat:(ADS_WS_SCOPES[cat]?cat:'algemeen'), title:'', body:'' });
   var cnt=document.getElementById('adsWsCount'); if(cnt) cnt.textContent=ws.recs.length;
   adsWsRerenderRecs(); adsWsSaveRecsDebounced();
   // Focus de nieuwe (laatste) titel binnen de gekozen categorie.
