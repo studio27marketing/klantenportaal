@@ -2392,7 +2392,27 @@ function googleTrendBlock(){
    conversies/waarde/CPA/conv.ratio + vertonings-aandeel + adgroep-breakdown + zoekwoorden.
    Data via S27DATA.googleAdsRich() (worker googleAdsRich, is_staff-gated, acting-as).
    ============================================================================= */
-function googleRichNotLinked(){ return '<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen Google Ads-account gekoppeld</div><div style="color:var(--ink-3);max-width:470px;margin:0 auto;line-height:1.55">Koppel het Google Ads-klant-id van deze klant (veld &ldquo;Google Ads ID&rdquo; op de bedrijf-taak) om hier de uitgebreide rapportage te zien.</div></div>'; }
+function googleRichNotLinked(){
+  // Team-weergave: toon de ECHTE reden (uit de worker) zodat een teamlid meteen weet wat te doen
+  // i.p.v. een eindeloze laadspinner. 'bad_id' = veld bevat geen 10-cijferig klant-id; 'account_error' =
+  // id klopt qua vorm maar Google geeft geen toegang; 'no_token' = server-koppeling ontbreekt.
+  var g=(window.S27DATA&&S27DATA.googleAdsRich&&S27DATA.googleAdsRich())||{};
+  var r=g.reason||'', title, body;
+  if(r==='bad_id'){
+    title='Google Ads ID lijkt niet te kloppen';
+    body='Het veld &ldquo;Google Ads ID&rdquo; op de bedrijf-taak bevat '+(g.account?('&ldquo;<b>'+esc(g.account)+'</b>&rdquo;'):'een waarde')+', maar een Google Ads klant-id bestaat uit <b>10 cijfers</b> (formaat 123-456-7890). Corrigeer het in ClickUp.';
+  } else if(r==='account_error'){
+    title='Google Ads-account niet bereikbaar';
+    body='Het klant-id is ingevuld, maar Google geeft geen data terug. Controleer of het id klopt en of dit account onder het beheeraccount (MCC) van Studio&nbsp;27 hangt.'+(g.detail?'<br><span style="font-size:12px;color:var(--ink-4)">'+esc(g.detail)+'</span>':'');
+  } else if(r==='no_token'){
+    title='Google Ads-koppeling ontbreekt';
+    body='De Google Ads API-koppeling (developer- of refresh-token) is niet ingesteld op de server.';
+  } else {
+    title='Nog geen Google Ads-account gekoppeld';
+    body='Koppel het Google Ads-klant-id van deze klant (veld &ldquo;Google Ads ID&rdquo; op de bedrijf-taak) om hier de uitgebreide rapportage te zien.';
+  }
+  return '<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">'+title+'</div><div style="color:var(--ink-3);max-width:480px;margin:0 auto;line-height:1.55">'+body+'</div></div>';
+}
 function _gCur(){ var g=(window.S27DATA&&S27DATA.googleAdsRich&&S27DATA.googleAdsRich()); return (g&&g.currency)||'EUR'; }
 function _gFindCamp(cid){ var g=(window.S27DATA&&S27DATA.googleAdsRich&&S27DATA.googleAdsRich()); if(!g||!g.campaigns) return null; for(var i=0;i<g.campaigns.length;i++){ if(String(g.campaigns[i].id)===String(cid)) return g.campaigns[i]; } return null; }
 function _gMatch(mt){ return ({EXACT:'Exact',PHRASE:'Zinsdeel',BROAD:'Breed',BROAD_MATCH_MODIFIER:'Breed+'})[String(mt||'').toUpperCase()]||(mt?_titleCase(mt):'–'); }
