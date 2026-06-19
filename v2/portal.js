@@ -355,13 +355,13 @@ function renderLogin(mode){
     $id('lgSubmit').onclick = function(){ mode==='demo' ? enterDemo() : doLoginCode(); };
     return;
   }
-  // v2 signed_out (Firebase): Google + magic-link e-mail
+  // v2 signed_out (Firebase): e-maillink (standaard, werkt met ELK mailadres incl. Outlook) + Google als alternatief
   loginCard(
     '<div class="llab" hidden></div>'+
-    '<button class="oauth-btn" id="lgGoogle">'+GOOGLE_SVG+' Inloggen met Google</button>'+
-    '<div class="divider-or">of met je e-mailadres</div>'+
-    '<div class="field"><label>E-mailadres</label><input id="lgEmail" type="email" placeholder="jij@bedrijf.be" autocomplete="email"></div>'+
+    '<div class="field"><label>E-mailadres</label><input id="lgEmail" type="email" placeholder="jij@bedrijf.be" autocomplete="email" onkeydown="if(event.key===\'Enter\'){event.preventDefault();var b=document.getElementById(\'lgEmailBtn\');if(b)b.click();}"></div>'+
     '<button class="btn btn-primary btn-block" style="min-height:50px;font-size:15px;margin-top:4px" id="lgEmailBtn">Stuur me een inloglink '+ARROW_SVG+'</button>'+
+    '<div class="divider-or">of met je Google-account</div>'+
+    '<button class="oauth-btn" id="lgGoogle">'+GOOGLE_SVG+' Inloggen met Google</button>'+
     '<div class="login-foot"><label class="remember"><input type="checkbox" id="lgRemember" checked> Onthoud dit toestel</label></div>'
   );
   $id('lgGoogle').onclick = function(){ loginErr(''); if(window.S27Auth) window.S27Auth.google(); };
