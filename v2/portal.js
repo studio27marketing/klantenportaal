@@ -2924,32 +2924,119 @@ async function shootInitAutocomplete(tid){
 function toggleBot(){ const p=$id('botPanel'),f=$id('botFab'); const open=p.classList.toggle('show'); f.style.display=open?'none':'flex'; if(open){ const g=$id('botGreet'); if(g){ var nm=(typeof _greetNaam==='function'?_greetNaam():'')||''; g.innerHTML='Hallo '+escapeHtml(nm||'daar')+'! Ik help je graag op weg. Waarmee kan ik je verder helpen?'; } if(typeof renderBotChips==='function') renderBotChips(); const inp=p.querySelector('.bot-input input'); if(inp)setTimeout(()=>inp.focus(),50); } }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($id('tourScrim')&&$id('tourScrim').classList.contains('show'))endTour(false); else if(state.viewMode==='project'){ if(typeof _isContentTak==='function'&&_isContentTak(state._backTab||'')) markSkipAutoLand(state._backTab); goTab(state._backTab||'start'); } } });
 
-/* ---------- Onboarding tour (1x + opt-out) ---------- */
-const TOUR=[
-  {t:'Jouw startscherm',b:'Hier vind je altijd wat er voor jóu klaarstaat, reviews, feedback en meetings. Begin hier elke dag.',target:'.sb-item[data-tab="start"]'},
-  {t:'Al je werk, gebundeld',b:'In de zijbalk staat alles altijd zichtbaar: je projecten, socials én advertenties.',target:'.sb-item[data-tab="video"]'},
-  {t:'Altijd in contact',b:'Vragen? Onze slimme assistent helpt je meteen op weg en schakelt zo nodig door naar een echt mens.',target:'#botFab'},
-  {t:'Plan vlot een moment',b:'Een meeting nodig? Prik zelf een vrij tijdslot. Wij staan klaar, vrijblijvend.',target:'.sb-item[data-tab="meetings"]'},
+/* ---------- Onboarding-rondleiding (auto 1x + altijd via het ?-icoon) ----------
+   Volledige begeleide tour: elke stap licht een ECHT element uit (spotlight-ring +
+   gedimde rest), met een tekstkaart ernaast. Stappen zonder zichtbaar doel (bv. een
+   tak die deze klant niet heeft) worden automatisch overgeslagen. Welkom + slot zijn
+   gecentreerde kaarten. Tijdens de tour staat de zijbalk volledig uitgeklapt (overlay,
+   body.tour-on) zodat de labels leesbaar zijn. */
+const TOUR_ALL=[
+  {ic:'spark',       t:'Welkom in je portaal',          b:'In een halve minuut tonen we je waar alles staat. Geen zorgen — je kan deze rondleiding altijd opnieuw starten via het vraagteken bovenaan.', targets:null},
+  {ic:'home',        t:'Je startscherm',                b:'Hier begint je dag: alles wat voor jou klaarstaat — reviews, feedback, geplande shoots en meetings — verschijnt meteen bovenaan.', targets:['.sb-item[data-tab="start"]']},
+  {ic:'doc',         t:'Je projecten per discipline',   b:'Elke dienst heeft z’n eigen plek in de zijbalk. Klik op een tak — zoals Video & fotografie, Branding of Strategie — om je projecten, bestanden en feedbackrondes te bekijken en goed te keuren.', targets:['.sb-item[data-tab="video"]','.sb-item[data-tab="branding"]','.sb-item[data-tab="strategie"]']},
+  {ic:'st_progress', t:'Volg je resultaten',            b:'Bij Socials, Adverteren en Website zie je je cijfers in real time. Kies zelf de periode die je wil — en elke weergave heeft een eigen link die je 1-op-1 met een collega kan delen.', targets:['.sb-item[data-tab="socials"]','.sb-item[data-tab="advertenties"]','.sb-item[data-tab="webprestaties"]']},
+  {ic:'msg',         t:'Chatten met je team',           b:'Onder Berichten vind je al je gesprekken met het Studio 27-team, netjes gebundeld per project. Je kan ook rechtstreeks bij elk project reageren.', targets:['.sb-item[data-tab="berichten"]']},
+  {ic:'cal',         t:'Een meeting inplannen',         b:'Een overleg nodig? Onder Meetings prik je zelf een vrij moment dat jou past. Volledig vrijblijvend.', targets:['.sb-item[data-tab="meetings"]']},
+  {ic:'gear',        t:'Je instellingen',               b:'Bij Instellingen pas je je gegevens en meldingsvoorkeuren aan — kies of je updates liefst via e-mail, WhatsApp of een pushmelding ontvangt.', targets:['.sb-item[data-tab="instellingen"]']},
+  {ic:'bell',        t:'Je meldingen',                  b:'Dit belletje verzamelt updates over je projecten, reviews en berichten. Een gekleurd bolletje betekent dat er iets nieuws voor je is.', targets:['#bellBtn']},
+  {ic:'msg',         t:'Contact opnemen',               b:'Een vraag, een nieuw project of website-support nodig? Met de Contact-knop kom je in één klik bij de juiste persoon terecht.', targets:['#topNewBtn']},
+  {ic:'bug',         t:'Feedback & bugs melden',        b:'Werkt er iets niet zoals verwacht, of heb je een idee voor het portaal? Meld het via dit knopje — het komt rechtstreeks bij ons team terecht.', targets:['#bugBtn']},
+  {ic:'help',        t:'Deze rondleiding herhalen',     b:'Even kwijt hoe iets werkt? Via dit vraagteken start je deze rondleiding wanneer je maar wil opnieuw.', targets:['.topbar .icon-btn[aria-label="Rondleiding"]']},
+  {ic:'st_approved', t:'Je bent helemaal klaar!',       b:'Dat was het — je kent nu de weg. Veel plezier in je Studio 27-portaal, en weet dat we altijd voor je klaarstaan.', targets:null},
 ];
-let tourIdx=0;
-function openTour(){ tourIdx=0; goTab('start'); $id('tourScrim').classList.add('show'); $id('spotlight').classList.add('show'); $id('tourDialog').classList.add('show'); renderTour(); }
-function renderTour(){
-  const s=TOUR[tourIdx];
-  if(window.innerWidth<=980){ const sb=$id('sidebar'); if(s.target.indexOf('.sb-item')===0)sb.classList.add('open'); else sb.classList.remove('open'); }
-  $id('tourStep').textContent='Stap '+(tourIdx+1)+' van '+TOUR.length;
-  $id('tourTitle').textContent=s.t; $id('tourBody').textContent=s.b;
-  $id('tourDots').innerHTML=TOUR.map((_,i)=>'<i class="'+(i===tourIdx?'on':'')+'"></i>').join('');
-  $id('tourPrev').style.visibility=tourIdx===0?'hidden':'visible';
-  $id('tourNext').textContent=tourIdx===TOUR.length-1?'Aan de slag!':'Volgende';
-  const el=document.querySelector(s.target); const sp=$id('spotlight'), dg=$id('tourDialog');
-  if(el){ const r=el.getBoundingClientRect(); const pad=8; sp.style.left=(r.left-pad)+'px'; sp.style.top=(r.top-pad)+'px'; sp.style.width=(r.width+pad*2)+'px'; sp.style.height=(r.height+pad*2)+'px';
-    let top=r.bottom+16; if(top+220>window.innerHeight)top=Math.max(16,r.top-236); let left=Math.min(Math.max(16,r.left),window.innerWidth-396);
-    if(window.innerWidth<=980 && s.target.indexOf('.sb-item')===0){ left=Math.min(280,window.innerWidth-360); top=Math.min(r.top,window.innerHeight-240); }
-    dg.style.top=top+'px'; dg.style.left=left+'px'; }
+let tourIdx=0, tourSteps=[], _tourLifted=null;
+function tourEnsureStyles(){
+  if($id('s27-tour-styles')) return;
+  var st=document.createElement('style'); st.id='s27-tour-styles';
+  st.textContent=
+    '.tour-dialog{transition:top .26s cubic-bezier(.4,0,.2,1),left .26s cubic-bezier(.4,0,.2,1);}'+
+    '.spotlight{background:transparent!important;box-shadow:0 0 0 3px var(--s27-blue,#3083DC),0 0 0 6px rgba(48,131,220,.28)!important;transition:top .26s cubic-bezier(.4,0,.2,1),left .26s cubic-bezier(.4,0,.2,1),width .26s cubic-bezier(.4,0,.2,1),height .26s cubic-bezier(.4,0,.2,1);}'+
+    '.tour-ic{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--s27-blue,#3083DC);color:#fff;margin-bottom:13px;box-shadow:0 7px 18px rgba(48,131,220,.34);}'+
+    '.tour-ic svg{width:21px;height:21px;}'+
+    '.tour-dialog.tour-center{left:50%!important;top:50%!important;transform:translate(-50%,-50%);}'+
+    '@media(max-width:980px){.tour-dialog.tour-bottom{left:12px!important;right:12px!important;top:auto!important;bottom:14px!important;width:auto!important;transform:none;}}'+
+    '@media(min-width:981px){'+
+      'body.tour-on.sb-rail .sidebar{width:var(--sb-full)!important;box-shadow:0 22px 70px rgba(35,15,35,.22)!important;}'+
+      'body.tour-on.sb-rail .sidebar .sb-label{display:block!important;}'+
+      'body.tour-on.sb-rail .sidebar .sb-client-tx{display:flex!important;}'+
+      'body.tour-on.sb-rail .sidebar .sb-client .chev{display:block!important;}'+
+      'body.tour-on.sb-rail .sidebar .sb-wordmark{display:block!important;}'+
+      'body.tour-on.sb-rail .sidebar .sb-glabel{visibility:visible!important;}'+
+      'body.tour-on.sb-rail .sidebar .sb-item{justify-content:flex-start!important;gap:12px!important;padding:9px 12px!important;}'+
+      'body.tour-on.sb-rail .sidebar .sb-item .sb-badge{display:flex!important;}'+
+      'body.tour-on.sb-rail .sidebar .sb-client{justify-content:flex-start!important;}'+
+    '}';
+  document.head.appendChild(st);
 }
-function tourNav(dir){ tourIdx+=dir; if(tourIdx>=TOUR.length){endTour(true);return;} if(tourIdx<0)tourIdx=0; renderTour(); }
-function endTour(remember){ $id('tourScrim').classList.remove('show'); $id('spotlight').classList.remove('show'); $id('tourDialog').classList.remove('show'); if(window.innerWidth<=980)closeSidebar(); if(remember)localStorage.setItem('s27_tour_completed',new Date().toISOString()); }
-window.addEventListener('resize',()=>{ if($id('tourDialog')&&$id('tourDialog').classList.contains('show'))renderTour(); });
+function _tourVisible(el){ try{ if(!el) return false; if(el.offsetParent===null && getComputedStyle(el).position!=='fixed') return false; var r=el.getBoundingClientRect(); return r.width>2 && r.height>2; }catch(e){ return false; } }
+function _tourEl(s){ if(!s||!s.targets) return null; for(var i=0;i<s.targets.length;i++){ var el=document.querySelector(s.targets[i]); if(_tourVisible(el)) return el; } return null; }
+// het uitgelichte element (of z'n container) boven de scrim tillen zodat het helder blijft
+function _tourLift(el){
+  if(_tourLifted){ try{ _tourLifted.style.zIndex=_tourLifted.__z0||''; _tourLifted.style.position=_tourLifted.__p0||''; }catch(e){} _tourLifted=null; }
+  if(!el) return;
+  var cont = (el.closest && (el.closest('#sidebar') || el.closest('.sidebar') || el.closest('.topbar'))) || el;
+  cont.__z0=cont.style.zIndex; cont.__p0=cont.style.position;
+  try{ if(getComputedStyle(cont).position==='static') cont.style.position='relative'; }catch(e){}
+  cont.style.zIndex='151';   // boven de scrim (150), onder de spotlight-ring (155) en kaart (160)
+  _tourLifted=cont;
+}
+function openTour(){
+  tourEnsureStyles();
+  goTab('start');
+  document.body.classList.add('tour-on');                                   // zijbalk uitgeklapt (overlay)
+  tourSteps = TOUR_ALL.filter(function(s){ return !s.targets || _tourEl(s); });   // enkel stappen met een zichtbaar doel
+  tourIdx=0;
+  $id('tourScrim').classList.add('show'); $id('tourDialog').classList.add('show');
+  window.addEventListener('scroll', _tourReposition, true);
+  renderTour();
+  setTimeout(_tourReposition, 320);                                         // herplaats nadat de zijbalk-uitklap gesetteld is
+}
+function renderTour(){
+  var s=tourSteps[tourIdx]; if(!s){ endTour(true); return; }
+  var el=_tourEl(s);
+  if(window.innerWidth<=980){ var sb=$id('sidebar'); var isSb=!!(el && /sb-item|sidebar/.test((s.targets&&s.targets[0])||'')); if(sb){ if(isSb) sb.classList.add('open'); else sb.classList.remove('open'); } }
+  $id('tourIc').innerHTML = s.ic ? ic(s.ic,21) : '';
+  $id('tourStep').textContent='Stap '+(tourIdx+1)+' van '+tourSteps.length;
+  $id('tourTitle').textContent=s.t; $id('tourBody').textContent=s.b;
+  $id('tourDots').innerHTML=tourSteps.map(function(_,i){ return '<i class="'+(i===tourIdx?'on':'')+'"></i>'; }).join('');
+  $id('tourPrev').style.visibility=tourIdx===0?'hidden':'visible';
+  $id('tourNext').textContent=tourIdx===tourSteps.length-1?'Aan de slag!':'Volgende';
+  _tourPlace(el);
+}
+function _tourPlace(el){
+  var sp=$id('spotlight'), dg=$id('tourDialog');
+  _tourLift(el);
+  if(!el){ sp.classList.remove('show'); dg.classList.add('tour-center'); dg.classList.remove('tour-bottom'); dg.style.left=''; dg.style.top=''; return; }
+  dg.classList.remove('tour-center');
+  try{ var pre=el.getBoundingClientRect(); if(pre.top<72 || pre.bottom>window.innerHeight-12){ el.scrollIntoView({block:'center',behavior:'auto'}); } }catch(e){}
+  var r=el.getBoundingClientRect(), pad=7;
+  sp.classList.add('show');
+  sp.style.left=(r.left-pad)+'px'; sp.style.top=(r.top-pad)+'px'; sp.style.width=(r.width+pad*2)+'px'; sp.style.height=(r.height+pad*2)+'px';
+  if(window.innerWidth<=980){ dg.classList.add('tour-bottom'); dg.style.left=''; dg.style.top=''; return; }
+  dg.classList.remove('tour-bottom');
+  var dw=Math.min(380, window.innerWidth-32), gap=14, dh=dg.offsetHeight||230, top, left;
+  if(r.left < window.innerWidth*0.22){                          // zijbalk -> kaart rechts ernaast
+    left=r.right+gap; if(left+dw>window.innerWidth-12) left=Math.max(12, r.left-dw-gap); top=Math.max(12, r.top-4);
+  } else if(r.top < 140){                                       // topbar -> kaart eronder, rechts uitgelijnd
+    top=r.bottom+gap; left=Math.min(r.right-dw, window.innerWidth-dw-12); if(left<12) left=12;
+  } else { top=r.bottom+gap; left=r.left; }
+  if(top+dh>window.innerHeight-12) top=Math.max(12, window.innerHeight-dh-12);
+  if(left+dw>window.innerWidth-12) left=window.innerWidth-dw-12;
+  if(left<12) left=12;
+  dg.style.left=left+'px'; dg.style.top=top+'px';
+}
+function tourNav(dir){ tourIdx+=dir; if(tourIdx>=tourSteps.length){ endTour(true); return; } if(tourIdx<0) tourIdx=0; renderTour(); }
+function endTour(remember){
+  ['tourScrim','spotlight','tourDialog'].forEach(function(id){ var e=$id(id); if(e) e.classList.remove('show'); });
+  var dg=$id('tourDialog'); if(dg) dg.classList.remove('tour-center','tour-bottom');
+  _tourLift(null);
+  window.removeEventListener('scroll', _tourReposition, true);
+  document.body.classList.remove('tour-on');
+  if(window.innerWidth<=980) closeSidebar();
+  if(remember){ try{ localStorage.setItem('s27_tour_completed', new Date().toISOString()); }catch(e){} }
+}
+function _tourReposition(){ var dg=$id('tourDialog'); if(dg && dg.classList.contains('show')) renderTour(); }
+window.addEventListener('resize', _tourReposition);
 // Advertentierapport-iframe (Arne's engine) auto-resize op postMessage
 window.addEventListener('message',function(e){ try{ if(e&&e.data&&e.data.type==='s27-ads-report-height'){ var f=$id('perfFrame'); if(f&&e.data.height){ f.style.minHeight='0'; f.style.height=(parseInt(e.data.height,10)+24)+'px'; } } }catch(_){} });
 
