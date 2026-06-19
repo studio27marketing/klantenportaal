@@ -313,6 +313,9 @@
 .sb-dock-toggle{display:none;}
 .sb-edge{display:none;}
 .sb-mini-mark{display:none;}
+/* Geen bedrijfs-initialen-avatar in de zijbalk: portaal-breed enkel de bedrijfsnaam (Vincent) */
+.sb-client-av{display:none!important;}
+.sb-client{gap:2px;}
 @media(min-width:981px){
   /* vloeiende overgangen */
   .sidebar{transition:width .26s cubic-bezier(.4,0,.2,1),box-shadow .26s ease;will-change:width;}

@@ -2949,8 +2949,12 @@ function tourEnsureStyles(){
   if($id('s27-tour-styles')) return;
   var st=document.createElement('style'); st.id='s27-tour-styles';
   st.textContent=
-    // kaart: GPU-positie via transform (vloeiend), fade-in via opacity
-    '.tour-dialog{left:0;top:0;opacity:0;transition:transform .36s cubic-bezier(.22,1,.36,1),opacity .24s ease;will-change:transform;}'+
+    // kaart: GPU-positie via transform (vloeiend), fade-in via opacity. Standaard GECENTREERD via
+    // pure CSS (translate met viewport-units + eigen maat) zodat de welkomkaart al bij de eerste
+    // paint in het midden staat, ongeacht JS-timing (geen sprong meer van links naar het midden).
+    // popIn-keyframe UIT: die overschreef onze transform-positie .35s lang en liet de kaart daarna
+    // naar het midden springen. Wij sturen de positie + fade nu zelf, dus geen entree-animatie.
+    '.tour-dialog{left:0;top:0;opacity:0;animation:none!important;transition:transform .36s cubic-bezier(.22,1,.36,1),opacity .24s ease;will-change:transform;}'+
     '.tour-dialog.show{opacity:1;}'+
     '.tour-dialog.tour-wide{width:calc(100vw - 24px)!important;}'+
     '.tour-ic{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--s27-blue,#3083DC);color:#fff;margin-bottom:13px;box-shadow:0 7px 18px rgba(48,131,220,.34);}'+
@@ -2966,6 +2970,7 @@ function tourEnsureStyles(){
     '@media(prefers-reduced-motion:reduce){.tour-dialog{transition:opacity .2s ease!important;}.spotlight{transition:opacity .2s ease!important;}.spotlight.show{animation:none!important;}}'+
     '@media(min-width:981px){'+
       'body.tour-on.sb-rail .sidebar{transition:none!important;width:var(--sb-full)!important;box-shadow:0 22px 70px rgba(35,15,35,.22)!important;}'+
+      'body.tour-on.sb-rail .sidebar .sb-mini-mark{display:none!important;}'+   /* geen dubbele 27: enkel het wordmerk tijdens de tour */
       'body.tour-on.sb-rail .sidebar .sb-label{display:block!important;}'+
       'body.tour-on.sb-rail .sidebar .sb-client-tx{display:flex!important;}'+
       'body.tour-on.sb-rail .sidebar .sb-client .chev{display:block!important;}'+
@@ -3025,26 +3030,29 @@ function _tourPlace(el){
   _tourLift(el);
   var vw=window.innerWidth, vh=window.innerHeight, mobile=vw<=980;
   dg.classList.toggle('tour-wide', mobile);
+  // positie altijd via transform vanuit hoek (0,0): enkel transform verandert tussen stappen,
+  // dus vloeiende overgangen en geen left/top-sprong.
+  var setPos=function(tx,ty){ dg.style.left='0px'; dg.style.top='0px'; dg.style.transform='translate('+Math.round(tx)+'px,'+Math.round(ty)+'px)'; };
   var dw=dg.offsetWidth||360, dh=dg.offsetHeight||230, gap=14, x, y;
-  if(!el){                                                       // welkom/slot → gecentreerd
+  if(!el){                                                       // welkom/slot: gecentreerd
     sp.classList.remove('show');
-    x=Math.round((vw-dw)/2); y=Math.round((vh-dh)/2);
-    dg.style.transform='translate('+x+'px,'+y+'px)'; return;
+    if(mobile) setPos(12, vh-dh-14); else setPos((vw-dw)/2, (vh-dh)/2);
+    return;
   }
   try{ var pre=el.getBoundingClientRect(); if(pre.top<72 || pre.bottom>vh-12){ el.scrollIntoView({block:'center',behavior:'auto'}); } }catch(e){}
   var r=el.getBoundingClientRect(), pad=7;
   sp.classList.add('show');
   sp.style.left=(r.left-pad)+'px'; sp.style.top=(r.top-pad)+'px'; sp.style.width=(r.width+pad*2)+'px'; sp.style.height=(r.height+pad*2)+'px';
-  if(mobile){ x=12; y=vh-dh-14; dg.style.transform='translate('+x+'px,'+y+'px)'; return; }   // bottom-sheet
-  if(r.left < vw*0.22){                                          // zijbalk → kaart rechts ernaast
+  if(mobile){ setPos(12, vh-dh-14); return; }                   // bottom-sheet
+  if(r.left < vw*0.22){                                          // zijbalk: kaart rechts ernaast
     x=r.right+gap; if(x+dw>vw-12) x=Math.max(12, r.left-dw-gap); y=Math.max(12, r.top-4);
-  } else if(r.top < 140){                                        // topbar → kaart eronder, rechts uitgelijnd
+  } else if(r.top < 140){                                        // topbar: kaart eronder, rechts uitgelijnd
     y=r.bottom+gap; x=Math.min(r.right-dw, vw-dw-12); if(x<12) x=12;
   } else { y=r.bottom+gap; x=r.left; }
   if(y+dh>vh-12) y=Math.max(12, vh-dh-12);
   if(x+dw>vw-12) x=vw-dw-12;
   if(x<12) x=12;
-  dg.style.transform='translate('+Math.round(x)+'px,'+Math.round(y)+'px)';
+  setPos(x, y);
 }
 function tourNav(dir){ tourIdx+=dir; if(tourIdx>=tourSteps.length){ endTour(true); return; } if(tourIdx<0) tourIdx=0; renderTour(); }
 function endTour(remember){
