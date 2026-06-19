@@ -15,64 +15,263 @@ function qsp(){ return new URLSearchParams(location.search); }
 function $id(x){ return document.getElementById(x); }
 
 /* =============================================================================
-   DEEP-LINK ROUTER, bestemming uit de URL → na auth ernaartoe navigeren
+   DEEP-LINK ROUTER v2 — élke toestand krijgt een unieke, deelbare hash-URL.
+
+   Schema (hash-based, zodat refresh/OAuth/PWA-SW nooit breken; het bedrijf zit in
+   ELKE link zodat een collega of klant-met-toegang 'm 1-op-1 opent):
+
+     #/b/<bedrijf>/home
+     #/b/<bedrijf>/socials/statistieken?periode=30d&vgl=previous
+     #/b/<bedrijf>/socials/planner?maand=2026-06&filter=feedback
+     #/b/<bedrijf>/socials/post/<postId>
+     #/b/<bedrijf>/adverteren/<meta|google>/<overzicht|campagnes|zoektermen|aanbevelingen|meeting>?periode=30d
+     #/b/<bedrijf>/adverteren/<meta|google>/campagne/<cid>?periode=30d
+     #/b/<bedrijf>/website/<projecten|statistieken>?periode=30d
+     #/b/<bedrijf>/projecten | /meetings | /offertes | /facturatie | /instellingen | /huisstijl | /contact
+     #/b/<bedrijf>/project/<taakId>[/chat | /onderdeel/<subId> | /review/<key>?ronde=N | /galerij[/<idx>] | /inplannen/<subId>]
+     #/b/<bedrijf>/offerte-aanvraag/<tak> | /offertes/wizard/<tak>?stap=N
+     #/b/<bedrijf>/meeting/plannen?mode=&project=&host=
+
+   Een route is één plat object {bedrijf, as, view, tab, project, sub, ...}. parseRoute()
+   leest 'm uit de URL (nieuw schema + alle oude links), currentRoute() bouwt 'm uit de
+   live state, buildHash() serialiseert, applyRouteObj() navigeert ernaartoe.
    ============================================================================= */
+
+// tab-key (intern) <-> URL-slug (leesbaar)
+const TAB_SLUG = { start:'home', 'alle-projecten':'projecten', advertenties:'adverteren', webprestaties:'website' };
+const SLUG_TAB = {}; Object.keys(TAB_SLUG).forEach(function(k){ SLUG_TAB[TAB_SLUG[k]] = k; });
+function tabToSlug(t){ return TAB_SLUG[t] || t; }
+function slugToTab(s){ return SLUG_TAB[s] || s; }
+// socials sub-tab: mode-onafhankelijke slug (planner | statistieken | inzichten) <-> intern _socTab
+const SOC_SLUG = { planner:'planner', rapport:'statistieken', analyse:'statistieken', aanbevelingen:'inzichten', inzichten:'inzichten' };
+function socTabToSlug(t){ return SOC_SLUG[t] || 'planner'; }
+function socSlugToTab(s){ var rich=(typeof isRichView==='function'&&isRichView()); if(s==='statistieken') return rich?'rapport':'analyse'; if(s==='inzichten') return rich?'aanbevelingen':'inzichten'; return 'planner'; }
+// ads sub-tab: leesbare slug <-> intern _adsTab
+const ADS_SLUG = { samengevat:'overzicht', campagnes:'campagnes', gegevens:'zoektermen', aanbevelingen:'aanbevelingen', meeting:'meeting' };
+const ADS_SLUG_REV = {}; Object.keys(ADS_SLUG).forEach(function(k){ ADS_SLUG_REV[ADS_SLUG[k]] = k; });
+function adsTabToSlug(t){ return ADS_SLUG[t] || 'overzicht'; }
+function adsSlugToTab(s){ return ADS_SLUG_REV[s] || 'samengevat'; }
+// website sub-tab + periode-enum
+function webTabToSlug(t){ return t==='stats' ? 'statistieken' : 'projecten'; }
+function webSlugToTab(s){ return s==='statistieken' ? 'stats' : 'projecten'; }
+function webPerToParam(p){ return ({today:'today',last_7d:'7d',last_30d:'30d',last_90d:'90d'})[p||'last_30d'] || '30d'; }
+function webParamToPer(s){ return ({today:'today','7d':'last_7d','30d':'last_30d','90d':'last_90d'})[s] || 'last_30d'; }
+
+// periode {preset,from,to} -> één URL-token; custom = 'YYYY-MM-DD_YYYY-MM-DD'
+function perToParam(pp){ if(!pp) return ''; if(pp.preset && pp.preset!=='custom') return pp.preset; var f=String(pp.from||'').slice(0,10), t=String(pp.to||'').slice(0,10); return (f&&t)?(f+'_'+t):''; }
+function paramToPer(s){ s=String(s||''); if(!s) return null; if(s.indexOf('_')>0){ var p=s.split('_'); return {preset:'custom',from:p[0],to:p[1]}; } return {preset:s}; }
+// rolling presets opnieuw uitrekenen tot een {preset,compare,from,to}-venster bij apply
+function _expandSocPeriod(s,vgl){ var p=paramToPer(s); if(!p) return null; if(p.preset==='custom') return {preset:'custom',compare:vgl||'none',from:(p.from+'T00:00:00'),to:(p.to+'T23:59:59')}; var w=(typeof socialPeriodWindow==='function')?socialPeriodWindow(p.preset):null; return {preset:p.preset,compare:vgl||'none',from:(w?w.from:''),to:(w?w.to:'')}; }
+function _expandAdsPeriod(s,vgl){ var p=paramToPer(s); if(!p) return null; if(p.preset==='custom') return {preset:'custom',compare:vgl||'none',from:p.from,to:p.to}; var w=(typeof adsPeriodWindow==='function')?adsPeriodWindow(p.preset):null; return {preset:p.preset,compare:vgl||'none',from:(w?w.from:''),to:(w?w.to:'')}; }
+
+// ---- URL -> route -------------------------------------------------------------
 function parseRoute(){
   const q = qsp();
-  const r = { project:q.get('p'), chat:q.get('c'), notif:q.get('n'), tab:q.get('go'), mtab:q.get('tab') };
-  if(r.project || r.chat || r.notif || r.tab) return r;
-  // hash-variant: #/project/<id>?tab=feedback  of  #/meetings
-  const h = location.hash.replace(/^#\/?/, '');
-  if(h){
-    const parts = h.split('?'); const path = parts[0]; const seg = path.split('/');
-    const hq = new URLSearchParams(parts[1]||'');
-    if(seg[0]==='project' && seg[1]) return { project:seg[1], mtab:hq.get('tab') };
-    if(seg[0]==='chat' && seg[1]) return { chat:seg[1] };
-    if(seg[0]) return { tab:seg[0] };
-  }
+  // 1) nieuw hash-schema
+  const r = _parseHash(location.hash);
+  if(r) return r;
+  // 2) oude query-links (?p ?c ?n ?go ?tab ?klant) — blijven werken
+  if(q.get('p')) return { view:'project', project:q.get('p'), sub:(q.get('tab')==='chat'?'chat':''), bedrijf:q.get('klant')||'' };
+  if(q.get('c')) return { view:'project', project:q.get('c'), sub:'chat', bedrijf:q.get('klant')||'' };
+  if(q.get('go')){ var t=q.get('go'); if(t==='projecten') t='start'; return { view:'tab', tab:t, bedrijf:q.get('klant')||'' }; }
+  if(q.get('n')) return { view:'tab', tab:'start', notif:true, bedrijf:q.get('klant')||'' };
+  if(q.get('klant')) return { view:'tab', tab:'start', bedrijf:q.get('klant') };
   return null;
 }
-// URL bijwerken bij navigatie (deelbare links), zonder reload. push=true duwt een echte
-// history-entry (zodat de browser-terugknop binnen de SPA terug kan i.p.v. het portaal te verlaten).
-function syncUrl(push){
-  if(state.demoMode) return;
-  let url = location.pathname;
-  let st = { tab: currentTab };
-  if(state.viewMode==='project' && state.activeProject){
-    url += '?p=' + encodeURIComponent(state.activeProject) + (state._mtab && state._mtab!=='overzicht' ? '&tab='+state._mtab : '');
-    st = { p: state.activeProject, mtab: state._mtab||'overzicht', back: state._backTab||'start' };
-  } else if(currentTab && currentTab!=='start'){
-    url += '?go=' + encodeURIComponent(currentTab);
+function _parseHash(hash){
+  var raw = String(hash||'').replace(/^#\/?/, '');
+  if(!raw) return null;
+  var parts = raw.split('?'); var seg = parts[0].split('/').filter(Boolean).map(decodeURIComponent);
+  if(!seg.length) return null;
+  var hq = new URLSearchParams(parts[1]||'');
+  var r = {};
+  if(seg[0]==='b' && seg[1]){ r.bedrijf = seg[1]; seg = seg.slice(2); }
+  if(hq.get('as')==='klant') r.as='klant';
+  if(!seg.length){ r.view='tab'; r.tab='start'; return r; }
+  var head = seg[0];
+  // ---- LEGACY hash-vormen (#/project/<id>, #/chat/<id>, #/<tab>) ----
+  if(head==='chat' && seg[1] && !r.bedrijf){ r.view='project'; r.project=seg[1]; r.sub='chat'; return r; }
+  // ---- nieuw schema ----
+  if(head==='project' && seg[1]){
+    r.view='project'; r.project=seg[1]; r.sub=seg[2] || (hq.get('tab')==='chat'?'chat':'');   // legacy #/project/<id>?tab=chat
+    if(r.sub==='onderdeel') r.onderdeel=seg[3]||'';
+    else if(r.sub==='review'){ r.review=seg[3]||''; r.ronde=hq.get('ronde')||''; }
+    else if(r.sub==='galerij'){ r.galIdx=seg[3]||''; }
+    else if(r.sub==='inplannen'){ r.shoot=seg[3]||''; }
+    return r;
   }
-  try { if(push) history.pushState(st, '', url); else history.replaceState(st, '', url); } catch(e){}
+  if(head==='socials'){ r.view='tab'; r.tab='socials'; r.soc={};
+    if(seg[1]==='post'){ r.soc.post=seg[2]||''; }
+    else if(seg[1]) r.soc.tab=seg[1];
+    r.soc.per=hq.get('periode')||''; r.soc.vgl=hq.get('vgl')||''; r.soc.maand=hq.get('maand')||''; r.soc.filter=hq.get('filter')||''; r.soc.inz=hq.get('inz')||'';
+    return r; }
+  if(head==='adverteren'){ r.view='tab'; r.tab='advertenties'; r.ads={ platform:(seg[1]||'meta') };
+    if(seg[2]==='campagne'){ r.ads.campagne=seg[3]||''; }
+    else if(seg[2]) r.ads.tab=seg[2];
+    r.ads.per=hq.get('periode')||''; r.ads.vgl=hq.get('vgl')||'';
+    return r; }
+  if(head==='website'){ r.view='tab'; r.tab='webprestaties'; r.web={ tab:seg[1]||'', per:hq.get('periode')||'' }; return r; }
+  if(head==='meeting' && seg[1]==='plannen'){ r.view='meetingplan'; r.meeting={ mode:hq.get('mode')||'algemeen', project:hq.get('project')||'', host:hq.get('host')||'' }; return r; }
+  if(head==='offerte-aanvraag'){ r.view='offerte-aanvraag'; r.offerteTak=seg[1]||'website'; return r; }
+  if(head==='offertes' && seg[1]==='wizard'){ r.view='offerte-wizard'; r.offerteTak=seg[2]||'strategie'; r.offerteStap=hq.get('stap')||''; return r; }
+  if(head==='contact'){ r.view='contact'; return r; }
+  // gewone tab via slug (home/projecten/meetings/strategie/...)
+  r.view='tab'; r.tab=slugToTab(head); if(r.tab==='projecten') r.tab='start';
+  return r;
 }
-// Browser-terugknop opvangen: navigeer BINNEN het portaal i.p.v. het te verlaten. Defensief:
-// faalt er iets, dan vallen we terug op de Home-tab (nooit slechter dan vandaag).
+
+// ---- live state -> route ------------------------------------------------------
+function currentRoute(){
+  var r = { bedrijf: state.activeBedrijf || '' };
+  if(state.adminMode && state._adminClientView) r.as='klant';
+  var vm = state.viewMode;
+  if(vm==='project' && state.activeProject){
+    r.view='project'; r.project=state.activeProject;
+    if(state._mtab==='chat') r.sub='chat';
+  } else if(vm==='galerij' && state._gal){
+    r.view='project'; r.project=state._galFrom || state._gal.taskId || ''; r.sub='galerij'; if(state._gal.idx>0) r.galIdx=String(state._gal.idx);
+  } else if(vm==='shootplan'){
+    r.view='project'; r.project=state._shootFrom || ''; r.sub='inplannen'; r.shoot=state._shootTid || '';
+  } else if(vm==='contact'){
+    r.view='contact';
+  } else {
+    r.view='tab'; r.tab=currentTab || 'start';
+    if(currentTab==='socials'){
+      r.soc={};
+      if(state._socialDetail){ r.soc.post=String(state._socialDetail); }
+      else { r.soc.tab=socTabToSlug(typeof socialTab==='function'?socialTab():(state._socTab||'planner'));
+        if(r.soc.tab==='statistieken'){ r.soc.per=perToParam(state._socPeriod); if(state._socPeriod&&state._socPeriod.compare&&state._socPeriod.compare!=='none') r.soc.vgl=state._socPeriod.compare; }
+        else if(r.soc.tab==='planner'){ if(state._socialMonth) r.soc.maand=state._socialMonth.y+'-'+('0'+(state._socialMonth.m+1)).slice(-2); if(state._socialFilter&&state._socialFilter!=='alles') r.soc.filter=state._socialFilter; }
+        else if(r.soc.tab==='inzichten'){ if(state._socInzTab&&state._socInzTab!=='momenten') r.soc.inz=state._socInzTab; }
+      }
+    } else if(currentTab==='advertenties'){
+      r.ads={ platform:(state._adsPlatform||'meta'), tab:adsTabToSlug(state._adsTab||'samengevat') };
+      if(state._metaCampOpen) r.ads.campagne=String(state._metaCampOpen);
+      r.ads.per=perToParam(state._adsPeriod); if(state._adsPeriod&&state._adsPeriod.compare&&state._adsPeriod.compare!=='none') r.ads.vgl=state._adsPeriod.compare;
+    } else if(currentTab==='webprestaties'){
+      r.web={ tab:webTabToSlug(typeof webTakTab==='function'?webTakTab():(state._webTakTab||'projecten')), per:webPerToParam(state._webPeriod) };
+    }
+  }
+  return r;
+}
+
+// ---- route -> hash-string -----------------------------------------------------
+function buildHash(r){
+  if(!r) return '#/';
+  var segs = [];
+  if(r.bedrijf){ segs.push('b', r.bedrijf); }
+  var q = [];
+  var addq = function(k,v){ if(v) q.push(k+'='+encodeURIComponent(v)); };
+  if(r.as==='klant') addq('as','klant');
+  if(r.view==='project' && r.project){
+    segs.push('project', r.project);
+    if(r.sub==='chat') segs.push('chat');
+    else if(r.sub==='onderdeel'){ segs.push('onderdeel'); if(r.onderdeel) segs.push(r.onderdeel); }
+    else if(r.sub==='review'){ segs.push('review'); if(r.review) segs.push(r.review); addq('ronde', r.ronde); }
+    else if(r.sub==='galerij'){ segs.push('galerij'); if(r.galIdx) segs.push(String(r.galIdx)); }
+    else if(r.sub==='inplannen'){ segs.push('inplannen'); if(r.shoot) segs.push(r.shoot); }
+  } else if(r.view==='contact'){ segs.push('contact');
+  } else if(r.view==='meetingplan'){ segs.push('meeting','plannen'); var m=r.meeting||{}; if(m.mode&&m.mode!=='algemeen') addq('mode',m.mode); addq('project',m.project); addq('host',m.host);
+  } else if(r.view==='offerte-aanvraag'){ segs.push('offerte-aanvraag', r.offerteTak||'website');
+  } else if(r.view==='offerte-wizard'){ segs.push('offertes','wizard', r.offerteTak||'strategie'); addq('stap', r.offerteStap);
+  } else { // tab
+    var tab=r.tab||'start';
+    if(tab==='socials'){ var s=r.soc||{};
+      if(s.post){ segs.push('socials','post', s.post); }
+      else { segs.push('socials', s.tab||'planner'); addq('periode',s.per); addq('vgl',s.vgl); addq('maand',s.maand); addq('filter',s.filter); addq('inz',s.inz); }
+    } else if(tab==='advertenties'){ var a=r.ads||{}; segs.push('adverteren', a.platform||'meta');
+      if(a.campagne){ segs.push('campagne', a.campagne); } else { segs.push(a.tab||'overzicht'); }
+      addq('periode',a.per); addq('vgl',a.vgl);
+    } else if(tab==='webprestaties'){ var w=r.web||{}; segs.push('website', w.tab||'projecten'); addq('periode', (w.per&&w.per!=='30d')?w.per:'');
+    } else { segs.push(tabToSlug(tab)); }
+  }
+  return '#/' + segs.map(encodeURIComponent).join('/') + (q.length?('?'+q.join('&')):'');
+}
+
+// alleen boot-vlaggen (?demo / ?auth) in de query houden; al de rest leeft in de hash
+function _keepQuery(){ var keep=[]; var q=qsp(); ['demo','auth'].forEach(function(k){ var v=q.get(k); if(v!=null) keep.push(k+'='+encodeURIComponent(v)); }); return keep.length?('?'+keep.join('&')):''; }
+
+// URL bijwerken bij navigatie (deelbare links), zonder reload. push=true duwt een echte
+// history-entry zodat de browser-terugknop binnen de SPA terugkeert i.p.v. het portaal te verlaten.
+function syncUrl(push){
+  if(state.demoMode || state._routingSilent) return;
+  try{
+    var r = currentRoute();
+    var url = location.pathname + _keepQuery() + buildHash(r);
+    if(push) history.pushState(r, '', url); else history.replaceState(r, '', url);
+  }catch(e){}
+}
+// Browser-terugknop: het history.state-object IS de volledige route → reproduceer 'm.
 function onPopState(ev){
   if(state.demoMode) return;
-  var st = ev && ev.state;
-  try {
-    if(st && st.p){                                  // terug NAAR een project (vooruit/terug tussen details)
-      openProject(st.p, st.back||'auto', true);       // noPush=true: niet opnieuw pushen
-      if(st.mtab && st.mtab!=='overzicht') switchModalTab(st.mtab);
-    } else if(state.viewMode==='project'){           // terug UIT een project -> zelfde als de in-portaal terugknop
-      closeModal();
-    } else {                                         // tussen tabs
-      var tab=(st && st.tab) || 'start';
-      goTab(PANELS[tab]?tab:'start');
+  var st = (ev && ev.state) || parseRoute();
+  applyRouteObj(st, { fromPop:true }).catch(function(){ try{ goTab('start'); }catch(_e){} });
+}
+
+async function applyRoute(){ var r = state.route; state.route = null; return applyRouteObj(r, {}); }
+
+// Centrale navigator: brengt het portaal naar exact de toestand die de route beschrijft.
+// silent=true onderdrukt tussentijdse syncUrl-schrijfacties; bij boot canonicaliseren we
+// achteraf met één replace, bij popstate staat de URL al goed (geen extra schrijf).
+async function applyRouteObj(r, opts){
+  opts = opts || {};
+  if(!r){ goTab('start'); return; }
+  state._routingSilent = true;
+  try{
+    // staff-clientview meeschalen zodat de gedeelde weergave 1-op-1 klopt
+    if(r.as==='klant' && state.adminMode && !state._adminClientView){ state._adminClientView=true; try{ updateAdminViewToggle(); applyTakVisibility(); }catch(e){} }
+    if(r.view==='project' && r.project){
+      await openProject(r.project, 'auto', true);
+      if(r.sub==='chat') switchModalTab('chat');
+      else if(r.sub==='onderdeel' && r.onderdeel) _routeOpenOnderdeel(r.onderdeel);
+      else if(r.sub==='review' && r.review) _routeOpenReview(r.project, r.review, r.ronde);
+      else if(r.sub==='galerij') _routeOpenGalerij(r.project, r.galIdx);
+      else if(r.sub==='inplannen' && r.shoot){ try{ openShootOverlay(r.shoot); }catch(e){} }
+    } else if(r.view==='contact'){
+      try{ if(typeof goContact==='function') goContact(); else goTab('start'); }catch(e){ goTab('start'); }
+    } else if(r.view==='meetingplan'){
+      await goTab('meetings'); try{ openMeetingPlanner((r.meeting&&r.meeting.mode)||'algemeen'); if(r.meeting&&r.meeting.project&&typeof mpPickProject==='function') mpPickProject(r.meeting.project); }catch(e){}
+    } else if(r.view==='offerte-aanvraag'){
+      try{ openOfferteAanvraag(r.offerteTak||'website'); }catch(e){ goTab('start'); }
+    } else if(r.view==='offerte-wizard'){
+      try{ openOfferteWizard(r.offerteTak||'strategie'); }catch(e){ goTab('start'); }
+    } else {
+      var tab = r.tab || 'start'; if(tab==='projecten') tab='start';
+      if(!PANELS[tab]) tab='start';
+      // sub-state vóór goTab zetten zodat data-load + render meteen het juiste venster/tab pakken
+      if(tab==='socials') _routeApplySoc(r.soc);
+      else if(tab==='advertenties') _routeApplyAds(r.ads);
+      else if(tab==='webprestaties') _routeApplyWeb(r.web);
+      await goTab(tab);
+      if(tab==='advertenties' && r.ads && r.ads.campagne) _routeScrollCampaign(r.ads.campagne);
+      if(r.notif){ var np=$id('notifPanel'); if(np) setTimeout(function(){ np.classList.add('show'); }, 350); }
     }
   } catch(e){ try{ goTab('start'); }catch(_e){} }
+  state._routingSilent = false;
+  if(!opts.fromPop) syncUrl(false);   // boot: URL canonicaliseren (replace); popstate: URL staat al goed
 }
-async function applyRoute(){
-  const r = state.route; state.route = null;
-  if(!r){ goTab('start'); return; }
-  if(r.project){ await openProject(r.project, 'auto'); if(r.mtab) switchModalTab(r.mtab); return; }
-  if(r.chat){ await openProject(r.chat, 'berichten'); switchModalTab('chat'); return; }
-  if(r.tab==='projecten') r.tab='start';   // legacy deep-links naar de oude Projecten-pagina
-  if(r.tab && PANELS[r.tab]){ goTab(r.tab); return; }
-  if(r.notif){ goTab('start'); setTimeout(()=>{ const np=$id('notifPanel'); if(np) np.classList.add('show'); }, 400); return; }
-  goTab('start');
+
+// --- sub-state appliers (zetten state vóór de render; geen eigen syncUrl) -------
+function _routeApplySoc(s){ if(!s) return;
+  if(s.post){ state._socTab='planner'; state._socialDetail=String(s.post); return; }
+  if(s.tab) state._socTab=socSlugToTab(s.tab); state._socialDetail=null;
+  if(s.inz) state._socInzTab=s.inz;
+  if(s.filter) state._socialFilter=s.filter;
+  if(s.maand){ var p=String(s.maand).split('-'); if(p.length===2) state._socialMonth={ y:+p[0], m:(+p[1]-1) }; }
+  if(s.per){ var pp=_expandSocPeriod(s.per, s.vgl); if(pp) state._socPeriod=pp; }
 }
+function _routeApplyAds(a){ if(!a) return;
+  state._adsPlatform = (a.platform==='google')?'google':'meta';
+  if(a.tab) state._adsTab = adsSlugToTab(a.tab);
+  if(a.per){ var pp=_expandAdsPeriod(a.per, a.vgl); if(pp) state._adsPeriod=pp; }
+}
+function _routeApplyWeb(w){ if(!w) return; if(w.tab) state._webTakTab=webSlugToTab(w.tab); if(w.per) state._webPeriod=webParamToPer(w.per); }
+
+// --- in-project deep-opens (best-effort; falen mag de navigatie nooit breken) --
+function _routeOpenOnderdeel(subId){ try{ var row=document.querySelector('[data-task="'+(window.CSS&&CSS.escape?CSS.escape(subId):subId)+'"]'); if(!row) return; var acc=row.closest('.acc')||row; var btn=acc.querySelector?acc.querySelector('.acc-head, .acc-btn, button'):null; if(btn && acc.querySelector && !acc.querySelector('.acc-body.open')) btn.click(); row.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){} }
+function _routeScrollCampaign(cid){ try{ setTimeout(function(){ var el=document.getElementById('arch_'+cid)||document.getElementById('garch_'+cid)||document.querySelector('[data-cid="'+cid+'"]'); if(el){ if(typeof toggleMetaCampaign==='function' && document.getElementById('metaCampExp_'+cid)) toggleMetaCampaign(cid); el.scrollIntoView({behavior:'smooth',block:'center'}); } }, 500); }catch(e){} }
+function _routeOpenReview(taskId, linkKey, ronde){ try{ setTimeout(function(){ if(!window.S27Review||typeof S27Review.linkKeyOf!=='function') return; var rows=document.querySelectorAll('.deliv-file a[href]'); for(var i=0;i<rows.length;i++){ var url=rows[i].getAttribute('href')||''; if(url && url!=='#' && S27Review.linkKeyOf(url)===linkKey){ var fileRow=rows[i].closest('.deliv-file'); var btn=fileRow?fileRow.querySelector('.rv-fb,[onclick*="fileFeedback"],[onclick*="fileApprove"]'):null; if(btn){ btn.click(); } else if(typeof fileFeedback==='function' && fileRow){ var fb=fileRow.querySelector('button'); if(fb) fileFeedback(fb); } return; } } }, 600); }catch(e){} }
+function _routeOpenGalerij(project, idx){ try{ setTimeout(function(){ var trg=document.querySelector('[onclick*="openFotoGalerij"]'); if(trg){ trg.click(); if(idx>0 && state._gal){ state._gal.idx=+idx; } } }, 500); }catch(e){} }
 
 /* =============================================================================
    BOOT
@@ -352,7 +551,8 @@ async function enterAdminMode(){
   // DEEP-LINK vanuit het teamportaal (?klant=<bedrijfId>): spring meteen naar die klant
   // i.p.v. de bedrijvenkiezer te tonen. Zo verifieert een teamlid in 1 klik hoe de klant
   // z'n portaal ziet. Enkel staff bereikt enterAdminMode, dus geen klant-impact.
-  var _jumpKlant=''; try{ _jumpKlant=qsp().get('klant')||''; }catch(e){}
+  // bedrijf uit een gedeelde hash-link (#/b/<id>/...) of de oude ?klant=-sprong: meteen die klant openen
+  var _jumpKlant=''; try{ _jumpKlant=qsp().get('klant') || (state.route && state.route.bedrijf) || ''; }catch(e){}
   if(_jumpKlant && /^[A-Za-z0-9_-]{1,64}$/.test(_jumpKlant)){
     try{ history.replaceState(null,'',location.pathname); }catch(e){}
     if(!state.adminCompanies || !state.adminCompanies.length){ try{ state.adminCompanies = await S27DATA.loadAdminCompanies(); }catch(e){ state.adminCompanies=[]; } }
@@ -2388,6 +2588,7 @@ async function openFotoGalerij(taskId, url){
   state._gal={taskId:taskId,fotos:d.fotos,naam:d.taak_naam||'Fotoshoot',zip:_gw(d.zip_url||''),folder:d.folder_url||'',goedgekeurd:!!d.goedgekeurd,idx:0,zoom:false};
   page.innerHTML='<div class="panel active br-purple">'+galerijHTML()+'</div>';
   window.scrollTo({top:0,behavior:'auto'});
+  syncUrl(true);
 }
 function closeFotoGalerij(){
   var pid=state._galFrom||state.activeProject;
@@ -2453,6 +2654,7 @@ async function galApprove(btn){
 function openShootOverlay(tid){
   var safe=String(tid).replace(/[^A-Za-z0-9_-]/g,'');
   state._shootFrom=state.activeProject||null;
+  state._shootTid=String(tid);
   state.viewMode='shootplan';
   var page=$id('page'); if(!page) return;
   var pNaam=''; try{ var pp=(window.S27DATA&&(S27DATA.projects()||[]).find(function(x){return x.id===state._shootFrom;})); pNaam=pp?pp.name:''; }catch(e){}
@@ -2463,6 +2665,7 @@ function openShootOverlay(tid){
     +'<div id="s27-plan-'+safe+'"></div></div></div>';
   window.scrollTo({top:0,behavior:'auto'});
   openShootWizard(tid);
+  syncUrl(true);
 }
 async function closeShootOverlay(){
   // terug naar het projectdetail met vers shoot-overzicht (zonet geboekt = meteen 'ingepland')

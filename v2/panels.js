@@ -571,6 +571,7 @@ function socialSetTab(name){
     if(isRichView() && name==='rapport' && typeof socialRichMountCharts==='function') socialRichMountCharts();
     if(window.scrollTo) window.scrollTo({top:0,behavior:'smooth'});
   } else { renderPanel('socials'); }
+  if(typeof syncUrl==='function') syncUrl();
 }
 function socialSetInzTab(name){
   state._socInzTab=name;
@@ -578,6 +579,7 @@ function socialSetInzTab(name){
   if(box){ box.innerHTML=socialInzBody();
     var nav=document.getElementById('socialInzNav'); if(nav){ [].slice.call(nav.children).forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-itab')===name); }); }
   } else { var b2=document.getElementById('socialBody'); if(b2){ b2.innerHTML=socialBodyHTML(); } }
+  if(typeof syncUrl==='function') syncUrl();
 }
 // dispatcher: het actieve sub-tabblad (of de post-editor) binnen #socialBody.
 function socialBodyHTML(){
@@ -629,12 +631,14 @@ function socialSetPeriod(preset){
   if(preset!=='custom'){ var w=socialPeriodWindow(preset); if(w){ pp.from=w.from; pp.to=w.to; } }
   _socRerenderPeriodBar();
   if(preset!=='custom') socialReloadStats();
+  if(typeof syncUrl==='function') syncUrl();
 }
 function socialCustomPeriod(){
   var f=document.getElementById('socFrom'), t=document.getElementById('socTo'); if(!f||!t||!f.value||!t.value) return;
   var pp=socialPeriod(); pp.from=f.value+'T00:00:00'; pp.to=t.value+'T23:59:59'; socialReloadStats();
+  if(typeof syncUrl==='function') syncUrl();
 }
-function socialSetCompare(mode){ var pp=socialPeriod(); pp.compare=mode; socialReloadStats(); }
+function socialSetCompare(mode){ var pp=socialPeriod(); pp.compare=mode; socialReloadStats(); if(typeof syncUrl==='function') syncUrl(); }
 function socialPlannerHTML(){
   var nieuw=socialsEditable()?'<div class="soc-newpost-row"><button class="btn btn-branch br-yellow btn-sm" onclick="openSocialCreate()">'+ic('plus',15)+' Nieuwe post</button></div>':'';
   return nieuw+socialFilters()+'<div id="socialCalContainer">'+socialCalendar(socialShownPosts())+'</div>';
@@ -804,9 +808,9 @@ function socialHashtagsHTML(){
   var tags=ht.length?('<div class="soc-tags">'+ht.map(function(h){ return '<span class="soc-tag" title="'+socialFmt(h.avgReach)+' gem. bereik · '+socialFmt(h.count)+' posts">'+esc(h.tag)+'<b>'+(Number(h.avgEngagementRate)||0)+'%</b></span>'; }).join('')+'</div>'):'<div class="soc-iempty">Voeg hashtags toe aan je posts om hier inzicht te krijgen.</div>';
   return '<div class="soc-stats soc-insights"><div class="soc-phead"><h3>Topscorende hashtags</h3><span class="soc-isub">welke hashtags jou het meeste engagement opleveren</span></div><div class="soc-icard soc-icard-wide">'+tags+'</div></div>';
 }
-function socialMonthNav(d){ var mo=socialMonth(); var dt=new Date(mo.y,mo.m+d,1); state._socialMonth={y:dt.getFullYear(),m:dt.getMonth()}; var box=document.getElementById('socialCalContainer'); if(box){ box.innerHTML=socialCalendar(socialShownPosts()); } else { renderPanel('socials'); } }
-function socialSetFilter(f){ state._socialFilter=f; var box=document.getElementById('socialBody'); if(box){ box.innerHTML=socialBodyHTML(); } else { renderPanel('socials'); } }
-function socialOpenDetail(id){ state._socTab='planner'; state._socialDetail=String(id); renderPanel('socials'); if(window.scrollTo)window.scrollTo({top:0,behavior:'smooth'}); }
+function socialMonthNav(d){ var mo=socialMonth(); var dt=new Date(mo.y,mo.m+d,1); state._socialMonth={y:dt.getFullYear(),m:dt.getMonth()}; var box=document.getElementById('socialCalContainer'); if(box){ box.innerHTML=socialCalendar(socialShownPosts()); } else { renderPanel('socials'); } if(typeof syncUrl==='function') syncUrl(); }
+function socialSetFilter(f){ state._socialFilter=f; var box=document.getElementById('socialBody'); if(box){ box.innerHTML=socialBodyHTML(); } else { renderPanel('socials'); } if(typeof syncUrl==='function') syncUrl(); }
+function socialOpenDetail(id){ state._socTab='planner'; state._socialDetail=String(id); renderPanel('socials'); if(window.scrollTo)window.scrollTo({top:0,behavior:'smooth'}); if(typeof syncUrl==='function') syncUrl(true); }
 function socialCloseDetail(){ state._socialDetail=null; state._socTab='planner'; renderPanel('socials'); if(typeof socialChatMount==='function') socialChatMount(); }
 /* ---- KPI-dashboard + trend (fase 1 metriek-look-and-feel), data via metricoolStats ---- */
 function socialFmt(n){ return (Number(n)||0).toLocaleString('nl-BE'); }
@@ -1262,7 +1266,7 @@ function setAdsPlatform(p){ state._adsPlatform=p; state._adsPlatMenuOpen=false; 
   // Meeting-materiaal is gedeeld per bedrijf (KV adsws:<bedrijf>, platform-loos). Bij platformwissel de
   // workspace herladen zodat Meta en Google ALTIJD exact dezelfde bijlagen/links/notities tonen (geen stale render).
   if(isRichView() && adsRichTab()==='meeting' && window.S27DATA && S27DATA.loadAdsWorkspace){ try{ adsWsState().loaded=false; }catch(e){} }
-  if(p==='google') adsGoogleResetLoad(); renderPanel('advertenties'); _adsApplyAccent(); if(isRichView()){ if(adsActivePlatform()==='google') googleRichMountTabCharts(); else adsRichMountTabCharts(); } else adsClientMountChart(); }
+  if(p==='google') adsGoogleResetLoad(); renderPanel('advertenties'); _adsApplyAccent(); if(isRichView()){ if(adsActivePlatform()==='google') googleRichMountTabCharts(); else adsRichMountTabCharts(); } else adsClientMountChart(); if(typeof syncUrl==='function') syncUrl(); }
 // Reset de Google-laadstaat: backoff-timestamps + retry-tellers + een stale FAILURE/error-respons wissen, zodat de
 // eerstvolgende render gegarandeerd een verse load probeert (na switch naar Google of de 'Opnieuw proberen'-knop).
 // GOEDE data (linked:true met campagnes) blijft staan -> geen onnodige herlaad.
@@ -1480,9 +1484,9 @@ function adsReload(){
   if(state.demoMode || !(window.S27DATA&&S27DATA.loadMetaAds)){ var b0=document.getElementById('adsBody'); if(b0){ b0.innerHTML=adsOverviewInner(); adsClientMountChart(); } return; }
   S27DATA.loadMetaAds({from:pp.from,to:pp.to,compare:pp.compare}).then(function(){ var b=document.getElementById('adsBody'); if(b){ b.innerHTML=adsOverviewInner(); adsClientMountChart(); } }).catch(function(){ var b=document.getElementById('adsBody'); if(b){ b.innerHTML=adsOverviewInner(); adsClientMountChart(); } });
 }
-function adsSetPeriod(preset){ var pp=adsPeriod(); pp.preset=preset; if(preset!=='custom'){ var w=adsPeriodWindow(preset); if(w){ pp.from=w.from; pp.to=w.to; } } else { state._adsCal=null; } _adsRerenderPeriodBar(); if(preset!=='custom') adsReload(); }
+function adsSetPeriod(preset){ var pp=adsPeriod(); pp.preset=preset; if(preset!=='custom'){ var w=adsPeriodWindow(preset); if(w){ pp.from=w.from; pp.to=w.to; } } else { state._adsCal=null; } _adsRerenderPeriodBar(); if(preset!=='custom') adsReload(); if(typeof syncUrl==='function') syncUrl(); }
 function adsCustomPeriod(){ var f=document.getElementById('adsFrom'),t=document.getElementById('adsTo'); if(!f||!t||!f.value||!t.value) return; var pp=adsPeriod(); pp.from=f.value; pp.to=t.value; _adsRerenderPeriodBar(); adsReload(); }
-function adsSetCompare(mode){ var pp=adsPeriod(); pp.compare=mode; _adsRerenderPeriodBar(); adsReload(); }
+function adsSetCompare(mode){ var pp=adsPeriod(); pp.compare=mode; _adsRerenderPeriodBar(); adsReload(); if(typeof syncUrl==='function') syncUrl(); }
 function refreshMetaAds(){ adsReload(); }
 function metaCreativeCard(a,i,cur){
   var fm=metaFmt(a.format); var cm=a.creativeMedia||{};
@@ -1506,12 +1510,13 @@ function metaCampaignCard(c,cur){
 function toggleMetaCampaign(id){
   id=String(id); var exp=document.getElementById('metaCampExp_'+id); if(!exp) return;
   var card=exp.previousElementSibling;
-  if(exp.getAttribute('data-open')==='1'){ exp.style.display='none'; exp.innerHTML=''; exp.removeAttribute('data-open'); if(card) card.classList.remove('open'); return; }
+  if(exp.getAttribute('data-open')==='1'){ exp.style.display='none'; exp.innerHTML=''; exp.removeAttribute('data-open'); if(card) card.classList.remove('open'); state._metaCampOpen=''; if(typeof syncUrl==='function') syncUrl(); return; }
   // slechts één campagne tegelijk open (state._metaAdsView is globaal en wordt door de open expand gebruikt)
   var open=document.querySelectorAll('.meta-camp-exp[data-open="1"]');
   for(var k=0;k<open.length;k++){ open[k].style.display='none'; open[k].innerHTML=''; open[k].removeAttribute('data-open'); var pc=open[k].previousElementSibling; if(pc) pc.classList.remove('open'); }
   if(card) card.classList.add('open'); exp.style.display='block'; exp.setAttribute('data-open','1');
   _metaCampExpRender(id);
+  state._metaCampOpen=id; if(typeof syncUrl==='function') syncUrl(true);
 }
 function _metaCampExpRender(id){
   var exp=document.getElementById('metaCampExp_'+id); if(!exp||exp.getAttribute('data-open')!=='1') return;
@@ -1645,6 +1650,7 @@ function adsRichSetTab(name){
     if(goog) googleRichMountTabCharts(); else adsRichMountTabCharts();
     if(window.scrollTo) window.scrollTo({top:0,behavior:'smooth'});
   } else { renderPanel('advertenties'); }
+  if(typeof syncUrl==='function') syncUrl();
 }
 function adsRichTabBody(){
   var m=(window.S27DATA&&S27DATA.metaAdsRich&&S27DATA.metaAdsRich());
@@ -4863,6 +4869,7 @@ async function webSetPeriod(p){
   try{ if(window.S27DATA){ await Promise.all([S27DATA.loadWebTraffic({period:p}), S27DATA.loadWebSearch({period:p})]); } }catch(e){}
   if(typeof renderPanel==='function') renderPanel('webprestaties');
   webMountCharts();
+  if(typeof syncUrl==='function') syncUrl();
 }
 function webMountCharts(){
   var t=(window.S27DATA&&S27DATA.webTraffic&&S27DATA.webTraffic())||null;
@@ -4910,7 +4917,7 @@ function webTakTab(){
   if(state._webTakTab) return state._webTakTab;
   return _takProjects(TAK_WEBSITE.discIds).some(function(p){return p.status!=='done';}) ? 'projecten' : 'stats';
 }
-function webSetTakTab(t){ state._webTakTab=t; renderPanel('webprestaties'); }
+function webSetTakTab(t){ state._webTakTab=t; renderPanel('webprestaties'); if(typeof syncUrl==='function') syncUrl(); }
 function webTakSubnav(){
   var t=webTakTab();
   var mk=function(key,label,icn){ return '<button class="soc-subtab'+(t===key?' active':'')+'" onclick="webSetTakTab(\''+key+'\')">'+ic(icn,17)+'<span>'+label+'</span></button>'; };
