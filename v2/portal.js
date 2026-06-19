@@ -2959,6 +2959,9 @@ function tourEnsureStyles(){
     '.tour-dialog.tour-wide{width:calc(100vw - 24px)!important;}'+
     '.tour-ic{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--s27-blue,#3083DC);color:#fff;margin-bottom:13px;box-shadow:0 7px 18px rgba(48,131,220,.34);}'+
     '.tour-ic svg{width:21px;height:21px;}'+
+    // De menubalk + zijbalk zijn glas (semi-transparant + blur). Boven de dim-laag getild zou hun blur
+    // die donkere laag oppikken (donkere balk bovenaan). Tijdens de tour dus solide, niet-transparant.
+    'body.tour-on .topbar,body.tour-on .sidebar{background:var(--paper,#fff)!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;}'+
     // spotlight-ring: zacht in/uit-faden + rustige adem-puls, vloeiend mee-bewegen
     '.spotlight{display:block!important;background:transparent!important;pointer-events:none;opacity:0;visibility:hidden;border-radius:12px;box-shadow:0 0 0 3px var(--s27-blue,#3083DC),0 0 0 6px rgba(48,131,220,.30);transition:left .36s cubic-bezier(.22,1,.36,1),top .36s cubic-bezier(.22,1,.36,1),width .36s cubic-bezier(.22,1,.36,1),height .36s cubic-bezier(.22,1,.36,1),opacity .22s ease;}'+
     '.spotlight.show{opacity:1;visibility:visible;animation:s27ring 2s ease-in-out infinite;}'+
