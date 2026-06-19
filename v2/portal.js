@@ -2944,19 +2944,28 @@ const TOUR_ALL=[
   {ic:'help',        t:'Deze rondleiding herhalen',     b:'Even kwijt hoe iets werkt? Via dit vraagteken start je deze rondleiding wanneer je maar wil opnieuw.', targets:['.topbar .icon-btn[aria-label="Rondleiding"]']},
   {ic:'st_approved', t:'Je bent helemaal klaar!',       b:'Dat was het — je kent nu de weg. Veel plezier in je Studio 27-portaal, en weet dat we altijd voor je klaarstaan.', targets:null},
 ];
-let tourIdx=0, tourSteps=[], _tourLifted=null;
+let tourIdx=0, tourSteps=[], _tourLifted=null, _tourRaf=0;
 function tourEnsureStyles(){
   if($id('s27-tour-styles')) return;
   var st=document.createElement('style'); st.id='s27-tour-styles';
   st.textContent=
-    '.tour-dialog{transition:top .26s cubic-bezier(.4,0,.2,1),left .26s cubic-bezier(.4,0,.2,1);}'+
-    '.spotlight{background:transparent!important;box-shadow:0 0 0 3px var(--s27-blue,#3083DC),0 0 0 6px rgba(48,131,220,.28)!important;transition:top .26s cubic-bezier(.4,0,.2,1),left .26s cubic-bezier(.4,0,.2,1),width .26s cubic-bezier(.4,0,.2,1),height .26s cubic-bezier(.4,0,.2,1);}'+
+    // kaart: GPU-positie via transform (vloeiend), fade-in via opacity
+    '.tour-dialog{left:0;top:0;opacity:0;transition:transform .36s cubic-bezier(.22,1,.36,1),opacity .24s ease;will-change:transform;}'+
+    '.tour-dialog.show{opacity:1;}'+
+    '.tour-dialog.tour-wide{width:calc(100vw - 24px)!important;}'+
     '.tour-ic{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--s27-blue,#3083DC);color:#fff;margin-bottom:13px;box-shadow:0 7px 18px rgba(48,131,220,.34);}'+
     '.tour-ic svg{width:21px;height:21px;}'+
-    '.tour-dialog.tour-center{left:50%!important;top:50%!important;transform:translate(-50%,-50%);}'+
-    '@media(max-width:980px){.tour-dialog.tour-bottom{left:12px!important;right:12px!important;top:auto!important;bottom:14px!important;width:auto!important;transform:none;}}'+
+    // spotlight-ring: zacht in/uit-faden + rustige adem-puls, vloeiend mee-bewegen
+    '.spotlight{display:block!important;background:transparent!important;pointer-events:none;opacity:0;visibility:hidden;border-radius:12px;box-shadow:0 0 0 3px var(--s27-blue,#3083DC),0 0 0 6px rgba(48,131,220,.30);transition:left .36s cubic-bezier(.22,1,.36,1),top .36s cubic-bezier(.22,1,.36,1),width .36s cubic-bezier(.22,1,.36,1),height .36s cubic-bezier(.22,1,.36,1),opacity .22s ease;}'+
+    '.spotlight.show{opacity:1;visibility:visible;animation:s27ring 2s ease-in-out infinite;}'+
+    '@keyframes s27ring{0%,100%{box-shadow:0 0 0 3px var(--s27-blue,#3083DC),0 0 0 6px rgba(48,131,220,.30);}50%{box-shadow:0 0 0 3px var(--s27-blue,#3083DC),0 0 0 12px rgba(48,131,220,.07);}}'+
+    // eerste plaatsing zonder slide-vanuit-hoek (enkel opacity), daarna wel animeren
+    'body.tour-snap .tour-dialog{transition:opacity .24s ease!important;}'+
+    'body.tour-snap .spotlight{transition:opacity .22s ease!important;}'+
+    // toegankelijkheid: respecteer "minder beweging"
+    '@media(prefers-reduced-motion:reduce){.tour-dialog{transition:opacity .2s ease!important;}.spotlight{transition:opacity .2s ease!important;}.spotlight.show{animation:none!important;}}'+
     '@media(min-width:981px){'+
-      'body.tour-on.sb-rail .sidebar{width:var(--sb-full)!important;box-shadow:0 22px 70px rgba(35,15,35,.22)!important;}'+
+      'body.tour-on.sb-rail .sidebar{transition:none!important;width:var(--sb-full)!important;box-shadow:0 22px 70px rgba(35,15,35,.22)!important;}'+
       'body.tour-on.sb-rail .sidebar .sb-label{display:block!important;}'+
       'body.tour-on.sb-rail .sidebar .sb-client-tx{display:flex!important;}'+
       'body.tour-on.sb-rail .sidebar .sb-client .chev{display:block!important;}'+
@@ -2983,13 +2992,16 @@ function _tourLift(el){
 function openTour(){
   tourEnsureStyles();
   goTab('start');
-  document.body.classList.add('tour-on');                                   // zijbalk uitgeklapt (overlay)
+  document.body.classList.add('tour-on');                                   // zijbalk uitgeklapt (overlay, instant)
+  document.body.classList.add('tour-snap');                                 // eerste plaatsing zonder slide
   tourSteps = TOUR_ALL.filter(function(s){ return !s.targets || _tourEl(s); });   // enkel stappen met een zichtbaar doel
   tourIdx=0;
   $id('tourScrim').classList.add('show'); $id('tourDialog').classList.add('show');
   window.addEventListener('scroll', _tourReposition, true);
+  window.addEventListener('resize', _tourReposition);
   renderTour();
-  setTimeout(_tourReposition, 320);                                         // herplaats nadat de zijbalk-uitklap gesetteld is
+  // snap kort aanhouden, dan weghalen → de eerste stap verschijnt zonder slide, daarna schuift alles vloeiend
+  setTimeout(function(){ document.body.classList.remove('tour-snap'); }, 60);
 }
 function renderTour(){
   var s=tourSteps[tourIdx]; if(!s){ endTour(true); return; }
@@ -3001,42 +3013,57 @@ function renderTour(){
   $id('tourDots').innerHTML=tourSteps.map(function(_,i){ return '<i class="'+(i===tourIdx?'on':'')+'"></i>'; }).join('');
   $id('tourPrev').style.visibility=tourIdx===0?'hidden':'visible';
   $id('tourNext').textContent=tourIdx===tourSteps.length-1?'Aan de slag!':'Volgende';
+  // synchroon plaatsen (getBoundingClientRect forceert de layout, dus een net-geopende drawer
+  // telt al mee) — geen rAF-afhankelijkheid zodat het ook in een achtergrond-tab correct staat
   _tourPlace(el);
 }
+// alleen positioneren (geen content-rebuild) — wordt ook gebruikt bij scroll/resize
 function _tourPlace(el){
-  var sp=$id('spotlight'), dg=$id('tourDialog');
+  var sp=$id('spotlight'), dg=$id('tourDialog'); if(!sp||!dg) return;
   _tourLift(el);
-  if(!el){ sp.classList.remove('show'); dg.classList.add('tour-center'); dg.classList.remove('tour-bottom'); dg.style.left=''; dg.style.top=''; return; }
-  dg.classList.remove('tour-center');
-  try{ var pre=el.getBoundingClientRect(); if(pre.top<72 || pre.bottom>window.innerHeight-12){ el.scrollIntoView({block:'center',behavior:'auto'}); } }catch(e){}
+  var vw=window.innerWidth, vh=window.innerHeight, mobile=vw<=980;
+  dg.classList.toggle('tour-wide', mobile);
+  var dw=dg.offsetWidth||360, dh=dg.offsetHeight||230, gap=14, x, y;
+  if(!el){                                                       // welkom/slot → gecentreerd
+    sp.classList.remove('show');
+    x=Math.round((vw-dw)/2); y=Math.round((vh-dh)/2);
+    dg.style.transform='translate('+x+'px,'+y+'px)'; return;
+  }
+  try{ var pre=el.getBoundingClientRect(); if(pre.top<72 || pre.bottom>vh-12){ el.scrollIntoView({block:'center',behavior:'auto'}); } }catch(e){}
   var r=el.getBoundingClientRect(), pad=7;
   sp.classList.add('show');
   sp.style.left=(r.left-pad)+'px'; sp.style.top=(r.top-pad)+'px'; sp.style.width=(r.width+pad*2)+'px'; sp.style.height=(r.height+pad*2)+'px';
-  if(window.innerWidth<=980){ dg.classList.add('tour-bottom'); dg.style.left=''; dg.style.top=''; return; }
-  dg.classList.remove('tour-bottom');
-  var dw=Math.min(380, window.innerWidth-32), gap=14, dh=dg.offsetHeight||230, top, left;
-  if(r.left < window.innerWidth*0.22){                          // zijbalk -> kaart rechts ernaast
-    left=r.right+gap; if(left+dw>window.innerWidth-12) left=Math.max(12, r.left-dw-gap); top=Math.max(12, r.top-4);
-  } else if(r.top < 140){                                       // topbar -> kaart eronder, rechts uitgelijnd
-    top=r.bottom+gap; left=Math.min(r.right-dw, window.innerWidth-dw-12); if(left<12) left=12;
-  } else { top=r.bottom+gap; left=r.left; }
-  if(top+dh>window.innerHeight-12) top=Math.max(12, window.innerHeight-dh-12);
-  if(left+dw>window.innerWidth-12) left=window.innerWidth-dw-12;
-  if(left<12) left=12;
-  dg.style.left=left+'px'; dg.style.top=top+'px';
+  if(mobile){ x=12; y=vh-dh-14; dg.style.transform='translate('+x+'px,'+y+'px)'; return; }   // bottom-sheet
+  if(r.left < vw*0.22){                                          // zijbalk → kaart rechts ernaast
+    x=r.right+gap; if(x+dw>vw-12) x=Math.max(12, r.left-dw-gap); y=Math.max(12, r.top-4);
+  } else if(r.top < 140){                                        // topbar → kaart eronder, rechts uitgelijnd
+    y=r.bottom+gap; x=Math.min(r.right-dw, vw-dw-12); if(x<12) x=12;
+  } else { y=r.bottom+gap; x=r.left; }
+  if(y+dh>vh-12) y=Math.max(12, vh-dh-12);
+  if(x+dw>vw-12) x=vw-dw-12;
+  if(x<12) x=12;
+  dg.style.transform='translate('+Math.round(x)+'px,'+Math.round(y)+'px)';
 }
 function tourNav(dir){ tourIdx+=dir; if(tourIdx>=tourSteps.length){ endTour(true); return; } if(tourIdx<0) tourIdx=0; renderTour(); }
 function endTour(remember){
   ['tourScrim','spotlight','tourDialog'].forEach(function(id){ var e=$id(id); if(e) e.classList.remove('show'); });
-  var dg=$id('tourDialog'); if(dg) dg.classList.remove('tour-center','tour-bottom');
+  var dg=$id('tourDialog'); if(dg){ dg.classList.remove('tour-wide'); dg.style.transform=''; }
   _tourLift(null);
   window.removeEventListener('scroll', _tourReposition, true);
-  document.body.classList.remove('tour-on');
+  window.removeEventListener('resize', _tourReposition);
+  document.body.classList.remove('tour-on','tour-snap');
   if(window.innerWidth<=980) closeSidebar();
   if(remember){ try{ localStorage.setItem('s27_tour_completed', new Date().toISOString()); }catch(e){} }
 }
-function _tourReposition(){ var dg=$id('tourDialog'); if(dg && dg.classList.contains('show')) renderTour(); }
-window.addEventListener('resize', _tourReposition);
+// scroll/resize: enkel herpositioneren (geen content-rebuild), rAF-gethrottled = vloeiend
+function _tourReposition(){
+  if(_tourRaf) return;
+  _tourRaf=requestAnimationFrame(function(){
+    _tourRaf=0;
+    var dg=$id('tourDialog'); if(!dg || !dg.classList.contains('show')) return;
+    var s=tourSteps[tourIdx]; _tourPlace(s?_tourEl(s):null);
+  });
+}
 // Advertentierapport-iframe (Arne's engine) auto-resize op postMessage
 window.addEventListener('message',function(e){ try{ if(e&&e.data&&e.data.type==='s27-ads-report-height'){ var f=$id('perfFrame'); if(f&&e.data.height){ f.style.minHeight='0'; f.style.height=(parseInt(e.data.height,10)+24)+'px'; } } }catch(_){} });
 
