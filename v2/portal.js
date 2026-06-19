@@ -2456,8 +2456,8 @@ function openBugReport(){
     +'<div class="gal-toprow"><button class="gal-close" onclick="closeBugReport()" aria-label="Terug">'+ic('plus',22)+'</button></div>'
     +'<h1 style="display:flex;align-items:center;gap:10px">'+ic('bug',24)+' Portaal-feedback</h1>'
     +'<p class="sdesc" style="margin:4px 0 20px">'+(team
-        ? 'Bug gezien of een idee voor het portaal? Drop het hier \u2014 het komt rechtstreeks in de bugs-lijst terecht.'
-        : 'Werkt er iets niet zoals verwacht, of heb je een idee voor het portaal? Laat het ons hier weten \u2014 we pakken het op.')+'</p>'
+        ? 'Bug gezien of een idee voor het portaal? Zet het hier en het komt rechtstreeks in de bugs-lijst terecht.'
+        : 'Werkt er iets niet zoals verwacht, of heb je een idee voor het portaal? Laat het ons hier weten, we pakken het op.')+'</p>'
     +'<div class="card contact-form" style="max-width:680px">'
       + wieBlok
       +'<label class="ms-label">Titel</label>'
@@ -2508,7 +2508,7 @@ async function bugVerstuur(btn){
   if(res&&res.ok&&res.data&&res.data.ok){
     var page=$id('page');
     var _vn=String(state._bugWie||'').trim().split(' ')[0];
-    if(page) page.innerHTML='<div class="panel active br-blue"><div class="contactpage"><div class="empty" style="padding:60px"><div class="em-ic">'+ic('st_approved',52)+'</div><b style="font-family:var(--font-display);font-size:17px;color:var(--ink-2)">Bedankt'+(_vn?(', '+escapeHtml(_vn)):'')+'!</b><p style="margin:6px 0 18px">Je melding is doorgegeven — we bekijken ze zo snel mogelijk.</p><button class="btn btn-primary" onclick="closeBugReport()">Terug</button> <button class="btn btn-outline" onclick="openBugReport()">Nog een melding</button></div></div></div>';
+    if(page) page.innerHTML='<div class="panel active br-blue"><div class="contactpage"><div class="empty" style="padding:60px"><div class="em-ic">'+ic('st_approved',52)+'</div><b style="font-family:var(--font-display);font-size:17px;color:var(--ink-2)">Bedankt'+(_vn?(', '+escapeHtml(_vn)):'')+'!</b><p style="margin:6px 0 18px">Je melding is doorgegeven. We bekijken ze zo snel mogelijk.</p><button class="btn btn-primary" onclick="closeBugReport()">Terug</button> <button class="btn btn-outline" onclick="openBugReport()">Nog een melding</button></div></div></div>';
   }
   else { btn.disabled=false; btn.innerHTML=ic('send',15)+' Opnieuw proberen'; if(msg){msg.textContent='Versturen lukte niet \u2014 probeer zo opnieuw.';msg.style.display='block';} }
 }
@@ -2931,18 +2931,18 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($id('tourScrim
    gecentreerde kaarten. Tijdens de tour staat de zijbalk volledig uitgeklapt (overlay,
    body.tour-on) zodat de labels leesbaar zijn. */
 const TOUR_ALL=[
-  {ic:'spark',       t:'Welkom in je portaal',          b:'In een halve minuut tonen we je waar alles staat. Geen zorgen — je kan deze rondleiding altijd opnieuw starten via het vraagteken bovenaan.', targets:null},
-  {ic:'home',        t:'Je startscherm',                b:'Hier begint je dag: alles wat voor jou klaarstaat — reviews, feedback, geplande shoots en meetings — verschijnt meteen bovenaan.', targets:['.sb-item[data-tab="start"]']},
-  {ic:'doc',         t:'Je projecten per discipline',   b:'Elke dienst heeft z’n eigen plek in de zijbalk. Klik op een tak — zoals Video & fotografie, Branding of Strategie — om je projecten, bestanden en feedbackrondes te bekijken en goed te keuren.', targets:['.sb-item[data-tab="video"]','.sb-item[data-tab="branding"]','.sb-item[data-tab="strategie"]']},
-  {ic:'st_progress', t:'Volg je resultaten',            b:'Bij Socials, Adverteren en Website zie je je cijfers in real time. Kies zelf de periode die je wil — en elke weergave heeft een eigen link die je 1-op-1 met een collega kan delen.', targets:['.sb-item[data-tab="socials"]','.sb-item[data-tab="advertenties"]','.sb-item[data-tab="webprestaties"]']},
-  {ic:'msg',         t:'Chatten met je team',           b:'Onder Berichten vind je al je gesprekken met het Studio 27-team, netjes gebundeld per project. Je kan ook rechtstreeks bij elk project reageren.', targets:['.sb-item[data-tab="berichten"]']},
-  {ic:'cal',         t:'Een meeting inplannen',         b:'Een overleg nodig? Onder Meetings prik je zelf een vrij moment dat jou past. Volledig vrijblijvend.', targets:['.sb-item[data-tab="meetings"]']},
-  {ic:'gear',        t:'Je instellingen',               b:'Bij Instellingen pas je je gegevens en meldingsvoorkeuren aan — kies of je updates liefst via e-mail, WhatsApp of een pushmelding ontvangt.', targets:['.sb-item[data-tab="instellingen"]']},
-  {ic:'bell',        t:'Je meldingen',                  b:'Dit belletje verzamelt updates over je projecten, reviews en berichten. Een gekleurd bolletje betekent dat er iets nieuws voor je is.', targets:['#bellBtn']},
-  {ic:'msg',         t:'Contact opnemen',               b:'Een vraag, een nieuw project of website-support nodig? Met de Contact-knop kom je in één klik bij de juiste persoon terecht.', targets:['#topNewBtn']},
-  {ic:'bug',         t:'Feedback & bugs melden',        b:'Werkt er iets niet zoals verwacht, of heb je een idee voor het portaal? Meld het via dit knopje — het komt rechtstreeks bij ons team terecht.', targets:['#bugBtn']},
-  {ic:'help',        t:'Deze rondleiding herhalen',     b:'Even kwijt hoe iets werkt? Via dit vraagteken start je deze rondleiding wanneer je maar wil opnieuw.', targets:['.topbar .icon-btn[aria-label="Rondleiding"]']},
-  {ic:'st_approved', t:'Je bent helemaal klaar!',       b:'Dat was het — je kent nu de weg. Veel plezier in je Studio 27-portaal, en weet dat we altijd voor je klaarstaan.', targets:null},
+  {ic:'spark',       t:'Welkom in je portaal',          b:'We tonen je in een halve minuut waar je alles vindt. Je kan deze uitleg later altijd opnieuw bekijken via het vraagteken bovenaan.', targets:null},
+  {ic:'home',        t:'Je startscherm',                b:'Dit is je vertrekpunt. Alles wat op jou wacht staat hier bovenaan klaar: reviews, feedback, geplande shoots en meetings.', targets:['.sb-item[data-tab="start"]']},
+  {ic:'doc',         t:'Je projecten per discipline',   b:'Elke dienst heeft een eigen plek in de menubalk. Klik op een tak zoals Video & fotografie, Branding of Strategie om je projecten, bestanden en feedbackrondes te bekijken en goed te keuren.', targets:['.sb-item[data-tab="video"]','.sb-item[data-tab="branding"]','.sb-item[data-tab="strategie"]']},
+  {ic:'st_progress', t:'Volg je resultaten',            b:'Bij Socials, Adverteren en Website volg je je cijfers in real time. Je kiest zelf de periode, en van elke pagina kan je de link doorsturen naar een collega.', targets:['.sb-item[data-tab="socials"]','.sb-item[data-tab="advertenties"]','.sb-item[data-tab="webprestaties"]']},
+  {ic:'msg',         t:'Chatten met je team',           b:'Bij Berichten staan al je gesprekken met het Studio 27-team, gebundeld per project. Je kan ook gewoon antwoorden vanuit het project zelf.', targets:['.sb-item[data-tab="berichten"]']},
+  {ic:'cal',         t:'Een meeting inplannen',         b:'Wil je samen iets bespreken? Bij Meetings kies je zelf een vrij moment dat jou past. Helemaal vrijblijvend.', targets:['.sb-item[data-tab="meetings"]']},
+  {ic:'gear',        t:'Je instellingen',               b:'Bij Instellingen beheer je je gegevens en je meldingen. Je kiest zelf of je updates via e-mail, WhatsApp of een pushbericht wil ontvangen.', targets:['.sb-item[data-tab="instellingen"]']},
+  {ic:'bell',        t:'Je meldingen',                  b:'Het belletje verzamelt updates over je projecten, reviews en berichten. Een gekleurd bolletje betekent dat er iets nieuws is.', targets:['#bellBtn']},
+  {ic:'msg',         t:'Contact opnemen',               b:'Een vraag, een nieuw project of hulp bij je website? Via de Contact-knop kom je meteen bij de juiste persoon terecht.', targets:['#topNewBtn']},
+  {ic:'bug',         t:'Feedback en bugs melden',       b:'Loopt er iets mis of heb je een idee voor het portaal? Meld het met dit knopje. Het komt rechtstreeks bij ons team terecht.', targets:['#bugBtn']},
+  {ic:'help',        t:'Deze rondleiding herhalen',     b:'Even kwijt hoe iets werkt? Met dit vraagteken start je deze uitleg op elk moment opnieuw.', targets:['.topbar .icon-btn[aria-label="Rondleiding"]']},
+  {ic:'st_approved', t:'Je bent helemaal klaar',        b:'Je kent nu de weg. Veel plezier in je portaal, en als je iets nodig hebt staan we voor je klaar.', targets:null},
 ];
 let tourIdx=0, tourSteps=[], _tourLifted=null, _tourRaf=0;
 function tourEnsureStyles(){
@@ -3000,8 +3000,10 @@ function openTour(){
   window.addEventListener('scroll', _tourReposition, true);
   window.addEventListener('resize', _tourReposition);
   renderTour();
-  // snap kort aanhouden, dan weghalen → de eerste stap verschijnt zonder slide, daarna schuift alles vloeiend
-  setTimeout(function(){ document.body.classList.remove('tour-snap'); }, 60);
+  // de transform meteen vastleggen (forceer layout) zodat de eerste paint al gecentreerd is,
+  // niet vanuit de hoek. tour-snap houdt de slide kort uit; daarna schuiven volgende stappen vloeiend.
+  try{ void $id('tourDialog').offsetWidth; }catch(e){}
+  setTimeout(function(){ document.body.classList.remove('tour-snap'); }, 90);
 }
 function renderTour(){
   var s=tourSteps[tourIdx]; if(!s){ endTour(true); return; }
