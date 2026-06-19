@@ -208,7 +208,18 @@ function onPopState(ev){
   applyRouteObj(st, { fromPop:true }).catch(function(){ try{ goTab('start'); }catch(_e){} });
 }
 
-async function applyRoute(){ var r = state.route; state.route = null; return applyRouteObj(r, {}); }
+async function applyRoute(){
+  var r = state.route; state.route = null;
+  // Magic-link/login-redirect: als de URL geen route meer draagt (e-maillogin wiste 'm), haal de
+  // bewaarde bestemming uit localStorage (gezet in init vóór login). Eenmalig + 15 min geldig.
+  try{
+    var raw = localStorage.getItem('s27_pending_route');
+    if(raw){ localStorage.removeItem('s27_pending_route');
+      if(!r){ var p = JSON.parse(raw); if(p && p.hash && (Date.now()-(p.t||0)) < 15*60*1000) r = _parseHash(p.hash); }
+    }
+  }catch(e){}
+  return applyRouteObj(r, {});
+}
 
 // Centrale navigator: brengt het portaal naar exact de toestand die de route beschrijft.
 // silent=true onderdrukt tussentijdse syncUrl-schrijfacties; bij boot canonicaliseren we
@@ -279,6 +290,11 @@ function _routeOpenGalerij(project, idx){ try{ setTimeout(function(){ var trg=do
 function init(){
   $id('overlays').innerHTML = buildOverlays();
   state.route = parseRoute();
+  // Magic-link/login-overleving: een uitgelogde bezoeker die een deep-link opent, verliest de
+  // bestemming tijdens de e-maillogin (continue-url = pathname, Firebase wist de URL). Daarom
+  // bewaren we de bedoelde hash hier (vóór login) in localStorage; applyRoute herstelt 'm na login
+  // (zelfde browser/toestel; 15 min geldig, eenmalig). Google-SSO behoudt de hash sowieso.
+  try{ if(qsp().get('demo')!=='1' && location.hash && location.hash.replace(/^#\/?/,'').length>1){ localStorage.setItem('s27_pending_route', JSON.stringify({ t:Date.now(), hash:location.hash })); } }catch(e){}
   window.addEventListener('popstate', onPopState);   // browser-terugknop -> in-SPA navigatie (geen portaal-exit)
   S27.onSessionExpired = onSessionExpired;
   // skipLink=true bij een bedrijf-switch: switchCompany heeft al geprovisioned + de claim ververst,
@@ -552,7 +568,10 @@ async function enterAdminMode(){
   // i.p.v. de bedrijvenkiezer te tonen. Zo verifieert een teamlid in 1 klik hoe de klant
   // z'n portaal ziet. Enkel staff bereikt enterAdminMode, dus geen klant-impact.
   // bedrijf uit een gedeelde hash-link (#/b/<id>/...) of de oude ?klant=-sprong: meteen die klant openen
-  var _jumpKlant=''; try{ _jumpKlant=qsp().get('klant') || (state.route && state.route.bedrijf) || ''; }catch(e){}
+  var _jumpKlant=''; try{ _jumpKlant=qsp().get('klant') || (state.route && state.route.bedrijf) || '';
+    // ook na een e-maillogin (URL gewist): peil het bedrijf uit de bewaarde deep-link (applyRoute consumeert 'm verder)
+    if(!_jumpKlant){ var _pr=localStorage.getItem('s27_pending_route'); if(_pr){ var _pp=JSON.parse(_pr); if(_pp&&_pp.hash&&(Date.now()-(_pp.t||0))<15*60*1000){ var _rr=_parseHash(_pp.hash); if(_rr&&_rr.bedrijf) _jumpKlant=_rr.bedrijf; } } }
+  }catch(e){}
   if(_jumpKlant && /^[A-Za-z0-9_-]{1,64}$/.test(_jumpKlant)){
     try{ history.replaceState(null,'',location.pathname); }catch(e){}
     if(!state.adminCompanies || !state.adminCompanies.length){ try{ state.adminCompanies = await S27DATA.loadAdminCompanies(); }catch(e){ state.adminCompanies=[]; } }
