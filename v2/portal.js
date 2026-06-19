@@ -2944,7 +2944,7 @@ const TOUR_ALL=[
   {ic:'help',        t:'Deze rondleiding herhalen',     b:'Even kwijt hoe iets werkt? Met dit vraagteken start je deze uitleg op elk moment opnieuw.', targets:['.topbar .icon-btn[aria-label="Rondleiding"]']},
   {ic:'st_approved', t:'Je bent helemaal klaar',        b:'Je kent nu de weg. Veel plezier in je portaal, en als je iets nodig hebt staan we voor je klaar.', targets:null},
 ];
-let tourIdx=0, tourSteps=[], _tourLifted=null, _tourRaf=0;
+let tourIdx=0, tourSteps=[], _tourChromeSaved=null, _tourRaf=0;
 function tourEnsureStyles(){
   if($id('s27-tour-styles')) return;
   var st=document.createElement('style'); st.id='s27-tour-styles';
@@ -2984,21 +2984,24 @@ function tourEnsureStyles(){
 }
 function _tourVisible(el){ try{ if(!el) return false; if(el.offsetParent===null && getComputedStyle(el).position!=='fixed') return false; var r=el.getBoundingClientRect(); return r.width>2 && r.height>2; }catch(e){ return false; } }
 function _tourEl(s){ if(!s||!s.targets) return null; for(var i=0;i<s.targets.length;i++){ var el=document.querySelector(s.targets[i]); if(_tourVisible(el)) return el; } return null; }
-// het uitgelichte element (of z'n container) boven de scrim tillen zodat het helder blijft
-function _tourLift(el){
-  if(_tourLifted){ try{ _tourLifted.style.zIndex=_tourLifted.__z0||''; _tourLifted.style.position=_tourLifted.__p0||''; }catch(e){} _tourLifted=null; }
-  if(!el) return;
-  var cont = (el.closest && (el.closest('#sidebar') || el.closest('.sidebar') || el.closest('.topbar'))) || el;
-  cont.__z0=cont.style.zIndex; cont.__p0=cont.style.position;
-  try{ if(getComputedStyle(cont).position==='static') cont.style.position='relative'; }catch(e){}
-  cont.style.zIndex='151';   // boven de scrim (150), onder de spotlight-ring (155) en kaart (160)
-  _tourLifted=cont;
+// De volledige chrome (zijbalk + menubalk) de hele tour lang boven de scrim houden, zodat álles
+// daar even helder blijft (geen losse knop die opvalt) en enkel de pagina-inhoud gedimd is.
+// De spotlight-ring (z155) en kaart (z160) blijven erboven.
+function _tourLiftChrome(on){
+  var els=[document.querySelector('.topbar'), (document.getElementById('sidebar')||document.querySelector('.sidebar'))];
+  if(on){
+    _tourChromeSaved=els.map(function(e){ if(!e) return null; var s={el:e, z:e.style.zIndex, p:e.style.position}; try{ if(getComputedStyle(e).position==='static') e.style.position='relative'; }catch(x){} e.style.zIndex='151'; return s; });
+  } else {
+    if(_tourChromeSaved) _tourChromeSaved.forEach(function(s){ if(s){ try{ s.el.style.zIndex=s.z||''; s.el.style.position=s.p||''; }catch(x){} } });
+    _tourChromeSaved=null;
+  }
 }
 function openTour(){
   tourEnsureStyles();
   goTab('start');
   document.body.classList.add('tour-on');                                   // zijbalk uitgeklapt (overlay, instant)
   document.body.classList.add('tour-snap');                                 // eerste plaatsing zonder slide
+  _tourLiftChrome(true);                                                     // zijbalk + menubalk helder houden, niet half-gedimd
   tourSteps = TOUR_ALL.filter(function(s){ return !s.targets || _tourEl(s); });   // enkel stappen met een zichtbaar doel
   tourIdx=0;
   $id('tourScrim').classList.add('show'); $id('tourDialog').classList.add('show');
@@ -3027,7 +3030,6 @@ function renderTour(){
 // alleen positioneren (geen content-rebuild) — wordt ook gebruikt bij scroll/resize
 function _tourPlace(el){
   var sp=$id('spotlight'), dg=$id('tourDialog'); if(!sp||!dg) return;
-  _tourLift(el);
   var vw=window.innerWidth, vh=window.innerHeight, mobile=vw<=980;
   dg.classList.toggle('tour-wide', mobile);
   // positie altijd via transform vanuit hoek (0,0): enkel transform verandert tussen stappen,
@@ -3057,8 +3059,8 @@ function _tourPlace(el){
 function tourNav(dir){ tourIdx+=dir; if(tourIdx>=tourSteps.length){ endTour(true); return; } if(tourIdx<0) tourIdx=0; renderTour(); }
 function endTour(remember){
   ['tourScrim','spotlight','tourDialog'].forEach(function(id){ var e=$id(id); if(e) e.classList.remove('show'); });
-  var dg=$id('tourDialog'); if(dg){ dg.classList.remove('tour-wide'); dg.style.transform=''; }
-  _tourLift(null);
+  var dg=$id('tourDialog'); if(dg){ dg.classList.remove('tour-wide'); dg.style.left=''; dg.style.top=''; dg.style.transform=''; }
+  _tourLiftChrome(false);
   window.removeEventListener('scroll', _tourReposition, true);
   window.removeEventListener('resize', _tourReposition);
   document.body.classList.remove('tour-on','tour-snap');
