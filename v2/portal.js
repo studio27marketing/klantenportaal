@@ -519,6 +519,9 @@ async function prefetchAdjacent(){
 function afterEnter(){
   applyTakVisibility();
   initSbGlass();
+  // Portaalfeedback (bug-knop): zichtbaar voor IEDEREEN met een echte sessie — klanten mogen ook
+  // bugs/feedback melden (zie in de clientview). Enkel in de demo blijft de knop verborgen.
+  if(!state.demoMode){ var _bb=$id('bugBtn'); if(_bb) _bb.style.display=''; }
   // ADMIN: geen klant-onboardingtour; toon i.p.v. de naam-begroeting een "team"-context.
   if(state.adminMode){ document.body.classList.add('admin-mode'); updateAdminViewToggle(); }
   else if(!localStorage.getItem('s27_tour_completed')){ setTimeout(openTour,500); }
@@ -563,7 +566,7 @@ function updateAdminViewToggle(){
    zoek-overlay (openAdminPicker) zodat een admin tussen ALLE klanten kan springen.
    ============================================================================= */
 async function enterAdminMode(){
-  (function(){ var b=$id('bugBtn'); if(b) b.style.display=''; })();
+  // (bug-knop wordt nu in afterEnter voor iedereen getoond — klanten incl.)
   // DEEP-LINK vanuit het teamportaal (?klant=<bedrijfId>): spring meteen naar die klant
   // i.p.v. de bedrijvenkiezer te tonen. Zo verifieert een teamlid in 1 klik hoe de klant
   // z'n portaal ziet. Enkel staff bereikt enterAdminMode, dus geen klant-impact.
@@ -2429,26 +2432,39 @@ async function loadBugTeam(){
   var sel=$id('bugWie');
   if(sel){ if(!state._bugWie) state._bugWie=_bugWieDefault(); sel.innerHTML=_bugWieOptions(); }
 }
+// Naam van de ingelogde klant voor een melding (Firebase displayName, anders de naam v\u00f3\u00f3r de @).
+function _bugClientName(){ var s=state.session||{}; return String(s.displayName||'').trim() || String(s.email||'').split('@')[0] || ''; }
+function _bugBedrijfNaam(){ try{ return (window.S27DATA&&S27DATA.bedrijfsnaam&&S27DATA.bedrijfsnaam())||state._adminActiveName||(state.session&&state.session.bedrijfsnaam)||''; }catch(e){ return ''; } }
 function openBugReport(){
   state._bugFrom={mode:state.viewMode, tab:currentTab, project:state.activeProject};
   state.viewMode='bugreport'; state._bugFile=null;
-  // melder vooraf selecteren op het ingelogde e-mailadres + live ledenlijst (async) ophalen
-  state._bugWie=_bugWieDefault();
-  loadBugTeam();
+  var team = (typeof isRichView==='function' && isRichView());   // teamweergave (staff, niet de clientview)
+  var wieBlok;
+  if(team){
+    // team: melder kiezen uit de live ClickUp-ledenlijst (dropdown)
+    state._bugWie=_bugWieDefault(); loadBugTeam();
+    wieBlok='<label class="ms-label">Wie meldt dit?</label>'
+      +'<select id="bugWie" class="bug-wie-select" onchange="bugPickWie(this.value)">'+_bugWieOptions()+'</select>';
+  } else {
+    // klant: identiteit automatisch (geen team-dropdown) \u2014 getoond zodat duidelijk is wie het indient
+    var wie=_bugClientName(), bn=_bugBedrijfNaam();
+    wieBlok='<div style="display:flex;align-items:center;gap:8px;color:var(--ink-3);background:var(--paper-3,#F1EBE2);border-radius:10px;padding:10px 13px;margin-bottom:14px;font-size:13.5px">'+ic('person',16)+'<span>Je meldt dit als <b style="color:var(--ink-2)">'+escapeHtml(wie||(state.session&&state.session.email)||'jou')+'</b>'+(bn?(' \u00b7 '+escapeHtml(bn)):'')+'</span></div>';
+  }
   var page=$id('page'); if(!page) return;
   var tt=$id('topbarTitle'); if(tt) tt.textContent='Portaal-feedback';
   page.innerHTML='<div class="panel active br-blue" data-screen-label="bugreport"><div class="contactpage">'
     +'<div class="gal-toprow"><button class="gal-close" onclick="closeBugReport()" aria-label="Terug">'+ic('plus',22)+'</button></div>'
-    +'<h1>\ud83d\udc1e Portaal-feedback</h1>'
-    +'<p class="sdesc" style="margin:4px 0 20px">Bug gezien of een idee voor het portaal? Drop het hier \u2014 het komt rechtstreeks in de bugs-lijst terecht.</p>'
+    +'<h1 style="display:flex;align-items:center;gap:10px">'+ic('bug',24)+' Portaal-feedback</h1>'
+    +'<p class="sdesc" style="margin:4px 0 20px">'+(team
+        ? 'Bug gezien of een idee voor het portaal? Drop het hier \u2014 het komt rechtstreeks in de bugs-lijst terecht.'
+        : 'Werkt er iets niet zoals verwacht, of heb je een idee voor het portaal? Laat het ons hier weten \u2014 we pakken het op.')+'</p>'
     +'<div class="card contact-form" style="max-width:680px">'
-      +'<label class="ms-label">Wie meldt dit?</label>'
-      +'<select id="bugWie" class="bug-wie-select" onchange="bugPickWie(this.value)">'+_bugWieOptions()+'</select>'
+      + wieBlok
       +'<label class="ms-label">Titel</label>'
-      +'<input type="text" id="bugTitel" class="shoot-zoek" style="margin:4px 0 14px" maxlength="140" placeholder="Korte omschrijving van de bug of het idee">'
+      +'<input type="text" id="bugTitel" class="shoot-zoek" style="margin:4px 0 14px" maxlength="140" placeholder="Korte omschrijving van wat je zag">'
       +'<label class="ms-label">Wat zie je / wat verwacht je?</label>'
-      +'<textarea id="bugBody" class="mp-note" rows="12" placeholder="Stappen om te reproduceren, welk scherm, wat je verwachtte\u2026"></textarea>'
-      +'<div style="margin-top:12px"><label class="btn btn-outline btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">'+ic('upload',14)+' Screenshot toevoegen<input type="file" accept="image/*" style="display:none" onchange="bugPickFile(this)"></label><span id="bugFileChip" class="fs" style="margin-left:10px;color:var(--ink-3)"></span></div>'
+      +'<textarea id="bugBody" class="mp-note" rows="12" placeholder="Op welk scherm, wat ging er mis, wat had je verwacht\u2026"></textarea>'
+      +'<div style="margin-top:12px"><label class="btn btn-outline btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">'+ic('upload',14)+' Schermafbeelding toevoegen<input type="file" accept="image/*" style="display:none" onchange="bugPickFile(this)"></label><span id="bugFileChip" class="fs" style="margin-left:10px;color:var(--ink-3)"></span></div>'
       +'<div class="shoot-msg" id="bugMsg"></div>'
       +'<div style="margin-top:18px"><button class="btn btn-primary" onclick="bugVerstuur(this)">'+ic('send',15)+' Versturen</button></div>'
     +'</div>'
@@ -2469,11 +2485,19 @@ function closeBugReport(){
 async function bugVerstuur(btn){
   var titel=($id('bugTitel')||{}).value||'', body=($id('bugBody')||{}).value||'';
   var msg=$id('bugMsg');
-  if(!String(titel).trim()&&!String(body).trim()){ if(msg){msg.textContent='Beschrijf eerst even de bug of het idee.';msg.style.display='block';} return; }
-  var selEl=$id('bugWie'); if(selEl&&selEl.value) state._bugWie=selEl.value;
-  if(!state._bugWie){ if(msg){msg.textContent='Selecteer even wie dit meldt.';msg.style.display='block';} return; }
+  if(!String(titel).trim()&&!String(body).trim()){ if(msg){msg.textContent='Beschrijf eerst even wat je zag of welk idee je hebt.';msg.style.display='block';} return; }
+  var team = (typeof isRichView==='function' && isRichView());
+  var melder;
+  if(team){
+    var selEl=$id('bugWie'); if(selEl&&selEl.value) state._bugWie=selEl.value;
+    if(!state._bugWie){ if(msg){msg.textContent='Selecteer even wie dit meldt.';msg.style.display='block';} return; }
+    melder=state._bugWie;
+  } else {
+    melder=_bugClientName();   // klant: identiteit automatisch (e-mail wordt server-side toegevoegd)
+  }
+  state._bugWie=melder;
   btn.disabled=true; btn.innerHTML='Versturen\u2026';
-  var payload={titel:String(titel).trim(),omschrijving:String(body).trim(),melder_naam:state._bugWie,context:location.href+' \u00b7 '+(state.activeBedrijf||'')};
+  var payload={titel:String(titel).trim(),omschrijving:String(body).trim(),melder_naam:melder,bedrijfsnaam:_bugBedrijfNaam(),context:location.href+' \u00b7 '+(state.activeBedrijf||'')};
   if(state._bugFile&&state._bugFile.size<=22*1024*1024){
     try{
       var b64=await new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){res(String(r.result).split(',')[1]||'');}; r.onerror=rej; r.readAsDataURL(state._bugFile); });
@@ -2483,7 +2507,8 @@ async function bugVerstuur(btn){
   var res; try{ res=await api(ENDPOINTS.bugReport,payload); }catch(e){ res=null; }
   if(res&&res.ok&&res.data&&res.data.ok){
     var page=$id('page');
-    if(page) page.innerHTML='<div class="panel active br-blue"><div class="contactpage"><div class="empty" style="padding:60px"><div class="em-ic">'+ic('st_approved',52)+'</div><b style="font-family:var(--font-display);font-size:17px;color:var(--ink-2)">Bedankt, '+escapeHtml(String(state._bugWie).split(' ')[0])+'!</b><p style="margin:6px 0 18px">Je melding staat in de bugs-lijst.</p><button class="btn btn-primary" onclick="closeBugReport()">Terug</button> <button class="btn btn-outline" onclick="openBugReport()">Nog een melding</button></div></div></div>';
+    var _vn=String(state._bugWie||'').trim().split(' ')[0];
+    if(page) page.innerHTML='<div class="panel active br-blue"><div class="contactpage"><div class="empty" style="padding:60px"><div class="em-ic">'+ic('st_approved',52)+'</div><b style="font-family:var(--font-display);font-size:17px;color:var(--ink-2)">Bedankt'+(_vn?(', '+escapeHtml(_vn)):'')+'!</b><p style="margin:6px 0 18px">Je melding is doorgegeven — we bekijken ze zo snel mogelijk.</p><button class="btn btn-primary" onclick="closeBugReport()">Terug</button> <button class="btn btn-outline" onclick="openBugReport()">Nog een melding</button></div></div></div>';
   }
   else { btn.disabled=false; btn.innerHTML=ic('send',15)+' Opnieuw proberen'; if(msg){msg.textContent='Versturen lukte niet \u2014 probeer zo opnieuw.';msg.style.display='block';} }
 }
