@@ -3453,7 +3453,7 @@ function facturatieBlock(){
     +'<div class="setsec" style="margin-top:0">'
     +'<div class="set-grid">'
     +'<div class="field"><label>Ondernemingsnummer / BTW</label><input id="facBtw" value="'+esc(onum)+'" placeholder="BE 0xxx.xxx.xxx" style="'+fld+'"></div>'
-    +'<div class="field"><label>Facturatie-e-mail</label><input id="facEmail" value="'+esc(email)+'" placeholder="boekhouding@…" style="'+fld+'"></div>'
+    +'<div class="field"><label>Facturatie-e-mail</label><input id="facEmail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" value="'+esc(email)+'" placeholder="boekhouding@…" style="'+fld+'"></div>'
     +'<div class="field" style="grid-column:1/-1"><label>Facturatie-opmerkingen</label><textarea id="facOpm" rows="2" style="'+fld+';resize:vertical" placeholder="bv. PO-nummer of wijziging ondernemingsnummer">'+esc(opm)+'</textarea></div>'
     +'</div>'
     +'<div style="margin-top:14px"><button class="btn btn-branch br-green btn-sm" onclick="saveBedrijfGegevens(this)">'+ic('check',15)+' Facturatiegegevens opslaan</button></div>'
@@ -4187,8 +4187,8 @@ function panelInstellingen(){
       <h3>Mijn profiel &amp; notificaties</h3><p class="sdesc">Je eigen gegevens, wijzigingen synchroniseren meteen met je contactfiche bij Studio&nbsp;27.</p>
       <input type="hidden" id="npProfileId" value="${esc(prof.id||'')}">
       <div class="set-grid">
-        <div class="field"><label>E-mail</label><input id="npEmail" value="${esc(prof.email||'')}" placeholder="naam@bedrijf.be" onchange="saveProfile()" ${prof.id?'':'disabled'}></div>
-        <div class="field"><label>GSM / WhatsApp-nummer</label><input id="npGsm" value="${esc(prof.gsm||(demo?'+32 478 12 34 56':''))}" placeholder="+32 4xx xx xx xx" onchange="saveProfile()" ${prof.id?'':'disabled'}></div>
+        <div class="field"><label>E-mail</label><input id="npEmail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" value="${esc(prof.email||'')}" placeholder="naam@bedrijf.be" onchange="saveProfile()" ${prof.id?'':'disabled'}></div>
+        <div class="field"><label>GSM / WhatsApp-nummer</label><input id="npGsm" type="tel" inputmode="tel" autocomplete="tel" value="${esc(prof.gsm||(demo?'+32 478 12 34 56':''))}" placeholder="+32 4xx xx xx xx" onchange="saveProfile()" ${prof.id?'':'disabled'}></div>
         <div class="field" style="grid-column:1/-1"><label>Notificatie-kanalen</label>${kanaalPicker('npKanalen', (Array.isArray(prof.kanalen)&&prof.kanalen.length)?prof.kanalen:legacyVoorkeurNaarKanalen(vk), prof.id?'saveProfile':null)}${prof.id?'':'<div class="fs" style="color:var(--ink-4);margin-top:6px">Koppel eerst je e-mail om kanalen te bewaren.</div>'}</div>
       </div>
       ${demo?'':`<div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--paper-3,#F1EBE2)"><button class="btn btn-outline btn-sm" onclick="enablePushHere(this)">${ic('phone',15)} Pushmeldingen op dit toestel aanzetten</button><span id="pushHereMsg" class="fs" style="margin-left:10px;color:var(--ink-4)"></span><div class="fs" style="color:var(--ink-4);margin-top:6px">Krijg meldingen rechtstreeks op dit toestel, ook als de app dicht staat. Werkt op je telefoon zodra je het portaal aan je beginscherm toevoegt.</div></div>`}

@@ -1455,3 +1455,17 @@ button.ond-head{cursor:pointer;}
   .section-head .soc-nav button{width:44px; height:44px;}
   .soc-fbar .soc-fchip{min-height:44px; display:inline-flex; align-items:center;}
 }
+
+/* ============================================================
+   BOTTOM-SHEETS POLISH (golf 5) — het mp-overlay-systeem (meeting-planner,
+   website-ticket, offerte-wizard, contact-flow) is op mobiel al een bottom-sheet
+   (dokt onderaan, ronde bovenhoeken, schuift op; gecentreerde dialoog op desktop).
+   Hier de afwerking: grijp-handvat, dynamische viewport-hoogte en een veilige zone
+   onder de sticky actieknop zodat die niet onder de home-indicator valt.
+   ============================================================ */
+.mp-modal{max-height:94dvh;}
+.mp-foot{padding-bottom:calc(14px + env(safe-area-inset-bottom));}
+@media(max-width:759px){
+  .mp-modal::before{content:""; flex:none; width:40px; height:4px; border-radius:99px; background:var(--line); margin:9px auto 2px;}
+}
+@media(min-width:760px){ .mp-modal{max-height:90dvh;} }
