@@ -1015,8 +1015,22 @@ function socialCalendar(posts){
     return '<button class="soc-chip" style="--cc:'+nc[1]+'" onclick="socialOpenDetail(\''+esc(p.id)+'\')"><span class="soc-cdot" style="background:'+m[1]+'"></span>'+snip+'</button>';
   }).join('')+'</div>'):'';
   var legend='<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--ink-4)">'+(posts.some(function(p){return socialStatus(p)==='concept';})?['concept','feedback','goedgekeurd','gepubliceerd']:['feedback','goedgekeurd','gepubliceerd']).map(function(s){var m=socialStatusMeta(s);return '<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:99px;background:'+m[1]+'"></span>'+esc(m[0])+'</span>';}).join('')+'</div>';
+  // Mobiele agenda: hetzelfde maandoverzicht maar als chronologische lijst (alleen dagen mét posts).
+  // Het dichte 7-koloms-raster is onleesbaar op een telefoon; CSS wisselt grid<->agenda per schermbreedte.
+  var daysWith=Object.keys(byDay).map(Number).sort(function(a,b){return a-b;});
+  var agenda='<div class="soc-agenda">'+(daysWith.length? daysWith.map(function(day){
+      var dps=(byDay[day]||[]).sort(function(a,b){return a.dt-b.dt;});
+      var dd=new Date(mo.y,mo.m,day), wd=dd.toLocaleDateString('nl-BE',{weekday:'long'});
+      var today=isCur&&now.getDate()===day;
+      return '<div class="soc-agday'+(today?' soc-agtoday':'')+'"><div class="soc-agdate"><span class="soc-agnum">'+day+'</span><span class="soc-agwd">'+esc(wd)+'</span></div><div class="soc-aglist">'+dps.map(function(p){
+        var m=socialStatusMeta(socialStatus(p)), nc=mcNet(((p.netwerken||[])[0]||{}).netwerk);
+        var tm=p.dt.toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'});
+        var snip=esc((p.tekst||'(geen tekst)').replace(/\s+/g,' ').slice(0,64));
+        return '<button class="soc-agitem" style="--cc:'+nc[1]+'" onclick="socialOpenDetail(\''+esc(p.id)+'\')"><span class="soc-cdot" style="background:'+m[1]+'"></span><span class="soc-agtime">'+tm+'</span><span class="soc-agtxt">'+snip+'</span></button>';
+      }).join('')+'</div></div>';
+    }).join('') : '<div class="empty" style="padding:26px;text-align:center;color:var(--ink-4)">Geen posts gepland in '+esc(label)+'.</div>')+'</div>';
   return '<div class="section-head" style="margin-top:6px"><h2 style="text-transform:capitalize">'+esc(label)+'</h2><div class="soc-nav"><button aria-label="Vorige maand" onclick="socialMonthNav(-1)">'+ic('arrow',16)+'</button><button aria-label="Volgende maand" onclick="socialMonthNav(1)">'+ic('arrow',16)+'</button></div></div>'
-    +'<div class="soc-cal"><div class="soc-dow">'+dow.map(function(d){return '<span>'+d+'</span>';}).join('')+'</div><div class="soc-grid">'+cells+'</div></div>'+zonderHtml+legend;
+    +'<div class="soc-cal"><div class="soc-dow">'+dow.map(function(d){return '<span>'+d+'</span>';}).join('')+'</div><div class="soc-grid">'+cells+'</div></div>'+agenda+zonderHtml+legend;
 }
 /* platform-merkglyphs (currentColor) voor de kanaalkiezer + gsm-mockup */
 function mcNetIcon(net){

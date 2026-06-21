@@ -1413,3 +1413,45 @@ button.ond-head{cursor:pointer;}
   body.bn-hide .bottom-nav,
   body.kb-open .bottom-nav{transform:translateY(115%);}
 }
+
+/* ============================================================
+   TOPBAR SLIM (golf 3) — minder chrome + verberg-bij-scrollen, enkel mobiel.
+   De onderbalk neemt de kernnavigatie over, dus de topbar wordt rustiger:
+   geen hamburger (de 'Meer'-tab opent de lade) en geen dubbele Berichten/Meetings-iconen.
+   ============================================================ */
+@media(max-width:980px){
+  .topbar .hamb{display:none !important;}
+  .topbar [data-topnav]{display:none !important;}
+  /* Topbar wijkt bij naar-beneden-scrollen (leesruimte), komt terug bij omhoog (tb-hidden via portal.js). */
+  .topbar{transition:transform .28s var(--ease-out), margin-left .26s cubic-bezier(.4,0,.2,1);}
+  body.tb-hidden .topbar{transform:translateY(-106%);}
+  /* Contact compacter zodat de smalle topbar niet overvol oogt. */
+  #topNewBtn{padding-left:13px; padding-right:13px;}
+}
+
+/* ============================================================
+   DICHTE DATA MOBIEL (golf 4) — socials-planner als agenda-lijst i.p.v. dicht
+   maandraster, plus grotere tikdoelen in de planner. Ads-tabellen scrollen al
+   horizontaal (ar-tscroll, min-width 680) en sr-charts klappen al naar 1 kolom.
+   ============================================================ */
+.soc-agenda{display:none;}
+@media(max-width:680px){
+  .soc-cal{display:none;}                 /* 7-koloms maandraster is onleesbaar op een telefoon */
+  .soc-agenda{display:block;}
+  .soc-agday{display:flex; gap:12px; padding:12px 2px; border-top:1px solid var(--paper-3,#F1EBE2);}
+  .soc-agday:first-child{border-top:none;}
+  .soc-agdate{flex:0 0 48px; text-align:center; padding-top:2px;}
+  .soc-agnum{display:block; font-family:var(--font-display); font-weight:900; font-size:21px; color:var(--ink); line-height:1;}
+  .soc-agwd{display:block; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-4); margin-top:3px;}
+  .soc-agtoday .soc-agnum{color:#92740b;}
+  .soc-aglist{flex:1; min-width:0; display:flex; flex-direction:column; gap:7px;}
+  .soc-agitem{display:flex; align-items:center; gap:9px; width:100%; min-height:46px; text-align:left;
+    background:var(--paper-2,#FAF7F2); border:1px solid var(--paper-3,#F1EBE2); border-left:3px solid var(--cc,#667684);
+    border-radius:11px; padding:8px 12px; cursor:pointer;}
+  .soc-agitem:active{transform:scale(.99);}
+  .soc-agtime{font-family:var(--font-display); font-weight:800; font-size:12.5px; color:var(--ink-3); flex:0 0 auto;}
+  .soc-agtxt{font-size:13px; color:var(--ink-2); overflow:hidden; white-space:nowrap; text-overflow:ellipsis;}
+  /* planner-tikdoelen >=44px (extra specificiteit verslaat de later-geïnjecteerde mcStyle-regel) */
+  .section-head .soc-nav button{width:44px; height:44px;}
+  .soc-fbar .soc-fchip{min-height:44px; display:inline-flex; align-items:center;}
+}

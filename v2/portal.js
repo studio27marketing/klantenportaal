@@ -823,6 +823,22 @@ function openMeer(){ try{ toggleSidebar(); }catch(e){} }
 // Toetsenbord open (input-focus op mobiel) -> onderbalk wegschuiven zodat hij niet over het toetsenbord/veld valt.
 document.addEventListener('focusin', function(e){ var t=e.target; if(t&&t.tagName&&/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)&&t.type!=='checkbox'&&t.type!=='radio'){ document.body.classList.add('kb-open'); } });
 document.addEventListener('focusout', function(){ setTimeout(function(){ var a=document.activeElement; if(!(a&&a.tagName&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&a.type!=='checkbox'&&a.type!=='radio')) document.body.classList.remove('kb-open'); }, 90); });
+// MOBIEL golf 3: topbar verbergt bij naar-beneden-scrollen (extra leesruimte) en komt terug bij omhoog-scrollen.
+// De ONDERSTE menubalk blijft altijd staan (Vincent: kernnavigatie permanent zichtbaar) — enkel de topbar wijkt.
+(function(){
+  var lastY=0, ticking=false, THRESH=10;
+  function onScroll(){
+    if(ticking) return; ticking=true;
+    requestAnimationFrame(function(){
+      var y=window.pageYOffset||document.documentElement.scrollTop||0, dy=y-lastY;
+      if(y<70){ document.body.classList.remove('tb-hidden'); lastY=y; }                       // bovenaan: altijd tonen
+      else if(dy>THRESH){ document.body.classList.add('tb-hidden'); lastY=y; }                  // omlaag -> verbergen
+      else if(dy<-THRESH){ document.body.classList.remove('tb-hidden'); lastY=y; }              // omhoog -> tonen
+      ticking=false;
+    });
+  }
+  window.addEventListener('scroll', onScroll, {passive:true});
+})();
 // Resultaten/performance-tab tonen of verbergen op basis van de module-vlag van dit bedrijf.
 // Symmetrisch: bij een switch van bedrijf-A (performance uit) -> B (aan) komt de tab terug zonder reload.
 // (Socials + advertenties blijven altijd zichtbaar: hun koppeling staat los van projecten; de panels
