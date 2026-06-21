@@ -4837,7 +4837,7 @@ function buildOverlays(){
   <!-- Chatbot -->
   <button class="bot-fab" id="botFab" onclick="toggleBot()" aria-label="Hulp van Studio 27">${logo27(30)}</button>
   <div class="bot-panel" id="botPanel">
-    <div class="bot-head"><div class="ba">${logo27(24)}</div><div><h3>Vraag het aan Studio 27</h3><div class="st"><i></i> meestal binnen enkele minuten</div></div><button class="bclose" onclick="toggleBot()"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+    <div class="bot-head"><div class="ba">${logo27(24)}</div><div><h3>Vraag het aan Studio 27</h3><div class="st"><i></i> direct antwoord op je vragen</div></div><button class="bclose" onclick="toggleBot()"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
     <div class="bot-msgs" id="botMsgs"><div class="bmsg bot" id="botGreet">Hallo! Ik help je graag op weg. Waarmee kan ik je verder helpen?</div></div>
     <div class="bot-chips" id="botChips"><!-- dynamisch gevuld door renderBotChips() bij elke open -->
     </div>

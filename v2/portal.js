@@ -1103,68 +1103,111 @@ async function sendDringend(btn, id){
   try{ await api(ENDPOINTS.directMessage, { bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), onderwerp:'Dringende vraag, '+naam, bericht:'[DRINGEND · via projectpagina] '+tx, project:naam }); }catch(e){}
 }
 
-const BOT_ANSWERS={'Wanneer is mijn volgende meeting?':'Je vindt al je geplande meetings onder <b>Meetings</b> in de zijbalk. Wil je er een verzetten? Laat het hier weten.','Status van mijn website?':'Open je webdesign-project onder <b>Projecten</b>, daar zie je live de status en de laatste deliverables.','Hoe geef ik feedback?':'Open een project en ga naar het tabblad <b>Bestanden</b>. Per bestand kan je apart goedkeuren of feedback geven (met de weg waarlangs je het doorgaf), alles passen we gratis aan!'};
-// demo-antwoorden: ook de DYNAMISCHE chips krijgen een zinnig antwoord (prefix-match)
-function botDemoAnswer(q){
-  if(BOT_ANSWERS[q]) return BOT_ANSWERS[q];
-  if(/^Wat staat er voor mij klaar/i.test(q)) return 'Op je <b>Home</b> zie je alles wat op jou wacht: feedback geven, iets inplannen of een bericht beantwoorden. Klik een kaart aan en je springt er meteen naartoe.';
-  if(/^Wat is de status van /i.test(q)) return 'Open dit project onder <b>Projecten</b>, daar zie je live de status, de planning en de laatste deliverables. Vragen? Stel ze in de projectchat.';
-  return 'Goeie vraag! Ik verbind je even door met <b>Ilke</b>, je vaste contact, zij antwoordt je zo.';
+/* =============================================================================
+   STUDIO 27-ASSISTENT (klantenportaal) — DETERMINISTISCH + VEILIG.
+   Beantwoordt ENKEL praktische vragen over de eigen projecten, planning, feedback
+   en resultaten, uit de data die al in het portaal staat (afkomstig uit ClickUp).
+   GEEN off-topic antwoorden, GEEN doorverwijzing/belofte richting een collega,
+   GEEN interne of gevoelige data, altijd professioneel en in de Studio 27-tone.
+   Geen externe AI-call meer: alles wordt lokaal en voorspelbaar bepaald.
+   ============================================================================= */
+function _botProjects(){ try{ return (window.S27DATA&&S27DATA.projects&&S27DATA.projects())||[]; }catch(e){ return []; } }
+function _botActief(){ return _botProjects().filter(function(p){ return String(p.status||'').toLowerCase().indexOf('done')<0 && String(p.status||'').toLowerCase().indexOf('afgerond')<0; }); }
+function _botMeetings(){ try{ var mt=(window.S27DATA&&S27DATA.meetings&&S27DATA.meetings())||null; return (((mt&&mt.list)||[]).filter(function(m){return m.dt&&m.dt.getTime()>=Date.now();}).sort(function(a,b){return a.dt-b.dt;})); }catch(e){ return []; } }
+function _botActiepunten(){ try{ return (typeof _notifItems==='function'?_notifItems():[])||[]; }catch(e){ return []; } }
+// huisstijl: geen em/en-dashes in tekst die we tonen, en veilig tegen HTML in ClickUp-namen
+function _botSafe(s){ return escapeHtml(String(s||'').replace(/\s*[—–]\s*/g,', ').replace(/\s{2,}/g,' ').trim()); }
+function _botStatusLabel(p){
+  var s=String(p.status||'').toLowerCase();
+  if(/done|afgerond|klaar|opgeleverd|live/.test(s)) return 'afgerond';
+  if(/review|feedback|wacht|akkoord/.test(s)) return 'wacht op je feedback';
+  if(/progress|bezig|uitvoer|werk|montage|shoot/.test(s)) return 'volop in uitvoering';
+  return 'gepland';
 }
-function botAsk(btn){ pushBot(btn.textContent,'user'); const q=btn.textContent; const c=$id('botChips'); if(c)c.style.display='none'; botReply(q); }
-function botSend(){ const inp=$id('botInput'); const tx=(inp.value||'').trim(); if(!tx) return; pushBot(tx,'user'); inp.value=''; botReply(tx); }
-function pushBot(text,who){ const m=$id('botMsgs'); const d=document.createElement('div'); d.className='bmsg '+who; d.innerHTML = who==='user'?escapeHtml(text):text; m.appendChild(d); m.scrollTop=m.scrollHeight; }
-async function botReply(q){
-  const m=$id('botMsgs'); const t=document.createElement('div'); t.className='typing'; t.innerHTML='<i></i><i></i><i></i><span class="typing-tx">Onze assistent denkt na…</span>'; m.appendChild(t); m.scrollTop=m.scrollHeight;
-  if(state.demoMode){ setTimeout(()=>{ t.remove(); pushBot(botDemoAnswer(q),'bot'); },1100); return; }
-  try {
-    const res = await api(ENDPOINTS.aiStatusBot, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), vraag:q, projecten_context:botContext() });
-    t.remove(); pushBot(botFormatAnswer(res&&res.data&&res.data.answer),'bot');
-  } catch(e){ t.remove(); pushBot('Ik verbind je even door met je vaste contact, die antwoordt je zo.','bot'); }
+// koppel een vraag aan een concreet project op basis van een betekenisvol woord uit de naam
+function _botMatchProject(ql){
+  var ps=_botProjects(), hit=null;
+  ps.forEach(function(p){
+    if(hit) return;
+    var words=String(p.name||'').toLowerCase().split(/[^a-z0-9]+/).filter(function(w){return w.length>=4;});
+    for(var i=0;i<words.length;i++){ if(ql.indexOf(words[i])>=0){ hit=p; break; } }
+  });
+  return hit;
 }
-// AI-antwoord opmaken: eerst letterlijke \n -> echte regeleindes (de AI levert soms een
-// letterlijke \n), DAN de interne ESCALATE-stuurregel weghalen (alles vóór de eerste regel-
-// einde), en veilig als HTML tonen. Leeg of enkel-escalate -> nette doorverwijzing i.p.v. niets.
-function botFormatAnswer(raw){
-  var s=String(raw==null?'':raw).replace(/\\r/g,'').replace(/\\n/g,'\n');
-  if(!s.trim()) return 'Ik verbind je even door met je vaste contact, die antwoordt je zo.';
-  if(/^\s*ESCALATE\s*:/i.test(s)){
-    var nl=s.indexOf('\n');
-    s=(nl>=0?s.slice(nl+1):'').trim() || 'Ik laat je vaste contactpersoon dit persoonlijk opvolgen, je hoort snel van hen.';
+// DE assistent: alleen scope-vragen, anders netjes terugverwijzen (geen off-topic, geen handoff-belofte)
+function botAnswer(q){
+  var raw=String(q||'').trim(), s=raw.toLowerCase();
+  if(!s) return 'Stel je vraag gerust. Ik help je met je projecten, planning, feedback en resultaten.';
+  if(/^(hoi|hallo|hey|h[eé]|dag|goeie?\b|goedemorgen|goedemiddag|goedenavond|hi|hello|yo)\b/.test(s))
+    return 'Hallo! Ik help je graag op weg met je projecten, je planning, feedback geven en je resultaten. Waarmee kan ik je verder helpen?';
+  if(/^(bedankt|dank(je|u)?|merci|thx|top|super|perfect|oke|ok[é!]?)\b/.test(s))
+    return 'Heel graag gedaan! Kan ik je nog ergens mee helpen?';
+  // wat staat er klaar / actiepunten
+  if(/wat.*(klaar|doen|wacht|openstaa)|actiepunt|to-?do|takenlijst|mijn taken|moet ik nog/.test(s)){
+    var ap=_botActiepunten();
+    if(!ap.length) return 'Er staat op dit moment niets op je te wachten. Zodra er iets klaarstaat (feedback geven, iets inplannen of een bericht) verschijnt het meteen op je <b>Home</b>.';
+    return 'Dit staat er voor je klaar:<br>'+ap.slice(0,5).map(function(a){ return '• '+_botSafe(a.title); }).join('<br>')+'<br><br>Alles vind je terug op je <b>Home</b>. Klik een kaart aan en je springt er meteen naartoe.';
   }
-  return escapeHtml(s).replace(/\n/g,'<br>');
+  // meetings
+  if(/meeting|afspraak|vergader|wanneer zien|samenzit|\bcall\b|videocall/.test(s)){
+    var ms=_botMeetings();
+    if(!ms.length) return 'Er staat momenteel geen meeting gepland. Een moment prikken? Dat doe je onder <b>Meetings</b>, daar kies je zelf een tijdstip dat past.';
+    var m0=ms[0], dd=m0.dt.toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'long'}), tt=m0.dt.toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'});
+    return 'Je volgende meeting is <b>'+_botSafe(m0.titel||m0.title||'een afspraak')+'</b> op '+dd+' om '+tt+'. Al je meetings staan onder <b>Meetings</b>.';
+  }
+  // feedback
+  if(/feedback|goedkeur|afkeur|aanpass|opmerking|revisie|herzien|ronde|wijzig/.test(s))
+    return 'Feedback geven is simpel: open je project en ga naar de bestanden. Per bestand kan je apart <b>goedkeuren</b> of een opmerking achterlaten. Bij beeld en video duid je zelfs op de juiste plek aan wat je bedoelt. Wij passen het dan voor je aan.';
+  // facturatie / offerte / prijs (praktisch verwijzen, nooit bedragen verzinnen) — vóór de
+  // discipline-intents zodat "wat kost een nieuwe website" naar de offerte-weg gaat
+  if(/factu|betaal|betaling|boekhoud|offerte|\bprijs|prijzen|\bkost|tarief|btw/.test(s))
+    return 'Je facturatiegegevens vind je onder <b>Facturatie</b>. Wil je een prijs of een nieuwe opdracht? Vraag het aan via de <b>Contact</b>-knop, dan stellen we een voorstel voor je op.';
+  // socials
+  if(/social|\bpost(s|en)?\b|instagram|facebook|linkedin|tiktok|reel|\bstory\b|content.*plan/.test(s))
+    return 'Je geplande en gepubliceerde posts vind je onder <b>Socials</b>. Daar zie je de volledige planning en keur je content goed of geef je feedback.';
+  // adverteren
+  if(/adverteer|advertentie|campagne|\bads\b|resultaten|rendement|\broas\b|vertoning|klik/.test(s))
+    return 'Je advertentieresultaten staan onder <b>Adverteren</b>: je uitgaven, vertoningen, klikken en de lopende campagnes, met de cijfers in real time.';
+  // website / seo
+  if(/website|\bseo\b|webdesign|webshop|zoekmachine|vindbaar|google.*vind/.test(s))
+    return 'De voortgang en cijfers van je website volg je onder <b>Website</b>. Zodra ze live staat, zie je daar ook je bezoekers en vindbaarheid.';
+  // status / voortgang (eventueel van een specifiek project)
+  if(/status|hoe ?ver|hoever|voortgang|update|stand van zaken|wanneer.*(klaar|af|opgeleverd|online)/.test(s)){
+    var mp=_botMatchProject(s);
+    if(mp) return '<b>'+_botSafe(mp.name)+'</b> is op dit moment <b>'+_botStatusLabel(mp)+'</b>'+(mp.pct?(' ('+parseInt(mp.pct,10)+'% klaar)'):'')+'. De details en de laatste bestanden vind je onder <b>Projecten</b>.';
+    var act=_botActief();
+    if(!act.length) return 'Al je projecten zijn afgerond, er loopt op dit moment niets. Iets nieuws starten? Gebruik gerust de <b>Contact</b>-knop bovenaan.';
+    return 'De stand van je lopende projecten:<br>'+act.slice(0,5).map(function(p){ return '• <b>'+_botSafe(p.name)+'</b>, '+_botStatusLabel(p)+(p.pct?(' ('+parseInt(p.pct,10)+'%)'):''); }).join('<br>')+'<br><br>Open een project onder <b>Projecten</b> voor de details.';
+  }
+  // contact / bereiken: waar de klant zelf terecht kan, GEEN belofte dat iemand terugbelt
+  if(/contact|bereiken|spreken|bellen|telefoon|mail|iemand van|met jullie|met het team/.test(s))
+    return 'Je kan je vraag altijd kwijt in de <b>chat</b> bij elk project, daar volgt je team je dossier mee op. Voor iets nieuws of algemeen gebruik je de <b>Contact</b>-knop bovenaan.';
+  // buiten scope: netjes terugverwijzen, NIET off-topic beantwoorden, GEEN handoff-belofte
+  return 'Ik help je hier met alles rond je projecten: de <b>status</b> en planning, <b>feedback</b> geven, je <b>meetings</b> en je <b>resultaten</b> bij Socials, Adverteren en Website. Stel je vraag gerust wat concreter, of laat ze achter in de projectchat, dan kijkt je team mee.';
 }
-// context voor de AI: projecten + aanstaande meetings + openstaande actiepunten (zo kan de
-// bestaande antwoord-flow ook de dynamische chip-vragen aan)
-function botContext(){
-  const ps=S27DATA.projects()||[];
-  var out=ps.map(p=>'- '+p.name+' ('+p.disc+', '+p.status+(p.pct?(', '+p.pct+'% klaar'):'')+')').join('\n')||'(geen projecten)';
-  try{
-    var mt=(window.S27DATA&&S27DATA.meetings&&S27DATA.meetings())||null;
-    var up=((mt&&mt.list)||[]).filter(function(m){return m.dt&&m.dt.getTime()>=Date.now();}).slice(0,3);
-    if(up.length) out+='\n\nAanstaande meetings:\n'+up.map(function(m){return '- '+(m.titel||m.title||'meeting')+' op '+m.dt.toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'long'});}).join('\n');
-    var cock=(typeof _notifItems==='function'?_notifItems():[]);
-    if(cock.length) out+='\n\nOpenstaande actiepunten voor de klant:\n'+cock.slice(0,4).map(function(a){return '- '+a.title+' ('+(a.cat||'')+')';}).join('\n');
-  }catch(e){}
-  return out;
+function botAsk(btn){ pushBot(btn.textContent,'user'); var q=btn.textContent; var c=$id('botChips'); if(c)c.style.display='none'; botReply(q); }
+function botSend(){ var inp=$id('botInput'); var tx=(inp.value||'').trim(); if(!tx) return; pushBot(tx,'user'); inp.value=''; botReply(tx); }
+function pushBot(text,who){ var m=$id('botMsgs'); var d=document.createElement('div'); d.className='bmsg '+who; d.innerHTML = who==='user'?escapeHtml(text):text; m.appendChild(d); m.scrollTop=m.scrollHeight; }
+function botReply(q){
+  var m=$id('botMsgs'); var t=document.createElement('div'); t.className='typing'; t.innerHTML='<i></i><i></i><i></i><span class="typing-tx">Onze assistent kijkt het na…</span>'; m.appendChild(t); m.scrollTop=m.scrollHeight;
+  var ans=botAnswer(q);
+  setTimeout(function(){ t.remove(); pushBot(ans,'bot'); }, 600);
 }
-/* ---- Dynamische chatbot-chips (Cluster G): voorgestelde vragen op basis van context ---- */
+/* ---- Dynamische assistent-chips: voorgestelde praktische vragen op basis van context.
+   De chiptekst IS de vraag, dus em/en-dashes uit ClickUp-namen worden weggehaald (huisstijl). ---- */
 function botDynChips(){
   var chips=[];
   try{
-    var ps=(window.S27DATA&&S27DATA.projects&&S27DATA.projects())||(typeof PROJECTS!=='undefined'?PROJECTS:[]);
-    var actief=(ps||[]).filter(function(p){return p.status!=='done';});
-    // 1) openstaand actiepunt -> meest relevante vraag eerst
-    var cock=(typeof _notifItems==='function'?_notifItems():[]);
-    if(cock.length) chips.push('Wat staat er voor mij klaar?');
-    // 2) status van het recentste actieve project (concreet, herkenbaar)
-    if(actief.length) chips.push('Wat is de status van '+String(actief[0].name||'').replace(/"/g,'')+'?');
-    // 3) meetings (vaste vraag, heeft ook een demo-antwoord)
+    var actief=_botActief();
+    if(_botActiepunten().length) chips.push('Wat staat er voor mij klaar?');
+    if(actief.length){
+      var nm=String(actief[0].name||'').replace(/\s*[—–]\s*/g,', ').replace(/"/g,'').replace(/\s{2,}/g,' ').trim();
+      chips.push('Wat is de status van '+nm+'?');
+    }
     chips.push('Wanneer is mijn volgende meeting?');
-    // 4) feedback-uitleg (vaste vraag, heeft ook een demo-antwoord)
     chips.push('Hoe geef ik feedback?');
   }catch(e){}
-  if(!chips.length) chips=Object.keys(BOT_ANSWERS);
+  if(!chips.length) chips=['Wat staat er voor mij klaar?','Wanneer is mijn volgende meeting?','Hoe geef ik feedback?'];
   return chips.slice(0,4);
 }
 function renderBotChips(){

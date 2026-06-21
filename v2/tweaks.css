@@ -1453,7 +1453,7 @@ button.ond-head{cursor:pointer;}
   .soc-agtxt{font-size:13px; color:var(--ink-2); overflow:hidden; white-space:nowrap; text-overflow:ellipsis;}
   /* planner-tikdoelen >=44px (extra specificiteit verslaat de later-geïnjecteerde mcStyle-regel) */
   .section-head .soc-nav button{width:44px; height:44px;}
-  .soc-fbar .soc-fchip{min-height:44px; display:inline-flex; align-items:center;}
+  .soc-fbar .soc-fchip{min-height:44px; display:inline-flex; align-items:center; gap:5px;}
 }
 
 /* ============================================================
@@ -1490,3 +1490,32 @@ button.ond-head{cursor:pointer;}
 .s27-install .si-act{flex:none; display:flex; align-items:center; gap:6px;}
 .s27-install .si-x{flex:none; width:34px; height:34px; border-radius:9px; border:none; background:var(--paper-2); color:var(--ink-3); display:flex; align-items:center; justify-content:center; cursor:pointer;}
 @media(min-width:981px){.s27-install{display:none !important;}}
+
+/* ============================================================
+   FEEDBACK-RONDE MOBIEL (socials + adverteren) — uitlijning, spacing, menubalken.
+   Reden: filterchip-count plakte tegen het label, 'Nieuwe post' zweefde los rechts,
+   en de sticky sub-navs botsten met de verberg-bij-scrollen-topbar (zwevende gap).
+   ============================================================ */
+@media(max-width:680px){
+  /* Filterbalk: één nette horizontaal-scrollbare rij i.p.v. 3 gewrapte rijen bulk.
+     Dubbele klasse = hogere specificiteit dan de later-geïnjecteerde mcStyle (.soc-fbar{flex-wrap:wrap}). */
+  .soc-fbar.soc-fbar{flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; margin:0 -2px 14px; padding:2px 2px 4px;}
+  .soc-fbar::-webkit-scrollbar{display:none;}
+  .soc-fbar .soc-fchip{flex:0 0 auto;}
+  /* 'Nieuwe post' als volwaardige actieknop i.p.v. een los rechts zwevend knopje */
+  .soc-newpost-row{justify-content:stretch; margin-bottom:14px;}
+  .soc-newpost-row .btn{flex:1; justify-content:center;}
+}
+@media(max-width:760px){
+  /* Geen zwevende sticky sub-navs op mobiel: ze botsen met de verberg-bij-scrollen-topbar.
+     Ze scrollen gewoon mee met de inhoud, dat oogt rustiger. */
+  .soc-period, .soc-subnav, .soc-subnav-row{position:static; top:auto;}
+  /* Rich menubalk (team-weergave): tabs als één horizontaal-scrollbare rij, niet wrappen */
+  .soc-subnav-row{gap:10px; margin-bottom:14px;}
+  .soc-subnav-row .soc-subnav{flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; width:100%; max-width:100%;}
+  .soc-subnav-row .soc-subnav::-webkit-scrollbar{display:none;}
+  .soc-subnav-row .soc-subtab{flex:0 0 auto;}
+  .soc-subnav-act{margin-left:0; width:100%; gap:8px;}
+  /* Compacte TeamView-schakelaar in de topbar: label weg, enkel de switch (minder gedrang) */
+  .vmode-lab{display:none;}
+}
