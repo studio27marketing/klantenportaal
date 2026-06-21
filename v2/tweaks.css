@@ -1356,3 +1356,60 @@ button.ond-head{cursor:pointer;}
 .sup-link{display:inline-flex;align-items:center;gap:6px;background:none;border:none;font:700 13px var(--font-display);color:var(--ink-3,#6B5B6B);cursor:pointer;padding:4px 0;margin:14px 0 6px;}
 .sup-link:hover{color:var(--ink,#230F23);}
 @media(max-width:560px){.sup-row{flex-wrap:wrap;}.sup-row .btn{width:100%;justify-content:center;}}
+
+/* ============================================================
+   MOBIEL-FUNDAMENT (golf 1) — veilige zones, dynamische viewport, tikdoelen.
+   Bron: mobiel UX-onderzoek (NN/g, Apple HIG, Material 3, web.dev).
+   ============================================================ */
+/* dvh: schermvullende chat/overlays krimpen mee met toetsenbord + URL-balk.
+   Staat NA de bestaande 100vh-regels; browsers zonder dvh negeren dit en houden de vh-fallback. */
+#berichtChat .chat-list{height:calc(100dvh - 340px);}
+.detail-chatpane.active{min-height:calc(100dvh - 320px);}
+.detail-chatpane .dc-body .chat-list{max-height:calc(100dvh - 470px);}
+.bot-panel{height:min(560px,80dvh);}
+@media(max-width:760px){ .detail-chatpane.active{min-height:calc(100dvh - 250px);} }
+
+@media(max-width:980px){
+  /* Veilige zones (notch + iOS home-indicator). viewport-fit=cover staat in de meta. */
+  .topbar{padding-top:calc(10px + env(safe-area-inset-top));}
+  .bot-fab{bottom:calc(26px + env(safe-area-inset-bottom));}
+  .bot-panel{height:82dvh;}
+  /* Tikdoelen >= 44px (Apple HIG / Material). Visueel compact via bestaande padding. */
+  .sb-item{min-height:44px;}
+  .btn-sm{min-height:44px;}
+  .fchip{min-height:44px;}
+  .soc-perchip{min-height:44px;display:inline-flex;align-items:center;}
+  .icon-btn{width:44px;height:44px;}
+}
+
+/* ============================================================
+   ONDERSTE MENUBALK (golf 2) — vaste bottom tab bar, enkel mobiel.
+   ============================================================ */
+.bottom-nav{display:none;}
+@media(max-width:980px){
+  .bottom-nav{
+    display:flex; position:fixed; left:0; right:0; bottom:0; z-index:70;
+    background:rgba(255,255,255,.85); -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px);
+    border-top:1px solid var(--glass-border);
+    padding:5px 4px calc(5px + env(safe-area-inset-bottom));
+    justify-content:space-around; align-items:stretch;
+    transition:transform .26s var(--ease-out);
+  }
+  .bn-item{flex:1 1 0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+    padding:5px 2px; min-height:50px; color:var(--ink-4); background:none; border:none; border-radius:12px;
+    position:relative; cursor:pointer; transition:color .15s var(--ease-out);}
+  .bn-item:active{transform:scale(.94);}
+  .bn-ic{display:flex; width:24px; height:24px; align-items:center; justify-content:center; color:var(--ink-4); transition:color .15s var(--ease-out);}
+  .bn-ic svg{width:23px; height:23px;}
+  .bn-lbl{font-family:var(--font-display); font-weight:700; font-size:10.5px; letter-spacing:.005em; line-height:1; white-space:nowrap;}
+  .bn-item.active{color:var(--c-ink,var(--s27-blue-ink));}
+  .bn-item.active .bn-ic{color:var(--c,var(--s27-blue));}
+  .bn-item.active::before{content:""; position:absolute; top:0; width:26px; height:3px; border-radius:0 0 3px 3px; background:var(--c,var(--s27-blue));}
+  /* content + AI-knop boven de balk houden */
+  .page{padding-bottom:calc(80px + env(safe-area-inset-bottom)) !important;}
+  .bot-fab{bottom:calc(82px + env(safe-area-inset-bottom));}
+  /* balk wegschuiven bij open lade of bij actief toetsenbord (input-focus) of in schermvullende contexten */
+  body.sb-open .bottom-nav,
+  body.bn-hide .bottom-nav,
+  body.kb-open .bottom-nav{transform:translateY(115%);}
+}

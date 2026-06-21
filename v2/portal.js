@@ -801,7 +801,28 @@ function setActiveNav(name){
   // Op de homepage tonen we geen titel in de topbar (geen "Start"-tekst die meespringt bij navigatie).
   const tt=$id('topbarTitle'); if(tt) tt.textContent=(name==='start')?'':(SECTION_LABEL[name]||name);
   document.querySelectorAll('.topbar [data-topnav]').forEach(t=>t.classList.toggle('topnav-on',t.dataset.topnav===name));
+  updateBottomNav(name);
 }
+// MOBIELE ONDERSTE MENUBALK (golf 2): markeer de juiste tab op basis van de huidige view.
+// Projecten = de projectenlijst, alle disciplinetakken én een open projectdetail. De rest valt onder 'Meer'.
+const _BN_PROJ_TABS=['alle-projecten','strategie','branding','video','webprestaties','socials','advertenties'];
+function updateBottomNav(name){
+  var nav=$id('bottomNav'); if(!nav) return;
+  var t=String(name||(typeof currentTab!=='undefined'?currentTab:'')||'');
+  var slot;
+  if(state.viewMode==='project') slot='projecten';
+  else if(t==='start') slot='start';
+  else if(t==='berichten') slot='berichten';
+  else if(t==='meetings') slot='meetings';
+  else if(_BN_PROJ_TABS.indexOf(t)>=0) slot='projecten';
+  else slot='meer';   // facturatie, instellingen, offertes, contact, e.d.
+  nav.querySelectorAll('.bn-item').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-bn')===slot); });
+}
+// 'Meer'-tab: opent de bestaande zijbalk-lade (volledige dakstructuur-navigatie).
+function openMeer(){ try{ toggleSidebar(); }catch(e){} }
+// Toetsenbord open (input-focus op mobiel) -> onderbalk wegschuiven zodat hij niet over het toetsenbord/veld valt.
+document.addEventListener('focusin', function(e){ var t=e.target; if(t&&t.tagName&&/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)&&t.type!=='checkbox'&&t.type!=='radio'){ document.body.classList.add('kb-open'); } });
+document.addEventListener('focusout', function(){ setTimeout(function(){ var a=document.activeElement; if(!(a&&a.tagName&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&a.type!=='checkbox'&&a.type!=='radio')) document.body.classList.remove('kb-open'); }, 90); });
 // Resultaten/performance-tab tonen of verbergen op basis van de module-vlag van dit bedrijf.
 // Symmetrisch: bij een switch van bedrijf-A (performance uit) -> B (aan) komt de tab terug zonder reload.
 // (Socials + advertenties blijven altijd zichtbaar: hun koppeling staat los van projecten; de panels
@@ -836,6 +857,7 @@ async function openProject(id, from, noPush){
   state._backTab=f;
   document.querySelectorAll('.sb-item').forEach(t=>t.classList.remove('active'));
   const item=document.querySelector('.sb-item[data-tab="'+f+'"]'); if(item) item.classList.add('active');
+  updateBottomNav();   // projectdetail -> 'Projecten'-tab actief in de mobiele onderbalk
   const page=$id('page');
   page.innerHTML='<div class="panel active br-'+(p?p.br:'blue')+'" data-screen-label="projectdetail">'+buildModal(id,f)+'</div>';
   window.scrollTo({top:0,behavior:'auto'});
