@@ -1469,3 +1469,24 @@ button.ond-head{cursor:pointer;}
   .mp-modal::before{content:""; flex:none; width:40px; height:4px; border-radius:99px; background:var(--line); margin:9px auto 2px;}
 }
 @media(min-width:760px){ .mp-modal{max-height:90dvh;} }
+
+/* ============================================================
+   APP-GEVOEL (golf 7) — geen blauwe tik-flits, geen scroll-bleed tussen
+   binnen-scrollers en de pagina, en een subtiele installeer-hint (mobiel, eenmalig).
+   ============================================================ */
+*{-webkit-tap-highlight-color:transparent;}
+.mp-scroll,.notif-list,#chatList,.chat-list,.bot-body,.bot-panel,.detail-chatpane,.sb-scroll{overscroll-behavior:contain;}
+/* installeer-hint: zweeft boven de onderbalk, schuift eenmalig in, makkelijk weg te tikken */
+.s27-install{position:fixed; left:12px; right:12px; bottom:calc(148px + env(safe-area-inset-bottom)); z-index:75;
+  display:flex; align-items:center; gap:12px; background:rgba(255,255,255,.93);
+  -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px); border:1px solid var(--glass-border,rgba(231,223,211,.8));
+  border-radius:16px; padding:11px 13px; box-shadow:0 12px 30px rgba(20,8,20,.16);
+  transform:translateY(150%); transition:transform .32s var(--ease-out,cubic-bezier(.2,.8,.25,1));}
+.s27-install.show{transform:translateY(0);}
+.s27-install .si-ic{flex:none; width:38px; height:38px; border-radius:11px; background:linear-gradient(120deg,var(--s27-blue,#3083DC),var(--s27-purple,#9441DB)); display:flex; align-items:center; justify-content:center; color:#fff;}
+.s27-install .si-tx{flex:1; min-width:0;}
+.s27-install .si-tx b{display:block; font-family:var(--font-display); font-weight:800; font-size:13.5px; color:var(--ink); line-height:1.2;}
+.s27-install .si-tx span{font-size:11.5px; color:var(--ink-4); line-height:1.3;}
+.s27-install .si-act{flex:none; display:flex; align-items:center; gap:6px;}
+.s27-install .si-x{flex:none; width:34px; height:34px; border-radius:9px; border:none; background:var(--paper-2); color:var(--ink-3); display:flex; align-items:center; justify-content:center; cursor:pointer;}
+@media(min-width:981px){.s27-install{display:none !important;}}

@@ -839,6 +839,35 @@ document.addEventListener('focusout', function(){ setTimeout(function(){ var a=d
   }
   window.addEventListener('scroll', onScroll, {passive:true});
 })();
+// APP-GEVOEL (golf 7): installeer-coaching. Vangt 'beforeinstallprompt' (Android/Chrome) of toont op
+// iOS-Safari een 'zet op startscherm'-tip. Enkel mobiel, niet als al geïnstalleerd, eenmalig (onthouden).
+(function(){
+  var DKEY='s27_install_dismissed', deferred=null, shown=false;
+  function standalone(){ return (window.matchMedia&&matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone===true; }
+  function dismissed(){ try{ return localStorage.getItem(DKEY)==='1'; }catch(e){ return false; } }
+  function setDismissed(){ try{ localStorage.setItem(DKEY,'1'); }catch(e){} }
+  function isIOS(){ return /iphone|ipad|ipod/i.test(navigator.userAgent) && !/crios|fxios|android/i.test(navigator.userAgent); }
+  function mount(mode){
+    if(shown||dismissed()||standalone()||window.innerWidth>980) return; shown=true;
+    var el=document.createElement('div'); el.className='s27-install'; el.id='s27Install';
+    var tx = mode==='ios'
+      ? '<b>Zet het portaal op je startscherm</b><span>Tik op deel-icoon, dan ‘Zet op beginscherm’.</span>'
+      : '<b>Installeer het portaal als app</b><span>Sneller terug en opent schermvullend.</span>';
+    var act = mode==='ios' ? '' : '<button class="btn btn-primary btn-sm si-go">Installeer</button>';
+    var logo = (typeof logo27==='function') ? logo27(20) : '27';
+    var x = (typeof ic==='function') ? ic('close',14) : '×';
+    el.innerHTML='<span class="si-ic">'+logo+'</span><div class="si-tx">'+tx+'</div><div class="si-act">'+act+'<button class="si-x" aria-label="Sluiten">'+x+'</button></div>';
+    document.body.appendChild(el);
+    void el.getBoundingClientRect();   // commit de begintoestand (translateY 150%) zodat de transitie zeker speelt
+    requestAnimationFrame(function(){ el.classList.add('show'); });
+    function close(){ el.classList.remove('show'); setDismissed(); setTimeout(function(){ try{el.remove();}catch(e){} },340); }
+    el.querySelector('.si-x').onclick=close;
+    var go=el.querySelector('.si-go'); if(go) go.onclick=function(){ if(deferred){ try{ deferred.prompt(); var c=deferred.userChoice; if(c&&c.finally) c.finally(function(){deferred=null;}); }catch(e){} } close(); };
+  }
+  window.__s27InstallMount=mount;   // testbaar/forceerbaar
+  window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); deferred=e; setTimeout(function(){ mount('android'); }, 8000); });
+  if(isIOS() && !standalone()){ setTimeout(function(){ mount('ios'); }, 9000); }
+})();
 // Resultaten/performance-tab tonen of verbergen op basis van de module-vlag van dit bedrijf.
 // Symmetrisch: bij een switch van bedrijf-A (performance uit) -> B (aan) komt de tab terug zonder reload.
 // (Socials + advertenties blijven altijd zichtbaar: hun koppeling staat los van projecten; de panels
