@@ -511,7 +511,7 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;}
 .tour-dialog h3{font-family:var(--font-display);font-weight:800;font-size:19px;letter-spacing:-0.02em;margin:6px 0 8px;}
 .tour-dialog p{font-size:14px;color:var(--ink-3);margin:0 0 18px;}
 .tour-foot{display:flex;align-items:center;gap:10px;}
-.tour-dots{display:flex;gap:6px;}
+.tour-dots{display:flex;flex-wrap:wrap;gap:6px;flex:1 1 auto;min-width:0;}
 .tour-dots i{width:7px;height:7px;border-radius:50%;background:var(--paper-3);transition:all 200ms;}
 .tour-dots i.on{background:var(--s27-blue);width:20px;border-radius:var(--r-pill);}
 .tour-skip{font-family:var(--font-display);font-weight:700;font-size:12.5px;color:var(--ink-4);}

@@ -827,7 +827,10 @@ async function openProject(id, from, noPush){
   let f=(from && from!=='auto' && typeof PANELS!=='undefined' && PANELS[from])?from:'';
   stopChatPoll();
   state.viewMode='project'; state.activeProject=id; state._mtab=(state._openChatTab?'chat':'overzicht'); state._openChatTab=false; state._chatStaged=[];
-  if(!state.demoMode){ renderLoading(f||'start'); await Promise.all([ S27DATA.loadDetail(id), S27DATA.loadChat(id) ]); }
+  if(!state.demoMode){ renderLoading(f||'start'); await Promise.all([ S27DATA.loadDetail(id), S27DATA.loadChat(id) ]);
+    // Klant opent het project rechtstreeks op de chat-tab -> markeer als gelezen (read-receipt voor het team).
+    if(state._mtab==='chat' && !state.adminMode && S27DATA && S27DATA.markChatRead) S27DATA.markChatRead(id);
+  }
   const p=(S27DATA.projects()||(typeof PROJECTS!=='undefined'?PROJECTS:[])).find(x=>x.id===id);
   if(!f) f=(typeof takOfProject==='function')?takOfProject(p):'start';
   state._backTab=f;
@@ -1169,7 +1172,7 @@ function _seenKey(){ return 's27_notif_seen_'+_bedrijfScope(); }
 function notifId(a){
   // expliciete nid (bv. plan-items: meerdere kaarten op hetzelfde project) wint van de action-afleiding
   if(a && a.nid) return String(a.nid).replace(/[^A-Za-z0-9:_-]+/g,'_');
-  var m=String(a&&a.action||'').match(/openProject\('([^']+)'/);
+  var m=String(a&&a.action||'').match(/openProject(?:Chat)?\('([^']+)'/);   // ook openProjectChat('id') (chat-deeplink) → per-taak-identiteit
   var tid=m?m[1]:String(a&&a.title||'');
   var raw=tid+'::'+String(a&&a.cat||'')+'::'+String(a&&a.title||'');
   // sanitize -> identieke key in HTML-attr (escapeHtml), JS-string (onclick) én localStorage;
@@ -1263,6 +1266,8 @@ function switchModalTab(name){
     const ch=c.querySelector('.mpane[data-mpane="chat"]'); if(ch)ch.classList.add('active');
     const list=c.querySelector('#dcBody .chat-list'); if(list) list.scrollTop=list.scrollHeight;
     const inp=c.querySelector('#dcBody .chat-textin'); if(inp) inp.focus();
+    // Klant bekijkt de chat-tab -> markeer als gelezen (read-receipt voor het team).
+    if(!state.adminMode && state.activeProject && S27DATA && S27DATA.markChatRead) S27DATA.markChatRead(state.activeProject);
   }
   syncUrl();
 }
@@ -1810,15 +1815,15 @@ function mpRender(){
 function mpHeader(){
   var s=state.mp;
   var titles={ project:'Over welk project?', host:'Met wie wil je samenzitten?', cal:'Kies een moment', done:'Gepland' };
-  var canBack=(s.step==='host')||(s.step==='cal'&&s.mode==='project');
+  var canBack=(s.step==='cal'&&s.mode==='project');
   var back=canBack?'<button class="mp-back" onclick="mpBack()">'+ic('arrow',16)+'</button>':'<span class="mp-back-sp"></span>';
   return '<div class="mp-head">'+back
     +'<div class="mp-head-c"><span class="mp-head-eyebrow">Plan een meeting</span><b>'+escapeHtml(titles[s.step]||'Plan een meeting')+'</b></div>'
     +'<button class="mp-close" onclick="closeMeetingPlanner()" aria-label="Sluiten">'+ic('plus',22)+'</button></div>';
 }
 function mpBack(){ var s=state.mp; if(!s)return;
-  if(s.step==='cal'&&s.mode==='project'){ s.step='host'; mpRender(); }
-  else if(s.step==='host'){ s.step='project'; mpRender(); }
+  // 'host'-stap bestaat niet meer: vanuit de kalender terug = naar de projectkeuze (mode 'project').
+  if(s.step==='cal'&&s.mode==='project'){ s.step='project'; s.slots=null; s._err=''; s.selDay=null; s.selSlot=null; mpRender(); }
 }
 /* ---- stap: projectkeuze (actieve + recent afgeronde projecten, ≤60 dagen) ---- */
 function mpActiveProjects(){
@@ -1848,7 +1853,11 @@ function mpProjectStep(){
 function mpPickProject(id){
   var s=state.mp; if(!s)return;
   s.project=mpActiveProjects().find(function(x){return x.id===id;})||{ id:id, name:'Project', sae:[] };
-  s.step='host'; mpRender();
+  // De Studio 27-persoon = de ASSIGNEE van de meeting-taak; geen tussenkeuze meer. Ga meteen naar
+  // de kalender, gebonden aan het projectteamlid (mpLoadAvail overschrijft naam/e-mail met de echte
+  // assignee uit de beschikbaarheid-call).
+  s.hostKey='lead'; s.host={ email:'', naam:(mpLeadName(s.project)||'je projectteam'), rol:'Projectlead', color:'purple' };
+  s.step='cal'; mpRender(); mpLoadAvail();
 }
 /* ---- stap: hostkeuze (Ilke vs het teamlid dat het project droeg) ---- */
 function mpLeadName(p){ if(!p)return ''; var sae=p.sae||[]; var n=sae.map(function(x){return x.naam;}).filter(Boolean); return n.join(' & '); }
@@ -1886,7 +1895,9 @@ async function mpLoadAvail(){
       if(state.demoMode){ s.slots=computeFreeFromBusy(mpDemoBusy(),durMs); }
       else {
         var van=Date.now(), tot=Date.now()+21*86400000;
-        var res=await api(ENDPOINTS.beschikbaarheid,{ task_id:s.project.id, van:String(van), tot:String(tot) });
+        // meeting:1 => worker past de meeting-regels toe (1u marge + telewerk blokkeert fysieke meetings);
+        // online stuurt mee of telewerkdagen vrij mogen blijven (online) of niet (fysiek).
+        var res=await api(ENDPOINTS.beschikbaarheid,{ task_id:s.project.id, van:String(van), tot:String(tot), meeting:1, online:(s.online?1:0) });
         var d=(res&&res.ok&&res.data&&res.data.ok)?res.data:null;
         if(d&&d.no_member){ s._err='no_member'; mpRender(); return; }
         if(!d){ s._err='load'; mpRender(); return; }
@@ -1942,7 +1953,7 @@ function mpCalStep(){
 }
 function mpAvailHTML(){
   var s=state.mp;
-  if(s._err==='no_member') return '<div class="mp-notebox">Voor dit project is nog geen vaste contactpersoon toegewezen. Kies hierboven <b>Terug → Ilke</b>, of stuur ons een berichtje — dan koppelen we je meteen aan de juiste persoon.</div>';
+  if(s._err==='no_member') return '<div class="mp-notebox">Voor dit project is nog geen vaste contactpersoon toegewezen. Stuur ons gerust een berichtje, dan koppelen we je meteen aan de juiste persoon en prikken we samen een moment.</div>';
   if(s._err) return '<div class="mp-notebox">De agenda kon even niet geladen worden. Probeer het zo opnieuw of stuur ons gerust een berichtje.</div>';
   if(s.slots===null) return '<div class="mp-loading"><div class="brand-spinner"></div><span>Vrije momenten ophalen…</span></div>';
   if(!s.slots.length) return '<div class="mp-notebox">Geen vrije momenten in de komende twee weken. Stuur ons gerust een berichtje, dan zoeken we samen iets dat past.</div>';
@@ -1984,8 +1995,12 @@ function mpPickSlot(ms){ var s=state.mp; if(!s)return; s.selSlot=ms;
 function mpCalNav(dir){ var s=state.mp; if(!s||!s.slots||!s.slots.length)return;
   var firstMon=_monday(s.slots[0]); s.weekStart+=dir*14*864e5; if(s.weekStart<firstMon)s.weekStart=firstMon;
   s.selDay=null; s.selSlot=null; var m=$id('mpAvailMount'); if(m)m.innerHTML=mpAvailHTML(); mpUpdateConfirm(); }
-function mpSetOnline(v){ var s=state.mp; if(!s)return; s.online=!!v;
-  var tg=document.querySelectorAll('#meetPlanner .mp-tg'); if(tg&&tg.length>=2){ tg[0].classList.toggle('on',!!v); tg[1].classList.toggle('on',!v); } }
+function mpSetOnline(v){ var s=state.mp; if(!s)return; var was=s.online; s.online=!!v;
+  var tg=document.querySelectorAll('#meetPlanner .mp-tg'); if(tg&&tg.length>=2){ tg[0].classList.toggle('on',!!v); tg[1].classList.toggle('on',!v); }
+  // Telewerkdagen blokkeren enkel FYSIEKE meetings: bij een online/fysiek-wissel de beschikbaarheid van
+  // het projectteamlid opnieuw ophalen zodat thuiswerkdagen mee verschijnen/verdwijnen (enkel lead-pad).
+  if(was!==!!v && s.hostKey==='lead' && s.project && !state.demoMode){ mpLoadAvail(); }
+}
 function mpUpdateConfirm(){ var s=state.mp; var cf=$id('mpConfirm'); if(!cf||!s)return;
   cf.disabled=!s.selSlot; cf.textContent=s.selSlot?('Bevestig '+mpSlotLabel(s.selSlot)):'Kies eerst een moment'; }
 function mpTime(ms){ return new Date(ms).toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'}); }
@@ -2973,7 +2988,13 @@ function tourEnsureStyles(){
     '@media(prefers-reduced-motion:reduce){.tour-dialog{transition:opacity .2s ease!important;}.spotlight{transition:opacity .2s ease!important;}.spotlight.show{animation:none!important;}}'+
     '@media(min-width:981px){'+
       'body.tour-on.sb-rail .sidebar{transition:none!important;width:var(--sb-full)!important;box-shadow:0 22px 70px rgba(35,15,35,.22)!important;}'+
+      /* de menubalk start tijdens de tour ná de uitgeklapte zijbalk (264px) i.p.v. de rail (64px),
+         zodat hij het woordmerk niet half overdekt — dat was de afgesneden "STUD…"-logo. */
+      'body.tour-on.sb-rail .topbar{margin-left:var(--sb-full)!important;transition:none!important;}'+
       'body.tour-on.sb-rail .sidebar .sb-mini-mark{display:none!important;}'+   /* geen dubbele 27: enkel het wordmerk tijdens de tour */
+      /* logo + bedrijfsnaam dezelfde inspringing als de overige menubalk-knoppen (niet flush links) */
+      'body.tour-on.sb-rail .sidebar .sb-head{padding:22px 22px 12px!important;text-align:left!important;}'+
+      'body.tour-on.sb-rail .sidebar .client-switch-wrap{padding:0 14px 12px!important;}'+
       'body.tour-on.sb-rail .sidebar .sb-label{display:block!important;}'+
       'body.tour-on.sb-rail .sidebar .sb-client-tx{display:flex!important;}'+
       'body.tour-on.sb-rail .sidebar .sb-client .chev{display:block!important;}'+
@@ -2981,7 +3002,7 @@ function tourEnsureStyles(){
       'body.tour-on.sb-rail .sidebar .sb-glabel{visibility:visible!important;}'+
       'body.tour-on.sb-rail .sidebar .sb-item{justify-content:flex-start!important;gap:12px!important;padding:9px 12px!important;}'+
       'body.tour-on.sb-rail .sidebar .sb-item .sb-badge{display:flex!important;}'+
-      'body.tour-on.sb-rail .sidebar .sb-client{justify-content:flex-start!important;}'+
+      'body.tour-on.sb-rail .sidebar .sb-client{justify-content:flex-start!important;padding:9px 10px!important;gap:10px!important;}'+
     '}';
   document.head.appendChild(st);
 }

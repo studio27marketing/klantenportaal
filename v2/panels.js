@@ -246,7 +246,7 @@ const _COCKPIT_MOCK = [
   {br:'orange',cat:'Online adverteren',title:'Rapport inplannen',ctx:'Tijd om de <b>resultaten van je campagnes</b> samen te bekijken. Prik een moment dat jou past.',cta:'Plan in',action:"goTab('meetings')",tag:'mei',urgent:false,icon:'st_plan'},
   {br:'yellow',cat:'Social media',title:'Feedback gevraagd',ctx:'Je <b>contentkalender</b> staat klaar ter goedkeuring. Bekijk de geplande posts en geef je akkoord.',cta:'Bekijk posts',action:"goTab('socials')",tag:'deze week',urgent:false,icon:'st_feedback'},
   {br:'purple',cat:'Video- en fotografie',title:'Klaar om in te plannen',ctx:'Je <b>productshoot</b> is klaar om ingepland te worden. Prik een datum die jou past.',cta:'Plan shoot',action:"openProject('p3')",tag:'binnenkort',urgent:true,icon:'st_plan'},
-  {br:'green',cat:'Webdesign',title:'Bericht wacht op jou',ctx:'We hebben een vraag in de chat van je <b>nieuwe website</b>. Laat iets weten zodat we verder kunnen.',cta:'Open chat',action:"openProject('p2','berichten')",urgent:false,icon:'msg'}
+  {br:'green',cat:'Webdesign',title:'Bericht wacht op jou',ctx:'We hebben een vraag in de chat van je <b>nieuwe website</b>. Laat iets weten zodat we verder kunnen.',cta:'Open chat',action:"openProjectChat('p2')",urgent:false,icon:'msg'}
 ];
 function _cockpitCard(a){
   return `<div class="action-card ${a.urgent?'urgent':''} br-${a.br}">
@@ -312,11 +312,18 @@ function _inboxRow(p){
   var snippet=lc&&lc.tekst?lc.tekst:'Open de chat en stel je vraag over dit project.';
   var when=lc?_inboxWhen(lc.ts):'';
   var wacht=lc?!!lc.wacht:false;
+  // Team-weergave (staff): toon of de klant het nieuwste TEAM-bericht al las.
+  var readTag='';
+  if(typeof isRichView==='function' && isRichView() && lc && lc.van_klant===false){
+    readTag = lc.read_by_client
+      ? '<span class="ios-read" style="font-size:11px;color:var(--s27-green-ink,#147A50);margin-left:8px;white-space:nowrap;flex:none">'+ic('check',11)+' gelezen</span>'
+      : '<span class="ios-read" style="font-size:11px;color:var(--ink-4);margin-left:8px;white-space:nowrap;flex:none">nog niet gelezen</span>';
+  }
   return '<button class="ios-row br-'+p.br+'" onclick="openProjectChat(\''+esc(p.id)+'\')">'
     +'<span class="ios-dot'+(wacht?' on':'')+'"></span>'
     +'<span class="ios-av" style="background:var(--s27-'+p.br+')">'+discMark(p.disc,'ios-av-ic')+'</span>'
     +'<span class="ios-main"><span class="ios-top"><b>'+esc(p.name)+'</b><span class="ios-when">'+esc(when)+'</span></span>'
-    +'<span class="ios-snippet'+(wacht?' unread':'')+'">'+esc(snippet)+'</span></span>'
+    +'<span class="ios-snippet'+(wacht?' unread':'')+'" style="display:flex;align-items:center">'+'<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(snippet)+'</span>'+readTag+'</span></span>'
     +'<svg class="ios-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>';
 }
 function panelBerichten(){
@@ -3096,7 +3103,7 @@ function adsToggleAdRow(i){
   var a=(state._metaAdsView||[])[i]; if(!a) return;
   var cur=((window.S27DATA&&S27DATA.metaAds&&S27DATA.metaAds())||{}).currency||'EUR';
   var media;
-  if(a.format==='video' && a.videoSrc){ media='<video class="ads-adexp-el" src="'+esc(a.videoSrc)+'" controls preload="metadata" poster="'+esc(a.poster||'')+'"></video>'; }
+  if(a.format==='video' && a.videoSrc){ media='<video class="ads-adexp-el" src="'+esc(a.videoSrc)+'" controls preload="none" poster="'+esc(a.poster||a.image||a.thumb||'')+'"></video>'; }
   else { var vis=(a.format==='video'?(a.poster||a.image||a.thumb):(a.image||a.thumb)); media=vis?'<img class="ads-adexp-el" src="'+esc(vis)+'" alt="" referrerpolicy="no-referrer" onclick="openMetaCreative('+i+')">':'<div class="ads-adexp-el ads-adexp-none">geen voorbeeld</div>'; }
   var stats=[['Besteed',metaEur(a.spend,cur)],['Vertoningen',adsNum(a.impressions)],['Klikken',adsNum(a.linkClicks||a.clicks)],['CTR',(Number(a.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%'],['CPC',metaEur(a.cpc,cur)]];
   exp.innerHTML='<div class="ads-adexp-in"><div class="ads-adexp-media">'+media+'<button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openMetaCreative('+i+')">'+ic('arrow',13)+' Vergroot visual</button></div><div class="ads-adexp-stats">'+stats.map(function(s){return '<div><div class="ads-adexp-lab">'+esc(s[0])+'</div><div class="ads-adexp-num">'+s[1]+'</div></div>';}).join('')+'</div></div>';
@@ -3115,13 +3122,15 @@ function _metaLbMedia(a){
   var cm=a.creativeMedia||{};
   var type=cm.type||a.format||'image';
   if(type==='video'){
-    var vsrc=cm.video||a.videoSrc||''; var poster=cm.thumb||cm.poster||a.thumb||a.poster||'';   // lichte thumb-poster = direct zichtbaar terwijl de video buffert
+    var vsrc=cm.video||a.videoSrc||''; var poster=cm.poster||cm.image||cm.thumb||a.poster||a.image||a.thumb||'';   // SCHERPE still als poster = directe, heldere eerste indruk
     var plink=cm.permalink||a.videoPermalink||'';
-    // item 8b: 'muted' houdt autoplay toegestaan (anders blokkeert de browser → zwart kader). De fbcdn-source
-    // is kort geldig, dus toon ALTIJD ook de permalink-fallback zodat de klant bij een verlopen video kan doorklikken.
+    // De fbcdn-source is kort geldig, dus toon ALTIJD ook de permalink-fallback zodat de klant bij een verlopen video kan doorklikken.
     var flink=plink?'<a class="meta-lb-permalink" href="'+esc(plink)+'" target="_blank" rel="noopener">'+ic('play',14)+' Bekijk op Facebook</a>':'';
+    // SNELHEID (Vincent): de pop-up opent meteen met de scherpe still; de (zware, full-res) video wordt NIET vooraf
+    // gedownload (preload="none", geen autoplay). Voor "welke visuals staan live?" volstaat de still — afspelen
+    // laadt de video pas op de play-knop. Meta levert geen lichtere video-resolutie, dus dit is de snelste weg.
     // kolom-wrapper zodat de permalink-fallback ONDER de video/poster komt (niet ernaast in de flex-row van .meta-lb-stage)
-    if(vsrc) return '<div class="meta-lb-stage"><div class="meta-lb-col"><video class="meta-lb-vid" controls autoplay muted playsinline preload="metadata" poster="'+esc(poster)+'" src="'+esc(vsrc)+'" data-fb="'+esc(plink)+'" onerror="metaMediaErr(this)"></video>'+flink+'</div></div>';
+    if(vsrc) return '<div class="meta-lb-stage"><div class="meta-lb-col"><video class="meta-lb-vid" controls playsinline preload="none" poster="'+esc(poster)+'" src="'+esc(vsrc)+'" data-fb="'+esc(plink)+'" onerror="metaMediaErr(this)"></video>'+flink+'</div></div>';
     if(plink) return '<div class="meta-lb-stage"><div class="meta-lb-col">'+(poster?'<img class="meta-lb-media" src="'+esc(poster)+'" alt="" referrerpolicy="no-referrer" data-fb="'+esc(plink)+'" onerror="metaMediaErr(this)">':'')+flink+'</div></div>';
     var pf=poster||a.image||a.thumb||'';
     return pf?_lbImgStage(pf,plink):'<div class="meta-lb-stage"><div class="meta-lb-load"><span>Video niet beschikbaar</span></div></div>';
@@ -4192,11 +4201,28 @@ function chatHTML(taskId, readOnly){
     ['','Jij','blue','Wauw, ziet er strak uit! Kan de intro net iets korter?','09:41',true],
     ['IM','Ilke Meeusen','blue','Zeker, dat passen we gratis aan. Tegen morgen heb je een nieuwe versie.','09:43',false],
   ];
+  // Read-receipt: enkel in de teamweergave (staff). Toont onder het nieuwste TEAM-bericht of de klant
+  // de chat al las (m.me=true = klantbericht; nieuwste !me = teambericht, dan is de receipt relevant).
+  let receiptHTML='';
+  try{
+    if(typeof isRichView==='function' && isRichView() && live && live.length){
+      const last=live[live.length-1];
+      if(last && !last.me){
+        const rc=(window.S27DATA && S27DATA.chatReceipt) ? S27DATA.chatReceipt(taskId) : null;
+        const read=rc?!!rc.read_by_client:false;
+        const when=(rc&&rc.client_read_at)?(' · '+_inboxWhen(rc.client_read_at)):'';
+        receiptHTML = read
+          ? '<div class="chat-receipt" style="font-size:11.5px;color:var(--s27-green-ink,#147A50);padding:3px 8px 2px 0;display:flex;align-items:center;gap:4px;justify-content:flex-end">'+ic('check',13)+' Gelezen door klant'+esc(when)+'</div>'
+          : '<div class="chat-receipt" style="font-size:11.5px;color:var(--ink-4);padding:3px 8px 2px 0;text-align:right">Nog niet gelezen door klant</div>';
+      }
+    }
+  }catch(e){}
   const listHTML = `<div class="chat-list" id="chatList">
     ${msgs.length?msgs.map(m=>`<div class="msg ${m[5]?'me':''}">
       ${m[5]?'':`<span class="av" style="background:var(--s27-${m[2]})">${m[0]}</span>`}
       <div class="bubble"><div class="who">${m[1]==='Jij'?'Jij':esc(voornaam(m[1]))}</div><div class="tx">${m[3]}</div><div class="tm">${m[4]}</div></div>
     </div>`).join(''):`<div class="empty" style="padding:30px 10px"><p>${readOnly?'Geen chatgeschiedenis voor dit project.':'Nog geen berichten, stuur ons gerust iets!'}</p></div>`}
+    ${receiptHTML}
   </div>`;
   if(readOnly) return listHTML+`<div class="chat-readonly">${ic('check',14)} Dit project is afgerond. De chatgeschiedenis blijft hier zichtbaar.</div>`;
   return listHTML+`<div class="chat-compose">`

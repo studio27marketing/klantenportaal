@@ -203,7 +203,15 @@
     var raw = (res && res.ok && res.data && res.data.ok && res.data.comments) ? res.data.comments : [];
     raw.sort(function(a,b){ return (parseInt(a.datum||a.date||0,10))-(parseInt(b.datum||b.date||0,10)); });  // oudste boven, nieuwste onderaan
     state.data.chats[taskId] = raw.map(mapChatComment);
+    state.data.chatReceipts = state.data.chatReceipts || {};
+    state.data.chatReceipts[taskId] = (res && res.data && res.data.read_receipt) || null;   // team-read-receipt
     return state.data.chats[taskId];
+  };
+  // Klant markeert de projectchat als gelezen (read-receipt voor het team). Stil + fail-soft; nooit voor staff/demo.
+  DATA.chatReceipt = function(taskId){ return (state.data.chatReceipts||{})[taskId] || null; };
+  DATA.markChatRead = async function(taskId){
+    if(!live() || state.adminMode || !taskId) return;
+    try{ await api(ENDPOINTS.chatMarkRead, base({ task_id:taskId })); }catch(e){}
   };
   // Altijd-open klantchat: de server bepaalt de communicatietaak (geen task_id van de client).
   DATA.loadCommsChat = async function(){
@@ -274,7 +282,7 @@
       var br = DATA.disc(p.discipline);
       var st = DATA.status(p.status);
       var deliv = st.key==='wait' || !!p.feedback_link;
-      var lc = p.last_chat ? { tekst:String(p.last_chat.tekst||''), ts:Number(p.last_chat.ts)||0, wacht:!!p.chat_wacht_op_klant } : (p.chat_wacht_op_klant ? { tekst:'', ts:0, wacht:true } : null);
+      var lc = p.last_chat ? { tekst:String(p.last_chat.tekst||''), ts:Number(p.last_chat.ts)||0, wacht:!!p.chat_wacht_op_klant, van_klant:!!p.last_chat.van_klant, read_by_client:!!p.last_chat.read_by_client, client_read_at:Number(p.last_chat.client_read_at)||0 } : (p.chat_wacht_op_klant ? { tekst:'', ts:0, wacht:true } : null);
       return { id:p.task_id, name:cleanTaakNaam(p.naam), br:br.br, disc:br.label, discId:p.discipline, labels:mapLabels(p), status:st.key, deliv:deliv, sae:mapSae(p.sae), lastChat:lc, planItems:(p.plan_items||[]), actiesTodo:Number(p.acties_todo)||0, dateCreated:Number(p.date_created)||0, _raw:p };
     });
   };
@@ -315,7 +323,7 @@
       if(p.chat_wacht_op_klant===true || p.chat_wacht_op_klant==='true'){
         out.push({ br:br.br, cat:br.label, title:'Bericht wacht op jou',
           ctx:'Je team stelde je een vraag in de chat van <b>'+esc(p.naam)+'</b>. Laat iets weten zodat we verder kunnen.',
-          cta:'Open chat', action:"openProject('"+esc(p.task_id)+"','berichten')", urgent:false, icon:'msg' });
+          cta:'Open chat', action:"openProjectChat('"+esc(p.task_id)+"')", urgent:false, icon:'msg' });
       }
     });
     return out;

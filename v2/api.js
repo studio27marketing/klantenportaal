@@ -147,6 +147,8 @@ const ENDPOINTS = {
   // { host_email, host_naam, start, eind, start_ms, online, titel, beschrijving, locatie, client_email, client_naam, project_task_id?, project_naam?, intake?, when_label? }
   //   -> { ok, event_id, meet_link, html_link }. Muteert GEEN project-due_date; host moet @studio27.be zijn.
   meetingBook:       GATEWAY_BASE + '/meetingBook',
+  // Klant markeert de projectchat als gelezen → read-receipt voor het team. { task_id } -> { ok, read_at }.
+  chatMarkRead:        GATEWAY_BASE + '/chatMarkRead',
   // Altijd-open klantchat op de vaste communicatietaak (server-side taak-resolutie; client stuurt GEEN task_id).
   commsChatList:       GATEWAY_BASE + '/commsChatList',
   commsChatPost:       GATEWAY_BASE + '/commsChatPost',
