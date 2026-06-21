@@ -129,12 +129,12 @@ function _isAdProject(p){ if(!p) return false; if(p.discId==='ads') return true;
 function _adProject(){ return _projects().filter(_isAdProject)[0] || null; }   // huidige-maand ads-taak (worker filtert al op due deze maand)
 // De Projecten-pagina toont ENKEL de echte 'deliverable'-trajecten: video/fotografie, webdesign en branding.
 // Doorlopende diensten (social, ads, seo) + losse disciplines (strategie, opleiding, automation) hebben hun
-// eigen pagina/flow en horen niet in het projectenoverzicht. (Cluster F — Vincent: "enkel video/branding/webdesign".)
+// eigen pagina/flow en horen niet in het projectenoverzicht. (Cluster F, Vincent: "enkel video/branding/webdesign".)
 var PROJ_DISC_WHITELIST = ['video_fotografie','webdesign','branding','support'];   // support = opvolgbare website-tickets
 function _isProjectDisc(p){ if(!p) return false; var ls=(p.labels&&p.labels.length)?p.labels:[{discId:p.discId}]; return ls.some(function(l){ return PROJ_DISC_WHITELIST.indexOf(l.discId)>=0; }); }
-function _nonAdProjects(){ return _projects().filter(function(p){ return !_isAdProject(p); }); }   // alle niet-ads-projecten (meeting-planner e.d.) — blacklist
+function _nonAdProjects(){ return _projects().filter(function(p){ return !_isAdProject(p); }); }   // alle niet-ads-projecten (meeting-planner e.d.), blacklist
 function _overviewProjects(){ return _projects().filter(_isProjectDisc); }   // (legacy; tak-pagina's gebruiken _takProjects)
-/* ---- Dakstructuur (Q): tak-registry — elke tak = eigen zijbalk-pagina ---- */
+/* ---- Dakstructuur (Q): tak-registry, elke tak = eigen zijbalk-pagina ---- */
 const TAK_TABS = {
   strategie: { discIds:['strategie'],        label:'Strategie',            br:'blue',   stamp:'icon-strategie.svg' },
   branding:  { discIds:['branding'],         label:'Branding',             br:'pink',   stamp:'icon-branding-heart.svg' },
@@ -142,7 +142,7 @@ const TAK_TABS = {
 };
 const TAK_WEBSITE = { discIds:['webdesign','support'], label:'Website', br:'green', stamp:'icon-webdesign.svg' };   // sub-sectie van de Website-tab
 // CONTENT-takken (Vincent 2026-06-13): video, branding en strategie delen exact dezelfde
-// werkwijze + look&feel — pure projectenlijst (geen contactkaart, geen 'plan een meeting',
+// werkwijze + look&feel, pure projectenlijst (geen contactkaart, geen 'plan een meeting',
 // geen apart archief), auto-landing bij 1 project, en in de detail de onderdelen-per-subtaak
 // met geintegreerde bestand-feedback. Eén bron van waarheid zodat de drie takken niet uiteenlopen.
 var CONTENT_TAK_KEYS=['video','branding','strategie'];
@@ -160,7 +160,7 @@ function takOfProject(p){
   for(var key in TAK_TABS){ if(ls.some(function(l){ return TAK_TABS[key].discIds.indexOf(l.discId)>=0; })) return key; }
   if(ls.some(function(l){ return TAK_WEBSITE.discIds.indexOf(l.discId)>=0; })) return 'webprestaties';
   // defensieve fallback: leid de tak rechtstreeks af uit discId (labels leeg/mismatch mag NOOIT
-  // naar 'berichten' vallen, anders springt de terugknop naar het verkeerde scherm — review v85)
+  // naar 'berichten' vallen, anders springt de terugknop naar het verkeerde scherm, review v85)
   for(var k2 in TAK_TABS){ if(TAK_TABS[k2].discIds.indexOf(p.discId)>=0) return k2; }
   if(TAK_TABS[p.discId]) return p.discId;
   if(TAK_WEBSITE.discIds.indexOf(p.discId)>=0) return 'webprestaties';
@@ -173,7 +173,7 @@ function takLabelOf(key){
   var M={social:'Social media',adverteren:'Adverteren',berichten:'Projecten'};
   return M[key]||'';
 }
-// projecttitel + tak voor een taak (root of subtaak) — door feedback-core gebruikt zodat de
+// projecttitel + tak voor een taak (root of subtaak), door feedback-core gebruikt zodat de
 // review-overlay altijd de PROJECTNAAM + TAK toont i.p.v. de bestandsnaam/'Open in Drive' (item 11).
 window.S27ProjectMeta = function(taskId){
   try{
@@ -267,7 +267,7 @@ function _doneRow(d){
 function panelStart(){
   const cock = window.S27DATA && S27DATA.cockpit();
   const head = hero('blue', _bedrijf(), `Welkom terug, <span class="accent">${esc(_greetNaam())}</span>`, true);
-  // Home toont enkel "Voor jou te doen" — het volledige projectenoverzicht leeft op de Projecten-pagina.
+  // Home toont enkel "Voor jou te doen", het volledige projectenoverzicht leeft op de Projecten-pagina.
   let cockHtml;
   if(cock){
     cockHtml = cock.length
@@ -290,7 +290,7 @@ function goDienstOfferte(key){ openOfferteWizard(SVC_TO_TAK[key]||''); }
 // Berichten = iOS-stijl inbox: één rij per projectchat (avatar, naam, laatste bericht, tijd,
 // ongelezen-dot) -> klik opent de schermvullende chat van dat project (detail-Chat-tab).
 const BERICHT_MOCK_LAST={
-  p1:{tekst:'De eerste montage staat klaar — kijk je even mee?', uren:2,  wacht:true},
+  p1:{tekst:'De eerste montage staat klaar, kijk je even mee?', uren:2,  wacht:true},
   p2:{tekst:'De nieuwe homepage staat op staging, link volgt straks.', uren:7, wacht:true},
   p3:{tekst:'Top, dan plannen we de nabewerking deze week in.', uren:30, wacht:false},
   p4:{tekst:'Bedankt voor jullie input tijdens de sessie!', uren:78, wacht:false},
@@ -327,7 +327,7 @@ function _inboxRow(p){
     +'<svg class="ios-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>';
 }
 function panelBerichten(){
-  // alle projecten (ook social/ads/support) — elke projectchat blijft hier bereikbaar
+  // alle projecten (ook social/ads/support), elke projectchat blijft hier bereikbaar
   var projs=_projects().slice();
   projs.forEach(function(p){ if(!p.lastChat && state.demoMode && BERICHT_MOCK_LAST[p.id]){ var m=BERICHT_MOCK_LAST[p.id]; p._sortTs=Date.now()-m.uren*3600000; } else { p._sortTs=(p.lastChat&&p.lastChat.ts)||0; } });
   projs.sort(function(a,b){ return (b._sortTs-a._sortTs)||String(a.name).localeCompare(String(b.name)); });
@@ -347,7 +347,7 @@ function discChips(labels){
 // in een grid van ≥2 kolommen. Eén hoofdtaak verschijnt ÉÉN keer met haar discipline-label(s).
 const PROJ_CLUSTERS = [
   {key:'feedback', statuses:['wait','sent'], title:'Klaar voor jouw feedback', sub:'Hier wachten we op je akkoord of input om verder te kunnen.', br:'orange'},
-  {key:'plannen',  statuses:['todo'],        title:'Nog in te plannen of op te starten', sub:'Klaar om samen te beginnen — prik een moment of laat iets weten.', br:'blue'},
+  {key:'plannen',  statuses:['todo'],        title:'Nog in te plannen of op te starten', sub:'Klaar om samen te beginnen, prik een moment of laat iets weten.', br:'blue'},
   {key:'bezig',    statuses:['prog'],        title:'Wij werken eraan', sub:'Loopt bij ons, je hoeft nu even niets te doen.', br:'green'}
 ];
 function projCluster(cl, grp, num, fromTab){
@@ -364,7 +364,7 @@ function projDienst(list, fromTab, incDone){
   if(!all.length) return `<div class="empty"><div class="em-ic">${ic('st_approved',64)}</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Geen actieve projecten</b><p style="margin:6px 0 0">Zodra we samen aan iets nieuws starten, verschijnt het hier.</p></div>`;
   const sortFn=(a,b)=>{ const ia=DISC_ORDER.indexOf(a.disc),ib=DISC_ORDER.indexOf(b.disc); return ((ia<0?99:ia)-(ib<0?99:ib))||String(a.name).localeCompare(String(b.name)); };
   let html='', _n=0;
-  const clusters=incDone?PROJ_CLUSTERS.concat([{key:'goedgekeurd', statuses:['done'], title:'Goedgekeurd', sub:'Afgerond en goedgekeurd — verdwijnt hier na facturatie.', br:'green'}]):PROJ_CLUSTERS;
+  const clusters=incDone?PROJ_CLUSTERS.concat([{key:'goedgekeurd', statuses:['done'], title:'Goedgekeurd', sub:'Afgerond en goedgekeurd, verdwijnt hier na facturatie.', br:'green'}]):PROJ_CLUSTERS;
   clusters.forEach(cl=>{ var grp=all.filter(p=>cl.statuses.indexOf(p.status)>=0).sort(sortFn); if(grp.length){ _n++; html+=projCluster(cl, grp, _n, fromTab); } });
   // statussen die in geen enkel cluster vallen: verzamelcluster zodat nooit een project verdwijnt
   const rest=all.filter(p=>!PROJ_CLUSTERS.some(cl=>cl.statuses.indexOf(p.status)>=0)).sort(sortFn);
@@ -675,7 +675,7 @@ function socialInsightsData(){
 }
 
 /* =============================================================================
-   ADMIN — uitgebreide social-rapportage (team-weergave). Enkel in state.adminMode.
+   ADMIN, uitgebreide social-rapportage (team-weergave). Enkel in state.adminMode.
    Data via metricoolStatsRich (is_staff-gated): account-KPI's + per-netwerk breakdown
    met dag-series + vergelijking + post-insights (top-posts, beste momenten, formats,
    hashtags). Hergebruikt de bestaande inzicht-renderers via socialInsightsData().
@@ -691,7 +691,7 @@ function socialRichAanbevList(s){
   var nets=(s.networks||[]).filter(function(n){return n.reach;}); if(nets.length){ var topN=nets.slice().sort(function(a,b){return (b.engagementRate||0)-(a.engagementRate||0);})[0]; if(topN&&topN.engagementRate) recs.push(['blue','Sterkste netwerk',(topN.label||topN.network)+' heeft de hoogste engagement ('+(Number(topN.engagementRate)||0)+'%). Overweeg hier extra in te investeren.']); }
   var posts=(s.postSummary&&s.postSummary.posts)||0, days=(s.period&&s.period.days)||0;
   if(posts && days){ var perWeek=Math.round((posts/days)*7*10)/10; if(perWeek<3) recs.push(['orange','Postfrequentie','Je plaatste '+posts+' posts ('+perWeek+'/week). Meer consistentie (richtlijn 3-5/week) vergroot doorgaans je bereik.']); }
-  if(s.prevTotals){ var cur=Number((s.totals||{}).engagementRate)||0, prev=Number(s.prevTotals.engagementRate)||0; if(prev){ var d=Math.round((cur-prev)/prev*1000)/10; if(d<=-10) recs.push(['orange','Dalende engagement','Je engagement daalde '+Math.abs(d)+'% t.o.v. '+(s.compareLabel||'de vorige periode')+'. Test nieuwe formats of posttijden.']); else if(d>=10) recs.push(['green','Stijgende engagement','Je engagement steeg '+d+'% t.o.v. '+(s.compareLabel||'de vorige periode')+'. Wat je doet werkt — houd deze lijn aan.']); } }
+  if(s.prevTotals){ var cur=Number((s.totals||{}).engagementRate)||0, prev=Number(s.prevTotals.engagementRate)||0; if(prev){ var d=Math.round((cur-prev)/prev*1000)/10; if(d<=-10) recs.push(['orange','Dalende engagement','Je engagement daalde '+Math.abs(d)+'% t.o.v. '+(s.compareLabel||'de vorige periode')+'. Test nieuwe formats of posttijden.']); else if(d>=10) recs.push(['green','Stijgende engagement','Je engagement steeg '+d+'% t.o.v. '+(s.compareLabel||'de vorige periode')+'. Wat je doet werkt, houd deze lijn aan.']); } }
   if(!recs.length) recs.push(['green','Nog te weinig data','Er zijn nog te weinig posts in deze periode om concrete aanbevelingen te doen.']);
   return recs;
 }
@@ -767,7 +767,7 @@ function socialRichPostsTable(posts){
 }
 function _srTrim(t){ t=String(t||'').replace(/\s+/g,' ').trim(); return t.length>54?t.slice(0,54)+'…':(t||'Post'); }
 function socialRichSortPosts(key){ var s=SR_POST_SORT; if(s.key===key){s.dir=-s.dir;}else{s.key=key;s.dir=(key==='network'||key==='format')?1:-1;} var host=document.getElementById('srPosts'); var d=(window.S27DATA&&S27DATA.metricoolStatsRich)?S27DATA.metricoolStatsRich():null; if(host&&d) host.innerHTML=socialRichPostsTable(d.posts||[]); }
-/* Chart.js — overzicht (bereik+interacties) + volgersgroei per netwerk */
+/* Chart.js, overzicht (bereik+interacties) + volgersgroei per netwerk */
 function _srChartOpts(single){
   var x={ticks:{font:{family:'Montserrat',size:10},color:'#9E919E',maxRotation:0,autoSkip:true,maxTicksLimit:12},grid:{display:false}};
   var sc = single
@@ -840,7 +840,7 @@ function socialStatsBlock(s){
   function cmp(cur,prev,fallback){
     if(pv==null) return '<span class="soc-kpi-sub">'+fallback+'</span>';
     cur=Number(cur)||0; prev=Number(prev)||0;
-    var d; if(!prev){ d= cur>0?'<span class="soc-kpi-delta up">nieuw</span>':'<span class="soc-kpi-delta flat">—</span>'; }
+    var d; if(!prev){ d= cur>0?'<span class="soc-kpi-delta up">nieuw</span>':'<span class="soc-kpi-delta flat">-</span>'; }
     else { var pct=Math.round(((cur-prev)/prev)*1000)/10; var cls=pct>0?'up':(pct<0?'down':'flat'); d='<span class="soc-kpi-delta '+cls+'">'+(pct>0?'+':'')+pct+'%</span>'; }
     return d+' <span class="soc-kpi-sub">vs '+esc(clab)+'</span>';
   }
@@ -1007,7 +1007,7 @@ function socialCalendar(posts){
     }).join('')+'</div>';
   }
   // posts zonder datum (bv. concepten die het team nog moet inplannen) passen niet in het
-  // dag-raster maar moeten WEL zichtbaar zijn — anders kloppen de filtertellers niet (review v82)
+  // dag-raster maar moeten WEL zichtbaar zijn, anders kloppen de filtertellers niet (review v82)
   var zonder=posts.filter(function(p){return !p.dt;});
   var zonderHtml=zonder.length?('<div class="soc-nodate"><span class="soc-nodate-lab">Nog in te plannen</span>'+zonder.map(function(p){
     var m=socialStatusMeta(socialStatus(p)); var nc=mcNet(((p.netwerken||[])[0]||{}).netwerk);
@@ -1050,9 +1050,9 @@ function _socAccountName(net){
   var b=_bedrijf();
   return /@/.test(b) ? '' : b;   // nooit een e-mailadres in de mockup tonen
 }
-// Formaat afleiden: reel/verticaal (9:16) vs feed (1:1) — bepaalt de beeldverhouding van de mockup, zodat een reel niet wordt afgeknipt.
+// Formaat afleiden: reel/verticaal (9:16) vs feed (1:1), bepaalt de beeldverhouding van de mockup, zodat een reel niet wordt afgeknipt.
 /* Schrijfrecht 'Socials-bewerkbaar' (Cluster R): team + demo altijd; klanten enkel met het
-   recht op de bedrijf-taak (worker gate't dezelfde regel server-side — dit is enkel UI). */
+   recht op de bedrijf-taak (worker gate't dezelfde regel server-side, dit is enkel UI). */
 function socialsEditable(){
   if(state.demoMode) return true;
   // In ClientView (staff bekijkt als klant) spiegelen we exact wat de klant ziet: enkel het
@@ -1120,7 +1120,7 @@ function socialMockSlide(i){
 var _socSwipeX=null;
 function socialSwipeStart(e){ _socSwipeX=(e&&e.touches&&e.touches[0])?e.touches[0].clientX:null; }
 function socialSwipeEnd(e){ if(_socSwipeX==null) return; var host=document.getElementById('socPhMedia'); var x=(e&&e.changedTouches&&e.changedTouches[0])?e.changedTouches[0].clientX:null; var dx=(x==null)?0:(x-_socSwipeX); _socSwipeX=null; if(!host) return; if(host.querySelectorAll('.soc-ph-slide').length<2) return; var cur=Number(host.getAttribute('data-i')||0); if(dx<-30) socialMockSlide(cur+1); else if(dx>30) socialMockSlide(cur-1); }
-// Herbouw de mockup uit de huidige editor-state (kanalen, media, caption) — netwerk- en formaat-bewust.
+// Herbouw de mockup uit de huidige editor-state (kanalen, media, caption), netwerk- en formaat-bewust.
 function socialSyncMock(){
   var col=document.getElementById('socPv'); if(!col) return;
   var prevIdx=0; var oldHost=document.getElementById('socPhMedia'); if(oldHost) prevIdx=Number(oldHost.getAttribute('data-i')||0);
@@ -1161,17 +1161,17 @@ function socialDetailPage(id){
     return '<div class="soc-editor">'+back
       +'<div class="soc-egrid"><div class="soc-ecol-pv" id="socPv">'+phone+'</div><div class="soc-ecol-form">'
         +'<div class="soc-emeta">'+datebadge+'</div>'
-        +'<label class="soc-elab">Kanalen</label><div class="soc-chics soc-chics-ro">'+(nets||'<span class="fs" style="color:var(--ink-4)">—</span>')+'</div>'
+        +'<label class="soc-elab">Kanalen</label><div class="soc-chics soc-chics-ro">'+(nets||'<span class="fs" style="color:var(--ink-4)">-</span>')+'</div>'
         +'<label class="soc-elab">Tekst &amp; hashtags</label><div class="soc-dtxt-box">'+esc(p.tekst||'(geen tekst)')+'</div>'
         +'<div class="soc-roinfo">'+ic('check',15)+' Deze post is gepubliceerd, dus niet meer aanpasbaar. Een vraag erover? Laat het ons weten via de projectchat.</div>'
       +'</div></div></div>';
   }
-  // CONCEPT (Metricool-draft, bug 86ca83gp0): altijd read-only — ook voor klanten mét
+  // CONCEPT (Metricool-draft, bug 86ca83gp0): altijd read-only, ook voor klanten mét
   // bewerkrecht en voor het team via het portaal (drafts finaliseert het team in Metricool).
   // De klant ziet zo wél dat er een post aankomt waarvoor soms nog input/beeld nodig is.
   if(p.draft){
     var dm=socialStatusMeta('concept');
-    var dnets=(onNets.map(function(nw){ var n=mcNet(nw); return '<span class="soc-chic on" style="--cn:'+n[1]+'" title="'+esc(n[0])+'">'+mcNetIcon(nw)+'</span>'; }).join('')||'<span class="fs" style="color:var(--ink-4)">—</span>');
+    var dnets=(onNets.map(function(nw){ var n=mcNet(nw); return '<span class="soc-chic on" style="--cn:'+n[1]+'" title="'+esc(n[0])+'">'+mcNetIcon(nw)+'</span>'; }).join('')||'<span class="fs" style="color:var(--ink-4)">-</span>');
     return '<div class="soc-editor">'+back
       +'<div class="soc-egrid"><div class="soc-ecol-pv" id="socPv">'+phone+'</div><div class="soc-ecol-form">'
         +'<div class="soc-emeta">'+datebadge+'<span class="soc-badge" style="color:'+dm[1]+';background:'+dm[2]+'">'+esc(dm[0])+'</span></div>'
@@ -1187,7 +1187,7 @@ function socialDetailPage(id){
   var on={}; onNets.forEach(function(n){ on[n]=true; });
   var chans=editable
     ? CHAN.map(function(net){ return socialChanIcon(net,!!on[net]); }).join('')
-    : (onNets.map(function(nw){ var n=mcNet(nw); return '<span class="soc-chic on" style="--cn:'+n[1]+'" title="'+esc(n[0])+'">'+mcNetIcon(nw)+'</span>'; }).join('')||'<span class="fs" style="color:var(--ink-4)">—</span>');
+    : (onNets.map(function(nw){ var n=mcNet(nw); return '<span class="soc-chic on" style="--cn:'+n[1]+'" title="'+esc(n[0])+'">'+mcNetIcon(nw)+'</span>'; }).join('')||'<span class="fs" style="color:var(--ink-4)">-</span>');
   return '<div class="soc-editor">'+back
     +'<div class="soc-egrid"><div class="soc-ecol-pv" id="socPv">'+phone+'</div><div class="soc-ecol-form">'
       +'<div class="soc-emeta">'+datebadge+'</div>'
@@ -1222,7 +1222,7 @@ function socialEditorActions(id){
 }
 function socialToggleFeedback(){ var w=document.getElementById('socFbWrap'); if(!w) return; var hidden=(w.style.display==='none'||!w.style.display); w.style.display=hidden?'block':'none'; if(hidden){ var t=document.getElementById('socFbTx'); if(t) t.focus(); } }
 function panelSocials(){
-  const head = '';   // hero/titel "Jouw socials strak gepland" verwijderd (overbodig — altijd de klant zelf)
+  const head = '';   // hero/titel "Jouw socials strak gepland" verwijderd (overbodig, altijd de klant zelf)
   var mc = state.demoMode ? {linked:true,posts:socialDemoPosts()} : ((window.S27DATA&&S27DATA.metricool())||null);
   if(!mc) return head+'<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je socials worden geladen…</p></div>';
   if(!mc.linked) return head+statNotLinked('socials');
@@ -1230,7 +1230,7 @@ function panelSocials(){
   // met onderaan de contextuele social-chat (buiten #socialBody zodat sub-tab-wissels 'm niet herrenderen).
   return mcStyleOnce()+head+socialSubnav()+'<div id="socialBody">'+socialBodyHTML()+'</div>'+socialChatSection();
 }
-/* Social-chat: contextuele chat over de sociale-media-taak — spiegelt de ads-chat ("Chat over je advertenties").
+/* Social-chat: contextuele chat over de sociale-media-taak, spiegelt de ads-chat ("Chat over je advertenties").
    Niet zichtbaar in de post-editor (net zoals de ads-campagnedetail geen chat toont). */
 function socialChatSection(){
   if(state._socialDetail) return '';
@@ -1260,7 +1260,7 @@ function socialDemoPosts(){
     mk(19,11,30,'tiktok','Trend-video lentepromo. Doe je mee met de actie van deze maand?','PENDING',false),
     mk(24,9,0,'facebook','Maandelijkse update: dit hebben we de afgelopen weken voor je klaargezet.','PUBLISHED',false),
     mk(27,14,0,'linkedin','Praktijkcase: van idee tot resultaat. Lees hoe we deze samenwerking aanpakten.','PENDING',false),
-    (function(){ var d=mk(21,10,0,'instagram','Zomercampagne: teaser-reel. We wachten nog op het beeldmateriaal van de laatste shoot — daarna plannen we deze post definitief in.','DRAFT',false); d.draft=true; return d; })()
+    (function(){ var d=mk(21,10,0,'instagram','Zomercampagne: teaser-reel. We wachten nog op het beeldmateriaal van de laatste shoot, daarna plannen we deze post definitief in.','DRAFT',false); d.draft=true; return d; })()
   ];
 }
 
@@ -1296,7 +1296,7 @@ function campaignCard(c){
   +'</div>';
 }
 function panelAdvertenties(){
-  const head = '';   // hero/titel "Jouw campagnes die draaien" verwijderd (overbodig — altijd de klant zelf)
+  const head = '';   // hero/titel "Jouw campagnes die draaien" verwijderd (overbodig, altijd de klant zelf)
   if(state.demoMode){
     return head+`<div class="kpi-grid">
       ${[['orange','Advertentie-uitgaven','€ 2.840'],['blue','Vertoningen','318K'],['green','Klikken','7.412'],['purple','Campagnes','3']].map(k=>`
@@ -1311,7 +1311,7 @@ function panelAdvertenties(){
   return head+metaAdsBody();
 }
 
-/* ---- Meta — live advertenties & creatives (real-time via metaAds, geen Make) ---- */
+/* ---- Meta, live advertenties & creatives (real-time via metaAds, geen Make) ---- */
 function metaEnsureStyles(){
   if(document.getElementById('metaCreStyles')) return;
   var s=document.createElement('style'); s.id='metaCreStyles';
@@ -1410,7 +1410,7 @@ function _adsPeriodLabel(preset){ return ({today:'Vandaag','7d':'Laatste 7 dagen
 function _adsCompareLabel(c){ return ({none:'',previous:'vorige periode',month:'vorige maand',year:'vorig jaar'})[c]||''; }
 function _adsDateShort(s){ var p=String(s||'').split('-'); return p.length===3?(p[2]+'/'+p[1]):s; }
 function _adsPeriodSummary(pp){
-  var base=(pp.preset==='custom' && pp.from && pp.to) ? (_adsDateShort(pp.from)+' – '+_adsDateShort(pp.to)) : _adsPeriodLabel(pp.preset);
+  var base=(pp.preset==='custom' && pp.from && pp.to) ? (_adsDateShort(pp.from)+' - '+_adsDateShort(pp.to)) : _adsPeriodLabel(pp.preset);
   var cl=_adsCompareLabel(pp.compare);
   return base+(cl?' · vs '+cl:'');
 }
@@ -1540,7 +1540,7 @@ function _metaCampExpRender(id){
     return;
   }
   var ads=loaded.slice().sort(function(a,b){return (b.spend||0)-(a.spend||0);});
-  state._metaAdsView=ads;   // globaal — daarom max. 1 expand open
+  state._metaAdsView=ads;   // globaal, daarom max. 1 expand open
   exp.innerHTML='<div class="meta-camp-exp-in"><div class="section-head" style="margin-top:8px"><h2>Advertenties &amp; visuals</h2><span class="count">'+ads.length+'</span></div>'+(ads.length?('<div class="ads-adtable"><div class="ads-adhead"><span>Advertentie</span><span>Besteed</span><span>Klikken</span><span>CTR</span><span>CPC</span><span></span></div>'+ads.map(function(a,i){return metaAdRow(a,i,cur);}).join('')+'</div>'):'<div class="card" style="padding:18px;text-align:center;color:var(--ink-3)">Geen actieve advertenties in deze campagne.</div>')+'</div>';
 }
 /* ---- Multi-series toggle-trend: besteding/klikken/vertoningen per dag, aan/uit te klikken ---- */
@@ -1568,7 +1568,7 @@ function adsTrendBlock(){
   var svg=(tr.length<2)?'<div class="ads-tempty">Nog te weinig data voor een trend in deze periode.</div>':adsTrendSVG(tr,on);
   return '<div class="card ads-trend" id="adsTrendBox" style="padding:15px 18px 12px"><div class="ads-thead"><h3>Evolutie per dag</h3><div class="ads-tchips">'+chips+'</div></div>'+svg+'</div>';
 }
-// Client-view ads-chrome: ÉÉN doorlopende menubalk (zoals team) — links de Meta/Google-switcher, rechts periode + chat.
+// Client-view ads-chrome: ÉÉN doorlopende menubalk (zoals team), links de Meta/Google-switcher, rechts periode + chat.
 // Vervangt de oude losse 'Live overzicht'-kop + zwevende switcher + aparte periodebalk (die over elkaar vielen).
 function adsClientChrome(){
   return '<div class="ads-stickytop"><div class="soc-subnav-row">'+adsPlatformPicker()
@@ -1610,7 +1610,7 @@ function adsChatMount(){
 }
 function renderAds(){ renderPanel('advertenties'); if(typeof adsChatMount==='function') adsChatMount(); if(isRichView()) adsRichMountTabCharts(); else adsClientMountChart(); }
 // Deferred mount: de inner-HTML wordt synchroon via renderPanel() in de DOM gezet; de canvas bestaat dus
-// pas na deze tick. Eén keer per render plannen (idempotent — adsBuildSelChart vernietigt de oude chart).
+// pas na deze tick. Eén keer per render plannen (idempotent, adsBuildSelChart vernietigt de oude chart).
 function _adsDeferClientMount(){ if(isRichView()) return; var fn=function(){ adsClientMountChart(); }; if(window.requestAnimationFrame) requestAnimationFrame(fn); else setTimeout(fn,0); }
 // #17: client-overzicht-grafiek monteren (zelfde Chart.js dag-grafiek als de team-Samengevat).
 function adsClientMountChart(){
@@ -1626,7 +1626,7 @@ function adsClientMountChart(){
 }
 
 /* =============================================================================
-   ADMIN — uitgebreide Meta-rapportage (team-weergave). Enkel zichtbaar voor
+   ADMIN, uitgebreide Meta-rapportage (team-weergave). Enkel zichtbaar voor
    @studio27.be-medewerkers (state.adminMode). Data via de gateway (metaAdsRich,
    is_staff-gated). Gebaseerd op Arne's MASTERPROMPT: 8+ KPI's met vergelijking,
    per-campagne dag-evolutie (Chart.js), sorteerbare adset- + ad-tabellen
@@ -1645,7 +1645,7 @@ function adsControlsRow(){ return '<div class="ads-ctrlrow">'+adsPlatformPicker(
 function adsRichTab(){ return state._adsTab||'samengevat'; }
 function adsRichSubnav(){
   var t=adsRichTab();
-  var tabs=[['samengevat','Samengevat','st_progress'],['campagnes','Campagnes','cal'],['aanbevelingen','Aanbevelingen','msg']];   // 'Uitgebreide gegevens' verwijderd (Vincent) — niet meer beschikbaar voor Meta
+  var tabs=[['samengevat','Samengevat','st_progress'],['campagnes','Campagnes','cal'],['aanbevelingen','Aanbevelingen','msg']];   // 'Uitgebreide gegevens' verwijderd (Vincent), niet meer beschikbaar voor Meta
   if(isRichView()) tabs.push(['meeting','Meeting','img']);
   var tabsHtml=tabs.map(function(x){ return '<button class="soc-subtab'+(t===x[0]?' active':'')+'" data-atab="'+x[0]+'" onclick="adsRichSetTab(\''+x[0]+'\')">'+ic(x[2],17)+'<span>'+esc(x[1])+'</span></button>'; }).join('');
   // rechts op de menubalk-rij: notitie-knop + periode-keuze (rechtsboven). Platform-keuze staat in de rij eronder.
@@ -1727,12 +1727,12 @@ function adsGegevensTable(){
   var rows=_adsGegFiltered().slice().sort(function(a,b){ var k=ADS_GEG_SORT.key,c; if(k==='name'||k==='campaign'){ c=String(a[k]||'').localeCompare(String(b[k]||''),'nl'); } else { c=(Number(a[k])||0)-(Number(b[k])||0); } return c*ADS_GEG_SORT.dir; });
   state._adsGegRows=rows;
   if(!rows.length) return '<div class="ar-empty" style="border:1px solid var(--line);border-radius:14px;margin-top:4px">Geen advertenties die aan de filters voldoen.</div>';
-  // Taak 9: geen oog-icoon meer — de advertentienaam zelf opent de visual (adsGegVisual), net als elders.
+  // Taak 9: geen oog-icoon meer, de advertentienaam zelf opent de visual (adsGegVisual), net als elders.
   var cols=[['name','Advertentie',0],['campaign','Campagne',0],['spend','Besteed',1],['impressions','Vert.',1],['linkClicks','Klikken',1],['ctr','CTR',1],['cpc','CPC',1],['leads','Leads',1]];
   var tpl=cols.map(function(c,i){ return i===0?'minmax(150px,1.5fr)':(c[0]==='campaign'?'minmax(110px,1.1fr)':(c[2]?'minmax(70px,1fr)':'minmax(80px,1fr)')); }).join(' ');
   var head=cols.map(function(c){ var on=ADS_GEG_SORT.key===c[0]; var arr=on?(ADS_GEG_SORT.dir<0?' ▼':' ▲'):''; return '<button class="ar-th'+(c[2]?' num':'')+(on?' on':'')+'" onclick="adsGegSort(\''+c[0]+'\')">'+esc(c[1])+arr+'</button>'; }).join('');
   var body=rows.map(function(a,i){
-    var nm='<span class="ar-nm" title="'+esc(a.name||'')+'">'+esc(a.name||'–')+'</span>'+(a.merged?' <span class="ar-star">★'+a.count+'</span>':'');
+    var nm='<span class="ar-nm" title="'+esc(a.name||'')+'">'+esc(a.name||'-')+'</span>'+(a.merged?' <span class="ar-star">★'+a.count+'</span>':'');
     var nmCell=a.campaignId?'<button class="ar-namebtn" type="button" onclick="adsGegVisual('+i+')" title="Bekijk de visual van deze advertentie">'+nm+'</button>':nm;
     return '<div class="ar-trow" style="grid-template-columns:'+tpl+'">'
     +'<span class="ar-td">'+nmCell+'</span>'
@@ -1742,7 +1742,7 @@ function adsGegevensTable(){
     +'<span class="ar-td num">'+arNum(a.linkClicks||a.clicks)+'</span>'
     +'<span class="ar-td num">'+arPct(a.ctr)+'</span>'
     +'<span class="ar-td num">'+metaEur(a.cpc,cur)+'</span>'
-    +'<span class="ar-td num">'+(a.leads?arNum(a.leads):'–')+'</span></div>'; }).join('');
+    +'<span class="ar-td num">'+(a.leads?arNum(a.leads):'-')+'</span></div>'; }).join('');
   return '<div class="ar-table"><div class="ar-tscroll"><div class="ar-thead" style="grid-template-columns:'+tpl+'">'+head+'</div>'+body+'</div></div>';
 }
 // item 8c: robuuste naam-match (genormaliseerd + substring), want de team-tabel kan samengevoegde/PAUSED-namen
@@ -1801,7 +1801,7 @@ function adsRichMountTabCharts(){
   else if(t==='campagnes'){ adsRichMountCharts(); }
 }
 /* =============================================================================
-   #15/#17 — KLIKBARE KPI'S → AAN/UIT-toggle van reeksen in de dag-grafiek.
+   #15/#17, KLIKBARE KPI'S → AAN/UIT-toggle van reeksen in de dag-grafiek.
    Eén gegeneraliseerde Chart.js-bouwer die per platform de geselecteerde reeksen
    uit de dagdata plot. De selectie leeft per platform in state en overleeft een
    re-render binnen de sessie. Hergebruikt door zowel de team- (Samengevat) als de
@@ -1809,7 +1809,7 @@ function adsRichMountTabCharts(){
    ============================================================================= */
 // Plotbare reeksen per platform (key MOET matchen met de KPI-kaart-key zodat een klik op de kaart de juiste reeks schakelt).
 // axis-GROEP per metric: 'money' (€), 'count' (#), 'ratio' (% / verhouding). Bepaalt links/rechts-as (taak 2).
-// Volgorde = CANONIEKE METRIEK-VOLGORDE — wordt overal in dit document gespiegeld.
+// Volgorde = CANONIEKE METRIEK-VOLGORDE, wordt overal in dit document gespiegeld.
 // item 4: grafiek-paletten uit de Studio 27-huisstijl, per platform getint. Meta = koel/blauw-geleid,
 // Google = warm/oranje-geleid; de dominante 'spend'-balk draagt telkens de platformkleur (blauw/oranje).
 // Alle tinten komen uit de huisstijl: blauw #3083DC, donkerblauw #1F5FA8, paars #9441DB, groen #12AC4E,
@@ -1981,7 +1981,7 @@ function adsChartStyles(){ if(document.getElementById('adsChartStyles'))return; 
  +'.arkpi.arkpi-clk .arkpi-l{display:flex;align-items:center;gap:6px;}'
  +'.arkpi-tg{width:9px;height:9px;border-radius:50%;flex:none;border:1.5px solid var(--arkpi-dot,#3083DC);background:transparent;transition:background .15s;}'
  +'.arkpi.arkpi-clk.on .arkpi-tg{background:var(--arkpi-dot,#3083DC);}'
- /* per-campagne klikbare KPI-cellen (taak 3) — zelfde toggle-gevoel als de overzichts-KPI's */
+ /* per-campagne klikbare KPI-cellen (taak 3), zelfde toggle-gevoel als de overzichts-KPI's */
  +'.ar-ck.ar-ck-clk{cursor:pointer;position:relative;transition:border-color .15s,box-shadow .15s;}'
  +'.ar-ck.ar-ck-clk:hover{border-color:var(--ck-dot,#3083DC);box-shadow:0 3px 10px rgba(48,131,220,.14);}'
  +'.ar-ck.ar-ck-clk.on{border-color:var(--ck-dot,#3083DC);box-shadow:inset 0 0 0 1px var(--ck-dot,#3083DC);}'
@@ -2008,13 +2008,13 @@ function adsRichBuildAccountChart(m,cur){
 }
 
 /* =============================================================================
-   PDF-EXPORT (team-rapporten) — opent een gebrand, A4-geoptimaliseerd print-venster
+   PDF-EXPORT (team-rapporten), opent een gebrand, A4-geoptimaliseerd print-venster
    in Studio 27-huisstijl met de reeds gerenderde Chart.js-grafieken als afbeeldingen.
    window.print() → "Opslaan als PDF". Geen externe library. Enkel adminMode.
    ============================================================================= */
 function _pdfBtn(fn){ return '<button class="ar-pdfbtn" onclick="'+fn+'()" title="Download dit rapport als PDF"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg><span>PDF-rapport</span></button>'; }
 function _pdfToday(){ try{ return new Date().toLocaleDateString('nl-BE',{day:'2-digit',month:'long',year:'numeric'}); }catch(e){ return ''; } }
-function _pdfPeriodFromUI(which){ try{ var pp=which==='ads'?adsPeriod():socialPeriod(); return _srDate(pp.from)+' – '+_srDate(pp.to); }catch(e){ return ''; } }
+function _pdfPeriodFromUI(which){ try{ var pp=which==='ads'?adsPeriod():socialPeriod(); return _srDate(pp.from)+' - '+_srDate(pp.to); }catch(e){ return ''; } }
 function _pdfDelta(cur,prev,invert){ if(prev==null) return ''; cur=Number(cur)||0; prev=Number(prev)||0; if(!prev) return cur>0?'<div class="d up">nieuw</div>':''; var pct=Math.round(((cur-prev)/Math.abs(prev))*1000)/10; if(pct===0) return '<div class="d" style="color:#9E919E">0%</div>'; var better=invert?pct<0:pct>0; return '<div class="d '+(better?'up':'down')+'">'+(pct>0?'+':'')+pct+'%</div>'; }
 function _pdfChartImg(canvasId){ var c=document.getElementById(canvasId); if(!c||!c.toDataURL) return ''; try{ return c.toDataURL('image/png',1.0); }catch(e){ return ''; } }
 function _pdfOpen(html){ var w=window.open('','_blank'); if(!w){ alert('Sta pop-ups toe om het PDF-rapport te openen, en probeer opnieuw.'); return; } w.document.open(); w.document.write(html); w.document.close(); }
@@ -2048,7 +2048,7 @@ function _pdfAdTable(c,cur){
   var ads=adsRichMergeAds(c.ads||[]).slice().sort(function(a,b){return b.spend-a.spend;});
   var extra=ads.length>10?ads.length-10:0; ads=ads.slice(0,10);
   if(!ads.length) return '';
-  var rows=ads.map(function(a){ return '<tr><td>'+esc(a.name||'–')+(a.merged?' ★'+a.count:'')+'</td><td class="num">'+metaEur(a.spend,cur)+'</td><td class="num">'+arNum(a.impressions)+'</td><td class="num">'+arNum(a.linkClicks||a.clicks)+'</td><td class="num">'+arPct(a.ctr)+'</td><td class="num">'+(a.leads?arNum(a.leads):'–')+'</td></tr>'; }).join('');
+  var rows=ads.map(function(a){ return '<tr><td>'+esc(a.name||'-')+(a.merged?' ★'+a.count:'')+'</td><td class="num">'+metaEur(a.spend,cur)+'</td><td class="num">'+arNum(a.impressions)+'</td><td class="num">'+arNum(a.linkClicks||a.clicks)+'</td><td class="num">'+arPct(a.ctr)+'</td><td class="num">'+(a.leads?arNum(a.leads):'-')+'</td></tr>'; }).join('');
   return '<table><thead><tr><th>Advertentie</th><th class="num">Besteed</th><th class="num">Vert.</th><th class="num">Klikken</th><th class="num">CTR</th><th class="num">Leads</th></tr></thead><tbody>'+rows+'</tbody></table>'+(extra?'<div style="font-size:9px;color:#9E919E;margin-top:3px">+ '+extra+' andere advertenties</div>':'');
 }
 function exportAdsPdf(){
@@ -2056,7 +2056,7 @@ function exportAdsPdf(){
   var cur=m.currency||'EUR', k=m.kpis||{}, p=m.prevKpis||null;
   var company=(state._adminActiveName||(window.S27DATA&&S27DATA.bedrijfsnaam&&S27DATA.bedrijfsnaam())||'Klant');
   function kc(lab,val,key,inv){ return '<div class="pdf-kpi"><div class="l">'+lab+'</div><div class="v">'+val+'</div>'+(p?_pdfDelta(k[key],p[key],inv):'')+'</div>'; }
-  var kpis='<div class="pdf-kpis">'+[kc('Besteed',metaEur(k.spend,cur),'spend',true),kc('Leads',arNum(k.leads),'leads',false),kc('CPL',k.leads?metaEur(k.cpl,cur):'–','cpl',true),kc('Klikken',arNum(k.linkClicks||k.clicks),'linkClicks',false),kc('Vertoningen',arNum(k.impressions),'impressions',false),kc('Bereik',arNum(k.reach),'reach',false),kc('CPM',metaEur(k.cpm,cur),'cpm',true),kc('CTR',arPct(k.ctr),'ctr',false),kc('CPC',metaEur(k.cpc,cur),'cpc',true),kc('Frequentie',arDec(k.frequency,2),'frequency',true)].join('')+'</div>';
+  var kpis='<div class="pdf-kpis">'+[kc('Besteed',metaEur(k.spend,cur),'spend',true),kc('Leads',arNum(k.leads),'leads',false),kc('CPL',k.leads?metaEur(k.cpl,cur):'-','cpl',true),kc('Klikken',arNum(k.linkClicks||k.clicks),'linkClicks',false),kc('Vertoningen',arNum(k.impressions),'impressions',false),kc('Bereik',arNum(k.reach),'reach',false),kc('CPM',metaEur(k.cpm,cur),'cpm',true),kc('CTR',arPct(k.ctr),'ctr',false),kc('CPC',metaEur(k.cpc,cur),'cpc',true),kc('Frequentie',arDec(k.frequency,2),'frequency',true)].join('')+'</div>';
   var camps=(m.campaigns||[]).map(function(c){
     var img=_pdfChartImg('arch_'+c.id); var chart=img?'<div class="pdf-chart"><img src="'+img+'"></div>':'';
     return '<div class="pdf-camp"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:12.5px">'+esc(c.name||'Campagne')+'</b>'+(c.objective?'<span class="pdf-pill">'+esc(adsRichObjLabel(c.objective))+'</span>':'')+'</div>'
@@ -2066,7 +2066,7 @@ function exportAdsPdf(){
   var body='<h2 class="pdf-sec">Samenvatting'+(m.compareLabel?' · vs '+esc(m.compareLabel):'')+'</h2>'+kpis
     +'<h2 class="pdf-sec">Campagnes ('+(m.campaigns||[]).length+')</h2>'+(camps||'<p style="font-size:10px;color:#6B5B6B">Geen campagnes met activiteit in deze periode.</p>')
     +'<h2 class="pdf-sec">Optimalisatie-aanbevelingen</h2>'+recs;
-  _pdfOpen(s27PdfShell('Advertentierapport — '+company,'Advertentierapport',company+' · '+_pdfPeriodFromUI('ads'),body));
+  _pdfOpen(s27PdfShell('Advertentierapport, '+company,'Advertentierapport',company+' · '+_pdfPeriodFromUI('ads'),body));
 }
 /* ---- social-PDF ---- */
 function _pdfSocNetTable(s){
@@ -2100,7 +2100,7 @@ function exportSocialPdf(){
     +'<h2 class="pdf-sec">Per netwerk</h2>'+(_pdfSocNetTable(s)||'<p style="font-size:10px;color:#6B5B6B">Geen netwerkdata.</p>')
     +'<h2 class="pdf-sec">Best presterende posts</h2>'+(_pdfSocPostsTable(s.posts)||'<p style="font-size:10px;color:#6B5B6B">Geen posts in deze periode.</p>')
     +_pdfSocInsightTables(s);
-  _pdfOpen(s27PdfShell('Social media rapport — '+company,'Social media rapport',company+' · '+_pdfPeriodFromUI('social'),body));
+  _pdfOpen(s27PdfShell('Social media rapport, '+company,'Social media rapport',company+' · '+_pdfPeriodFromUI('social'),body));
 }
 function adsRichNotLinked(){ return '<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Nog geen Meta-advertentieaccount gekoppeld</div><div style="color:var(--ink-3);max-width:470px;margin:0 auto;line-height:1.55">Koppel het Meta-advertentieaccount van deze klant (veld “Meta Ads ID” op de bedrijf-taak) om hier de uitgebreide rapportage te zien.</div></div>'; }
 function adsRichInner(){
@@ -2131,7 +2131,7 @@ function arCmp(cur,prev,invert){
   return '<span class="arcmp '+(better?'good':'bad')+'">'+(pct>0?'▲ +':'▼ ')+pct+'%</span>';
 }
 // absolute-vergelijking: kleur via richting (pct+invert), toont een RICHTINGPIJL (▲/▼) + het ABSOLUTE
-// vorige-periode-getal (taak 4 — nooit een kale "vs" zonder pijl). Voor CPC/kliks/besteding/frequentie enz.;
+// vorige-periode-getal (taak 4, nooit een kale "vs" zonder pijl). Voor CPC/kliks/besteding/frequentie enz.;
 // ratio's (CTR/conv.ratio) blijven % via arCmp.
 function arCmpAbs(cur,prev,invert,fmt){
   if(prev==null) return '';
@@ -2144,7 +2144,7 @@ function arCmpAbs(cur,prev,invert,fmt){
   var arrow=diff>0?'▲':'▼';
   return '<span class="arcmp '+cls+'">'+arrow+' '+prevTxt+'</span>';
 }
-// metric-config: [invert (lager=beter), type] — type 'pct' = ratio (% via arCmp), e/n/d = absoluut (vs vorig getal).
+// metric-config: [invert (lager=beter), type], type 'pct' = ratio (% via arCmp), e/n/d = absoluut (vs vorig getal).
 var AR_METRIC={spend:[true,'e'],cpc:[true,'e'],cpm:[true,'e'],cpl:[true,'e'],costPerConv:[true,'e'],frequency:[true,'d'],clicks:[false,'n'],linkClicks:[false,'n'],impressions:[false,'n'],reach:[false,'n'],leads:[false,'n'],results:[false,'n'],conversions:[false,'d'],convValue:[false,'e'],ctr:[false,'pct'],convRate:[false,'pct']};
 // per-rij vergelijkings-delta: leest row.prev[key] (backend stuurt 'prev' per campagne/adset/ad/adgroep/keyword).
 function arRowDelta(r,key,cur){
@@ -2159,10 +2159,10 @@ function arRowDelta(r,key,cur){
 function adsRichKpiGrid(k,p,cur,cmpLabel){ return adsKpiGridGeneric('meta',k,p,cur,cmpLabel); }
 /* ---- per campagne ---- */
 function _titleCase(s){ return String(s).toLowerCase().replace(/_/g,' ').replace(/^\w/,function(c){return c.toUpperCase();}); }
-// Taak 6: status als KLEINE GEKLEURDE STIP (geen tekst-pill meer) — spaart horizontale ruimte in de tabellen.
+// Taak 6: status als KLEINE GEKLEURDE STIP (geen tekst-pill meer), spaart horizontale ruimte in de tabellen.
 // groen=actief, licht-oranje=gepauzeerd, grijs=gearchiveerd/verwijderd, rood=afgekeurd, blauw=review/bezig.
 var _AR_STATUS_DOT={green:'#12AC4E',orange:'#E8A33A',grey:'#B8AEA0',red:'#DC2626',blue:'#3083DC'};
-function adsRichStatus(st){ st=String(st||'').toUpperCase(); var map={ACTIVE:['Actief','green'],PAUSED:['Gepauzeerd','orange'],CAMPAIGN_PAUSED:['Gepauzeerd','orange'],ADSET_PAUSED:['Gepauzeerd','orange'],ARCHIVED:['Gearchiveerd','grey'],DELETED:['Verwijderd','grey'],DISAPPROVED:['Afgekeurd','red'],PENDING_REVIEW:['In review','blue'],IN_PROCESS:['Bezig','blue'],WITH_ISSUES:['Aandacht','orange'],ENABLED:['Actief','green'],REMOVED:['Verwijderd','grey']}; var m=map[st]||[st?_titleCase(st):'–','grey']; var col=_AR_STATUS_DOT[m[1]]||_AR_STATUS_DOT.grey; return '<span class="ar-stdot" title="'+esc(m[0])+'" aria-label="'+esc(m[0])+'" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+col+';box-shadow:0 0 0 2px rgba(255,255,255,.6)"></span>'; }
+function adsRichStatus(st){ st=String(st||'').toUpperCase(); var map={ACTIVE:['Actief','green'],PAUSED:['Gepauzeerd','orange'],CAMPAIGN_PAUSED:['Gepauzeerd','orange'],ADSET_PAUSED:['Gepauzeerd','orange'],ARCHIVED:['Gearchiveerd','grey'],DELETED:['Verwijderd','grey'],DISAPPROVED:['Afgekeurd','red'],PENDING_REVIEW:['In review','blue'],IN_PROCESS:['Bezig','blue'],WITH_ISSUES:['Aandacht','orange'],ENABLED:['Actief','green'],REMOVED:['Verwijderd','grey']}; var m=map[st]||[st?_titleCase(st):'-','grey']; var col=_AR_STATUS_DOT[m[1]]||_AR_STATUS_DOT.grey; return '<span class="ar-stdot" title="'+esc(m[0])+'" aria-label="'+esc(m[0])+'" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+col+';box-shadow:0 0 0 2px rgba(255,255,255,.6)"></span>'; }
 function adsRichObjLabel(o){ o=String(o||'').toUpperCase(); var map={OUTCOME_LEADS:'Leads',LEAD_GENERATION:'Leadgeneratie',OUTCOME_SALES:'Verkoop',CONVERSIONS:'Conversies',OUTCOME_TRAFFIC:'Verkeer',LINK_CLICKS:'Verkeer',OUTCOME_ENGAGEMENT:'Betrokkenheid',POST_ENGAGEMENT:'Betrokkenheid',OUTCOME_AWARENESS:'Naamsbekendheid',BRAND_AWARENESS:'Naamsbekendheid',REACH:'Bereik',VIDEO_VIEWS:'Videoweergaven',OUTCOME_APP_PROMOTION:'App-promotie'}; return o?(map[o]||_titleCase(o)):''; }
 function adsRichCampaign(c,cur){
   var obj=c.objective?'<span class="ar-obj">'+esc(adsRichObjLabel(c.objective))+'</span>':'';
@@ -2197,7 +2197,7 @@ function adsRichCampKpis(c,cur){
   var hasLeads=((Number(c.leads)||0)>0)||(c.prev&&(Number(c.prev.leads)||0)>0);
   // CANONIEKE volgorde: Besteed → Vertoningen → Bereik → CPM → Klikken → CTR → CPC → Leads → CPL → Frequentie.
   var items=[['Besteed',arEur(c.spend,cur),'spend'],['Vertoningen',arNum(c.impressions),'impressions'],['Bereik',arNum(c.reach),'reach'],['CPM',arEur(c.cpm,cur),'cpm'],['Klikken',arNum(c.linkClicks||c.clicks),'linkClicks'],['CTR',arPct(c.ctr),'ctr'],['CPC',arEur(c.cpc,cur),'cpc']];
-  if(hasLeads){ items.push(['Leads',arNum(c.leads),'leads']); items.push(['CPL',c.leads?arEur(c.cpl,cur):'–','cpl']); }
+  if(hasLeads){ items.push(['Leads',arNum(c.leads),'leads']); items.push(['CPL',c.leads?arEur(c.cpl,cur):'-','cpl']); }
   items.push(['Frequentie',arDec(c.frequency,2),'frequency']);
   return adsCampKpiGrid('meta',c,cur,items);
 }
@@ -2224,9 +2224,9 @@ function adsRichMergeAds(ads){
 function _arGridCols(cols){ return cols.map(function(col,i){ return i===0?'minmax(190px,2.2fr)':(col[0]==='status'?'46px':(col[2]?'minmax(72px,1fr)':'minmax(96px,1fr)')); }).join(' '); }
 function _arCell(key,r,cur){
   switch(key){
-    case 'name': var _nm='<span class="ar-nm" title="'+esc(r.name||'')+'">'+esc(r.name||'–')+'</span>'+(r.merged?' <span class="ar-star" title="'+r.count+' advertenties met dezelfde naam, samengeteld">★'+r.count+'</span>':''); return r._cid?'<button class="ar-namebtn" type="button" onclick="adsRichAdVisual(\''+esc(r._cid)+'\',\''+encodeURIComponent(r.name||'')+'\')" title="Bekijk de visual van deze advertentie">'+_nm+'</button>':_nm;
+    case 'name': var _nm='<span class="ar-nm" title="'+esc(r.name||'')+'">'+esc(r.name||'-')+'</span>'+(r.merged?' <span class="ar-star" title="'+r.count+' advertenties met dezelfde naam, samengeteld">★'+r.count+'</span>':''); return r._cid?'<button class="ar-namebtn" type="button" onclick="adsRichAdVisual(\''+esc(r._cid)+'\',\''+encodeURIComponent(r.name||'')+'\')" title="Bekijk de visual van deze advertentie">'+_nm+'</button>':_nm;
     case 'status': return adsRichStatus(r.status);
-    case 'text': return '<span class="ar-nm" title="'+esc(r.text||'')+'">'+esc(r.text||'–')+'</span>';
+    case 'text': return '<span class="ar-nm" title="'+esc(r.text||'')+'">'+esc(r.text||'-')+'</span>';
     case 'matchType': return esc(_gMatch(r.matchType));
     case 'campaign': return '<span class="ar-nm" title="'+esc(r.campaign||'')+'">'+esc(r.campaign||'')+'</span>';
   }
@@ -2241,10 +2241,10 @@ function _arCell(key,r,cur){
     case 'cpc': v=arEur(r.cpc,cur); break;
     case 'cpm': v=arEur(r.cpm,cur); break;
     case 'leads': v=arNum(r.leads); break;
-    case 'cpl': v=r.leads?arEur(r.cpl,cur):'–'; break;
+    case 'cpl': v=r.leads?arEur(r.cpl,cur):'-'; break;
     case 'frequency': v=arDec(r.frequency,2); break;
     case 'conversions': v=arDec(r.conversions,2); break;
-    case 'costPerConv': v=r.conversions?arEur(r.costPerConv,cur):'–'; break;
+    case 'costPerConv': v=r.conversions?arEur(r.costPerConv,cur):'-'; break;
     case 'convValue': v=arEur(r.convValue,cur); break;
     case 'convRate': v=arPct(r.convRate); break;
     default: return '';
@@ -2267,7 +2267,7 @@ function adsRichSort(cid,which,key){ var s=arSortState(cid,which); if(s.key===ke
 function adsRichOptimList(camps){
   var recs=[];
   (camps||[]).forEach(function(c){
-    if(c.frequency>7) recs.push(['orange','Hoge frequentie bij “'+(c.name||'campagne')+'”','Frequentie '+arDec(c.frequency,1)+'× — dezelfde mensen zien je ad vaak. Overweeg nieuwe visuals of een breder publiek.']);
+    if(c.frequency>7) recs.push(['orange','Hoge frequentie bij “'+(c.name||'campagne')+'”','Frequentie '+arDec(c.frequency,1)+'×, dezelfde mensen zien je ad vaak. Overweeg nieuwe visuals of een breder publiek.']);
     if((c.adsets||[]).length>1){ var tot=c.adsets.reduce(function(a,x){return a+(x.spend||0);},0); var top=c.adsets.slice().sort(function(a,b){return b.spend-a.spend;})[0]; if(tot>0 && top && top.spend/tot>0.6) recs.push(['blue','Budget geconcentreerd in “'+(c.name||'campagne')+'”','Eén adset (“'+(top.name||'')+'”) neemt '+Math.round(top.spend/tot*100)+'% van het budget. Check of de andere adsets genoeg kans krijgen.']); }
     var ads=adsRichMergeAds(c.ads||[]); if(ads.length>3){ var totA=ads.reduce(function(a,x){return a+(x.spend||0);},0); var top3=ads.slice().sort(function(a,b){return b.spend-a.spend;}).slice(0,3).reduce(function(a,x){return a+(x.spend||0);},0); if(totA>0 && top3/totA>0.5) recs.push(['blue','Spend op enkele ads in “'+(c.name||'campagne')+'”','De top 3 advertenties nemen '+Math.round(top3/totA*100)+'% van het budget. Pauzeer zwakke ads of test nieuwe varianten.']); }
     if((c.leads||0)===0 && (c.linkClicks||c.clicks||0)>500) recs.push(['red','Klikken zonder leads bij “'+(c.name||'campagne')+'”',(c.linkClicks||c.clicks)+' klikken maar 0 leads. Controleer de landingspagina/het formulier of de conversie-tracking.']);
@@ -2278,7 +2278,7 @@ function adsRichOptimList(camps){
 function adsRichOptim(camps,cur){
   return adsWsRecsRender(adsRichOptimList(camps));
 }
-/* ---- Chart.js (lazy via CDN) — per-campagne dag-evolutie ---- */
+/* ---- Chart.js (lazy via CDN), per-campagne dag-evolutie ---- */
 function adsRichLoadChart(){ return new Promise(function(res){ if(window.Chart) return res(true); var ex=document.getElementById('s27-chartjs'); if(ex){ ex.addEventListener('load',function(){res(!!window.Chart);}); ex.addEventListener('error',function(){res(false);}); return; } var el=document.createElement('script'); el.id='s27-chartjs'; el.src='https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js'; el.onload=function(){res(!!window.Chart);}; el.onerror=function(){res(false);}; document.head.appendChild(el); }); }
 function _arDayLabel(ymd){ var m=String(ymd||'').match(/(\d{4})-(\d{2})-(\d{2})/); return m?(m[3]+'/'+m[2]):(ymd||''); }
 function adsRichMountCharts(){
@@ -2315,7 +2315,7 @@ function adsOverviewInner(){
   var k=m.kpis||{}, pv=m.prevKpis||null, clab=m.compareLabel||'';
   var resd = pv?('<div class="ads-reschip-d">'+adsKpiDelta(k.results,pv.results)+'<span>vs '+esc(clab)+'</span></div>'):'';
   var resChip='<div class="ads-reschip"><div class="ads-reschip-ic">'+ic('st_approved',20)+'</div><div class="ads-reschip-tx"><div class="ads-reschip-lab">Resultaten in deze periode</div><div class="ads-reschip-num">'+adsNum(k.results)+'</div></div>'+resd+'</div>';
-  // #17: identiek aan de team-weergave — zelfde klikbare KPI-kaarten + dezelfde Chart.js dag-grafiek.
+  // #17: identiek aan de team-weergave, zelfde klikbare KPI-kaarten + dezelfde Chart.js dag-grafiek.
   var grid=adsRichKpiGrid(k, pv, cur, clab);
   var rows=_adsClientRows(m);
   var chart='<div class="ar-camp" style="margin-top:14px"><div class="ar-camp-head"><span class="ar-camp-nm">Overzicht per dag</span></div>'
@@ -2327,7 +2327,7 @@ function adsOverviewInner(){
 }
 
 /* =============================================================================
-   GOOGLE ADS — client-weergave (beknopt, real-time). Meta/Google-schakelaar op de
+   GOOGLE ADS, client-weergave (beknopt, real-time). Meta/Google-schakelaar op de
    bestaande platform-scaffolding (setAdsPlatform / state._adsPlatform / ADS_PLAT).
    Hergebruikt dezelfde periodebalk (adsPeriodBar/adsReload) + KPI-/trend-helpers als
    Meta. Geen creatives (Google Ads kent geen vergelijkbaar visueel postmodel).
@@ -2409,7 +2409,7 @@ function googleTrendBlock(){
   return '<div class="card ads-trend" id="gadsTrendBox" style="padding:15px 18px 12px"><div class="ads-thead"><h3>Evolutie per dag</h3><div class="ads-tchips">'+chips+'</div></div>'+svg+'</div>';
 }
 /* =============================================================================
-   GOOGLE ADS — TEAM-WEERGAVE (uitgebreide rapportage, staff). Spiegelt de Meta-rich-
+   GOOGLE ADS, TEAM-WEERGAVE (uitgebreide rapportage, staff). Spiegelt de Meta-rich-
    view (zelfde ar- en arkpi-CSS + Chart.js + subnav-tabs), maar met Google-metrics:
    conversies/waarde/CPA/conv.ratio + vertonings-aandeel + adgroep-breakdown + zoekwoorden.
    Data via S27DATA.googleAdsRich() (worker googleAdsRich, is_staff-gated, acting-as).
@@ -2437,7 +2437,7 @@ function googleRichNotLinked(){
 }
 function _gCur(){ var g=(window.S27DATA&&S27DATA.googleAdsRich&&S27DATA.googleAdsRich()); return (g&&g.currency)||'EUR'; }
 function _gFindCamp(cid){ var g=(window.S27DATA&&S27DATA.googleAdsRich&&S27DATA.googleAdsRich()); if(!g||!g.campaigns) return null; for(var i=0;i<g.campaigns.length;i++){ if(String(g.campaigns[i].id)===String(cid)) return g.campaigns[i]; } return null; }
-function _gMatch(mt){ return ({EXACT:'Exact',PHRASE:'Zinsdeel',BROAD:'Breed',BROAD_MATCH_MODIFIER:'Breed+'})[String(mt||'').toUpperCase()]||(mt?_titleCase(mt):'–'); }
+function _gMatch(mt){ return ({EXACT:'Exact',PHRASE:'Zinsdeel',BROAD:'Breed',BROAD_MATCH_MODIFIER:'Breed+'})[String(mt||'').toUpperCase()]||(mt?_titleCase(mt):'-'); }
 function googleAdsBodyRich(){ return adsRichChrome(googleRichSubnav())+'<div id="adsBody">'+googleRichTabBody()+'</div>'+googleRichPdfFooter(); }
 function googleRichSubnav(){
   var t=adsRichTab();
@@ -2495,7 +2495,7 @@ function adsKpiGridGeneric(plat,k,p,cur,cmpLabel){
     }
     return '<div class="arkpi"><div class="arkpi-l">'+lab+'</div><div class="arkpi-v">'+val+'</div>'+(d?'<div class="arkpi-d">'+d+'</div>':'')+'</div>';
   }
-  // CANONIEKE METRIEK-VOLGORDE (taak 1+7) — elke metric is nu klikbaar (zit in ADS_SEL_METRICS).
+  // CANONIEKE METRIEK-VOLGORDE (taak 1+7), elke metric is nu klikbaar (zit in ADS_SEL_METRICS).
   var cards;
   if(g){
     cards=[
@@ -2506,7 +2506,7 @@ function adsKpiGridGeneric(plat,k,p,cur,cmpLabel){
       card('CTR',arPct(k.ctr),'ctr',false),
       card('CPC',arEur(k.cpc,cur),'cpc',true,fE),
       card('Leads',arDec(k.conversions,2),'conversions',false,fD),
-      card('CPL',k.conversions?arEur(k.costPerConv,cur):'–','costPerConv',true,fE),
+      card('CPL',k.conversions?arEur(k.costPerConv,cur):'-','costPerConv',true,fE),
       card('Waarde',arEur(k.convValue,cur),'convValue',false,fE),
       card('Leadratio',arPct(k.convRate),'convRate',false)
     ];
@@ -2521,7 +2521,7 @@ function adsKpiGridGeneric(plat,k,p,cur,cmpLabel){
       card('CTR', arPct(k.ctr), 'ctr', false),
       card('CPC', arEur(k.cpc,cur), 'cpc', true, fE)
     ];
-    if(hasLeads){ cards.push(card('Leads', arNum(k.leads), 'leads', false, fN)); cards.push(card('Cost per lead', k.leads?arEur(k.cpl,cur):'–', 'cpl', true, fE)); }
+    if(hasLeads){ cards.push(card('Leads', arNum(k.leads), 'leads', false, fN)); cards.push(card('Cost per lead', k.leads?arEur(k.cpl,cur):'-', 'cpl', true, fE)); }
     cards.push(card('Frequentie', arDec(k.frequency,2), 'frequency', true, fD));
   }
   var note=(p && cmpLabel)?'<div class="arkpi-note">Vergeleken met '+esc(cmpLabel)+'</div>':'';
@@ -2536,7 +2536,7 @@ function googleRichSamengevat(g,cur){
 }
 function googleRichCampKpis(c,cur){
   // CANONIEKE Google-volgorde: Besteed → Vertoningen → CPM → Klikken → CTR → CPC → Leads → CPL → Waarde → Leadratio.
-  var items=[['Besteed',arEur(c.spend,cur),'spend'],['Vertoningen',arNum(c.impressions),'impressions'],['CPM',arEur(c.cpm,cur),'cpm'],['Klikken',arNum(c.clicks),'clicks'],['CTR',arPct(c.ctr),'ctr'],['CPC',arEur(c.cpc,cur),'cpc'],['Leads',arDec(c.conversions,2),'conversions'],['CPL',c.conversions?arEur(c.costPerConv,cur):'–','costPerConv'],['Waarde',arEur(c.convValue,cur),'convValue'],['Leadratio',arPct(c.convRate),'convRate']];
+  var items=[['Besteed',arEur(c.spend,cur),'spend'],['Vertoningen',arNum(c.impressions),'impressions'],['CPM',arEur(c.cpm,cur),'cpm'],['Klikken',arNum(c.clicks),'clicks'],['CTR',arPct(c.ctr),'ctr'],['CPC',arEur(c.cpc,cur),'cpc'],['Leads',arDec(c.conversions,2),'conversions'],['CPL',c.conversions?arEur(c.costPerConv,cur):'-','costPerConv'],['Waarde',arEur(c.convValue,cur),'convValue'],['Leadratio',arPct(c.convRate),'convRate']];
   return adsCampKpiGrid('google',c,cur,items);
 }
 function googleRichCampaign(c,cur){
@@ -2589,8 +2589,8 @@ function googleRichOptimList(g){
   var recs=[]; var camps=(g.campaigns||[]);
   camps.forEach(function(c){
     if((c.conversions||0)===0 && (c.clicks||0)>300) recs.push(['red','Klikken zonder conversies bij &ldquo;'+esc(c.name||'campagne')+'&rdquo;',arNum(c.clicks)+' klikken maar 0 conversies. Controleer de landingspagina, het formulier of de conversie-tracking.']);
-    if(c.imprShare>0 && c.imprShare<40 && (c.spend||0)>0) recs.push(['orange','Laag vertonings-aandeel bij &ldquo;'+esc(c.name||'campagne')+'&rdquo;','Vertonings-aandeel '+arPct(c.imprShare)+' — je mist vertoningen. Een hoger budget of een betere kwaliteitsscore kan helpen.']);
-    if(c.ctr>0 && c.ctr<2 && (c.impressions||0)>1000) recs.push(['blue','Lage CTR bij &ldquo;'+esc(c.name||'campagne')+'&rdquo;','CTR '+arPct(c.ctr)+' — test scherpere advertentieteksten of relevantere zoekwoorden.']);
+    if(c.imprShare>0 && c.imprShare<40 && (c.spend||0)>0) recs.push(['orange','Laag vertonings-aandeel bij &ldquo;'+esc(c.name||'campagne')+'&rdquo;','Vertonings-aandeel '+arPct(c.imprShare)+', je mist vertoningen. Een hoger budget of een betere kwaliteitsscore kan helpen.']);
+    if(c.ctr>0 && c.ctr<2 && (c.impressions||0)>1000) recs.push(['blue','Lage CTR bij &ldquo;'+esc(c.name||'campagne')+'&rdquo;','CTR '+arPct(c.ctr)+', test scherpere advertentieteksten of relevantere zoekwoorden.']);
   });
   var noConvKw=(g.keywords||[]).filter(function(k){return (k.conversions||0)===0 && (k.spend||0)>0;}).sort(function(a,b){return b.spend-a.spend;})[0];
   if(noConvKw && noConvKw.spend>0) recs.push(['orange','Besteding op niet-converterend zoekwoord','&ldquo;'+esc(noConvKw.text||'')+'&rdquo; gaf '+arEur(noConvKw.spend,_gCur())+' uit zonder conversie. Overweeg het te pauzeren of als uitsluitings-zoekwoord toe te voegen.']);
@@ -2660,7 +2660,7 @@ function adsWsStyles(){ if(document.getElementById('adsWsStyles'))return; var s=
 }
 // Aanbevelingen worden per SCOPE getagd (Vincent): één uniforme lijst waarin elke aanbeveling
 // gekoppeld is aan Meta Ads, Google Ads of iets algemeens (website e.d.). Bij het toevoegen kies
-// je de scope. (Het 'cat'-veld op een rec bevat nu de scope — backward-compatibel met de opslag.)
+// je de scope. (Het 'cat'-veld op een rec bevat nu de scope, backward-compatibel met de opslag.)
 // 4e element = [tint-achtergrond, ink-kleur]: Meta=blauw, Google=oranje, Algemeen=leisteen. NOOIT rood.
 var ADS_WS_CATS=[
   ['meta','Meta Ads','st_progress',['rgba(48,131,220,.12)','#1F5FA8']],
@@ -2711,7 +2711,7 @@ function adsWsRecsRender(seedList){
       ws.recs=saved.recs.map(function(r){ return { id:r.id||adsWsRid(), cat:(ADS_WS_SCOPES[r.cat]?r.cat:'algemeen'), title:r.title||'', body:r.body||'' }; });   // oude categorie-recs -> 'Algemeen'
       ws.seededFromSaved=true;
     } else {
-      // Vincent: GEEN automatische standaard-aanbevelingen meer — de tab start LEEG (Meta én Google),
+      // Vincent: GEEN automatische standaard-aanbevelingen meer, de tab start LEEG (Meta én Google),
       // het team voegt enkel manueel toe. (seedList wordt genegeerd; de auto-generatoren blijven enkel
       // voor de PDF-export bestaan.)
       ws.recs=[];
@@ -2952,7 +2952,7 @@ function googleRichBuildCampChart(c,cur){
     has:function(k){ return (c.daily||[]).some(function(d){ return Number(d[k])>0; }); } });
 }
 /* =============================================================================
-   #23 — GOOGLE MAANDOVERZICHT (team). Eén grote, dynamische Chart.js-grafiek over
+   #23, GOOGLE MAANDOVERZICHT (team). Eén grote, dynamische Chart.js-grafiek over
    12 maanden. Toggle-chips bepalen welke CAMPAGNES meetellen en welke METRICS
    geplot worden (Besteding · Conversies · Conv.waarde · Klikken). De selectie blijft
    bewaard over renders heen (state + localStorage). Data via DATA.loadGoogleMonthly().
@@ -2995,7 +2995,7 @@ function googleMonthlyTab(){
   var camps=(gm.campaigns||[]); _gMonthEnsureCamps(camps);
   var sel=gMonthSel();
   var metricChips=G_MONTH_METRICS.map(function(m){ return '<button class="ads-mchip'+(sel.metrics[m.key]?' on':'')+'" style="--mc:'+m.color+'" onclick="gMonthToggleMetric(\''+m.key+'\')"><span class="ads-mdot"></span>'+esc(m.label)+'</button>'; }).join('');
-  var campChips=camps.length?camps.map(function(c){ var id=String(c.id); return '<button class="ads-mchip'+(sel.camps[id]?' on':'')+'" style="--mc:#3083DC" onclick="gMonthToggleCamp(\''+esc(id)+'\')"><span class="ads-mdot"></span>'+esc(c.name||'Campagne')+'</button>'; }).join(''):'<span class="ads-mhint" style="margin:0">Geen campagne-uitsplitsing beschikbaar — de grafiek toont het accounttotaal.</span>';
+  var campChips=camps.length?camps.map(function(c){ var id=String(c.id); return '<button class="ads-mchip'+(sel.camps[id]?' on':'')+'" style="--mc:#3083DC" onclick="gMonthToggleCamp(\''+esc(id)+'\')"><span class="ads-mdot"></span>'+esc(c.name||'Campagne')+'</button>'; }).join(''):'<span class="ads-mhint" style="margin:0">Geen campagne-uitsplitsing beschikbaar, de grafiek toont het accounttotaal.</span>';
   return '<div class="section-head" style="margin-top:2px"><h2>Maandoverzicht</h2><span class="count">'+months.length+' mnd</span></div>'
     +'<p class="ads-mhint">Kies welke campagnes meetellen en welke statistieken je in de grafiek wil zien. Je keuze blijft bewaard.</p>'
     +'<div class="ads-mctl">'
@@ -3052,12 +3052,12 @@ function _gPdfCharts(g,cur){
 }
 function _gPdfAgTable(c,cur){
   var ags=(c.adGroups||[]).slice(0,8); if(!ags.length) return '';
-  var rows=ags.map(function(a){ return '<tr><td>'+esc(a.name||'–')+'</td><td class="num">'+metaEur(a.spend,cur)+'</td><td class="num">'+arNum(a.clicks)+'</td><td class="num">'+arPct(a.ctr)+'</td><td class="num">'+arDec(a.conversions,2)+'</td></tr>'; }).join('');
+  var rows=ags.map(function(a){ return '<tr><td>'+esc(a.name||'-')+'</td><td class="num">'+metaEur(a.spend,cur)+'</td><td class="num">'+arNum(a.clicks)+'</td><td class="num">'+arPct(a.ctr)+'</td><td class="num">'+arDec(a.conversions,2)+'</td></tr>'; }).join('');
   return '<table><thead><tr><th>Advertentiegroep</th><th class="num">Besteed</th><th class="num">Klikken</th><th class="num">CTR</th><th class="num">Leads</th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
 function _gPdfKwTable(kws,cur){
   var top=(kws||[]).slice(0,15); if(!top.length) return '';
-  var rows=top.map(function(w){ return '<tr><td>'+esc(w.text||'–')+'</td><td>'+esc(w.campaign||'')+'</td><td class="num">'+metaEur(w.spend,cur)+'</td><td class="num">'+arNum(w.clicks)+'</td><td class="num">'+arPct(w.ctr)+'</td><td class="num">'+arDec(w.conversions,2)+'</td></tr>'; }).join('');
+  var rows=top.map(function(w){ return '<tr><td>'+esc(w.text||'-')+'</td><td>'+esc(w.campaign||'')+'</td><td class="num">'+metaEur(w.spend,cur)+'</td><td class="num">'+arNum(w.clicks)+'</td><td class="num">'+arPct(w.ctr)+'</td><td class="num">'+arDec(w.conversions,2)+'</td></tr>'; }).join('');
   return '<table><thead><tr><th>Zoekwoord</th><th>Campagne</th><th class="num">Besteed</th><th class="num">Klikken</th><th class="num">CTR</th><th class="num">Leads</th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
 function googleAdsPdf(){
@@ -3066,7 +3066,7 @@ function googleAdsPdf(){
   var company=(state._adminActiveName||(window.S27DATA&&S27DATA.bedrijfsnaam&&S27DATA.bedrijfsnaam())||'Klant');
   var imgs=_gPdfCharts(g,cur);
   function kc(lab,val,key,inv){ return '<div class="pdf-kpi"><div class="l">'+lab+'</div><div class="v">'+val+'</div>'+(p?_pdfDelta(k[key],p[key],inv):'')+'</div>'; }
-  var kpis='<div class="pdf-kpis">'+[kc('Besteed',metaEur(k.spend,cur),'spend',true),kc('Leads',arDec(k.conversions,2),'conversions',false),kc('Leadwaarde',metaEur(k.convValue,cur),'convValue',false),kc('CPL',k.conversions?metaEur(k.costPerConv,cur):'–','costPerConv',true),kc('Leadratio',arPct(k.convRate),'convRate',false),kc('Klikken',arNum(k.clicks),'clicks',false),kc('Vertoningen',arNum(k.impressions),'impressions',false),kc('CTR',arPct(k.ctr),'ctr',false),kc('CPC',metaEur(k.cpc,cur),'cpc',true),kc('CPM',metaEur(k.cpm,cur),'cpm',true)].join('')+'</div>';
+  var kpis='<div class="pdf-kpis">'+[kc('Besteed',metaEur(k.spend,cur),'spend',true),kc('Leads',arDec(k.conversions,2),'conversions',false),kc('Leadwaarde',metaEur(k.convValue,cur),'convValue',false),kc('CPL',k.conversions?metaEur(k.costPerConv,cur):'-','costPerConv',true),kc('Leadratio',arPct(k.convRate),'convRate',false),kc('Klikken',arNum(k.clicks),'clicks',false),kc('Vertoningen',arNum(k.impressions),'impressions',false),kc('CTR',arPct(k.ctr),'ctr',false),kc('CPC',metaEur(k.cpc,cur),'cpc',true),kc('CPM',metaEur(k.cpm,cur),'cpm',true)].join('')+'</div>';
   var accImg=imgs.account?'<div class="pdf-chart"><div style="font-weight:800;font-size:10px;margin-bottom:4px">Account-overzicht per dag (besteding · klikken · leads)</div><img src="'+imgs.account+'"></div>':'';
   var camps=(g.campaigns||[]).map(function(c){
     var img=imgs['c'+c.id]?'<div class="pdf-chart"><img src="'+imgs['c'+c.id]+'"></div>':'';
@@ -3079,9 +3079,9 @@ function googleAdsPdf(){
     +'<h2 class="pdf-sec">Campagnes ('+(g.campaigns||[]).length+')</h2>'+(camps||'<p style="font-size:10px;color:#6B5B6B">Geen campagnes met activiteit in deze periode.</p>')
     +(kwTable?'<h2 class="pdf-sec">Top-zoekwoorden</h2>'+kwTable:'')
     +'<h2 class="pdf-sec">Optimalisatie-aanbevelingen</h2>'+recs;
-  _pdfOpen(s27PdfShell('Google Ads-rapport — '+company,'Google Ads-rapport',company+' · '+_pdfPeriodFromUI('ads'),body));
+  _pdfOpen(s27PdfShell('Google Ads-rapport, '+company,'Google Ads-rapport',company+' · '+_pdfPeriodFromUI('ads'),body));
 }
-// item 9: openMetaCampaign/closeMetaCampaign/metaCampaignDetail (paginavervanging) verwijderd —
+// item 9: openMetaCampaign/closeMetaCampaign/metaCampaignDetail (paginavervanging) verwijderd -
 // campagnes openen nu inline via toggleMetaCampaign().
 function _adsChev(){ return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>'; }
 function metaAdRow(a,i,cur){
@@ -3127,7 +3127,7 @@ function _metaLbMedia(a){
     // De fbcdn-source is kort geldig, dus toon ALTIJD ook de permalink-fallback zodat de klant bij een verlopen video kan doorklikken.
     var flink=plink?'<a class="meta-lb-permalink" href="'+esc(plink)+'" target="_blank" rel="noopener">'+ic('play',14)+' Bekijk op Facebook</a>':'';
     // SNELHEID (Vincent): de pop-up opent meteen met de scherpe still; de (zware, full-res) video wordt NIET vooraf
-    // gedownload (preload="none", geen autoplay). Voor "welke visuals staan live?" volstaat de still — afspelen
+    // gedownload (preload="none", geen autoplay). Voor "welke visuals staan live?" volstaat de still, afspelen
     // laadt de video pas op de play-knop. Meta levert geen lichtere video-resolutie, dus dit is de snelste weg.
     // kolom-wrapper zodat de permalink-fallback ONDER de video/poster komt (niet ernaast in de flex-row van .meta-lb-stage)
     if(vsrc) return '<div class="meta-lb-stage"><div class="meta-lb-col"><video class="meta-lb-vid" controls playsinline preload="none" poster="'+esc(poster)+'" src="'+esc(vsrc)+'" data-fb="'+esc(plink)+'" onerror="metaMediaErr(this)"></video>'+flink+'</div></div>';
@@ -3214,7 +3214,7 @@ function openMetaCreative(i){
   var a=(state._metaAdsView||[])[i]; if(!a) return;
   _metaLbCar=null; // reset carrousel-state: pijltjes mogen nooit op een vorige carrousel inwerken
   metaEnsureStyles();
-  // 1) Open de lightbox-shell ONMIDDELLIJK met een spinner — directe klik-feedback.
+  // 1) Open de lightbox-shell ONMIDDELLIJK met een spinner, directe klik-feedback.
   var ov=document.getElementById('metaLightbox');
   if(!ov){ ov=document.createElement('div'); ov.id='metaLightbox'; ov.className='meta-lb'; ov.addEventListener('click',metaCloseLightbox); document.body.appendChild(ov); }
   ov.innerHTML='<div class="meta-lb-box" onclick="event.stopPropagation()"><div class="meta-lb-stage"><div class="meta-lb-load"><div class="brand-spinner"></div><span>Voorbeeld laden…</span></div></div><div class="meta-lb-cap"><span>'+esc(a.name||'Advertentie')+'</span><button class="btn btn-ghost btn-sm" onclick="metaCloseLightbox()">Sluiten</button></div></div>';
@@ -3223,13 +3223,13 @@ function openMetaCreative(i){
   // 2) Vul de echte media in (volgende frame, zodat de spinner zeker geverfd is).
   requestAnimationFrame(function(){
     var cur=document.getElementById('metaLightbox'); if(!cur || cur.style.display==='none') return;
-    var note=((a.creativeMedia&&a.creativeMedia.type==='video')||a.format==='video') && !((a.creativeMedia&&a.creativeMedia.video)||a.videoSrc||(a.creativeMedia&&a.creativeMedia.permalink)||a.videoPermalink)?' — video niet beschikbaar':'';
+    var note=((a.creativeMedia&&a.creativeMedia.type==='video')||a.format==='video') && !((a.creativeMedia&&a.creativeMedia.video)||a.videoSrc||(a.creativeMedia&&a.creativeMedia.permalink)||a.videoPermalink)?', video niet beschikbaar':'';
     cur.innerHTML='<div class="meta-lb-box" onclick="event.stopPropagation()">'+_metaLbMedia(a)+'<div class="meta-lb-cap"><span>'+esc(a.name||'Advertentie')+note+'</span><button class="btn btn-ghost btn-sm" onclick="metaCloseLightbox()">Sluiten</button></div></div>';
     if(_metaLbCar) metaCarTo(0);   // pre-hydrateer kaart 1 (+buur 2) zodat eerste bladeren vlot is
   });
 }
 // preload bij hover: trek de full-res image/poster van deze ad alvast in cache zodat de lightbox bijna instant opent.
-// NIET de .mp4 (te zwaar) — enkel de poster/foto. Eénmalig per ad (a.__pl).
+// NIET de .mp4 (te zwaar), enkel de poster/foto. Eénmalig per ad (a.__pl).
 function metaPreloadCreative(i){
   try{
     var a=(state._metaAdsView||[])[i]; if(!a||a.__pl) return; a.__pl=1;
@@ -3241,9 +3241,9 @@ function metaPreloadCreative(i){
   }catch(e){}
 }
 
-// (Resultaten-tab verwijderd — alle advertentiedata staat nu real-time op de Advertenties-tab via metaAds.)
+// (Resultaten-tab verwijderd, alle advertentiedata staat nu real-time op de Advertenties-tab via metaAds.)
 
-// Meetings-tab: geen hero (op vraag verwijderd — gaf te veel ruimteverlies). Frisse
+// Meetings-tab: geen hero (op vraag verwijderd, gaf te veel ruimteverlies). Frisse
 // overzicht-kaarten + "nog in te plannen"-signaal + de plan-tunnel (3 ingangen) die de
 // schermvullende planner-overlay opent (openMeetingPlanner in portal.js).
 function panelMeetings(){
@@ -3259,7 +3259,7 @@ function panelMeetings(){
       ? `<a class="mcard-cta btn btn-branch br-blue btn-sm" href="${esc(m.link)}" target="_blank" rel="noopener">Deelnemen</a>`
       : `<button class="mcard-cta btn btn-outline btn-sm" onclick="meetRoute()">Route ${ic('pin',14)}</button>`;
     return `<div class="mcard">
-      <div class="mcard-date ${online?'br-blue':'br-orange'}"><span class="d">${d?d.getDate():'–'}</span><span class="mo">${d?MAAND[d.getMonth()]:''}</span></div>
+      <div class="mcard-date ${online?'br-blue':'br-orange'}"><span class="d">${d?d.getDate():'-'}</span><span class="mo">${d?MAAND[d.getMonth()]:''}</span></div>
       <div class="mcard-main">
         <span class="mcard-type">${online?ic('video',13):ic('cal',13)} ${esc(typeLabel)}</span>
         <b class="mcard-ttl">${esc(m.titel||'Meeting')}</b>
@@ -3303,7 +3303,7 @@ function panelMeetings(){
       </section>
       <aside class="card meet2-plan">
         <h3 class="meet2-plan-h">Plan een meeting</h3>
-        <p class="meet2-plan-sub">Kies wat je wil bespreken — je prikt zelf een vrij moment.</p>
+        <p class="meet2-plan-sub">Kies wat je wil bespreken, je prikt zelf een vrij moment.</p>
         <button class="planopt" onclick="openMeetingPlanner('algemeen')"><span class="planopt-ic br-blue">${ic('msg',20)}</span><span class="planopt-tx"><b>Algemene meeting</b><span>Bijpraten over de samenwerking</span></span>${ic('arrow',16)}</button>
         ${isRichView()?`<button class="planopt" onclick="openMeetingPlanner('project')"><span class="planopt-ic br-purple">${ic('video',20)}</span><span class="planopt-tx"><b>Projectmeeting</b><span>Over een lopend project</span></span>${ic('arrow',16)}</button>`:''}
         <button class="planopt" onclick="openMeetingPlanner('nieuw')"><span class="planopt-ic br-orange">${ic('spark',20)}</span><span class="planopt-tx"><b>Nieuw project</b><span>Iets nieuws opstarten</span></span>${ic('arrow',16)}</button>
@@ -3321,11 +3321,11 @@ function _meetingsTodo(){
 function meetRoute(){ window.open('https://www.google.com/maps/search/?api=1&query=Studio+27+Merksplassesteenweg+97+2310+Rijkevorsel','_blank','noopener'); }
 
 const NP_OPTIONS = {
-  'Strategie':[['Merkstrategie','€ 1.800 – € 3.500'],['Communicatiestrategie','€ 1.200 – € 2.800'],['Employer branding','€ 2.000 – € 4.000']],
-  'Video- en fotografie':[['Bedrijfsfilm (1–2 min)','€ 2.450 – € 3.200'],["Socialvideo's (pakket van 4)",'€ 1.200 – € 1.800'],['Fotoreportage','€ 750 – € 1.400']],
-  'Website & SEO':[['Onepager','€ 1.500 – € 2.500'],['Bedrijfswebsite','€ 3.500 – € 7.000'],['Webshop','€ 6.000 – € 12.000'],['SEO-traject','€ 600 – € 1.200 / maand']],
-  'Online adverteren':[['Google Ads-beheer','€ 500 – € 1.500 / maand'],['Meta Ads-beheer','€ 500 – € 1.500 / maand'],['Volledig advertentiebeheer','€ 1.200 – € 2.500 / maand']],
-  'Social media':[['Contentbeheer (4 posts/week)','€ 800 – € 1.400 / maand'],['Volledig beheer + ads','€ 1.500 – € 2.800 / maand']],
+  'Strategie':[['Merkstrategie','€ 1.800 - € 3.500'],['Communicatiestrategie','€ 1.200 - € 2.800'],['Employer branding','€ 2.000 - € 4.000']],
+  'Video- en fotografie':[['Bedrijfsfilm (1-2 min)','€ 2.450 - € 3.200'],["Socialvideo's (pakket van 4)",'€ 1.200 - € 1.800'],['Fotoreportage','€ 750 - € 1.400']],
+  'Website & SEO':[['Onepager','€ 1.500 - € 2.500'],['Bedrijfswebsite','€ 3.500 - € 7.000'],['Webshop','€ 6.000 - € 12.000'],['SEO-traject','€ 600 - € 1.200 / maand']],
+  'Online adverteren':[['Google Ads-beheer','€ 500 - € 1.500 / maand'],['Meta Ads-beheer','€ 500 - € 1.500 / maand'],['Volledig advertentiebeheer','€ 1.200 - € 2.500 / maand']],
+  'Social media':[['Contentbeheer (4 posts/week)','€ 800 - € 1.400 / maand'],['Volledig beheer + ads','€ 1.500 - € 2.800 / maand']],
 };
 function npDienst(){
   const d=document.getElementById('npDienst').value;
@@ -3351,7 +3351,7 @@ function offerteRequestForm(){
     <div class="field np-hidden" id="npField2"><label>Wat heb je ongeveer nodig?</label>
       <select id="npType" onchange="npType()"><option value="">Kies…</option></select></div>
     <div class="field np-hidden" id="npField3"><label>Wanneer wil je graag starten?</label>
-      <select id="npWhen"><option>Zo snel mogelijk</option><option>Binnen 1–3 maanden</option><option>Ik ben nog aan het oriënteren</option></select></div>
+      <select id="npWhen"><option>Zo snel mogelijk</option><option>Binnen 1-3 maanden</option><option>Ik ben nog aan het oriënteren</option></select></div>
     <div class="richtprijs br-blue np-hidden" id="npPrice">
       <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap"><span class="rp-lab">Richtprijs</span><span class="big" id="npPriceVal" style="color:var(--s27-blue-ink)">-</span></div>
       <div class="disclaimer">${ic('info',16)} Dit is een richtprijs, wij kijken ze persoonlijk na.</div>
@@ -3383,8 +3383,8 @@ function huisstijlSecties(){
   <div class="setsec">
     <h3>Fonts</h3><p class="sdesc">De lettertypes die we voor je gebruiken.</p>
     <div style="display:flex;gap:14px;flex-wrap:wrap">
-      <div class="filecard" style="min-width:220px"><div class="ft" style="font-family:var(--font-display);font-weight:900;color:var(--ink)">Aa</div><div><div class="fn">Montserrat</div><div class="fs">Display · 700–900</div></div></div>
-      <div class="filecard" style="min-width:220px"><div class="ft" style="font-family:var(--font-body);font-weight:800;color:var(--ink)">Aa</div><div><div class="fn">Nunito</div><div class="fs">Body · 400–700</div></div></div>
+      <div class="filecard" style="min-width:220px"><div class="ft" style="font-family:var(--font-display);font-weight:900;color:var(--ink)">Aa</div><div><div class="fn">Montserrat</div><div class="fs">Display · 700-900</div></div></div>
+      <div class="filecard" style="min-width:220px"><div class="ft" style="font-family:var(--font-body);font-weight:800;color:var(--ink)">Aa</div><div><div class="fn">Nunito</div><div class="fs">Body · 400-700</div></div></div>
     </div>
   </div>`;
 }
@@ -3714,11 +3714,11 @@ function closeOfferteWizard(){
   document.removeEventListener('keydown',owEsc);
   document.body.classList.remove('mp-lock');
   if(state.ow && state.ow.note!=null) state._offerteOpm=state.ow.note;   // notitie net zo persistent als de mand
-  state.ow=null;   // selectie (state._offerteCart) blijft bewust bewaard — heropenen = verder waar je was
+  state.ow=null;   // selectie (state._offerteCart) blijft bewust bewaard, heropenen = verder waar je was
 }
 
 /* =============================================================================
-   OFFERTE-AANVRAAG (KLANT/CLIENTVIEW) — vrije tekst + diensten i.p.v. de budget-wizard.
+   OFFERTE-AANVRAAG (KLANT/CLIENTVIEW), vrije tekst + diensten i.p.v. de budget-wizard.
    Korte omschrijving (verplicht) = de taaktitel; bericht (verplicht) = de taakomschrijving;
    diensten (≥1) bepalen welke offerte-blokken meekomen. Submit -> ENDPOINTS.offerteAanvraag.
    ============================================================================= */
@@ -3829,8 +3829,8 @@ function owSetFilter(k){
 function owStep1(){
   // mand kan al gevuld zijn (terug via "Nog een dienst toevoegen") -> toon het lopend aantal + snelle weg terug
   var n=offCartCount();
-  var cartHint = n ? ('<div class="ow-cartback">'+ic('cart',16)+'<span><b>'+n+' product'+(n===1?'':'en')+'</b> in je selectie ('+offEur(offCartTotal())+') — kies nog een tak of bekijk je samenstelling.</span><button type="button" class="btn btn-outline btn-sm" onclick="owPickFilterAlles()">Verder met je selectie '+ic('arrow',15)+'</button></div>') : '';
-  return '<p class="mp-intro">Kies de tak waarin je iets wil opstarten. Je kan gerust meerdere takken combineren — alles komt in dezelfde aanvraag.</p>'
+  var cartHint = n ? ('<div class="ow-cartback">'+ic('cart',16)+'<span><b>'+n+' product'+(n===1?'':'en')+'</b> in je selectie ('+offEur(offCartTotal())+'), kies nog een tak of bekijk je samenstelling.</span><button type="button" class="btn btn-outline btn-sm" onclick="owPickFilterAlles()">Verder met je selectie '+ic('arrow',15)+'</button></div>') : '';
+  return '<p class="mp-intro">Kies de tak waarin je iets wil opstarten. Je kan gerust meerdere takken combineren, alles komt in dezelfde aanvraag.</p>'
     +cartHint
     +'<div class="ow-takgrid">'+OW_TAKKEN.map(function(t){
       return '<button class="ow-tak br-'+t.br+'" onclick="owPickTak(\''+t.key+'\')"><span class="mp-host-av ow-stamp"><img src="assets/'+t.stamp+'" width="24" height="24" alt=""></span><span class="mp-host-tx"><b>'+esc(t.label)+'</b><span class="mp-host-tag">'+esc(t.sub)+'</span></span>'+ic('arrow',16)+'</button>';
@@ -3845,7 +3845,7 @@ function owProductRow(p, showGroup){
   var stepper;
   if(p.mand){
     var tk=owTakForGroup(p.group); var tlabel=(tk&&tk.label)||'deze tak';
-    stepper='<div class="off-mand'+(qty>0?' on':'')+'" title="Verplicht — automatisch inbegrepen zodra je iets uit '+esc(tlabel)+' kiest">'+ic(qty>0?'check':'lock',13)+'<span>'+(qty>0?'Inbegrepen':'Verplicht')+'</span></div>';
+    stepper='<div class="off-mand'+(qty>0?' on':'')+'" title="Verplicht, automatisch inbegrepen zodra je iets uit '+esc(tlabel)+' kiest">'+ic(qty>0?'check':'lock',13)+'<span>'+(qty>0?'Inbegrepen':'Verplicht')+'</span></div>';
   } else {
     stepper=qty>0
       ? '<div class="off-step"><button class="off-stepbtn" aria-label="Minder" onclick="owQty(\''+sku+'\',-1)">'+ic('minus',15)+'</button><span class="off-qty">'+qty+'</span><button class="off-stepbtn" aria-label="Meer" onclick="owQty(\''+sku+'\',1)">'+ic('plus',15)+'</button></div>'
@@ -3890,7 +3890,7 @@ function owListHTML(){
   return owTakBlock(tak, false);
 }
 // tak-/groep-filterbalk bovenaan stap 2 (zoals de off-tabs in offBuilderInner): "Alles" + één pill per tak.
-// Wisselen verandert enkel de zichtbare lijst — de mand (state._offerteCart) blijft over alle takken heen gedeeld.
+// Wisselen verandert enkel de zichtbare lijst, de mand (state._offerteCart) blijft over alle takken heen gedeeld.
 function owFilterBar(){
   var s=state.ow||{}; var active=s.filter||s.takKey||'alles'; var cat=offCatalog();
   var allTab='<button class="off-tab'+(active==='alles'?' active':'')+'" role="tab" data-of="alles" onclick="owSetFilter(\'alles\')"><span class="off-tabic">'+ic('cart',15)+'</span>Alles<span class="off-tabn">'+offCartCount()+'</span></button>';
@@ -3916,7 +3916,7 @@ function owRefreshFoot(){ var f=$id('owFoot'); if(f) f.innerHTML=owFootInner(); 
 // "Alles"-filtertab toont het lopende mand-aantal -> mee verversen bij elke wijziging
 function owRefreshAllesBadge(){ var t=document.querySelector('#owFilters .off-tab[data-of="alles"] .off-tabn'); if(t) t.textContent=offCartCount(); }
 // verplichte items (mand) staan present zodra de mand ≥1 NIET-verplicht item van dezelfde tak/groep
-// bevat — en verdwijnen weer zodra het laatste echte item van die tak weg is. Idempotent.
+// bevat, en verdwijnen weer zodra het laatste echte item van die tak weg is. Idempotent.
 function owReconcileMandatory(){
   var cat=offCatalog(), c=offCart(); var real={};
   Object.keys(c).forEach(function(s){ if(c[s]>0){ var p=offBySku(s); if(p && !p.mand) real[p.group]=true; } });
@@ -3927,7 +3927,7 @@ function owAdd(sku){ var p=offBySku(sku); if(!p||p.mand) return; var c=offCart()
 function owQty(sku,d){ var p=offBySku(sku); if(!p||p.mand) return; var c=offCart(); var n=(c[sku]||0)+d; if(n<=0) delete c[sku]; else c[sku]=n; owAfterCart(); }
 const OW_CONTACT={
   verzenden:'Stuur me de offerte direct',
-  akkoord:'Zet in planning — ik ga akkoord',
+  akkoord:'Zet in planning, ik ga akkoord',
   meeting:'Plan eerst een meeting',
   bellen:'Bel me even op'
 };
@@ -3940,7 +3940,7 @@ const OW_CONTACT_SUB={
 function owSetContact(k){ if(!state.ow) return; state.ow.contact=k; document.querySelectorAll('#offWizard .ow-contact .mp-tg').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-k')===k); }); }
 function owStep3(){
   var s=state.ow||{};
-  return '<p class="mp-intro">Vertel kort wat je voor ogen hebt — zo kunnen we je offerte meteen juist uitwerken.</p>'
+  return '<p class="mp-intro">Vertel kort wat je voor ogen hebt, zo kunnen we je offerte meteen juist uitwerken.</p>'
     +'<label class="mp-lbl">Context (optioneel)</label>'
     +'<textarea id="owNote" class="mp-note" rows="4" placeholder="Context, timing, doel…" oninput="state.ow.note=this.value">'+esc(s.note||'')+'</textarea>'
     +'<label class="mp-lbl" style="margin-top:14px">Hoe gaan we verder?</label>'
@@ -3980,12 +3980,12 @@ function owStep4(){
     +groupedRows
     +'<div class="ow-sumrow ow-sumtotal"><span>Totaal (richtprijs)</span><b>'+offEur(offCartTotal())+'</b></div>'
     +(hasOpMaat?'<div class="off-cartnote">Items "op maat" prijzen we persoonlijk in je offerte.</div>':'')
-    +(multiTak?'<div class="off-cartnote">'+ic('info',13)+' Je combineert '+order.length+' diensten in één aanvraag — wij bundelen ze in je offerte.</div>':'')
+    +(multiTak?'<div class="off-cartnote">'+ic('info',13)+' Je combineert '+order.length+' diensten in één aanvraag, wij bundelen ze in je offerte.</div>':'')
     +(String(s.note||'').trim()?'<div class="ow-sumnote"><b>Jouw context:</b> '+esc(s.note)+'</div>':'')
     +'<div class="ow-sumnote"><b>Vervolg:</b> '+esc(OW_CONTACT[s.contact]||OW_CONTACT.verzenden)+'</div>'
   +'</div>'
   +'<button type="button" class="ow-addmore" onclick="owAddMore()">'+ic('plus',16)+' Nog een dienst toevoegen</button>'
-  +'<p class="off-cartdisc" style="margin-top:12px">'+ic('info',14)+' Je krijgt een richtprijs — wij kijken alles persoonlijk na voor je definitieve offerte.</p>';
+  +'<p class="off-cartdisc" style="margin-top:12px">'+ic('info',14)+' Je krijgt een richtprijs, wij kijken alles persoonlijk na voor je definitieve offerte.</p>';
 }
 function owFootInner(){
   var s=state.ow||{}; var tak=owTak(); var br=(tak&&tak.br)||'blue';
@@ -3996,7 +3996,7 @@ function owFootInner(){
   }
   if(s.step===3) return '<button class="btn btn-branch br-'+br+' mp-confirm" onclick="owNext()">Naar bevestiging</button>';
   if(s.step===4){
-    var lbl={verzenden:'Verstuur en toon mijn offerte', akkoord:'Bevestig en zet in planning', meeting:'Verstuur en plan een meeting', bellen:'Verstuur — bel me op'}[s.contact]||'Verstuur aanvraag';
+    var lbl={verzenden:'Verstuur en toon mijn offerte', akkoord:'Bevestig en zet in planning', meeting:'Verstuur en plan een meeting', bellen:'Verstuur, bel me op'}[s.contact]||'Verstuur aanvraag';
     return '<button class="btn btn-branch br-'+br+' mp-confirm" id="owSubmitBtn" onclick="owSubmit(this)">'+ic('send',16)+' '+lbl+'</button>';
   }
   return '';
@@ -4047,8 +4047,8 @@ async function owSubmit(btn){
   var takLine=takSet.length?takSet.join(', '):'-';
   var note=String(s.note||'').trim();
   var actie=OW_CONTACT[s.contact]?s.contact:'verzenden';
-  var opmerking=(note?note+'\n\n':'')+'— Aangevraagd via de offerte-wizard —\nTak'+(takSet.length>1?'ken':'')+': '+takLine+'\nGekozen vervolg: '+(OW_CONTACT[actie]||'');
-  if(state.demoMode || !state.session){ state._offerteCart={}; state._offerteOpm=''; owDone('Dit is de voorbeeldweergave — in je echte portaal versturen we deze aanvraag meteen.'); return; }
+  var opmerking=(note?note+'\n\n':'')+'- Aangevraagd via de offerte-wizard -\nTak'+(takSet.length>1?'ken':'')+': '+takLine+'\nGekozen vervolg: '+(OW_CONTACT[actie]||'');
+  if(state.demoMode || !state.session){ state._offerteCart={}; state._offerteOpm=''; owDone('Dit is de voorbeeldweergave, in je echte portaal versturen we deze aanvraag meteen.'); return; }
   s.submitting=true;
   if(btn){ btn.disabled=true; btn.innerHTML=(actie==='verzenden')?'Je offerte wordt klaargezet…':'Versturen…'; }
   try{
@@ -4084,7 +4084,7 @@ function offerteOverzichtHTML(){
 }
 function offerteBodyHTML(){
   // 'nieuw'-tab is een slanke CTA naar de wizard (de inline-samensteller is vervangen door de overlay)
-  if(offerteTab()==='nieuw') return '<div class="card" style="padding:30px 26px;text-align:center;max-width:560px;margin:8px auto"><div style="font-family:var(--font-display);font-weight:800;font-size:18px;margin-bottom:6px">Nieuwe offerte aanvragen</div><p class="sdesc" style="margin:0 auto 16px;max-width:46ch">Kies je tak, stel je producten samen en verstuur — wij werken je offerte persoonlijk uit.</p><button class="btn btn-primary" onclick="openOfferteWizard()">'+ic('doc',16)+' Start je aanvraag</button></div>';
+  if(offerteTab()==='nieuw') return '<div class="card" style="padding:30px 26px;text-align:center;max-width:560px;margin:8px auto"><div style="font-family:var(--font-display);font-weight:800;font-size:18px;margin-bottom:6px">Nieuwe offerte aanvragen</div><p class="sdesc" style="margin:0 auto 16px;max-width:46ch">Kies je tak, stel je producten samen en verstuur, wij werken je offerte persoonlijk uit.</p><button class="btn btn-primary" onclick="openOfferteWizard()">'+ic('doc',16)+' Start je aanvraag</button></div>';
   return offerteOverzichtHTML();
 }
 function panelOffertes(){ return offerteSubnav()+'<div id="offBody">'+offerteBodyHTML()+'</div>'; }
@@ -4437,7 +4437,7 @@ function _ondShootRij(s, br){
       +'<div class="ond-info"><div class="ond-kv"><b>Startdatum</b><span>'+esc(_ondDatum(startMs))+'</span></div>'
       +'<div class="ond-kv"><b>Startuur</b><span>'+esc(_ondUur(startMs))+' (aankomst op locatie)</span></div>'
       +(s.locatie?'<div class="ond-kv"><b>Startlocatie</b><span>'+esc(s.locatie)+'</span></div>':'')
-      +'<p class="ond-locknote">'+ic('info',13)+' Deze shoot staat vast ingepland. Wijzigen kan enkel via het team — stuur ons gerust een berichtje in de chat.</p></div></div>';
+      +'<p class="ond-locknote">'+ic('info',13)+' Deze shoot staat vast ingepland. Wijzigen kan enkel via het team, stuur ons gerust een berichtje in de chat.</p></div></div>';
   }
   return '<div class="ond-row ond-shoot card br-'+br+'"><div class="ond-head">'+ic('cal',16)
     +'<span class="ond-naam">'+esc(s.naam)+'</span>'
@@ -4489,7 +4489,7 @@ function _ondEditRij(s, br){
 }
 // Stabiele TYPE JOB-sleutel van een subtaak: gebruik de door de worker meegestuurde
 // type_job_key (immuun voor herordenen van de ClickUp-dropdown). Valt terug op de TAAKNAAM
-// zolang de worker de sleutel nog niet meestuurt (transitie) of als ze ontbreekt — NOOIT meer
+// zolang de worker de sleutel nog niet meestuurt (transitie) of als ze ontbreekt, NOOIT meer
 // op de orderindex (die verschuift bij het toevoegen/verwijderen van een dropdown-optie).
 function _tjKey(s){
   if(s && s.typeJobKey) return s.typeJobKey;
@@ -4524,7 +4524,7 @@ function onderdelenBlok(det, p){
   if(shoots.length){ h+=kop(shoots.length===1?'Shoot':'Shoots',shoots.length)+shoots.map(function(s){ return _ondShootRij(s,br); }).join(''); }
   if(edits.length){
     h+=kop('Montage',edits.length)+edits.map(function(s){ return _ondEditRij(s,br); }).join('');
-    // Feedbackrondes horen BIJ de montage (Vincent: 'onder het juiste onderdeel, niet apart') —
+    // Feedbackrondes horen BIJ de montage (Vincent: 'onder het juiste onderdeel, niet apart') -
     // WhatsApp-stijl in/uitklapbaar blok direct onder de montage-rijen.
     if(fb.length) h+=_fbRondesBlock(fb,br);
   }
@@ -4557,10 +4557,10 @@ function _fbRondesBlock(fb, br){
 function demoVideoDet(){
   var nu=Date.now();
   return { subtasks:[
-    { id:'d-pre', naam:'Preproductie — draaiboek', status:'done', typeJobKey:'preproductie', heeftBestanden:true, bestanden:[{label:'Draaiboek v2.pdf', url:'#', type:'doc'}] },
-    { id:'d-sh1', naam:'Shoot 1 — kantoor & team', status:'prog', typeJobKey:'shoot', startDate:String(nu+5*86400000), datum:String(nu+5*86400000+4*3600000), locatie:'Industrieweg 27, 2320 Hoogstraten', heeftBestanden:false, bestanden:[] },
-    { id:'d-sh2', naam:'Shoot 2 — klantcases on-site', status:'todo', typeJobKey:'shoot', startDate:'', datum:'', locatie:'', heeftBestanden:false, bestanden:[] },
-    { id:'d-ed1', naam:'Montage bedrijfsfilm', status:'wait', typeJobKey:'edit', heeftBestanden:true, bestanden:[{label:'Montage v1 — bedrijfsfilm', url:'https://vimeo.com/76979871', type:'video'}] },
+    { id:'d-pre', naam:'Preproductie, draaiboek', status:'done', typeJobKey:'preproductie', heeftBestanden:true, bestanden:[{label:'Draaiboek v2.pdf', url:'#', type:'doc'}] },
+    { id:'d-sh1', naam:'Shoot 1, kantoor & team', status:'prog', typeJobKey:'shoot', startDate:String(nu+5*86400000), datum:String(nu+5*86400000+4*3600000), locatie:'Industrieweg 27, 2320 Hoogstraten', heeftBestanden:false, bestanden:[] },
+    { id:'d-sh2', naam:'Shoot 2, klantcases on-site', status:'todo', typeJobKey:'shoot', startDate:'', datum:'', locatie:'', heeftBestanden:false, bestanden:[] },
+    { id:'d-ed1', naam:'Montage bedrijfsfilm', status:'wait', typeJobKey:'edit', heeftBestanden:true, bestanden:[{label:'Montage v1, bedrijfsfilm', url:'https://vimeo.com/76979871', type:'video'}] },
     { id:'d-nab', naam:'Nabewerking foto\u2019s', status:'prog', typeJobKey:'edit', heeftBestanden:true, bestanden:[{label:'Fotoshoot najaarscollectie', url:'https://drive.google.com/drive/folders/demo-fotomap', type:'img'}] }
   ] };
 }
@@ -4812,7 +4812,7 @@ function buildModal(id, from){
    ========================================================= */
 function buildOverlays(){
   return `
-  <!-- (de loader staat nu statisch als video-loader in index.html — #loader/#vidload) -->
+  <!-- (de loader staat nu statisch als video-loader in index.html, #loader/#vidload) -->
 
   <!-- Notification panel -->
   <div class="notif-panel" id="notifPanel">
@@ -4850,7 +4850,7 @@ function buildOverlays(){
 }
 
 /* =============================================================================
-   WEBPRESTATIES (GA4 + Search Console) — team-weergave v1, data via de gateway.
+   WEBPRESTATIES (GA4 + Search Console), team-weergave v1, data via de gateway.
    ============================================================================= */
 function webEnsureStyles(){
   if(document.getElementById('wp-styles')) return;
@@ -4889,7 +4889,7 @@ function webEnsureStyles(){
 function _wpDay(ymd){ var m=String(ymd||'').match(/(\d{4})-?(\d{2})-?(\d{2})/); return m?(m[3]+'/'+m[2]):String(ymd||''); }
 function _wpNum(n){ return (Number(n)||0).toLocaleString('nl-BE'); }
 function webPeriod(){ return state._webPeriod || 'last_30d'; }
-// Periode-pills (Vandaag/7/30/90 dagen) — nu in de menubalk (zoals Adverteren), niet meer in een aparte rij.
+// Periode-pills (Vandaag/7/30/90 dagen), nu in de menubalk (zoals Adverteren), niet meer in een aparte rij.
 function webPeriodPills(){
   var p=webPeriod();
   var b=function(k,l){ return '<button class="'+(p===k?'on':'')+'" onclick="webSetPeriod(\''+k+'\')">'+l+'</button>'; };
@@ -4989,7 +4989,7 @@ function webBody(t,s){
   var tot=t.totals||{}, split=t.split||{};
   var totalSes=((split.paid||0)+(split.organic||0)+(split.direct||0)+(split.overig||0))||tot.sessions||0;
   var paidPct=totalSes>0?Math.round((split.paid||0)/totalSes*100):0;
-  var st=s.totals||{}; var topQ=(s.queries&&s.queries[0])?s.queries[0].query:'—';
+  var st=s.totals||{}; var topQ=(s.queries&&s.queries[0])?s.queries[0].query:'-';
   var kpis='<div class="wp-grid wp-kpis" style="margin-bottom:14px">'
     +'<div class="wp-kpi"><div class="l">Sessies</div><div class="v">'+_wpNum(tot.sessions||totalSes)+'</div><div class="s">'+_wpNum(tot.users||0)+' gebruikers</div></div>'
     +'<div class="wp-kpi"><div class="l">Betaald verkeer</div><div class="v">'+paidPct+'%</div><div class="s">'+_wpNum(split.paid||0)+' sessies via ads</div></div>'
@@ -5018,14 +5018,14 @@ function webBody(t,s){
     +'</div>';
   return kpis+charts+row2+qtbl;   // periode-pills + Support staan nu in de menubalk (webTakSubnav)
 }
-/* Website-support (Cluster K): ticket-ingang onderaan de Website-tab — ook zichtbaar zonder GA4/GSC-koppeling. */
+/* Website-support (Cluster K): ticket-ingang onderaan de Website-tab, ook zichtbaar zonder GA4/GSC-koppeling. */
 function webSupportCard(){
   return '<div class="wp-card" style="margin-top:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">'
     +'<div style="flex:1;min-width:200px"><h3 style="margin:0 0 4px">Hulp nodig met je website?</h3>'
-    +'<div style="color:#6B5B6B;font:600 13px Nunito,sans-serif;line-height:1.5">Een bug, een aanpassing of een vraag over je site? Stuur ons een ticket — we pakken het op en je krijgt een melding zodra de status verandert.</div></div>'
+    +'<div style="color:#6B5B6B;font:600 13px Nunito,sans-serif;line-height:1.5">Een bug, een aanpassing of een vraag over je site? Stuur ons een ticket, we pakken het op en je krijgt een melding zodra de status verandert.</div></div>'
     +'<button class="btn btn-branch br-green btn-sm" onclick="openWebTicket()">'+ic('msg',16)+' Ticket aanvragen</button></div>';
 }
-/* Instructievideo's over zelf je website aanpassen — Studio 27-brede set (tool-uitleg, GEEN klantdata).
+/* Instructievideo's over zelf je website aanpassen, Studio 27-brede set (tool-uitleg, GEEN klantdata).
    LEEG tot Vincent echte Vimeo/YouTube-URLs aanlevert; een lege lijst rendert niets (geen dode links). */
 const WEB_INSTRUCTIE_VIDEOS = [
   // { titel:'Tekst aanpassen op een pagina', duur:'2:14', url:'https://...' },

@@ -883,7 +883,7 @@ body.client-preview #adminViewToggle .vmode-knob{left:18px;}
 /* Team-only topbar-chrome verdwijnt in ClientView zodat je exact ziet wat de klant ziet (geen 🐞-feedbackknop). */
 body.client-preview #bugBtn{display:none !important;}
 /* persistente banner zodat een teamlid weet dat het in klantweergave kijkt */
-body.client-preview #page::before{content:'ClientView — je bekijkt dit portaal zoals de klant het ziet. Klik rechtsboven op de schakelaar om terug naar TeamView te gaan.';display:block;background:#FEF3E2;color:#B4540B;font-family:var(--font-display);font-weight:700;font-size:12px;line-height:1.4;text-align:center;padding:8px 14px;border-radius:10px;margin:0 0 14px;border:1px solid #F6D9A8;}
+body.client-preview #page::before{content:'ClientView, je bekijkt dit portaal zoals de klant het ziet. Klik rechtsboven op de schakelaar om terug naar TeamView te gaan.';display:block;background:#FEF3E2;color:#B4540B;font-family:var(--font-display);font-weight:700;font-size:12px;line-height:1.4;text-align:center;padding:8px 14px;border-radius:10px;margin:0 0 14px;border:1px solid #F6D9A8;}
 @media(max-width:600px){ body.admin-mode #adminViewToggle .vmode-lab{display:none;} body.client-preview #page::before{font-size:11px;} }
 
 /* ===== Ads — uitgebreide gegevens: filterregels + visual-knop + subtiele PDF ===== */

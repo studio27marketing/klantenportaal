@@ -100,7 +100,7 @@ const ENDPOINTS = {
   // Metricool analytics (KPI-dashboard + trend): { days? } -> { ok, linked, totals, networks:[], trend:[] }.
   metricoolStats:    GATEWAY_BASE + '/metricoolStats',
   metricoolPostStats:GATEWAY_BASE + '/metricoolPostStats',
-  // ADMIN-only (staff): uitgebreide social-rapportage (team-weergave) in één call — account-KPI's +
+  // ADMIN-only (staff): uitgebreide social-rapportage (team-weergave) in één call, account-KPI's +
   // per-netwerk breakdown met dag-series + vergelijking + post-insights. Acting-as scope.
   metricoolStatsRich:GATEWAY_BASE + '/metricoolStatsRich',
   // SEC-6: ads-insights via de gateway (bedrijf_id server-side uit het token), niet meer direct.

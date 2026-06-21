@@ -15,7 +15,7 @@ function qsp(){ return new URLSearchParams(location.search); }
 function $id(x){ return document.getElementById(x); }
 
 /* =============================================================================
-   DEEP-LINK ROUTER v2 — élke toestand krijgt een unieke, deelbare hash-URL.
+   DEEP-LINK ROUTER v2, élke toestand krijgt een unieke, deelbare hash-URL.
 
    Schema (hash-based, zodat refresh/OAuth/PWA-SW nooit breken; het bedrijf zit in
    ELKE link zodat een collega of klant-met-toegang 'm 1-op-1 opent):
@@ -70,7 +70,7 @@ function parseRoute(){
   // 1) nieuw hash-schema
   const r = _parseHash(location.hash);
   if(r) return r;
-  // 2) oude query-links (?p ?c ?n ?go ?tab ?klant) — blijven werken
+  // 2) oude query-links (?p ?c ?n ?go ?tab ?klant), blijven werken
   if(q.get('p')) return { view:'project', project:q.get('p'), sub:(q.get('tab')==='chat'?'chat':''), bedrijf:q.get('klant')||'' };
   if(q.get('c')) return { view:'project', project:q.get('c'), sub:'chat', bedrijf:q.get('klant')||'' };
   if(q.get('go')){ var t=q.get('go'); if(t==='projecten') t='start'; return { view:'tab', tab:t, bedrijf:q.get('klant')||'' }; }
@@ -453,7 +453,7 @@ async function loadAndEnter(skipLink){
     loaderStep(14,'Inloggen gecontroleerd…');
     // skipLink (bedrijf-switch): switchCompany koppelde + ververste de claim al -> niet opnieuw provisionen.
     // SNELPAD terugkerende klant: klopt de bedrijf_id-claim in het huidige token al (en is er geen
-    // afwijkende bedrijfskeuze), dan hoeft de provision-roundtrip (1,5-2,5s) NIET in het kritieke pad —
+    // afwijkende bedrijfskeuze), dan hoeft de provision-roundtrip (1,5-2,5s) NIET in het kritieke pad -
     // hij draait op de achtergrond (switcher/badges verversen daarna stil). Bij een verouderde claim
     // vangt de bestaande JIT-provision-retry in apiV2 het dashboard-403 alsnog op.
     if(!skipLink){
@@ -519,7 +519,7 @@ async function prefetchAdjacent(){
 function afterEnter(){
   applyTakVisibility();
   initSbGlass();
-  // Portaalfeedback (bug-knop): zichtbaar voor IEDEREEN met een echte sessie — klanten mogen ook
+  // Portaalfeedback (bug-knop): zichtbaar voor IEDEREEN met een echte sessie, klanten mogen ook
   // bugs/feedback melden (zie in de clientview). Enkel in de demo blijft de knop verborgen.
   if(!state.demoMode){ var _bb=$id('bugBtn'); if(_bb) _bb.style.display=''; }
   // ADMIN: geen klant-onboardingtour; toon i.p.v. de naam-begroeting een "team"-context.
@@ -555,7 +555,7 @@ function updateAdminViewToggle(){
   document.body.classList.toggle('client-preview', client);
   var lab=b.querySelector('.vmode-lab'); if(lab) lab.textContent=client?'ClientView':'TeamView';
   b.setAttribute('aria-pressed', client?'true':'false');
-  b.setAttribute('title', client?'Je bekijkt het portaal als klant (ClientView) — klik om terug naar TeamView':'Je bekijkt de teamweergave (TeamView) — klik om als klant mee te kijken (ClientView)');
+  b.setAttribute('title', client?'Je bekijkt het portaal als klant (ClientView), klik om terug naar TeamView':'Je bekijkt de teamweergave (TeamView), klik om als klant mee te kijken (ClientView)');
 }
 
 /* =============================================================================
@@ -566,7 +566,7 @@ function updateAdminViewToggle(){
    zoek-overlay (openAdminPicker) zodat een admin tussen ALLE klanten kan springen.
    ============================================================================= */
 async function enterAdminMode(){
-  // (bug-knop wordt nu in afterEnter voor iedereen getoond — klanten incl.)
+  // (bug-knop wordt nu in afterEnter voor iedereen getoond, klanten incl.)
   // DEEP-LINK vanuit het teamportaal (?klant=<bedrijfId>): spring meteen naar die klant
   // i.p.v. de bedrijvenkiezer te tonen. Zo verifieert een teamlid in 1 klik hoe de klant
   // z'n portaal ziet. Enkel staff bereikt enterAdminMode, dus geen klant-impact.
@@ -718,7 +718,7 @@ async function ensureTabData(name){
     if(name==='instellingen' && !state.data.huisstijl) _fi.push(S27DATA.loadHuisstijl());
     if(_fi.length){ try{ await Promise.all(_fi); }catch(e){} }
   }
-  // (Resultaten-tab verwijderd — advertentiedata staat real-time op de Advertenties-tab)
+  // (Resultaten-tab verwijderd, advertentiedata staat real-time op de Advertenties-tab)
   if(name==='offertes'){ var _t=[]; if(!state.data.offertes) _t.push(S27DATA.once('offertes', function(){ return S27DATA.loadOffertes(); })); if(!state.data.bedrijf) _t.push(S27DATA.loadBedrijf()); if(_t.length){ try{ await Promise.all(_t); }catch(e){} } }
   if(name==='socials'){ var _s=[]; if(!state.data.metricool) _s.push(S27DATA.once('metricool', function(){ return S27DATA.loadMetricool(); }));
     if(isRichView()){ if(!state.data.metricoolStatsRich){ var _sp=(typeof socialPeriod==='function')?socialPeriod():null; _s.push(S27DATA.loadMetricoolStatsRich(_sp?{from:_sp.from,to:_sp.to,compare:_sp.compare}:undefined)); } }
@@ -746,7 +746,7 @@ async function goTab(name){
   setActiveNav(name);
   if(!state.demoMode && needsLoad(name)) renderLoading(name);
   await ensureTabData(name);
-  // ITEM 17: GEEN auto-landing meer op één project — de klant komt ALTIJD eerst op de
+  // ITEM 17: GEEN auto-landing meer op één project, de klant komt ALTIJD eerst op de
   // projectenlijst en klikt zelf door naar de detail (uniform over alle takken).
   renderPanel(name);
   if(name==='advertenties' && typeof adsChatMount==='function') adsChatMount();   // ads-chat koppelen aan de huidige-maand-advertentietaak
@@ -807,7 +807,7 @@ function setActiveNav(name){
 // (Socials + advertenties blijven altijd zichtbaar: hun koppeling staat los van projecten; de panels
 //  tonen zelf een "nog niet gekoppeld"-staat.)
 function applyTakVisibility(){
-  // Offertes-tab ENKEL in teamview — nooit voor klanten of in de ClientView-preview. Boven de vroege return zodat
+  // Offertes-tab ENKEL in teamview, nooit voor klanten of in de ClientView-preview. Boven de vroege return zodat
   // hij ook in demo/pre-load verborgen blijft (de querySelector werkt los van dashboard-data).
   const off=document.querySelector('.sb-item[data-tab="offertes"]');
   if(off) off.style.display = (typeof isRichView==='function' && isRichView()) ? '' : 'none';
@@ -1041,7 +1041,7 @@ const BOT_ANSWERS={'Wanneer is mijn volgende meeting?':'Je vindt al je geplande 
 function botDemoAnswer(q){
   if(BOT_ANSWERS[q]) return BOT_ANSWERS[q];
   if(/^Wat staat er voor mij klaar/i.test(q)) return 'Op je <b>Home</b> zie je alles wat op jou wacht: feedback geven, iets inplannen of een bericht beantwoorden. Klik een kaart aan en je springt er meteen naartoe.';
-  if(/^Wat is de status van /i.test(q)) return 'Open dit project onder <b>Projecten</b> — daar zie je live de status, de planning en de laatste deliverables. Vragen? Stel ze in de projectchat.';
+  if(/^Wat is de status van /i.test(q)) return 'Open dit project onder <b>Projecten</b>, daar zie je live de status, de planning en de laatste deliverables. Vragen? Stel ze in de projectchat.';
   return 'Goeie vraag! Ik verbind je even door met <b>Ilke</b>, je vaste contact, zij antwoordt je zo.';
 }
 function botAsk(btn){ pushBot(btn.textContent,'user'); const q=btn.textContent; const c=$id('botChips'); if(c)c.style.display='none'; botReply(q); }
@@ -1092,9 +1092,9 @@ function botDynChips(){
     if(cock.length) chips.push('Wat staat er voor mij klaar?');
     // 2) status van het recentste actieve project (concreet, herkenbaar)
     if(actief.length) chips.push('Wat is de status van '+String(actief[0].name||'').replace(/"/g,'')+'?');
-    // 3) meetings (vaste vraag — heeft ook een demo-antwoord)
+    // 3) meetings (vaste vraag, heeft ook een demo-antwoord)
     chips.push('Wanneer is mijn volgende meeting?');
-    // 4) feedback-uitleg (vaste vraag — heeft ook een demo-antwoord)
+    // 4) feedback-uitleg (vaste vraag, heeft ook een demo-antwoord)
     chips.push('Hoe geef ik feedback?');
   }catch(e){}
   if(!chips.length) chips=Object.keys(BOT_ANSWERS);
@@ -1450,7 +1450,7 @@ async function removeContact(id, btn){
 }
 /* ---- Website-supportticket (Cluster K2): overlay-formulier -> worker ticketCreate + ticketAttach ----
    Meerdere bijlagen: stagen in state._wtFiles (chips-tray, zelfde CSS als de chat-composer), pas bij
-   "Versturen" gaat alles weg — eerst het ticket (tekst), daarna sequentieel per bestand één attach-call.
+   "Versturen" gaat alles weg, eerst het ticket (tekst), daarna sequentieel per bestand één attach-call.
    Hergebruikt de meeting-planner-overlay-CSS (mp-overlay/mp-modal/mp-scroll). */
 var _wtFileSeq=0;
 function wtEl(){ var el=$id('webTicket'); if(!el){ el=document.createElement('div'); el.id='webTicket'; el.className='mp-overlay'; el.addEventListener('mousedown',function(e){ el._downScrim=(e.target===el); }); el.addEventListener('click',function(e){ if(e.target===el && el._downScrim) closeWebTicket(); }); document.body.appendChild(el); } return el; }
@@ -1488,13 +1488,13 @@ function wtStageFiles(input){
 function wtUnstage(id){ state._wtFiles=(state._wtFiles||[]).filter(function(f){return f.id!==id;}); _wtRenderTray(); }
 function wtRender(){
   var el=$id('webTicket'); if(!el) return;
-  // WS-2 sales-reflex: eerst de juiste rail kiezen — defect = gratis support, iets
+  // WS-2 sales-reflex: eerst de juiste rail kiezen, defect = gratis support, iets
   // nieuws/prijs = offerte-flow (geen gratis support voor saleswerk).
   if(state._wtStep!=='form'){
     el.innerHTML='<div class="mp-modal" onclick="event.stopPropagation()">'
       +'<div class="mp-head"><span class="mp-back-sp"></span><div class="mp-head-c"><span class="mp-head-eyebrow">Website-support</span><b>Waarmee kunnen we je helpen?</b></div><button class="mp-close" onclick="closeWebTicket()" aria-label="Sluiten">'+ic('plus',22)+'</button></div>'
       +'<div class="mp-scroll"><div class="wt-keuze">'
-        +'<button class="contact-card br-green" onclick="state._wtStep=\'form\';wtRender()"><span class="cc-ic">'+ic('st_feedback',24)+'</span><b>Er is iets stuk of werkt niet</b><span>Een fout, kapotte pagina of formulier dat niet doet wat het moet — wij fixen het.</span><span class="cc-go">Meld het probleem '+ic('arrow',14)+'</span></button>'
+        +'<button class="contact-card br-green" onclick="state._wtStep=\'form\';wtRender()"><span class="cc-ic">'+ic('st_feedback',24)+'</span><b>Er is iets stuk of werkt niet</b><span>Een fout, kapotte pagina of formulier dat niet doet wat het moet, wij fixen het.</span><span class="cc-go">Meld het probleem '+ic('arrow',14)+'</span></button>'
         +'<button class="contact-card br-blue" onclick="closeWebTicket();setTimeout(function(){openOfferteWizard(\'website\');},150)"><span class="cc-ic">'+ic('plus',24)+'</span><b>Ik wil iets nieuws of een prijs</b><span>Een extra pagina, uitbreiding of vernieuwing? Dan stellen we graag een offerte op.</span><span class="cc-go">Naar de aanvraag '+ic('arrow',14)+'</span></button>'
       +'</div></div></div>';
     return;
@@ -1519,7 +1519,7 @@ async function submitWebTicket(btn){
   var m=$id('wtMsg');
   if(!subj){ var si=$id('wtSubj'); if(si){ si.style.borderColor='var(--s27-orange)'; si.focus(); } if(m) m.innerHTML='<span style="color:var(--ink-3)">Geef even een onderwerp mee.</span>'; return; }
   if(btn){ btn.disabled=true; btn.innerHTML='Versturen…'; }
-  // FileReader-race: net-gekozen bestanden kunnen nog aan het inlezen zijn — even wachten (max ~8s)
+  // FileReader-race: net-gekozen bestanden kunnen nog aan het inlezen zijn, even wachten (max ~8s)
   for(var w=0; w<80 && _wtPending>0; w++){ if(m&&w===4) m.innerHTML='<span style="color:var(--ink-3)">Bestanden voorbereiden…</span>'; await new Promise(function(r){ setTimeout(r,100); }); }
   var files=(state._wtFiles||[]).slice();
   if(state.demoMode || !state.session){ if(btn) btn.innerHTML=ic('check',15)+' Verstuurd (demo)'; if(m) m.innerHTML='<span style="color:var(--s27-green-ink,#147A50)">Je ticket staat genoteerd'+(files.length?' met '+files.length+' bijlage(n)':'')+' (voorbeeldweergave).</span>'; setTimeout(closeWebTicket,1600); return; }
@@ -1542,12 +1542,12 @@ async function submitWebTicket(btn){
     }
     state._wtFiles=[];
     if(m) m.innerHTML='<span style="color:var(--s27-green-ink,#147A50)">'+ic('check',14)+' Je ticket staat genoteerd'+(files.length?(' ('+(files.length-mislukt)+'/'+files.length+' bijlagen meegestuurd)'):'')+'. Je volgt het onder Projecten en krijgt een melding bij elke update.</span>'
-      +(mislukt?'<br><span style="color:var(--s27-orange-ink,#C44514)">'+mislukt+' bijlage(n) konden niet mee — stuur ze gerust na via de chat van het ticket.</span>':'');
+      +(mislukt?'<br><span style="color:var(--s27-orange-ink,#C44514)">'+mislukt+' bijlage(n) konden niet mee, stuur ze gerust na via de chat van het ticket.</span>':'');
     if(btn) btn.innerHTML=ic('check',15)+' Verstuurd ✓';
     setTimeout(closeWebTicket, mislukt?3500:2000);
   }catch(e){ fail(); }
 }
-/* ---- Nieuwe social post aanmaken (Cluster R) — enkel met 'Socials-bewerkbaar'-recht ----
+/* ---- Nieuwe social post aanmaken (Cluster R), enkel met 'Socials-bewerkbaar'-recht ----
    mp-overlay met datum/tijd, kanalen, caption, visual-upload en live mockup-preview.
    Submit -> worker metricoolCreate: de post wordt als CONCEPT ingepland (team finaliseert). */
 function scEl(){ var el=$id('socCreate'); if(!el){ el=document.createElement('div'); el.id='socCreate'; el.className='mp-overlay'; el.addEventListener('mousedown',function(e){ el._downScrim=(e.target===el); }); el.addEventListener('click',function(e){ if(e.target===el && el._downScrim) closeSocialCreate(); }); document.body.appendChild(el); } return el; }
@@ -1580,7 +1580,7 @@ function scRender(){
     +'<div class="mp-scroll"><div class="sc-grid">'
       +'<div class="sc-pv" id="scPv">'+scMockHTML()+'</div>'
       +'<div class="sc-form">'
-        +'<p class="mp-intro" style="margin-top:0">Stel je post samen — wij plannen ’m in als <b>concept</b> en finaliseren de publicatie voor je.</p>'
+        +'<p class="mp-intro" style="margin-top:0">Stel je post samen, wij plannen ’m in als <b>concept</b> en finaliseren de publicatie voor je.</p>'
         +'<label class="soc-elab">Kanalen</label><div class="soc-chics">'+chans+'</div>'
         +'<label class="soc-elab">Wanneer</label>'
         +'<div style="display:flex;gap:9px;flex-wrap:wrap"><input type="date" id="scDate" value="'+escapeHtml(s.date)+'" onchange="state._sc.date=this.value" style="padding:10px 12px;border:1px solid var(--line);border-radius:11px;font:600 14px Nunito,sans-serif"><input type="time" id="scTime" value="'+escapeHtml(s.time)+'" onchange="state._sc.time=this.value" style="padding:10px 12px;border:1px solid var(--line);border-radius:11px;font:600 14px Nunito,sans-serif"></div>'
@@ -1709,7 +1709,7 @@ function weekStrip(ctx, dayPickFn){
   const ws=ctx.weekStart;
   const firstMon=_monday(ctx.slots[0]), lastMon=_monday(ctx.slots[ctx.slots.length-1]);
   const canPrev=ws>firstMon, canNext=ws<lastMon;
-  const lab=new Date(ws).getDate()+' '+_MA[new Date(ws).getMonth()]+' – '+new Date(ws+6*864e5).getDate()+' '+_MA[new Date(ws+6*864e5).getMonth()];
+  const lab=new Date(ws).getDate()+' '+_MA[new Date(ws).getMonth()]+' - '+new Date(ws+6*864e5).getDate()+' '+_MA[new Date(ws+6*864e5).getMonth()];
   let selDay=ctx.selDay, strip='';
   for(let i=0;i<7;i++){ const dms=ws+i*864e5, k=_dayKey(dms), has=(ctx.byDay[k]||[]).length>0; if(has&&!selDay)selDay=k; const d=new Date(dms);
     strip+='<button class="calday'+(k===selDay?' sel':'')+'" '+(has?'':'disabled')+' style="'+(has?'':'opacity:.3;cursor:default')+'" data-k="'+k+'" '+(has?'onclick="'+dayPickFn+'(this)"':'')+'><div class="dow">'+_DOW[i]+'</div><div class="dnum">'+d.getDate()+'</div></button>';
@@ -1727,7 +1727,7 @@ function renderMeetPicker(slots){
 }
 function meetWeekHTML(){
   const c=state.meetCtx;
-  return weekStrip(c,'meetDayPick')+'<label class="ms-label">Tijdslot <span style="font-weight:600;color:var(--ink-4)">(8–17u)</span></label><div class="slotgrid" id="meetSlotGrid">'+(c.selDay?meetSlotButtons(c.byDay[c.selDay]):'<span class="fs" style="color:var(--ink-4)">Geen vrije momenten deze week, blader verder ›</span>')+'</div>';
+  return weekStrip(c,'meetDayPick')+'<label class="ms-label">Tijdslot <span style="font-weight:600;color:var(--ink-4)">(8-17u)</span></label><div class="slotgrid" id="meetSlotGrid">'+(c.selDay?meetSlotButtons(c.byDay[c.selDay]):'<span class="fs" style="color:var(--ink-4)">Geen vrije momenten deze week, blader verder ›</span>')+'</div>';
 }
 function meetWeekNav(dir){ const c=state.meetCtx; if(!c)return; c.weekStart+=dir*7*864e5; c.selDay=null; c.sel=null; const box=$id('meetWeek'); if(box)box.innerHTML=meetWeekHTML(); const cf=$id('meetConfirm'); if(cf)cf.disabled=true; }
 function meetDayPick(el){ const c=state.meetCtx, k=el.dataset.k; c.selDay=k; el.parentElement.querySelectorAll('.calday').forEach(d=>d.classList.remove('sel')); el.classList.add('sel'); const g=$id('meetSlotGrid'); if(g)g.innerHTML=meetSlotButtons(c.byDay[k]); c.sel=null; const cf=$id('meetConfirm'); if(cf)cf.disabled=true; }
@@ -1753,7 +1753,7 @@ async function submitNieuwProject(btn){
   } catch(e){ if(btn){ btn.disabled=false; btn.textContent='Opnieuw proberen'; } }
 }
 /* =============================================================================
-   MEETING-PLANNER — schermvullende plan-tunnel (Algemene meeting / Projectmeeting /
+   MEETING-PLANNER, schermvullende plan-tunnel (Algemene meeting / Projectmeeting /
    Nieuw project). Vervangt de oude smalle zijbalk-picker. Eén overlay op <body>
    (zoals metaLightbox), ESC + scrim-klik sluiten. Flow:
      algemeen → Ilke · project → kies project → kies Ilke of projectlead · nieuw → Arne
@@ -1842,7 +1842,7 @@ function mpProjectStep(){
   if(!projs.length) return '<div class="mp-empty">'+ic('cal',40)
     +'<b>Geen lopende projecten</b><p>Je hebt momenteel geen actief project om over samen te zitten. Wil je iets nieuws opstarten?</p>'
     +'<button class="btn btn-branch br-orange btn-sm" onclick="openMeetingPlanner(\'nieuw\')">Plan een gesprek over een nieuw project '+ic('arrow',15)+'</button></div>';
-  return '<p class="mp-intro">Kies het project waarover je wil samenzitten — je projecten van de afgelopen 60 dagen.</p>'
+  return '<p class="mp-intro">Kies het project waarover je wil samenzitten, je projecten van de afgelopen 60 dagen.</p>'
     +'<div class="mp-projlist">'+projs.map(function(p){
       var sae=(typeof saeNames==='function')?saeNames(p.sae):'';
       return '<button class="mp-proj br-'+p.br+'" onclick="mpPickProject(\''+escapeHtml(p.id)+'\')">'
@@ -1963,7 +1963,7 @@ function mpCalGrid(){
   var s=state.mp, ws=s.weekStart;
   var firstMon=_monday(s.slots[0]), lastMon=_monday(s.slots[s.slots.length-1]);
   var canPrev=ws>firstMon, canNext=lastMon>=ws+14*864e5;
-  var lab=new Date(ws).getDate()+' '+MP_MA[new Date(ws).getMonth()]+' – '+new Date(ws+13*864e5).getDate()+' '+MP_MA[new Date(ws+13*864e5).getMonth()];
+  var lab=new Date(ws).getDate()+' '+MP_MA[new Date(ws).getMonth()]+' - '+new Date(ws+13*864e5).getDate()+' '+MP_MA[new Date(ws+13*864e5).getMonth()];
   var head=''; for(var i=0;i<7;i++) head+='<span class="mp-cal-dow">'+MP_DOW[i]+'</span>';
   var cells=''; var todK=_dayKey(Date.now());
   for(var dd=0; dd<14; dd++){
@@ -1971,7 +1971,7 @@ function mpCalGrid(){
     var cls='mp-cal-day'+(has?' free':' off')+(s.selDay===k?' sel':'')+(k===todK?' today':'');
     cells+='<button type="button" class="'+cls+'" '+(has?('onclick="mpPickDay(\''+k+'\')"'):'disabled')+'>'
       +'<span class="mp-cal-dnum">'+dt.getDate()+'</span><span class="mp-cal-mon">'+MP_MA[dt.getMonth()]+'</span>'
-      +(has?('<span class="mp-cal-cnt">'+arr.length+' vrij</span>'):'<span class="mp-cal-cnt mp-cal-cnt-off">—</span>')+'</button>';
+      +(has?('<span class="mp-cal-cnt">'+arr.length+' vrij</span>'):'<span class="mp-cal-cnt mp-cal-cnt-off">-</span>')+'</button>';
   }
   return '<div class="mp-cal"><div class="mp-cal-nav">'
     +'<button type="button" class="mp-cal-arrow" '+(canPrev?'':'disabled')+' onclick="mpCalNav(-1)">‹</button>'
@@ -2011,7 +2011,7 @@ function mpTipsHTML(){
   var s=state.mp; var tips=[];
   tips.push(['spark','Online of bij ons?','Kies hierboven een gesprek via Google Meet of een koffie bij ons op kantoor in Rijkevorsel.']);
   if(s.byDay){ var best=null,bestN=-1; Object.keys(s.byDay).forEach(function(k){ var n=s.byDay[k].length; if(n>bestN){bestN=n;best=k;} });
-    if(best&&bestN>0){ var dl=MP_DAYS_FULL[new Date(best).getDay()]; tips.push(['clock','Veel ruimte op '+dl,'Op '+dl+' staat de agenda het ruimst — handig als je flexibel bent.']); } }
+    if(best&&bestN>0){ var dl=MP_DAYS_FULL[new Date(best).getDay()]; tips.push(['clock','Veel ruimte op '+dl,'Op '+dl+' staat de agenda het ruimst, handig als je flexibel bent.']); } }
   tips.push(['info','Kort en krachtig','Reken op ± '+Math.round((s.dur||1800000)/60000)+' minuten. Genoeg om bij te praten of een project te overlopen.']);
   return '<div class="mp-tips"><div class="mp-tips-h">'+ic('spark',15)+' Handig om te weten</div><div class="mp-tips-grid">'
     +tips.map(function(t){ return '<div class="mp-tip"><span class="mp-tip-ic">'+ic(t[0],16)+'</span><div class="mp-tip-tx"><b>'+escapeHtml(t[1])+'</b><span>'+escapeHtml(t[2])+'</span></div></div>'; }).join('')
@@ -2068,7 +2068,7 @@ function mpDone(start,meetLink,viaRequest){
   var who=(s.host&&s.host.naam)||'Studio 27';
   var when=mpSlotLabelLong(start);
   var sub = viaRequest ? 'We bevestigen je afspraak zo snel mogelijk per mail.'
-    : (s.online ? 'Top — je krijgt een agenda-uitnodiging met een Google Meet-link.' : 'Top — je krijgt een agenda-uitnodiging. Tot bij ons in Rijkevorsel!');
+    : (s.online ? 'Top, je krijgt een agenda-uitnodiging met een Google Meet-link.' : 'Top, je krijgt een agenda-uitnodiging. Tot bij ons in Rijkevorsel!');
   s._doneHTML='<div class="mp-done"><div class="mp-done-ic br-'+color+'">'+ic('st_approved',60)+'</div>'
     +'<b class="mp-done-h">'+(viaRequest?'Aanvraag verstuurd!':'Meeting ingepland!')+'</b>'
     +'<p class="mp-done-when">'+escapeHtml(when)+'<br><span>met '+escapeHtml(who)+'</span></p>'
@@ -2161,7 +2161,7 @@ async function socialApprove(id, btn){
   state._mcApproved=state._mcApproved||{}; state._mcApproved[id]=true;
   if(window.S27DATA&&S27DATA.markMetricoolApproved) S27DATA.markMetricoolApproved(id);
   // Optimistisch: het actie-blok meteen herrenderen (knop -> 'Goedgekeurd') i.p.v. wachten op de worker.
-  // Vroeger bleef de knop op 'Bezig…' hangen bij een trage/falende call — dat is hiermee weg.
+  // Vroeger bleef de knop op 'Bezig…' hangen bij een trage/falende call, dat is hiermee weg.
   var box=document.getElementById('socEditActsForm');
   if(box){ box.innerHTML=socialEditorActions(id); }
   else if(btn){ btn.disabled=true; btn.innerHTML=ic('check',15)+' Goedgekeurd'; }
@@ -2357,7 +2357,7 @@ function shootFormatDate(ds){const d=new Date(ds);return d.getDate()+' '+SHOOT_M
 function shootStepBar(active){return '<div class="shoot-steps">'+['Wanneer','Details'].map((s,i)=>{const cls=(i+1===active)?'active':((i+1<active)?'done':'');return '<span class="shoot-step '+cls+'"><b>'+(i+1)+'</b> '+s+'</span>';}).join('')+'</div>';}
 
 /* ---- Versie-bewaking (Y): gegarandeerd iedereen op de nieuwste versie ---- */
-// Eigen versie zelf-detecterend uit de portal.js-script-tag (?v=N) — geen extra bump-plek.
+// Eigen versie zelf-detecterend uit de portal.js-script-tag (?v=N), geen extra bump-plek.
 var APP_VERSION = (function(){
   try{
     var s=document.querySelector('script[src*="portal.js?v="]');
@@ -2367,7 +2367,7 @@ var APP_VERSION = (function(){
 })();
 // Check bij boot, bij terugkeer naar de app (PWA!) en elke 5 minuten. Hoger servernummer =
 // caches leeg + harde herlaad. Loop-guard: max één poging per gepushte versie per sessie
-// (anders zou een te vroege push — vóór de Pages-deploy — eindeloos herladen).
+// (anders zou een te vroege push, vóór de Pages-deploy, eindeloos herladen).
 async function checkPortalVersion(){
   if(!APP_VERSION) return;
   var now=Date.now();
@@ -2375,7 +2375,7 @@ async function checkPortalVersion(){
   state._verLastCheck=now;
   var target=0;
   // ZELF-VERVERSEND: lees de LIVE index.html (network-first via de SW) en neem de hoogste ?v=N.
-  // Zo ververst ELKE Pages-deploy automatisch alle clients — zonder de handmatige 'Push'-knop.
+  // Zo ververst ELKE Pages-deploy automatisch alle clients, zonder de handmatige 'Push'-knop.
   try{
     var ir=await fetch('/index.html?ts='+now,{cache:'no-store'});
     if(ir&&ir.ok){ var html=await ir.text(); var hi=0,m,re=/[?&]v=(\d+)/g; while((m=re.exec(html))){ var n=Number(m[1])||0; if(n>hi)hi=n; } if(hi>target)target=hi; }
@@ -2419,7 +2419,7 @@ async function pushPortalVersion(btn){
 
 /* ---- 🐞 Portaal-feedback (WS-3b, team-only): schermvullende pagina ---- */
 // Melder-dropdown = LIVE ClickUp-workspace-leden via het teamLeden-endpoint (Vincent 12-06:
-// exact wie in ClickUp assignee kan zijn; wie er niet in zit — zoals Celien nu — staat er
+// exact wie in ClickUp assignee kan zijn; wie er niet in zit, zoals Celien nu, staat er
 // dus ook niet tussen). Fallback-snapshot wordt enkel gebruikt tot/tenzij de fetch er (niet) is.
 var BUG_TEAM_FALLBACK=['Anouk de Hoon','Arne Goetschalckx','Bjorn Borgers','Danique Bosch','Eline Meyvis','Eva Goetschalckx','Griet Beyens','Guus Van den Heuvel','Ilke Meeusen','Ines Permentiers','Johanna Augustyns','Klaas Vanhove','Lara Hooyberghs','Viktor Hendrickx','Vincent Verleije','Ward Frijters','Wout Goos'];
 function _bugTeamNamen(){ return (state._bugTeam&&state._bugTeam.length)?state._bugTeam.map(function(l){return String(l.naam||'');}):BUG_TEAM_FALLBACK.slice(); }
@@ -2580,9 +2580,9 @@ function goContact(){
   var tt=$id('topbarTitle'); if(tt) tt.textContent='Contact';
   page.innerHTML='<div class="panel active br-blue" data-screen-label="contact"><div class="contactpage">'
     +'<h1>Waarmee kunnen we je helpen?</h1>'
-    +'<p class="sdesc" style="margin:4px 0 22px">Kies hieronder — dan komt je vraag meteen bij de juiste persoon terecht.</p>'
+    +'<p class="sdesc" style="margin:4px 0 22px">Kies hieronder, dan komt je vraag meteen bij de juiste persoon terecht.</p>'
     +'<div class="contact-grid">'
-      +'<button class="contact-card br-blue" onclick="openOfferteWizard()"><span class="cc-ic">'+ic('plus',24)+'</span><b>Nieuw project</b><span>Stel zelf je project samen — wij werken de offerte persoonlijk uit.</span><span class="cc-go">Start een aanvraag '+ic('arrow',14)+'</span></button>'
+      +'<button class="contact-card br-blue" onclick="openOfferteWizard()"><span class="cc-ic">'+ic('plus',24)+'</span><b>Nieuw project</b><span>Stel zelf je project samen, wij werken de offerte persoonlijk uit.</span><span class="cc-go">Start een aanvraag '+ic('arrow',14)+'</span></button>'
       +'<button class="contact-card br-pink" onclick="contactVraagForm()"><span class="cc-ic">'+ic('msg',24)+'</span><b>Algemene vraag</b><span>Vragen over je samenwerking, facturatie of iets anders? Ilke helpt je verder.</span><span class="cc-go">Stel je vraag '+ic('arrow',14)+'</span></button>'
       +'<button class="contact-card br-green" onclick="openWebTicket()"><span class="cc-ic">'+ic('doc',24)+'</span><b>Website support</b><span>Een bug, aanpassing of vraag over je site? Maak een ticket met bijlagen.</span><span class="cc-go">Ticket aanmaken '+ic('arrow',14)+'</span></button>'
     +'</div>'
@@ -2596,7 +2596,7 @@ function contactVraagForm(){
   var host=$id('contactVraagHost'); if(!host) return;
   host.innerHTML='<div class="card contact-form">'
     +'<h2 style="font-family:var(--font-display);font-size:17px;margin:0 0 4px">Je vraag voor Ilke</h2>'
-    +'<p class="sdesc" style="margin:0 0 14px">We bezorgen ze rechtstreeks — antwoord komt op het e-mailadres waarmee je bent ingelogd.</p>'
+    +'<p class="sdesc" style="margin:0 0 14px">We bezorgen ze rechtstreeks, antwoord komt op het e-mailadres waarmee je bent ingelogd.</p>'
     +'<label class="ms-label">Onderwerp</label>'
     +'<input type="text" id="cvOnderwerp" class="shoot-zoek" style="margin:4px 0 12px" maxlength="140" placeholder="Waar gaat het over?">'
     +'<label class="ms-label">Je vraag</label>'
@@ -2796,7 +2796,7 @@ function shootDrawCal(tid){
     +'<p class="shoot-intro">Paarse dagen = team volledig vrij · gele = nog plek. Boekingen tot een jaar vooruit, ten vroegste over 3 werkdagen. Je plant in: <b>'+escapeHtml(shootTeamLabel(ctx))+'</b>.</p>'
     +'<div class="shoot-cols">'
       +'<div class="shoot-col-l"><div id="shoot-cal-'+tid+'">'+shootCalHTML(tid)+'</div></div>'
-      +'<div class="shoot-col-r"><div id="shoot-slots-'+tid+'">'+(ctx.selectedDate?shootSlotsHTML(tid):'<div class="shoot-slotcard shoot-slot-hint"><span class="fs" style="color:var(--ink-4)">Kies links een dag — dan zie je hier meteen de mogelijke starturen.</span></div>')+'</div>'
+      +'<div class="shoot-col-r"><div id="shoot-slots-'+tid+'">'+(ctx.selectedDate?shootSlotsHTML(tid):'<div class="shoot-slotcard shoot-slot-hint"><span class="fs" style="color:var(--ink-4)">Kies links een dag, dan zie je hier meteen de mogelijke starturen.</span></div>')+'</div>'
       +'<div class="shoot-actions"><button class="btn btn-branch br-purple" id="shoot-next-'+tid+'" '+((ctx.selectedDate&&ctx.selectedTime)?'':'disabled')+' onclick="shootGoDetails(\''+tid+'\')">Verder →</button></div>'
     +'</div></div>';
 }
@@ -2831,7 +2831,7 @@ function shootGoDetails(tid){
       +'<div class="shoot-row"><div class="shoot-field"><label>Voornaam *</label><input type="text" id="shoot-voornaam-'+tid+'" value="'+escapeHtml(pf.voornaam||'')+'" placeholder="Jouw voornaam"></div><div class="shoot-field"><label>E-mailadres *</label><input type="email" id="shoot-email-'+tid+'" value="'+escapeHtml(pf.email||'')+'" placeholder="jij@merk.be"></div></div>'
       +'<label class="ms-label" style="margin-top:14px">Startlocatie van de shoot *</label>'
       +(ctx.locatieVast
-        ? '<div class="shoot-locvast">'+ic('check',14)+'<span>'+escapeHtml(ctx.locatieVast)+'</span><em>Door Studio 27 vastgelegd — wijzigen kan via het team.</em></div>'
+        ? '<div class="shoot-locvast">'+ic('check',14)+'<span>'+escapeHtml(ctx.locatieVast)+'</span><em>Door Studio 27 vastgelegd, wijzigen kan via het team.</em></div>'
         : '<div class="shoot-acwrap" id="shoot-acwrap-'+tid+'"><input type="text" class="shoot-zoek" id="shoot-zoek-'+tid+'" placeholder="Zoek je adres (begin te typen)…" autocomplete="off" oninput="shootSuggest(\''+tid+'\',this.value)"><div class="shoot-sugg" id="shoot-sugg-'+tid+'"></div></div>'
         +'<div class="shoot-row-loc"><input type="text" id="shoot-straat-'+tid+'" placeholder="Straat + nummer" autocomplete="off" oninput="shootClearCoords(\''+tid+'\')"><input type="text" id="shoot-postcode-'+tid+'" placeholder="Postcode" maxlength="4" autocomplete="off" oninput="shootClearCoords(\''+tid+'\')"><input type="text" id="shoot-gemeente-'+tid+'" placeholder="Gemeente" autocomplete="off" oninput="shootClearCoords(\''+tid+'\')"></div>')
       +'<div class="shoot-row"><div class="shoot-field"><label>Contactpersoon op locatie (indien anders dan jij)</label><input type="text" id="shoot-cnaam-'+tid+'" placeholder="Naam"></div><div class="shoot-field"><label>GSM contactpersoon</label><input type="text" id="shoot-cgsm-'+tid+'" placeholder="04XX XX XX XX"></div></div>'
@@ -2989,7 +2989,7 @@ function tourEnsureStyles(){
     '@media(min-width:981px){'+
       'body.tour-on.sb-rail .sidebar{transition:none!important;width:var(--sb-full)!important;box-shadow:0 22px 70px rgba(35,15,35,.22)!important;}'+
       /* de menubalk start tijdens de tour ná de uitgeklapte zijbalk (264px) i.p.v. de rail (64px),
-         zodat hij het woordmerk niet half overdekt — dat was de afgesneden "STUD…"-logo. */
+         zodat hij het woordmerk niet half overdekt, dat was de afgesneden "STUD…"-logo. */
       'body.tour-on.sb-rail .topbar{margin-left:var(--sb-full)!important;transition:none!important;}'+
       'body.tour-on.sb-rail .sidebar .sb-mini-mark{display:none!important;}'+   /* geen dubbele 27: enkel het wordmerk tijdens de tour */
       /* logo + bedrijfsnaam dezelfde inspringing als de overige menubalk-knoppen (niet flush links) */
@@ -3048,10 +3048,10 @@ function renderTour(){
   $id('tourPrev').style.visibility=tourIdx===0?'hidden':'visible';
   $id('tourNext').textContent=tourIdx===tourSteps.length-1?'Aan de slag!':'Volgende';
   // synchroon plaatsen (getBoundingClientRect forceert de layout, dus een net-geopende drawer
-  // telt al mee) — geen rAF-afhankelijkheid zodat het ook in een achtergrond-tab correct staat
+  // telt al mee), geen rAF-afhankelijkheid zodat het ook in een achtergrond-tab correct staat
   _tourPlace(el);
 }
-// alleen positioneren (geen content-rebuild) — wordt ook gebruikt bij scroll/resize
+// alleen positioneren (geen content-rebuild), wordt ook gebruikt bij scroll/resize
 function _tourPlace(el){
   var sp=$id('spotlight'), dg=$id('tourDialog'); if(!sp||!dg) return;
   var vw=window.innerWidth, vh=window.innerHeight, mobile=vw<=980;

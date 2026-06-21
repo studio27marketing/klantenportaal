@@ -362,7 +362,7 @@
   };
 
   // per-taak bestanden normaliseren: expliciet veld of geparset uit een ruwe URL-tekst.
-  // GEEN fallback op t.link/t.url: dat is de ClickUp-taaklink zelf, geen deliverable —
+  // GEEN fallback op t.link/t.url: dat is de ClickUp-taaklink zelf, geen deliverable -
   // die liet lege taken (bv. een lege pre-productietaak) onterecht 'met bestanden' lijken.
   function taakBestanden(t){
     if(t.bestanden && t.bestanden.length) return t.bestanden.map(function(f){ return { label:f.label||urlLabel(f.url||''), url:f.url||'', type:f.type||urlType(f.url||'') }; });
@@ -637,7 +637,7 @@
   };
   DATA.webSearch = function(){ return state.data.webSearch; };
 
-  // Google Ads real-time (direct via Google Ads API, geen Make) — zelfde periode-contract als Meta.
+  // Google Ads real-time (direct via Google Ads API, geen Make), zelfde periode-contract als Meta.
   DATA.loadGoogleAds = async function(opts){
     var o = (typeof opts === 'string') ? { period:opts } : (opts || {});
     if(!live()){ state.data.googleAds={linked:false}; return false; }   // demo/niet-live = legitiem geen Google

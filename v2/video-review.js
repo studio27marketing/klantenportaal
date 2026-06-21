@@ -1,5 +1,5 @@
 /* =============================================================================
-   Studio 27 Klantenportaal — VIDEO-REVIEW module (frame-accurate feedback)
+   Studio 27 Klantenportaal, VIDEO-REVIEW module (frame-accurate feedback)
    -----------------------------------------------------------------------------
    Haakt ZONDER panels.js-wijzigingen in op de bestaande deliverable-rijen
    (.deliv-file): een klik op een Vimeo- of Google Drive-videolink opent de
@@ -113,7 +113,7 @@
   }
 
   /* =============================================================================
-     SPELER — dual-mode wrapper (vimeo iframe / drive <video>), zelfde API als POC
+     SPELER, dual-mode wrapper (vimeo iframe / drive <video>), zelfde API als POC
      ============================================================================= */
   function createPlayer() {
     var mode = 'vimeo', player = null, videoEl = null, containerEl = null;
@@ -228,7 +228,7 @@
   }
 
   /* =============================================================================
-     REVIEW-OVERLAY — volledige flow in één afgesloten instantie
+     REVIEW-OVERLAY, volledige flow in één afgesloten instantie
      ============================================================================= */
   var current = null; // actieve review-instantie (max 1)
 
@@ -280,7 +280,7 @@
       '          <span id="vrTime" class="vr-time">0:00.0</span>' +
       '          <select id="vrQual" class="vr-qual vr-hidden" title="Videokwaliteit" aria-label="Videokwaliteit"></select>' +
       '        </div>' +
-      '        <p class="vr-hint">📍 Klik of tik op de video om een feedbackpunt te plaatsen — de video pauzeert vanzelf.</p>' +
+      '        <p class="vr-hint">📍 Klik of tik op de video om een feedbackpunt te plaatsen, de video pauzeert vanzelf.</p>' +
       '      </div>' +
       '    </section>' +
       '    <aside class="vr-panel">' +
@@ -288,7 +288,7 @@
       '      <div id="vrList" class="vr-list"><p class="vr-empty" id="vrEmpty">Nog geen feedbackpunten.<br>Klik of tik gewoon <strong>op de video</strong>.</p></div>' +
       '      <div class="vr-atts">' +
       '        <h4>Bijlagen voor het team</h4>' +
-      '        <label class="vr-drop"><input id="vrPanelFiles" type="file" accept="' + ACCEPT + '" multiple hidden><span>+ bestand (beeld, PDF, font, ZIP — max 15 MB)</span></label>' +
+      '        <label class="vr-drop"><input id="vrPanelFiles" type="file" accept="' + ACCEPT + '" multiple hidden><span>+ bestand (beeld, PDF, font, ZIP, max 15 MB)</span></label>' +
       '        <div id="vrPanelAtts" class="vr-attrow"></div>' +
       '      </div>' +
       '    </aside>' +
@@ -308,7 +308,7 @@
       '</div>' +
       '<div id="vrSendScrim" class="vr-scrim vr-hidden"></div>' +
       '<div id="vrSendModal" class="vr-modal vr-hidden">' +
-      '  <div class="vr-sendhead"><span class="vr-sendic">🎬</span><div><b>Feedback indienen</b><span>Controleer of je feedback volledig is — daarna kun je in deze ronde niets meer toevoegen.</span></div></div>' +
+      '  <div class="vr-sendhead"><span class="vr-sendic">🎬</span><div><b>Feedback indienen</b><span>Controleer of je feedback volledig is, daarna kun je in deze ronde niets meer toevoegen.</span></div></div>' +
       '  <div class="vr-sendsum" id="vrSendLine"></div>' +
       '  <label class="vr-field"><span>Algemene opmerking <em>(optioneel)</em></span><textarea id="vrSummary" rows="3" placeholder="Feedback die niet aan één punt hangt…"></textarea></label>' +
       '  <label class="vr-confirm"><input type="checkbox" id="vrSendVolledig"><span>Mijn feedback is <b>volledig</b>. Ik begrijp dat ik in deze feedbackronde niets meer kan toevoegen en dat Studio 27 nu start met de verwerking.</span></label>' +
@@ -348,13 +348,13 @@
     if (st.closed) return;
     if (!ctx.ok || !d.ok) {
       close();
-      // Geen (leesbare) video — bv. een pdf/office/audio Drive-bestand of een tijdelijke fout.
+      // Geen (leesbare) video, bv. een pdf/office/audio Drive-bestand of een tijdelijke fout.
       // We sturen de klant NOOIT naar Google Drive: geef door aan de gestandaardiseerde
       // in-portal review (die desnoods zelf een nette 'kon niet inladen'-kaart toont).
       if (window.S27Review && typeof S27Review.pickReviewer === 'function') {
         S27Review.pickReviewer(url, { taskId: taskId, label: label, sourceEl: opts.sourceEl });
       } else {
-        toast((d && d.message) || 'Dit bestand kan hier niet geopend worden — probeer het zo opnieuw.', 4200);
+        toast((d && d.message) || 'Dit bestand kan hier niet geopend worden, probeer het zo opnieuw.', 4200);
       }
       return;
     }
@@ -390,7 +390,7 @@
     if (st.locked) {
       var prevL = $('vrPrev');
       prevL.innerHTML = (d.is_approved
-        ? 'Deze video is goedgekeurd — mooi zo! Hieronder vind je alles als naslag terug.'
+        ? 'Deze video is goedgekeurd, mooi zo! Hieronder vind je alles als naslag terug.'
         : 'Je feedback op deze versie is definitief doorgestuurd' + (d.last_submitted_at ? ' op ' + new Date(d.last_submitted_at).toLocaleDateString('nl-BE') : '') + '. Hieronder zie je de punten als naslag.')
         + (st.lockedSummary ? '<br><span class="vr-locksum">Algemene opmerking: ' + st.lockedSummary.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</span>' : '');
       prevL.classList.remove('vr-hidden');
@@ -574,7 +574,7 @@
         .forEach(function (a, i) { a.sequenceNumber = i + 1; });
     }
     function placePin(pin) {
-      if (st.locked) { toast('Deze versie is al definitief doorgestuurd — feedback is vergrendeld als naslag.', 3800); return; }
+      if (st.locked) { toast('Deze versie is al definitief doorgestuurd, feedback is vergrendeld als naslag.', 3800); return; }
       P.pause();
       var provisional = st.annotations.filter(function (a) { return a.timestampSec <= pin.timestampSec; }).length + 1;
       st.pendingPin = { timestampSec: pin.timestampSec, xPct: pin.xPct, yPct: pin.yPct, sequenceNumber: provisional };
@@ -810,7 +810,7 @@
         try { localStorage.removeItem(st.draftKey); } catch (e) { }
         close();
         toast(res.data.all_approved
-          ? '🎉 Video goedgekeurd — bedankt! Je kan alles nu ook downloaden.'
+          ? '🎉 Video goedgekeurd, bedankt! Je kan alles nu ook downloaden.'
           : '🎉 Video goedgekeurd! Zodra je de overige video\u2019s van dit onderdeel goedkeurt, komen de downloads vrij.', 4600);
         // detail verversen zodat de status/downloads meteen kloppen
         try {
@@ -822,7 +822,7 @@
         } catch (e) { }
       } else {
         ab.disabled = false; ab.textContent = '✓ Video goedkeuren';
-        toast('Goedkeuren lukte net niet — probeer zo opnieuw.', 3600);
+        toast('Goedkeuren lukte net niet, probeer zo opnieuw.', 3600);
       }
     });
     $('vrSend').addEventListener('click', function () {
@@ -845,13 +845,13 @@
     $('vrSendScrim').addEventListener('mousedown', closeSend);
     $('vrSendGo').addEventListener('click', async function () {
       if (st.uploadsBusy > 0) {
-        $('vrSendErr').textContent = 'Nog een upload bezig — even geduld.';
+        $('vrSendErr').textContent = 'Nog een upload bezig, even geduld.';
         $('vrSendErr').classList.remove('vr-hidden');
         return;
       }
       var vol = $('vrSendVolledig');
       if (vol && !vol.checked) {
-        $('vrSendErr').textContent = 'Vink eerst aan dat je feedback volledig is — dan starten wij met de verwerking.';
+        $('vrSendErr').textContent = 'Vink eerst aan dat je feedback volledig is, dan starten wij met de verwerking.';
         $('vrSendErr').classList.remove('vr-hidden');
         return;
       }
@@ -868,14 +868,14 @@
       btn.disabled = false; btn.textContent = 'Feedback indienen';
       var rd = res.data || {};
       if (!res.ok || !rd.ok) {
-        $('vrSendErr').textContent = rd.message || 'Indienen lukte niet — probeer het zo opnieuw.';
+        $('vrSendErr').textContent = rd.message || 'Indienen lukte niet, probeer het zo opnieuw.';
         $('vrSendErr').classList.remove('vr-hidden');
         return;
       }
       try { localStorage.removeItem(st.draftKey); } catch (e) { }
       closeSend();
       close();
-      toast('🎉 Feedback verzonden — het team gaat ermee aan de slag!', 4200);
+      toast('🎉 Feedback verzonden, het team gaat ermee aan de slag!', 4200);
       if (opts.sourceEl && opts.sourceEl.isConnected && opts.sourceEl.tagName !== 'BUTTON' && !opts.sourceEl.parentElement.querySelector('.vr-sentpill')) {
         var pill = document.createElement('span');
         pill.className = 'vr-sentpill';
@@ -904,7 +904,7 @@
   }
 
   /* =============================================================================
-     INTEGRATIE — klik-delegatie op de bestaande deliverable-rijen (geen
+     INTEGRATIE, klik-delegatie op de bestaande deliverable-rijen (geen
      panels.js-wijziging): video-links openen de review i.p.v. een nieuw tabblad
      ============================================================================= */
   document.addEventListener('click', function (e) {
@@ -913,7 +913,7 @@
     var row = a.closest && a.closest('.deliv-file, .fbc-view');   // dekt ook de proces-feedbackkaart (.fbc-view)
     if (!row) return;
     if (!isReviewable(a.href)) return;
-    // taskId uit de rij (data-task) én pas dan uit de actieve-project-staat — anders lekt een
+    // taskId uit de rij (data-task) én pas dan uit de actieve-project-staat, anders lekt een
     // Drive-videolink/-bestand naar een nieuw tabblad zodra state.activeProject (nog) leeg is.
     var taskId = String(row.getAttribute('data-task') || (window.state && state.activeProject) || '');
     if (!taskId) return; // echt buiten projectcontext: normaal gedrag

@@ -1,5 +1,5 @@
 /* =============================================================================
-   Studio 27 Klantenportaal — FEEDBACK-CORE (gestandaardiseerd review-systeem)
+   Studio 27 Klantenportaal, FEEDBACK-CORE (gestandaardiseerd review-systeem)
    -----------------------------------------------------------------------------
    Eén gedeelde review-overlay + een register van type-specifieke viewers voor
    ÉLK deliverable-bestand (video, pdf, foto-map, pptx/office, audio, overig).
@@ -41,7 +41,7 @@
     { key: 'idee', label: 'Idee', color: '#12AC4E' },
   ];
   function annType(k) { for (var i = 0; i < ANN_TYPES.length; i++) if (ANN_TYPES[i].key === k) return ANN_TYPES[i]; return ANN_TYPES[0]; }
-  // pdf.js legacy (mjs) build — ESM, draait zonder bundler in elke moderne browser
+  // pdf.js legacy (mjs) build, ESM, draait zonder bundler in elke moderne browser
   var PDFJS_VER = '4.10.38';
   var PDFJS_BASE = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/' + PDFJS_VER + '/';
   var PDFJS_MJS = PDFJS_BASE + 'pdf.min.mjs';
@@ -74,7 +74,7 @@
   //   vimeo -> 'v'+id ; drive-bestand -> 'd'+id ; drive-map -> 'g'+id ;
   //   anders -> 'u'+fnv1a(url.toLowerCase().replace(/[?#].*$/,''))
   function linkKeyOf(url) {
-    var u = String(url || '').trim();   // identiek aan de worker (str(url).trim()) — anders divergeren de 'u'-keys
+    var u = String(url || '').trim();   // identiek aan de worker (str(url).trim()), anders divergeren de 'u'-keys
     var v = parseVimeoId(u); if (v) return 'v' + v;
     var d = parseDriveFileId(u); if (d) return 'd' + d;
     var g = parseDriveFolderId(u); if (g) return 'g' + g;
@@ -110,7 +110,7 @@
   function extOf(name) { return (String(name || '').split('.').pop() || '').toLowerCase(); }
   function isImg(ct) { return /^image\//.test(String(ct || '')); }
   // GATEWAY_BASE is een top-level const in api.js (globaal lexicaal, NIET op window). Daarom
-  // bare 'GATEWAY_BASE' gebruiken — net als video-review.js. window.GATEWAY_BASE was undefined,
+  // bare 'GATEWAY_BASE' gebruiken, net als video-review.js. window.GATEWAY_BASE was undefined,
   // waardoor alle calls naar een relatieve URL op de Pages-host gingen (405 → 'kon niet inladen').
   function gwUrl(rel) { return rel ? (/^https?:/.test(rel) ? rel : GATEWAY_BASE + rel) : ''; }
   function fmtClock(sec) { sec = Math.max(0, Math.round(sec || 0)); var m = Math.floor(sec / 60), s = sec % 60; return m + ':' + (s < 10 ? '0' : '') + s; }
@@ -161,7 +161,7 @@
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', end);
   }
-  // Stuur de volledige stored-attachment-velden mee die de worker (cleanAtt) nodig heeft —
+  // Stuur de volledige stored-attachment-velden mee die de worker (cleanAtt) nodig heeft -
   // niet enkel {filename,url}, anders dropt de worker de bijlage (uploadStatus/key ontbreken).
   function cleanAttPayload(x) {
     return {
@@ -280,7 +280,7 @@
       if (pageNum) shape.page = pageNum;
       // de live-draft (c.el = draftHolder.el) BLIJFT staan tijdens de pop-over; bij Opslaan
       // tekent renderShapes de echte shape, bij Annuleren/× wist clearDraftShape draftHolder.el.
-      // (Niet opnieuw tekenen — dat orphant de originele draft en laat 'm achter na annuleren.)
+      // (Niet opnieuw tekenen, dat orphant de originele draft en laat 'm achter na annuleren.)
       api.commentAt(derivePin(shape), ev.clientX, ev.clientY, shape);
     }
     surfaceEl.addEventListener('pointerdown', down);
@@ -300,7 +300,7 @@
     try {
       if (window.S27DATA && S27DATA.klantNaam) {
         var n = String(S27DATA.klantNaam() || '').trim();
-        // 'daar' is de groet-fallback van DATA.klantNaam — geen echte naam
+        // 'daar' is de groet-fallback van DATA.klantNaam, geen echte naam
         return (n && n.toLowerCase() !== 'daar') ? n : '';
       }
     } catch (e) { }
@@ -369,7 +369,7 @@
   }
 
   /* =============================================================================
-     OVERLAY-SHELL — gedeeld skelet voor alle niet-video viewers
+     OVERLAY-SHELL, gedeeld skelet voor alle niet-video viewers
      -----------------------------------------------------------------------------
      Levert: titel, ALTIJD een download-knop, een viewer-podium (door de reviewer
      gevuld), een comment-composer, en de knoppen 'Goedkeuren' + 'Feedback geven'.
@@ -430,7 +430,7 @@
       '</div>' +
       '<div id="fcSendScrim" class="fc-scrim fc-hidden"></div>' +
       '<div id="fcSendModal" class="fc-modal fc-hidden">' +
-      '  <div class="fc-sendhead"><span class="fc-sendic">📝</span><div><b>Feedback indienen</b><span>Controleer of je feedback volledig is — daarna kun je in deze ronde niets meer toevoegen.</span></div></div>' +
+      '  <div class="fc-sendhead"><span class="fc-sendic">📝</span><div><b>Feedback indienen</b><span>Controleer of je feedback volledig is, daarna kun je in deze ronde niets meer toevoegen.</span></div></div>' +
       '  <div class="fc-sendsum" id="fcSendLine"></div>' +
       '  <label class="fc-field"><span>Algemene opmerking <em>(optioneel)</em></span><textarea id="fcSummary" rows="3" placeholder="Feedback die niet aan één punt hangt…"></textarea></label>' +
       '  <label class="fc-confirm"><input type="checkbox" id="fcSendVolledig"><span>Mijn feedback is <b>volledig</b>. Ik begrijp dat ik in deze feedbackronde niets meer kan toevoegen en dat Studio 27 nu start met de verwerking.</span></label>' +
@@ -466,7 +466,7 @@
     var root = buildShell(st);
     var $ = function (id) { return root.querySelector('#' + id); };
     // item 1: de taaktitel hoort thuis in de PORTAAL-topbar (de bovenste menubalk, blijft zichtbaar
-    // boven de overlay) — niet nóg eens in de overlay-balk. De overlay-balk toont enkel 'Feedbackronde N'.
+    // boven de overlay), niet nóg eens in de overlay-balk. De overlay-balk toont enkel 'Feedbackronde N'.
     var _tb = document.getElementById('topbarTitle');
     if (_tb) { st._prevTopbar = _tb.textContent; _tb.textContent = projectTitle || _tb.textContent; }
 
@@ -495,7 +495,7 @@
       // wel een korte geruststelling als er iets openstaat.
       if (!st.locked && (st.annotations.length || ($('fcCompose') && $('fcCompose').value.trim()))) {
         try { if (st._saveDraft) st._saveDraft(); } catch (e) { }
-        toast('Je feedback is bewaard — je kunt later verder.', 2600);
+        toast('Je feedback is bewaard, je kunt later verder.', 2600);
       }
       close();
     });
@@ -558,7 +558,7 @@
       prev.classList.remove('fc-hidden');
       prev.classList.add('fc-lockbanner');
       prev.innerHTML = (d.lr_state === 'approved')
-        ? 'Dit bestand is goedgekeurd — mooi zo! Hieronder vind je alles als naslag terug.'
+        ? 'Dit bestand is goedgekeurd, mooi zo! Hieronder vind je alles als naslag terug.'
         : 'Je feedback op dit bestand is definitief doorgestuurd. Hieronder zie je alles als naslag.';
       // bewaarde bundel terug tonen
       var lb = d.last_bundle || null;
@@ -630,7 +630,7 @@
       try { if (st.reviewer && st.reviewer.clearDraftShape) st.reviewer.clearDraftShape(); } catch (e) { }
     }
     function openInlinePopover(pin, cx, cy, existing, shape) {
-      if (st.locked) { toast('Dit bestand is al doorgestuurd — feedback is vergrendeld.', 3600); return; }
+      if (st.locked) { toast('Dit bestand is al doorgestuurd, feedback is vergrendeld.', 3600); return; }
       closeInlinePopover();
       try { closeAnnBubble(); } catch (e) { }
       var selType = (existing && existing.type) || 'wijziging';
@@ -768,7 +768,7 @@
       busy: function () { return !!st._pop; },
       // klik-to-comment: open de inline pop-over-editor exact op de klikplek; optionele markup-shape
       commentAt: function (pin, cx, cy, shape) {
-        if (st.locked) { toast('Dit bestand is al doorgestuurd — feedback is vergrendeld.', 3600); return; }
+        if (st.locked) { toast('Dit bestand is al doorgestuurd, feedback is vergrendeld.', 3600); return; }
         openInlinePopover(pin, cx, cy, null, shape);
       },
       // klik op een pin/kader → toon de opmerking read-only ter plaatse (item 9)
@@ -777,7 +777,7 @@
       // back-compat: oude reviewers die enkel een pin doorgeven → pop-over centraal
       composeWithPin: function (pin) { openInlinePopover(pin, null, null); },
       addAnnotation: function (a) {
-        if (st.locked) { toast('Dit bestand is al doorgestuurd — feedback is vergrendeld.', 3600); return; }
+        if (st.locked) { toast('Dit bestand is al doorgestuurd, feedback is vergrendeld.', 3600); return; }
         st.annotations.push({ id: rid('ann'), comment: String(a && a.comment || ''), pin: (a && a.pin) || null, author: commentAuthor(), attachments: (a && a.attachments) || [], createdAt: new Date().toISOString() });
         renderAll();
       },
@@ -832,7 +832,7 @@
       };
       toolBtns.forEach(function (b) { b.addEventListener('click', function () { setTool(b.getAttribute('data-tool')); }); });
       setTool('comment');
-      // zoom (item 13) — enkel voor viewers met setZoom (pdf/office/pptx)
+      // zoom (item 13), enkel voor viewers met setZoom (pdf/office/pptx)
       if (def.setZoom) {
         $('fcZoom').classList.remove('fc-hidden');
         st.zoom = 1;
@@ -846,7 +846,7 @@
         $('fcZoomReset').addEventListener('click', function () { applyZoom(1); });
       }
     }
-    /* ---- comment-paneel tonen/verbergen — STANDAARD DICHT (item 8/14) ---- */
+    /* ---- comment-paneel tonen/verbergen, STANDAARD DICHT (item 8/14) ---- */
     var _collapsed = true;
     function setCollapsed(c) {
       _collapsed = c;
@@ -1038,12 +1038,12 @@
         try { localStorage.removeItem(st._draftKey); } catch (e) { }   // item 5: draft opruimen bij goedkeuren
         close();
         toast(res.data.all_approved
-          ? '🎉 Goedgekeurd — bedankt! Alles van dit onderdeel is nu af.'
+          ? '🎉 Goedgekeurd, bedankt! Alles van dit onderdeel is nu af.'
           : '🎉 Goedgekeurd! Keur je de overige bestanden van dit onderdeel ook goed, dan ronden we het af.', 4600);
         refreshDetail();
       } else {
         ab.disabled = false; ab.textContent = 'Goedkeuren';
-        toast((res.data && res.data.message) || 'Goedkeuren lukte net niet — probeer zo opnieuw.', 3600);
+        toast((res.data && res.data.message) || 'Goedkeuren lukte net niet, probeer zo opnieuw.', 3600);
       }
     });
 
@@ -1067,9 +1067,9 @@
     $('fcSendCancel').addEventListener('click', closeSend);
     $('fcSendScrim').addEventListener('mousedown', closeSend);
     $('fcSendGo').addEventListener('click', async function () {
-      if (st.uploadsBusy > 0) { showSendErr('Nog een upload bezig — even geduld.'); return; }
+      if (st.uploadsBusy > 0) { showSendErr('Nog een upload bezig, even geduld.'); return; }
       var vol = $('fcSendVolledig');
-      if (vol && !vol.checked) { showSendErr('Vink eerst aan dat je feedback volledig is — dan starten wij met de verwerking.'); return; }
+      if (vol && !vol.checked) { showSendErr('Vink eerst aan dat je feedback volledig is, dan starten wij met de verwerking.'); return; }
       // los composer-veld als extra punt meenemen
       var pending = $('fcCompose').value.trim();
       if (pending) {
@@ -1091,10 +1091,10 @@
       });
       btn.disabled = false; btn.textContent = 'Feedback indienen';
       var rd = res.data || {};
-      if (!res.ok || !rd.ok) { showSendErr(rd.message || 'Indienen lukte niet — probeer het zo opnieuw.'); return; }
+      if (!res.ok || !rd.ok) { showSendErr(rd.message || 'Indienen lukte niet, probeer het zo opnieuw.'); return; }
       try { localStorage.removeItem(st._draftKey); } catch (e) { }   // ingediende ronde-draft opruimen (item 5)
       closeSend(); close();
-      toast('🎉 Feedback ingediend — het team gaat ermee aan de slag!', 4200);
+      toast('🎉 Feedback ingediend, het team gaat ermee aan de slag!', 4200);
       markSentSource();
       refreshDetail();
     });
@@ -1134,7 +1134,7 @@
   }
 
   /* =============================================================================
-     REVIEWER-REGISTER — per mediaType een viewer met {detect, init, renderAnchor}
+     REVIEWER-REGISTER, per mediaType een viewer met {detect, init, renderAnchor}
      ============================================================================= */
   var REVIEWERS = {};
   function registerReviewer(type, def) { REVIEWERS[type] = Object.assign({ type: type }, def || {}); }
@@ -1153,7 +1153,7 @@
   }
   var PDF_REVIEWER = {
     pins: true,
-    emptyHint: 'Nog geen opmerkingen. Klik in het document op de plek waar je iets wil aanduiden — er opent een venstertje om je opmerking te typen en (optioneel) een bijlage toe te voegen.',
+    emptyHint: 'Nog geen opmerkingen. Klik in het document op de plek waar je iets wil aanduiden, er opent een venstertje om je opmerking te typen en (optioneel) een bijlage toe te voegen.',
     init: async function (api, ctx) {
       var lib = await ensurePdfJs();
       var src = api.stream_url || api.url;
@@ -1291,7 +1291,7 @@
       });
     },
     onAnnotationsChanged: function (anns) { if (this._layoutPins) this._layoutPins(anns); },
-    // ZOOM (item 13): CSS-resample van de canvassen — de pagina-box groeit mee, dus de
+    // ZOOM (item 13): CSS-resample van de canvassen, de pagina-box groeit mee, dus de
     // bestaande overflow geeft scrollbars en de genormaliseerde pins/shapes blijven kloppen.
     setZoom: function (z) {
       this._zoom = z;
@@ -1324,7 +1324,7 @@
          PDF-reviewer maar zonder pagina (pin = {xNorm,yNorm}). ---- */
   var IMAGE_REVIEWER = {
     pins: true,
-    emptyHint: 'Klik op de foto op de plek waar je iets wil aanduiden — er opent een venstertje om je opmerking te typen en (optioneel) een bijlage toe te voegen. Sleep een bestaande pin om hem te verplaatsen.',
+    emptyHint: 'Klik op de foto op de plek waar je iets wil aanduiden, er opent een venstertje om je opmerking te typen en (optioneel) een bijlage toe te voegen. Sleep een bestaande pin om hem te verplaatsen.',
     init: function (api, ctx) {
       var self = this; this._api = api; this._draftShape = { el: null };
       var wrap = document.createElement('div'); wrap.className = 'fc-imgwrap';
@@ -1415,7 +1415,7 @@
   /* ---- AUDIO-reviewer: native <audio controls> + 1 globale feedback-textarea
          (de gedeelde composer in de shell vervult de globale-feedback-rol) ---- */
   registerReviewer('audio', {
-    emptyHint: 'Beluister het fragment en klik op <strong>Opmerking op dit moment</strong> om je feedback aan de exacte tijd te koppelen — of schrijf hieronder een algemene opmerking.',
+    emptyHint: 'Beluister het fragment en klik op <strong>Opmerking op dit moment</strong> om je feedback aan de exacte tijd te koppelen, of schrijf hieronder een algemene opmerking.',
     init: function (api, ctx) {
       var box = document.createElement('div');
       box.className = 'fc-audio';
@@ -1429,7 +1429,7 @@
       var mark = box.querySelector('.fc-audio-mark');
       if (api.locked) { mark.style.display = 'none'; }
       mark.addEventListener('click', function () {
-        if (api.locked) { api.toast('Dit bestand is al doorgestuurd — feedback is vergrendeld.', 3200); return; }
+        if (api.locked) { api.toast('Dit bestand is al doorgestuurd, feedback is vergrendeld.', 3200); return; }
         var t = Math.max(0, el.currentTime || 0);
         var r = mark.getBoundingClientRect();
         api.commentAt({ timestampSec: Math.round(t * 1000) / 1000 }, r.left + r.width / 2, r.top);
@@ -1454,7 +1454,7 @@
         '<div class="fc-foto-card">' +
         '  <div class="fc-foto-ic">🖼️</div>' +
         '  <b>Beeldmateriaal</b>' +
-        '  <p>Open de volledige galerij om alle foto’s groot te bekijken, te selecteren en — als alles in orde is — in één keer goed te keuren.</p>' +
+        '  <p>Open de volledige galerij om alle foto’s groot te bekijken, te selecteren en, als alles in orde is, in één keer goed te keuren.</p>' +
         '  <button class="fc-btn fc-primary fc-foto-open" type="button">Open de fotogalerij</button>' +
         '</div>';
       api.host.appendChild(box);
@@ -1549,7 +1549,7 @@
   });
 
   /* =============================================================================
-     DISPATCHER — bepaal het type en open de juiste viewer
+     DISPATCHER, bepaal het type en open de juiste viewer
      -----------------------------------------------------------------------------
      Video delegeert naar de bestaande, geteste S27VideoReview-overlay (frame-
      accurate). Al de rest gaat door de gedeelde shell + reviewer hierboven.
@@ -1569,11 +1569,11 @@
   }
 
   /* =============================================================================
-     INTEGRATIE — klik-delegatie op de bestaande deliverable-rijen
+     INTEGRATIE, klik-delegatie op de bestaande deliverable-rijen
      -----------------------------------------------------------------------------
      Vangt klikken op deliverable-links binnen .deliv-file op (alle types), in
      projectcontext, en routeert ze naar pickReviewer i.p.v. een nieuw tabblad.
-     S27VideoReview heeft een eigen, smallere delegatie (alleen video) — die
+     S27VideoReview heeft een eigen, smallere delegatie (alleen video), die
      blijft werken; wij vangen alleen NIET-video links af zodat er geen dubbele
      overlay opent.
      ============================================================================= */
