@@ -4330,7 +4330,7 @@ function chatUnstage(id){ state._chatStaged=(state._chatStaged||[]).filter(funct
 //  - 'shoot'   : er is een nog-te-plannen shoot -> shootkalender-widget (altijd op locatie).
 // In alle andere gevallen (mode 'none' of geen plan-data) verdwijnt de module volledig.
 // Plan-module: één kaart per plannbaar item (det.plan.items, bepaald door de worker via
-// 'Kan beginnen' + due_date). Meerdere shoots/meetings tegelijk mogelijk. Geen items -> niets.
+// projectstatus 'in progress' + due_date). Meerdere shoots/meetings tegelijk mogelijk. Geen items -> niets.
 function scheduleBlock(det, p){
   const br = (p&&p.br)||'blue';
   if(!det){

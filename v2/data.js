@@ -310,7 +310,7 @@
         out.push({ br:br.br, cat:br.label, title:'Review nodig', ctx:'Er staat iets klaar voor jou bij <b>'+esc(p.naam)+'</b>. Geef je akkoord of je feedback.',
           cta:'Bekijk', action:"openProject('"+esc(p.task_id)+"','auto')", urgent:true, icon:'st_feedback' });
       }
-      // Plannbare taken (wij hebben 'Kan beginnen' aangevinkt, nog geen due date) -> 'nieuwe taak klaar'-melding.
+      // Plannbare taken (project loopt 'in progress', nog geen due date) -> 'nieuwe taak klaar'-melding.
       (p.plan_items||[]).forEach(function(it){
         var isShoot=it.type==='shoot';
         out.push({ br:br.br, cat:br.label, title:'Klaar om in te plannen',
