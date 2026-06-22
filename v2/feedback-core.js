@@ -473,11 +473,28 @@
     function vrLift(on) { try { document.body.classList.toggle('fc-lift', !!on); } catch (e) { } }
 
     // nav-klik in de sidebar sluit de review eerst (zoals video-review)
-    var navClose = function (e) { if (!st.closed && e.target.closest && e.target.closest('.sb-item')) close(); };
+    // onverzonden feedback? (pins/comments, composer-tekst of gestagede bijlagen, en niet vergrendeld)
+    function fcHasUnsent() { if (st.locked) return false; if (st.annotations && st.annotations.length) return true; var c = $('fcCompose'); if (c && c.value.trim()) return true; if (st.composerAtts && st.composerAtts.length) return true; return false; }
+    function fcConfirmLeave(onLeave) {
+      if (window.S27Leave && window.S27Leave.ask) { window.S27Leave.ask({ onChoice: function (leave) { if (leave) onLeave(); } }); }
+      else if (confirm('Weet je zeker dat je wil weggaan? Je feedback is nog niet doorgestuurd.')) onLeave();
+    }
+    var _fcLeaveDisarm = null;
+    // sidebar-nav (desktop): blokkeer en waarschuw bij onverzonden feedback, anders sluit + laat navigeren
+    var navClose = function (e) {
+      if (st.closed) return;
+      var item = e.target.closest && e.target.closest('.sb-item');
+      if (!item) return;
+      if (fcHasUnsent()) {
+        e.preventDefault(); e.stopPropagation();
+        fcConfirmLeave(function () { close(); setTimeout(function () { try { item.click(); } catch (x) { } }, 30); });
+      } else { close(); }
+    };
     document.addEventListener('click', navClose, true);
 
     function close() {
       if (st.closed) return;
+      try { if (_fcLeaveDisarm) _fcLeaveDisarm(); } catch (e) { }
       try { if (st._saveDraft) st._saveDraft(); } catch (e) { }   // item 5: bewaar lopende feedback bij sluiten
       st.closed = true;
       vrLift(false);
@@ -491,14 +508,11 @@
       current = null;
     }
     $('fcClose').addEventListener('click', function () {
-      // niet-ingediende feedback wordt automatisch bewaard (item 5) → geen blokkerende vraag,
-      // wel een korte geruststelling als er iets openstaat.
-      if (!st.locked && (st.annotations.length || ($('fcCompose') && $('fcCompose').value.trim()))) {
-        try { if (st._saveDraft) st._saveDraft(); } catch (e) { }
-        toast('Je feedback is bewaard, je kunt later verder.', 2600);
-      }
+      if (fcHasUnsent()) { fcConfirmLeave(function () { toast('Je feedback is bewaard, je kunt later verder.', 2600); close(); }); return; }
       close();
     });
+    // tab sluiten/verversen/site verlaten + browser-terug-pijltje
+    try { if (window.S27Leave && window.S27Leave.arm) _fcLeaveDisarm = window.S27Leave.arm(fcHasUnsent, function () { close(); }); } catch (e) { }
     current = { close: close };
 
     /* ---- context ophalen ---- */

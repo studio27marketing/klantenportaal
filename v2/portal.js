@@ -917,6 +917,62 @@ function markSkipAutoLand(tak){ if(!tak) return; state._skipAutoLand=state._skip
 function closeModal(){ if(typeof _isContentTak==='function'&&_isContentTak(state._backTab||'')) markSkipAutoLand(state._backTab); goTab(state._backTab||'start'); }
 
 /* =============================================================================
+   VERLAAT-WAARSCHUWING (gedeeld) — gebruikt door de feedbacksystemen (video + pdf/
+   office/foto). Toont een nette, gemerkte herinnering wanneer de klant de pagina
+   dreigt te verlaten met nog-niet-verzonden feedback. Eén gedeelde helper zodat
+   beide systemen exact dezelfde tekst en stijl gebruiken (Studio 27-tone, je/jouw).
+   - ask(): gemerkte bottom-sheet/dialoog (mp-overlay-stijl) voor IN-app-acties
+   - arm(): beforeunload (tab sluiten/verversen/site verlaten) + browser-terug-guard
+   ============================================================================= */
+window.S27Leave = (function(){
+  function ask(opts){
+    opts=opts||{};
+    var title=opts.title||'Weet je zeker dat je wil weggaan?';
+    var body=opts.body||'Je feedback is nog niet doorgestuurd. Je werk blijft lokaal bewaard, dus je kan later verder.';
+    var stay=opts.stay||'Terug naar feedback';
+    var go=opts.go||'Toch weggaan';
+    var onChoice=opts.onChoice||function(){};
+    var el=document.createElement('div'); el.className='mp-overlay s27leave-ov';
+    el.innerHTML='<div class="mp-modal s27leave-modal" role="alertdialog" aria-modal="true" onclick="event.stopPropagation()">'
+      +'<div class="s27leave-bd"><b>'+escapeHtml(title)+'</b><p>'+escapeHtml(body)+'</p></div>'
+      +'<div class="s27leave-act"><button type="button" class="btn btn-ghost btn-sm s27l-go">'+escapeHtml(go)+'</button>'
+      +'<button type="button" class="btn btn-primary btn-sm s27l-stay">'+escapeHtml(stay)+'</button></div></div>';
+    document.body.appendChild(el); document.body.classList.add('mp-lock');
+    void el.getBoundingClientRect(); el.classList.add('show');
+    var done=function(leave){ el.classList.remove('show'); document.body.classList.remove('mp-lock'); setTimeout(function(){ try{el.remove();}catch(e){} },300); onChoice(!!leave); };
+    el.querySelector('.s27l-stay').onclick=function(){ done(false); };
+    el.querySelector('.s27l-go').onclick=function(){ done(true); };
+    el.addEventListener('mousedown',function(e){ el._d=(e.target===el); });
+    el.addEventListener('click',function(e){ if(e.target===el && el._d) done(false); });   // scrim-klik = veilig blijven
+    return el;
+  }
+  // hasUnsentFn()=>bool ; onLeave()=sluit de overlay. Geeft een disarm()-functie terug.
+  function arm(hasUnsentFn, onLeave){
+    var armed=true;
+    var unloadH=function(e){ if(armed && hasUnsentFn && hasUnsentFn()){ e.preventDefault(); e.returnValue=''; return ''; } };
+    window.addEventListener('beforeunload', unloadH);
+    try{ history.pushState({s27leave:1}, ''); }catch(e){}   // sentinel-entry zodat browser-terug eerst hier landt
+    var popH=function(){
+      if(!armed) return;
+      if(hasUnsentFn && hasUnsentFn()){
+        ask({ onChoice:function(leave){
+          if(leave){ armed=false; cleanup(); if(onLeave) onLeave(); }
+          else { try{ history.pushState({s27leave:1}, ''); }catch(e){} }   // blijven: herstel de sentinel
+        }});
+      } else { armed=false; cleanup(); if(onLeave) onLeave(); }
+    };
+    window.addEventListener('popstate', popH);
+    function cleanup(){ try{ window.removeEventListener('beforeunload', unloadH); }catch(e){} try{ window.removeEventListener('popstate', popH); }catch(e){} }
+    return function disarm(){
+      if(!armed){ cleanup(); return; }
+      armed=false; cleanup();
+      try{ if(history.state && history.state.s27leave) history.back(); }catch(e){}   // ruim de sentinel op (popH is uit -> geen neveneffect)
+    };
+  }
+  return { ask:ask, arm:arm };
+})();
+
+/* =============================================================================
    ECHTE HANDLERS
    ============================================================================= */
 async function sendChat(input){

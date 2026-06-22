@@ -1521,3 +1521,18 @@ button.ond-head{cursor:pointer;}
   /* Compacte TeamView-schakelaar in de topbar: label weg, enkel de switch (minder gedrang) */
   .vmode-lab{display:none;}
 }
+
+/* ============================================================
+   VERLAAT-WAARSCHUWING (feature #3) — gemerkte bevestiging bovenop de
+   feedback-overlays. Hergebruikt de mp-overlay-backdrop maar toont een compacte
+   GECENTREERDE alert (geen bottom-sheet), op elk schermformaat.
+   ============================================================ */
+.mp-overlay.s27leave-ov{z-index:10010; align-items:center; justify-content:center; padding:20px;}
+.mp-overlay.s27leave-ov .s27leave-modal{max-width:420px; width:100%; max-height:none; border-radius:20px; animation:none;}
+.s27leave-modal::before{display:none !important;}   /* geen grijp-handvat: dit is een alert, geen sheet */
+.s27leave-bd{padding:24px 24px 6px;}
+.s27leave-bd b{display:block; font-family:var(--font-display); font-weight:800; font-size:18px; color:var(--ink); line-height:1.25; margin-bottom:8px;}
+.s27leave-bd p{font-size:14px; line-height:1.55; color:var(--ink-3); margin:0;}
+.s27leave-act{display:flex; gap:10px; justify-content:flex-end; padding:18px 24px 22px; flex-wrap:wrap;}
+.s27leave-act .btn{flex:0 0 auto;}
+@media(max-width:480px){ .s27leave-act{flex-direction:column-reverse;} .s27leave-act .btn{width:100%; justify-content:center;} }

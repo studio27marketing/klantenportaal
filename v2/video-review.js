@@ -322,12 +322,29 @@
 
     // sidebar is zichtbaar naast de review (desktop): een nav-klik sluit de review eerst,
     // anders navigeert het portaal onzichtbaar achter de overlay.
-    var navClose = function (e) { if (!st.closed && e.target.closest('.sb-item')) close(); };
+    // onverzonden feedback? (pins/comments, composer-tekst of gestagede bijlagen, en niet vergrendeld)
+    function hasUnsent() { if (st.locked) return false; if (st.annotations && st.annotations.length) return true; var c = $('vrCompText'); if (c && c.value.trim()) return true; if (st.composerAtts && st.composerAtts.length) return true; return false; }
+    function confirmLeave(onLeave) {
+      if (window.S27Leave && window.S27Leave.ask) { window.S27Leave.ask({ onChoice: function (leave) { if (leave) onLeave(); } }); }
+      else if (confirm('Weet je zeker dat je wil weggaan? Je feedback is nog niet doorgestuurd.')) onLeave();
+    }
+    var _leaveDisarm = null;
+    // sidebar-nav (desktop): blokkeer en waarschuw bij onverzonden feedback, anders sluit + laat navigeren
+    var navClose = function (e) {
+      if (st.closed) return;
+      var item = e.target.closest && e.target.closest('.sb-item');
+      if (!item) return;
+      if (hasUnsent()) {
+        e.preventDefault(); e.stopPropagation();
+        confirmLeave(function () { try { saveDraft(); } catch (x) { } close(); setTimeout(function () { try { item.click(); } catch (x) { } }, 30); });
+      } else { close(); }
+    };
     document.addEventListener('click', navClose, true);
     var vrLift = function (on) { try { document.body.classList.toggle('vr-lift', !!on); } catch (e) { } };
     function close() {
       if (st.closed) return;
       st.closed = true;
+      try { if (_leaveDisarm) _leaveDisarm(); } catch (e) { }
       vrLift(false);
       try { document.removeEventListener('click', navClose, true); } catch (e) { }
       try { P.destroy(); } catch (e) { }
@@ -336,10 +353,12 @@
       current = null;
     }
     $('vrClose').addEventListener('click', function () {
-      if (!st.locked && st.annotations.length && !confirm('Je hebt nog niet-verzonden feedback. Sluiten? (Je punten blijven lokaal bewaard.)')) return;
+      if (hasUnsent()) { confirmLeave(function () { try { saveDraft(); } catch (x) { } close(); }); return; }
       if (!st.locked) saveDraft();
       close();
     });
+    // tab sluiten/verversen/site verlaten + browser-terug-pijltje
+    try { if (window.S27Leave && window.S27Leave.arm) _leaveDisarm = window.S27Leave.arm(hasUnsent, function () { try { saveDraft(); } catch (e) { } close(); }); } catch (e) { }
     current = { close: close };
 
     /* ---- context ophalen ---- */
