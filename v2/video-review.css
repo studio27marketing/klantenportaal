@@ -185,3 +185,12 @@ body.vr-lift .vr-root{z-index:960;}   /* modal/composer/fullscreen open -> boven
 #vrApprove { background: var(--s27-green, #12AC4E); color: #fff; border: none; }
 #vrApprove:hover { filter: brightness(1.06); }
 .vr-locked #vrApprove { display: none !important; }
+
+/* Volume-control (feature #2) — past in de lichte glass-controlebalk; merk-paars duimpje */
+.vr-vol{display:flex;align-items:center;gap:5px;flex:none}
+.vr-volslider{-webkit-appearance:none;appearance:none;width:60px;height:5px;border-radius:999px;background:var(--line,#E7DFD3);outline:none;cursor:pointer;flex:none}
+.vr-volslider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:14px;height:14px;border-radius:50%;background:var(--s27-purple,#9441DB);border:2px solid #fff;cursor:pointer;box-shadow:0 1px 3px rgba(60,40,80,.3)}
+.vr-volslider::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--s27-purple,#9441DB);border:2px solid #fff;cursor:pointer}
+.vr-stage:fullscreen .vr-volslider,.vr-stage.vr-max .vr-volslider{background:rgba(255,255,255,.3)}
+@media(max-width:560px){.vr-volslider{width:46px}}
+@media(max-width:430px){.vr-volslider{display:none}}

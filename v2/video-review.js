@@ -117,7 +117,7 @@
      ============================================================================= */
   function createPlayer() {
     var mode = 'vimeo', player = null, videoEl = null, containerEl = null;
-    var videoW = 1920, videoH = 1080, duration = 0, lastTime = 0, paused = true, loopOn = false;
+    var videoW = 1920, videoH = 1080, duration = 0, lastTime = 0, paused = true, loopOn = false, vol = 1, muted = false;
     var timeL = [], stateL = [];
     var emitTime = function () { timeL.forEach(function (f) { f(lastTime, duration); }); };
     var emitState = function (p) { stateL.forEach(function (f) { f(p); }); };
@@ -211,6 +211,11 @@
       // loop aan/uit (native): Vimeo player.setLoop, drive <video>.loop.
       setLoop: function (b) { loopOn = !!b; if (mode === 'drive') { if (videoEl) videoEl.loop = loopOn; } else { try { player.setLoop(loopOn); } catch (e) { } } return loopOn; },
       getLoop: function () { return loopOn; },
+      // volume (0..1) + mute, werkt voor zowel Vimeo (setVolume/setMuted) als Drive (<video>.volume/.muted).
+      setVolume: function (v) { vol = Math.max(0, Math.min(1, v)); muted = (vol === 0); if (mode === 'drive') { if (videoEl) { videoEl.volume = vol; videoEl.muted = (vol === 0); } } else { try { player.setVolume(vol); } catch (e) { } } return vol; },
+      getVolume: function () { return muted ? 0 : vol; },
+      toggleMute: function () { muted = !muted; if (mode === 'drive') { if (videoEl) videoEl.muted = muted; } else { try { player.setMuted(muted); } catch (e) { } } return muted; },
+      isMuted: function () { return muted || vol === 0; },
       // kwaliteit: enkel zinvol voor Vimeo (meerdere renditions). Drive = 1 MP4 -> lege lijst (geen verzonnen opties).
       getQualities: async function () { if (mode === 'drive') return []; try { return (await player.getQualities()) || []; } catch (e) { return []; } },
       setQuality: async function (q) { if (mode === 'drive') return; try { await player.setQuality(q); } catch (e) { } },
@@ -278,6 +283,13 @@
       '          <button id="vrLoop" class="vr-ctrlbtn" title="Herhalen (loop)" aria-label="Herhalen" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg></button>' +
       '          <div id="vrBar"><div id="vrProg"></div></div>' +
       '          <span id="vrTime" class="vr-time">0:00.0</span>' +
+      '          <div class="vr-vol" id="vrVolWrap">' +
+      '            <button id="vrMute" class="vr-ctrlbtn" title="Geluid aan of uit" aria-label="Geluid aan of uit">' +
+      '              <svg id="vrIcoVol" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 9 7 9 12 4 12 20 7 15 3 15"/><path d="M16 8a5 5 0 0 1 0 8M19 5a9 9 0 0 1 0 14"/></svg>' +
+      '              <svg id="vrIcoMute" class="vr-hidden" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 9 7 9 12 4 12 20 7 15 3 15"/><path d="M22 9l-6 6M16 9l6 6"/></svg>' +
+      '            </button>' +
+      '            <input id="vrVol" class="vr-volslider" type="range" min="0" max="100" value="100" title="Volume" aria-label="Volume">' +
+      '          </div>' +
       '          <select id="vrQual" class="vr-qual vr-hidden" title="Videokwaliteit" aria-label="Videokwaliteit"></select>' +
       '        </div>' +
       '        <p class="vr-hint">📍 Klik of tik op de video om een feedbackpunt te plaatsen, de video pauzeert vanzelf.</p>' +
@@ -470,6 +482,21 @@
         sel.classList.remove('vr-hidden');
         sel.addEventListener('change', function () { P.setQuality(sel.value); });
       }).catch(function () { });
+    })();
+    // volume + mute (Vimeo en Drive). Op mobiel regelen de apparaatknoppen ook het volume;
+    // de slider geeft hier dezelfde controle als in Vimeo. lastVol onthoudt het niveau voor mute/unmute.
+    (function () {
+      var slider = $('vrVol'), muteBtn = $('vrMute'), icoVol = $('vrIcoVol'), icoMute = $('vrIcoMute');
+      if (!slider || !muteBtn) return;
+      var lastVol = 1;
+      function setIco(off) { if (icoVol) icoVol.classList.toggle('vr-hidden', off); if (icoMute) icoMute.classList.toggle('vr-hidden', !off); muteBtn.setAttribute('aria-label', off ? 'Geluid aan' : 'Geluid uit'); }
+      slider.addEventListener('input', function () { var v = Number(slider.value) / 100; if (v > 0) lastVol = v; P.setVolume(v); setIco(v === 0); });
+      muteBtn.addEventListener('click', function () {
+        var cur = Number(slider.value) / 100;
+        if (cur > 0) { lastVol = cur; P.setVolume(0); slider.value = 0; setIco(true); }
+        else { var v = lastVol > 0 ? lastVol : 1; P.setVolume(v); slider.value = Math.round(v * 100); setIco(false); }
+      });
+      setIco(false);
     })();
 
     /* ---- fullscreen (eigen element-fullscreen: pins blijven zichtbaar) ---- */
