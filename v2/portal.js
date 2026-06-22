@@ -9,7 +9,7 @@
 "use strict";
 
 let currentTab = 'start';
-const SECTION_LABEL = { start:'Jouw taken', berichten:'Berichten', strategie:'Strategie', branding:'Branding', video:'Video- en fotografie', socials:'Socials', advertenties:'Adverteren', webprestaties:'Website', 'alle-projecten':'Alle projecten', meetings:'Meetings', nieuwproject:'Nieuw project', offertes:'Offertes', facturatie:'Facturatie', instellingen:'Instellingen' };
+const SECTION_LABEL = { start:'Jouw taken', berichten:'Berichten', strategie:'Strategie', branding:'Branding', video:'Video- en fotografie', socials:'Socials', advertenties:'Adverteren', webprestaties:'Website', 'alle-projecten':'Alle projecten', meetings:'Meetings', nieuwproject:'Nieuw project', offertes:'Offertes', facturatie:'Facturatie', instellingen:'Instellingen', aivragen:'AI-vragen' };
 
 function qsp(){ return new URLSearchParams(location.search); }
 function $id(x){ return document.getElementById(x); }
@@ -753,6 +753,7 @@ async function goTab(name){
   if(name==='socials' && typeof socialChatMount==='function') socialChatMount();   // social-chat koppelen aan de sociale-media-taak
   if(name==='advertenties' && isRichView() && typeof adsRichMountTabCharts==='function') adsRichMountTabCharts();   // team-weergave: tab-grafieken mounten
   if(name==='webprestaties' && typeof webMountCharts==='function') webMountCharts();   // Webprestaties-grafieken mounten
+  if(name==='aivragen' && typeof aiVragenMount==='function') aiVragenMount();   // team: gelogde AI-vragen ophalen
   if(name==='socials' && isRichView() && socialTab && socialTab()==='rapport' && typeof socialRichMountCharts==='function') socialRichMountCharts();   // team-weergave: social-rapport-grafieken mounten
   updateNavBadges();
 
@@ -1249,7 +1250,30 @@ function pushBot(text,who){ var m=$id('botMsgs'); var d=document.createElement('
 function botReply(q){
   var m=$id('botMsgs'); var t=document.createElement('div'); t.className='typing'; t.innerHTML='<i></i><i></i><i></i><span class="typing-tx">Onze assistent kijkt het na…</span>'; m.appendChild(t); m.scrollTop=m.scrollHeight;
   var ans=botAnswer(q);
+  logBotQuestion(q);   // monitoring: log de klantvraag (fire-and-forget, niet in demo)
   setTimeout(function(){ t.remove(); pushBot(ans,'bot'); }, 600);
+}
+// Klantvraag loggen zodat het team kan observeren wat klanten vragen/missen (geen reactie, enkel analyse).
+// Fire-and-forget: faalt stil, vertraagt de bot niet, en NOOIT in demoMode.
+function logBotQuestion(q){
+  if(state.demoMode) return;
+  if(!state.session || !state.session.bedrijf_id) return;
+  try{ api(ENDPOINTS.botLog, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, vraag:String(q||'').slice(0,400), intent:_botIntent(q) }); }catch(e){}
+}
+function _botIntent(q){
+  var s=String(q||'').toLowerCase();
+  if(/^(hoi|hallo|hey|h[eé]|dag|goeie|hi|hello|yo)\b/.test(s)) return 'groet';
+  if(/^(bedankt|dank|merci|thx|top|super|perfect|oke|ok)\b/.test(s)) return 'dank';
+  if(/wat.*(klaar|doen|wacht|openstaa)|actiepunt|to-?do|takenlijst|mijn taken|moet ik nog/.test(s)) return 'taken';
+  if(/meeting|afspraak|vergader|wanneer zien|samenzit|call/.test(s)) return 'meeting';
+  if(/feedback|goedkeur|afkeur|aanpass|opmerking|revisie|herzien|ronde|wijzig/.test(s)) return 'feedback';
+  if(/factu|betaal|boekhoud|offerte|prijs|kost|tarief|btw/.test(s)) return 'facturatie';
+  if(/social|\bpost|instagram|facebook|linkedin|tiktok|reel|story/.test(s)) return 'socials';
+  if(/adverteer|advertentie|campagne|\bads\b|resultaten|rendement|roas|vertoning|klik/.test(s)) return 'adverteren';
+  if(/website|\bseo\b|webdesign|webshop|zoekmachine|vindbaar/.test(s)) return 'website';
+  if(/status|hoe ?ver|voortgang|update|stand van zaken|wanneer.*(klaar|af|opgeleverd|online)/.test(s)) return 'status';
+  if(/contact|bereiken|spreken|bellen|telefoon|mail|iemand van|met jullie|met het team/.test(s)) return 'contact';
+  return 'overig';
 }
 /* ---- Dynamische assistent-chips: voorgestelde praktische vragen op basis van context.
    De chiptekst IS de vraag, dus em/en-dashes uit ClickUp-namen worden weggehaald (huisstijl). ---- */

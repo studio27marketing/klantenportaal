@@ -5064,12 +5064,50 @@ function webEditorCard(){
 }
 
 /* ---- panel registry ---- */
+/* ============================================================================
+   AI-VRAGEN (team-only monitoring) — observeer wat klanten aan de assistent vroegen.
+   Enkel zichtbaar voor staff (sb-admin + admin-mode). Leest botLogList (staff-gated),
+   gescoped op het acting-as-bedrijf. Puur observatie/analyse, geen reactie van hieruit.
+   ============================================================================ */
+var _AIV_INTENT_LABELS={taken:'Taken',meeting:'Meetings',feedback:'Feedback',facturatie:'Facturatie',socials:'Socials',adverteren:'Adverteren',website:'Website',status:'Status',contact:'Contact',groet:'Begroeting',dank:'Bedankt',overig:'Overig / off-topic'};
+function panelAiVragen(){
+  return '<div class="section-head"><h2>AI-vragen</h2></div>'
+    +'<p class="fs" style="color:var(--ink-3);margin:-4px 0 16px;max-width:640px">Wat deze klant aan de AI-assistent vroeg. Puur ter observatie en analyse: welke info missen klanten, wat zijn de veelgestelde vragen. Je reageert hier niet, dit is enkel voor het team.</p>'
+    +'<div id="aivBody"><div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Vragen worden opgehaald…</p></div></div>';
+}
+async function aiVragenMount(){
+  var box=document.getElementById('aivBody'); if(!box) return;
+  if(state.demoMode){ box.innerHTML=_aivRender(_aivDemoVragen(), {meeting:1,feedback:1,website:1,overig:1,taken:1}, 5); return; }
+  try{
+    var res=await api(ENDPOINTS.botLogList, { bedrijf_id: state.activeBedrijf || ((state.session&&state.session.bedrijf_id)||'') });
+    var d=(res&&res.data)||res||{};
+    if(!d || d.ok!==true){ box.innerHTML='<div class="empty" style="padding:50px"><p>Deze monitoring is enkel voor het team beschikbaar.</p></div>'; return; }
+    box.innerHTML=_aivRender(d.vragen||[], d.intents||{}, d.totaal||0);
+  }catch(e){ box.innerHTML='<div class="empty" style="padding:50px"><p>De vragen konden even niet opgehaald worden. Probeer het zo opnieuw.</p></div>'; }
+}
+function _aivRender(vragen, intents, totaal){
+  if(!vragen || !vragen.length) return '<div class="empty" style="padding:54px 16px;text-align:center"><div class="em-ic">'+ic('msg',40)+'</div><b style="font-family:var(--font-display);font-size:15px;color:var(--ink-2)">Nog geen vragen</b><p style="color:var(--ink-3);margin-top:5px">Zodra deze klant iets aan de assistent vraagt, verschijnt het hier.</p></div>';
+  var order=Object.keys(intents||{}).sort(function(a,b){return intents[b]-intents[a];});
+  var chips=order.map(function(k){ return '<span class="aiv-chip"><b>'+intents[k]+'</b> '+esc(_AIV_INTENT_LABELS[k]||k)+'</span>'; }).join('');
+  var rows=vragen.map(function(v){
+    var when=v.ts? new Date(v.ts).toLocaleString('nl-BE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
+    return '<div class="aiv-row"><div class="aiv-q">'+esc(v.vraag||'')+'</div><div class="aiv-meta"><span class="aiv-tag">'+esc(_AIV_INTENT_LABELS[v.intent]||v.intent||'overig')+'</span><span class="aiv-when">'+esc(when)+'</span></div></div>';
+  }).join('');
+  return '<div class="aiv-stats"><span class="aiv-tot">'+totaal+' '+(totaal===1?'vraag gesteld':'vragen gesteld')+'</span>'+(chips?('<div class="aiv-chips">'+chips+'</div>'):'')+'</div><div class="aiv-list">'+rows+'</div>';
+}
+function _aivDemoVragen(){ var n=Date.now(); return [
+  {vraag:'Wanneer is mijn volgende meeting?',intent:'meeting',ts:n-3600e3},
+  {vraag:'Hoe geef ik feedback op de montage?',intent:'feedback',ts:n-7200e3},
+  {vraag:'Wat is de status van mijn website?',intent:'website',ts:n-86400e3},
+  {vraag:'Kunnen jullie ook een logo maken?',intent:'overig',ts:n-90000e3},
+  {vraag:'Wat staat er voor mij klaar?',intent:'taken',ts:n-180000e3}
+]; }
 const PANELS={
   start:panelStart, berichten:panelBerichten,
   strategie:function(){return panelTak('strategie');}, branding:function(){return panelTak('branding');}, video:function(){return panelTak('video');},
   socials:panelSocials, advertenties:panelAdvertenties, webprestaties:panelWebprestaties, 'alle-projecten':panelAlleProjecten,
   meetings:panelMeetings, nieuwproject:panelOffertes, offertes:panelOffertes,
-  huisstijl:panelHuisstijl, facturatie:panelFacturatie, instellingen:panelInstellingen,
+  huisstijl:panelHuisstijl, facturatie:panelFacturatie, instellingen:panelInstellingen, aivragen:panelAiVragen,
 };
-const TAB_BRANCH={start:'blue',berichten:'blue',strategie:'blue',branding:'pink',video:'purple',socials:'yellow',advertenties:'orange',webprestaties:'green','alle-projecten':'blue',meetings:'blue',nieuwproject:'blue',offertes:'purple',huisstijl:'pink',facturatie:'green',instellingen:'indigo'};
+const TAB_BRANCH={start:'blue',berichten:'blue',strategie:'blue',branding:'pink',video:'purple',socials:'yellow',advertenties:'orange',webprestaties:'green','alle-projecten':'blue',meetings:'blue',nieuwproject:'blue',offertes:'purple',huisstijl:'pink',facturatie:'green',instellingen:'indigo',aivragen:'indigo'};
 const TAB_GROUP={projecten:'werk',socials:'werk',advertenties:'werk',webprestaties:'werk','alle-projecten':'werk',meetings:'plannen',nieuwproject:'plannen',offertes:'plannen',huisstijl:'bedrijf',facturatie:'bedrijf',instellingen:'bedrijf'};

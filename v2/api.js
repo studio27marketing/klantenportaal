@@ -149,6 +149,9 @@ const ENDPOINTS = {
   meetingBook:       GATEWAY_BASE + '/meetingBook',
   // Klant markeert de projectchat als gelezen → read-receipt voor het team. { task_id } -> { ok, read_at }.
   chatMarkRead:        GATEWAY_BASE + '/chatMarkRead',
+  // AI-assistent: klantvraag loggen (fire-and-forget) + (staff) de gelogde vragen ophalen voor monitoring.
+  botLog:              GATEWAY_BASE + '/botLog',
+  botLogList:          GATEWAY_BASE + '/botLogList',
   // Altijd-open klantchat op de vaste communicatietaak (server-side taak-resolutie; client stuurt GEEN task_id).
   commsChatList:       GATEWAY_BASE + '/commsChatList',
   commsChatPost:       GATEWAY_BASE + '/commsChatPost',
