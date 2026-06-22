@@ -1700,7 +1700,9 @@ function adsRichSamengevatTab(m,cur){
 function adsRichCampagnesTab(m,cur){
   var camps=(m.campaigns||[]);
   if(!camps.length) return '<div class="card" style="padding:24px;text-align:center;color:var(--ink-3)">Geen campagnes met activiteit in deze periode.</div>';
-  return camps.map(function(c){ return adsRichCampaign(c,cur); }).join('');
+  // snel-vergelijken: alles in 1 klik dicht/open klappen (enkel de kern-KPI's per campagne)
+  var bar=(camps.length>1)?'<div class="ar-camp-bar"><button type="button" class="ar-camp-allbtn" onclick="adsCampSetAll(true)">Alles dichtklappen</button><button type="button" class="ar-camp-allbtn" onclick="adsCampSetAll(false)">Alles openklappen</button></div>':'';
+  return bar+camps.map(function(c){ return adsRichCampaign(c,cur); }).join('');
 }
 /* Uitgebreide gegevens: alle ads over alle campagnes, eigen filterregels + drill naar de visual. */
 var ADS_FILTER_METRICS=[['linkClicks','Klikken'],['spend','Besteed (€)'],['impressions','Vertoningen'],['ctr','CTR (%)'],['cpc','CPC (€)'],['leads','Leads']];
@@ -1806,6 +1808,11 @@ function adsNotepadMount(){
 function adsNotepadToggle(){ var n=adsNoteState(); n.open=!n.open; var p=document.getElementById('adsNotePanel'); if(p) p.classList.toggle('open',n.open); var b=document.getElementById('adsNoteBtn'); if(b) b.classList.toggle('on',n.open); if(n.open){ var ta=document.getElementById('adsNoteTa'); if(ta){ ta.value=n.text||''; ta.focus(); } } }
 function adsNoteInput(){ var ta=document.getElementById('adsNoteTa'); if(!ta) return; adsNoteState().text=ta.value; var st=document.getElementById('adsNoteStat'); if(st) st.textContent='bewaren…'; clearTimeout(state._adsNoteTmr); state._adsNoteTmr=setTimeout(adsNoteSave,900); }
 function adsNoteSave(){ if(!(window.S27DATA&&S27DATA.saveAdsWorkspace)) return; S27DATA.saveAdsWorkspace({notes:adsNoteState().text}).then(function(ok){ var st=document.getElementById('adsNoteStat'); if(st){ st.textContent=ok?'opgeslagen ✓':'opslaan mislukt'; if(ok) setTimeout(function(){ var s2=document.getElementById('adsNoteStat'); if(s2&&s2.textContent==='opgeslagen ✓') s2.textContent=''; },1600); } }); }
+/* ---- Agendapunten ter voorbereiding van de meeting (bug Arne): persistent tekstveld in het
+   meeting-materiaal, auto-save met debounce via het bestaande ads-werkblad (KV-veld 'agenda'). ---- */
+function adsAgendaState(){ if(!state._adsAgenda) state._adsAgenda={loaded:false,text:''}; return state._adsAgenda; }
+function adsAgendaInput(){ var ta=document.getElementById('adsAgendaTa'); if(!ta) return; adsAgendaState().text=ta.value; var st=document.getElementById('adsAgendaStat'); if(st) st.textContent='bewaren…'; clearTimeout(state._adsAgendaTmr); state._adsAgendaTmr=setTimeout(adsAgendaSave,900); }
+function adsAgendaSave(){ if(!(window.S27DATA&&S27DATA.saveAdsWorkspace)) return; S27DATA.saveAdsWorkspace({agenda:adsAgendaState().text}).then(function(ok){ var st=document.getElementById('adsAgendaStat'); if(st){ st.textContent=ok?'opgeslagen ✓':'opslaan mislukt'; if(ok) setTimeout(function(){ var s2=document.getElementById('adsAgendaStat'); if(s2&&s2.textContent==='opgeslagen ✓') s2.textContent=''; },1600); } }); }
 /* per-tab charts: Samengevat = account-overzicht; Campagnes = per-campagne dag-evolutie */
 function adsRichMountTabCharts(){
   _adsApplyAccent();
@@ -2179,11 +2186,36 @@ function _titleCase(s){ return String(s).toLowerCase().replace(/_/g,' ').replace
 var _AR_STATUS_DOT={green:'#12AC4E',orange:'#E8A33A',grey:'#B8AEA0',red:'#DC2626',blue:'#3083DC'};
 function adsRichStatus(st){ st=String(st||'').toUpperCase(); var map={ACTIVE:['Actief','green'],PAUSED:['Gepauzeerd','orange'],CAMPAIGN_PAUSED:['Gepauzeerd','orange'],ADSET_PAUSED:['Gepauzeerd','orange'],ARCHIVED:['Gearchiveerd','grey'],DELETED:['Verwijderd','grey'],DISAPPROVED:['Afgekeurd','red'],PENDING_REVIEW:['In review','blue'],IN_PROCESS:['Bezig','blue'],WITH_ISSUES:['Aandacht','orange'],ENABLED:['Actief','green'],REMOVED:['Verwijderd','grey']}; var m=map[st]||[st?_titleCase(st):'-','grey']; var col=_AR_STATUS_DOT[m[1]]||_AR_STATUS_DOT.grey; return '<span class="ar-stdot" title="'+esc(m[0])+'" aria-label="'+esc(m[0])+'" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+col+';box-shadow:0 0 0 2px rgba(255,255,255,.6)"></span>'; }
 function adsRichObjLabel(o){ o=String(o||'').toUpperCase(); var map={OUTCOME_LEADS:'Leads',LEAD_GENERATION:'Leadgeneratie',OUTCOME_SALES:'Verkoop',CONVERSIONS:'Conversies',OUTCOME_TRAFFIC:'Verkeer',LINK_CLICKS:'Verkeer',OUTCOME_ENGAGEMENT:'Betrokkenheid',POST_ENGAGEMENT:'Betrokkenheid',OUTCOME_AWARENESS:'Naamsbekendheid',BRAND_AWARENESS:'Naamsbekendheid',REACH:'Bereik',VIDEO_VIEWS:'Videoweergaven',OUTCOME_APP_PROMOTION:'App-promotie'}; return o?(map[o]||_titleCase(o)):''; }
+/* ---- Per-campagne dichtklappen (team-view, bug Arne): toon enkel de kern-KPI-strip en verberg
+   de grafiek + adset/ad-tabellen, zodat campagnes compact onder elkaar te vergelijken zijn.
+   De keuze wordt per bedrijf onthouden in localStorage (blijft dus na herladen). ---- */
+function _adsCampColKey(){ return 'adsCampCollapsed_'+(state.activeBedrijf||(state.session&&state.session.bedrijf_id)||'x'); }
+function adsCampColSet(){ if(!state._adsCampCol){ try{ state._adsCampCol=JSON.parse(localStorage.getItem(_adsCampColKey())||'{}')||{}; }catch(e){ state._adsCampCol={}; } } return state._adsCampCol; }
+function adsCampCollapsed(cid){ return !!adsCampColSet()[cid]; }
+function _adsCampColPersist(){ try{ localStorage.setItem(_adsCampColKey(), JSON.stringify(adsCampColSet())); }catch(e){} }
+function _adsCampApply(card, col){
+  if(!card) return;
+  card.classList.toggle('ar-camp-collapsed', !!col);
+  var ch=card.querySelector('.ar-camp-chev'); if(ch){ ch.classList.toggle('open', !col); ch.setAttribute('aria-expanded', col?'false':'true'); }
+  if(!col){ try{ var c=_arFindCamp(card.getAttribute('data-cid')); if(c) adsRichBuildChart(c, _arCur()); }catch(e){} }   // openklappen -> grafiek (her)opbouwen
+}
+function adsCampToggle(cid){
+  var s=adsCampColSet(); s[cid]=!s[cid]; _adsCampColPersist();
+  var sel='.ar-camp[data-cid="'+(window.CSS&&CSS.escape?CSS.escape(String(cid)):String(cid))+'"]';
+  _adsCampApply(document.querySelector(sel), !!s[cid]);
+}
+function adsCampSetAll(collapse){
+  var s=adsCampColSet();
+  [].forEach.call(document.querySelectorAll('.ar-camp[data-cid]'), function(card){ var cid=card.getAttribute('data-cid'); s[cid]=!!collapse; _adsCampApply(card, !!collapse); });
+  _adsCampColPersist();
+}
 function adsRichCampaign(c,cur){
   var obj=c.objective?'<span class="ar-obj">'+esc(adsRichObjLabel(c.objective))+'</span>':'';
   var bud=c.budget?'<span class="ar-bud">'+arEur(c.budget,cur)+(c.budgetType==='daily'?' /dag':'')+'</span>':'';
-  return '<div class="ar-camp" data-cid="'+esc(c.id)+'">'
-    +'<div class="ar-camp-head"><span class="ar-camp-nm">'+esc(c.name||'Campagne')+'</span><div class="ar-camp-meta">'+adsRichStatus(c.status)+obj+bud+'</div></div>'
+  var col=adsCampCollapsed(c.id);
+  var chev='<button class="ar-camp-chev'+(col?'':' open')+'" onclick="adsCampToggle(\''+esc(c.id)+'\')" aria-expanded="'+(col?'false':'true')+'" title="Dichtklappen of uitklappen"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>';
+  return '<div class="ar-camp'+(col?' ar-camp-collapsed':'')+'" data-cid="'+esc(c.id)+'">'
+    +'<div class="ar-camp-head"><span class="ar-camp-headl">'+chev+'<span class="ar-camp-nm">'+esc(c.name||'Campagne')+'</span></span><div class="ar-camp-meta">'+adsRichStatus(c.status)+obj+bud+'</div></div>'
     +adsRichCampKpis(c,cur)
     +(c.daily&&c.daily.length?'<div class="ar-chartwrap"><canvas id="arch_'+esc(c.id)+'"></canvas></div>':'')
     +adsRichAdsetTable(c,cur)
@@ -2299,7 +2331,7 @@ function _arDayLabel(ymd){ var m=String(ymd||'').match(/(\d{4})-(\d{2})-(\d{2})/
 function adsRichMountCharts(){
   if(!isRichView()) return;
   var m=(window.S27DATA&&S27DATA.metaAdsRich&&S27DATA.metaAdsRich()); if(!m||!m.linked||!m.campaigns) return;
-  adsRichLoadChart().then(function(ok){ if(!ok||!window.Chart) return; m.campaigns.forEach(function(c){ adsRichBuildChart(c, m.currency||'EUR'); }); });
+  adsRichLoadChart().then(function(ok){ if(!ok||!window.Chart) return; m.campaigns.forEach(function(c){ if(!adsCampCollapsed(c.id)) adsRichBuildChart(c, m.currency||'EUR'); }); });
 }
 // Per-campagne dag-grafiek (taak 3): zelfde klikbare selector-mechaniek als het overzicht, per campagne gesleuteld.
 function adsRichBuildChart(c,cur){
@@ -2869,9 +2901,14 @@ function adsWsMeetingTab(){
     S27DATA.loadAdsWorkspace().then(function(){ if(adsRichTab()!=='meeting') return; var box=document.getElementById('adsBody'); if(box) box.innerHTML=adsWsMeetingTab(); });
   }
   var plus=ic('plus',14);
+  var _ag=adsAgendaState(); if(!_ag.loaded && state.data && state.data.adsWorkspace){ _ag.text=state.data.adsWorkspace.agenda||''; _ag.loaded=true; }
+  var agendaIco='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>';
   return '<div class="section-head" style="margin-top:2px"><h2>Meeting-materiaal</h2><span class="count" id="adsWsUpCount">'+adsWsUploads().length+'</span></div>'
     +'<p class="sdesc" style="margin:-2px 0 12px;max-width:70ch">Verzamel hier alles voor de meeting met deze klant: schermafbeeldingen, visuals, bestanden en handige links. Alles wordt per bedrijf bewaard.</p>'
     +'<div class="ws-mt">'
+      +'<div class="ws-add"><div class="ws-add-h">'+agendaIco+' Agendapunten</div>'
+        +'<textarea id="adsAgendaTa" class="ws-agenda-ta" placeholder="Bespreekpunten ter voorbereiding van de meeting, zodat je zeker niets vergeet…" oninput="adsAgendaInput()">'+esc(_ag.text)+'</textarea>'
+        +'<div class="ws-agenda-stat" id="adsAgendaStat"></div></div>'
       +'<div class="ws-add"><div class="ws-add-h">'+adsWsLinkIcon()+' Link toevoegen</div>'
         +'<div class="ws-addrow"><input type="text" id="adsWsLinkUrl" placeholder="https://… (bv. een rapport, ad-preview of Drive-map)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();adsWsLinkAdd();}">'
         +'<button class="ws-btn" onclick="adsWsLinkAdd()">'+plus+' Link toevoegen</button></div></div>'

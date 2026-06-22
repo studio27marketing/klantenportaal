@@ -1554,3 +1554,22 @@ body.admin-mode .sb-admin{display:flex;}
 .aiv-meta{display:flex;align-items:center;gap:10px;margin-top:8px;}
 .aiv-tag{font-family:var(--font-display);font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--s27-indigo-ink,#3A4A6B);background:var(--s27-indigo-soft,rgba(91,107,140,.12));border-radius:999px;padding:3px 9px;}
 .aiv-when{font-size:12px;color:var(--ink-4,#9E919E);}
+
+/* ============================================================
+   ADS-BUGS (Arne) — per-campagne dichtklappen (team-view).
+   ============================================================ */
+.ar-camp-headl{display:flex;align-items:center;gap:8px;min-width:0;}
+.ar-camp-chev{flex:none;border:none;background:transparent;cursor:pointer;padding:3px;color:var(--ink-4);display:inline-flex;align-items:center;justify-content:center;border-radius:7px;transition:color .15s,background .15s;}
+.ar-camp-chev:hover{color:var(--ink-2);background:var(--paper-2);}
+.ar-camp-chev svg{transition:transform .2s;}
+.ar-camp-chev:not(.open) svg{transform:rotate(-90deg);}
+.ar-camp-collapsed .ar-chartwrap,.ar-camp-collapsed .ar-table{display:none !important;}
+.ar-camp-collapsed .ar-campkpis{margin-bottom:0;}
+.ar-camp-bar{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px;}
+.ar-camp-allbtn{font-family:var(--font-display);font-weight:700;font-size:12px;color:var(--ink-3);background:var(--paper-2,#FAF7F2);border:1px solid var(--line,#E7DFD3);border-radius:999px;padding:7px 14px;cursor:pointer;transition:border-color .15s,color .15s;}
+.ar-camp-allbtn:hover{border-color:var(--s27-orange,#F66131);color:var(--ink);}
+
+/* Agendapunten-vak in ads meeting-materiaal (bug Arne) */
+.ws-agenda-ta{width:100%;box-sizing:border-box;min-height:96px;resize:vertical;font-family:var(--font-body);font-size:13.5px;line-height:1.5;color:var(--ink);background:#fff;border:1px solid var(--line,#E7DFD3);border-radius:10px;padding:10px 12px;outline:none;margin-top:8px;}
+.ws-agenda-ta:focus{border-color:var(--s27-orange,#F66131);}
+.ws-agenda-stat{font-family:var(--font-display);font-weight:700;font-size:11px;color:var(--ink-4);margin-top:5px;min-height:14px;}
