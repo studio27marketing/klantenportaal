@@ -9,7 +9,7 @@
 "use strict";
 
 let currentTab = 'start';
-const SECTION_LABEL = { start:'Home', berichten:'Berichten', strategie:'Strategie', branding:'Branding', video:'Video- en fotografie', socials:'Socials', advertenties:'Adverteren', webprestaties:'Website', 'alle-projecten':'Alle projecten', meetings:'Meetings', nieuwproject:'Nieuw project', offertes:'Offertes', facturatie:'Facturatie', instellingen:'Instellingen' };
+const SECTION_LABEL = { start:'Jouw taken', berichten:'Berichten', strategie:'Strategie', branding:'Branding', video:'Video- en fotografie', socials:'Socials', advertenties:'Adverteren', webprestaties:'Website', 'alle-projecten':'Alle projecten', meetings:'Meetings', nieuwproject:'Nieuw project', offertes:'Offertes', facturatie:'Facturatie', instellingen:'Instellingen' };
 
 function qsp(){ return new URLSearchParams(location.search); }
 function $id(x){ return document.getElementById(x); }
@@ -763,8 +763,10 @@ async function goTab(name){
 function updateNavBadges(){
   try{
     updateBellBadge();   // bel-badge werkt óók in demo (meldingen zijn daar nu wisbaar)
-    if(state.demoMode) return;
     var setB=function(tab,n){ var b=document.querySelector('.sb-item[data-tab="'+tab+'"] .sb-badge'); if(!b)return; if(n>0){ b.textContent=n; b.style.display=''; } else { b.style.display='none'; } };
+    // 'Jouw taken'-teller: aantal openstaande actiepunten naast het startscherm-item (werkt in demo én live)
+    try{ setB('start', ((typeof _notifItems==='function'?_notifItems():[])||[]).length); }catch(e){}
+    if(state.demoMode) return;
     var projs=(window.S27DATA&&S27DATA.projects())||null;
     if(projs && typeof TAK_TABS!=='undefined'){
       Object.keys(TAK_TABS).forEach(function(key){
@@ -3057,7 +3059,7 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($id('tourScrim
    body.tour-on) zodat de labels leesbaar zijn. */
 const TOUR_ALL=[
   {ic:'spark',       t:'Welkom in je portaal',          b:'We tonen je in een halve minuut waar je alles vindt. Je kan deze uitleg later altijd opnieuw bekijken via het vraagteken bovenaan.', targets:null},
-  {ic:'home',        t:'Je startscherm',                b:'Dit is je vertrekpunt. Alles wat op jou wacht staat hier bovenaan klaar: reviews, feedback, geplande shoots en meetings.', targets:['.sb-item[data-tab="start"]']},
+  {ic:'home',        t:'Jouw taken',                    b:'Dit is je vertrekpunt. Alles wat op jou wacht staat hier klaar: reviews, feedback, geplande shoots en meetings, en nieuwe berichten van je team.', targets:['.sb-item[data-tab="start"]']},
   {ic:'doc',         t:'Je projecten per discipline',   b:'Elke dienst heeft een eigen plek in de menubalk. Klik op een tak zoals Video & fotografie, Branding of Strategie om je projecten, bestanden en feedbackrondes te bekijken en goed te keuren.', targets:['.sb-item[data-tab="video"]','.sb-item[data-tab="branding"]','.sb-item[data-tab="strategie"]']},
   {ic:'st_progress', t:'Volg je resultaten',            b:'Bij Socials, Adverteren en Website volg je je cijfers in real time. Je kiest zelf de periode, en van elke pagina kan je de link doorsturen naar een collega.', targets:['.sb-item[data-tab="socials"]','.sb-item[data-tab="advertenties"]','.sb-item[data-tab="webprestaties"]']},
   {ic:'msg',         t:'Chatten met je team',           b:'Bij Berichten staan al je gesprekken met het Studio 27-team, gebundeld per project. Je kan ook gewoon antwoorden vanuit het project zelf.', targets:['.sb-item[data-tab="berichten"]']},

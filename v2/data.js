@@ -325,6 +325,16 @@
           ctx:'Je team stelde je een vraag in de chat van <b>'+esc(p.naam)+'</b>. Laat iets weten zodat we verder kunnen.',
           cta:'Open chat', action:"openProjectChat('"+esc(p.task_id)+"')", urgent:false, icon:'msg' });
       }
+      // Nieuw bericht VAN het team dat de klant nog niet opende (read-receipt) en dat niet al als
+      // 'wacht op jou' staat: ontvangen teamberichten horen ook in 'Jouw taken' thuis. Strikte
+      // van_klant===false-gate = geen kaart bij oude payload zonder dit veld (veilig, geen spam).
+      var lc2=p.last_chat;
+      if(lc2 && lc2.van_klant===false && !lc2.read_by_client && p.chat_wacht_op_klant!==true && p.chat_wacht_op_klant!=='true' && String(lc2.tekst||'').trim()){
+        out.push({ br:br.br, cat:br.label, title:'Nieuw bericht van je team',
+          ctx:'Je team schreef iets in de chat van <b>'+esc(p.naam)+'</b>: “'+esc(String(lc2.tekst).replace(/\s+/g,' ').slice(0,80))+'”',
+          cta:'Lees bericht', action:"openProjectChat('"+esc(p.task_id)+"')", urgent:false, icon:'msg',
+          nid:'chatmsg::'+p.task_id });
+      }
     });
     return out;
   };

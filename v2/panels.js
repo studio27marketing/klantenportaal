@@ -246,7 +246,8 @@ const _COCKPIT_MOCK = [
   {br:'orange',cat:'Online adverteren',title:'Rapport inplannen',ctx:'Tijd om de <b>resultaten van je campagnes</b> samen te bekijken. Prik een moment dat jou past.',cta:'Plan in',action:"goTab('meetings')",tag:'mei',urgent:false,icon:'st_plan'},
   {br:'yellow',cat:'Social media',title:'Feedback gevraagd',ctx:'Je <b>contentkalender</b> staat klaar ter goedkeuring. Bekijk de geplande posts en geef je akkoord.',cta:'Bekijk posts',action:"goTab('socials')",tag:'deze week',urgent:false,icon:'st_feedback'},
   {br:'purple',cat:'Video- en fotografie',title:'Klaar om in te plannen',ctx:'Je <b>productshoot</b> is klaar om ingepland te worden. Prik een datum die jou past.',cta:'Plan shoot',action:"openProject('p3')",tag:'binnenkort',urgent:true,icon:'st_plan'},
-  {br:'green',cat:'Webdesign',title:'Bericht wacht op jou',ctx:'We hebben een vraag in de chat van je <b>nieuwe website</b>. Laat iets weten zodat we verder kunnen.',cta:'Open chat',action:"openProjectChat('p2')",urgent:false,icon:'msg'}
+  {br:'green',cat:'Webdesign',title:'Bericht wacht op jou',ctx:'We hebben een vraag in de chat van je <b>nieuwe website</b>. Laat iets weten zodat we verder kunnen.',cta:'Open chat',action:"openProjectChat('p2')",urgent:false,icon:'msg'},
+  {br:'pink',cat:'Branding',title:'Nieuw bericht van je team',ctx:'Je team schreef iets in de chat van <b>Branding-traject</b>: “We hebben het moodboard net bijgewerkt, geef gerust je eerste indruk.”',cta:'Lees bericht',action:"openProjectChat('p4')",urgent:false,icon:'msg'}
 ];
 function _cockpitCard(a){
   return `<div class="action-card ${a.urgent?'urgent':''} br-${a.br}">
