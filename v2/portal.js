@@ -773,13 +773,12 @@ function updateNavBadges(){
       Object.keys(TAK_TABS).forEach(function(key){
         setB(key, _takProjects(TAK_TABS[key].discIds).filter(function(p){return p.status!=='done';}).length);
       });
-      setB('webprestaties', _takProjects(TAK_WEBSITE.discIds).filter(function(p){return p.status!=='done';}).length);
+      setB('webprestaties', (typeof _webProjects==='function'?_webProjects():_takProjects(TAK_WEBSITE.discIds)).filter(function(p){return p.status!=='done';}).length);
     }
-    var mt=(window.S27DATA&&S27DATA.meetings());
-    // Meetings-teller: ENKEL bij echte aankomende/recente afspraken (zelfde telling als panelMeetings upCount).
-    // Geen data geladen -> badge verbergen (setB(.,0)=display:none), nooit de hardgecodeerde index.html-waarde laten staan.
-    if(mt){ setB('meetings', (mt.list||[]).filter(function(m){return m.dt&&m.dt.getTime()>=Date.now()-86400000;}).length); }
-    else { setB('meetings', 0); }
+    // Meetings-teller (Bug 86caae2a6): tel ENKEL meetings die de klant nog moet inplannen ('Nog in te plannen'-
+    // momenten uit de cockpit, cta 'Plan moment'), NIET elke reeds-geplande/afgehandelde afspraak. Zo verschijnt
+    // er geen badge '2' terwijl er bij doorklikken niets in te plannen valt. Geen data -> 0 (badge verbergt zich).
+    try{ setB('meetings', ((typeof _meetingsTodo==='function'?_meetingsTodo():[])||[]).length); }catch(e){ setB('meetings',0); }
     // berichten + topbar-bel: geen betrouwbare ongelezen-telling -> mock-badge verbergen
     var bb=document.querySelector('.sb-item[data-tab="berichten"] .sb-badge'); if(bb) bb.style.display='none';
     var topBer=document.querySelector('.icon-btn[data-topnav="berichten"] .badge'); if(topBer) topBer.style.display='none';
@@ -1477,11 +1476,23 @@ function _chanSelect(){ return '<select class="rv-chan" style="font-family:var(-
 // de oude inline-flow in demo of als S27Review nog niet geladen is. Video -> S27VideoReview.
 function fileApprove(btn){ if(!_openFileReview(btn)) _fileReviewUI(btn,'approve'); }
 function fileFeedback(btn){ if(!_openFileReview(btn)) _fileReviewUI(btn,'feedback'); }
+// Bug 86ca92rhm: een reeds-goedgekeurd/afgerond bestand opnieuw kunnen bekijken+downloaden. De review-overlay
+// levert de gesigneerde download (werkt ook zonder Drive-toegang); val terug op de directe link als de overlay
+// niet beschikbaar is (demo / niet geladen) zodat dit nooit een dode knop wordt.
+function fileDownload(btn){
+  if(_openFileReview(btn)) return;
+  try{ var r=btn.closest && btn.closest('.deliv-file'); if(!r) return;
+    var a=r.querySelector('a[href]');
+    var url=(r.getAttribute('data-url')||'')||(a?(a.getAttribute('href')||''):'')||((r.tagName==='A')?(r.getAttribute('href')||''):'');
+    if(url && url!=='#') window.open(url,'_blank','noopener'); }catch(e){}
+}
 function _openFileReview(btn){
   try{
     if(state.demoMode) return false;                       // demo: oude inline-flow (geen worker-calls)
     var row=btn.closest && btn.closest('.deliv-file'); if(!row) return false;
-    var a=row.querySelector('a[href]'); var url=a?(a.getAttribute('href')||''):'';
+    // URL kan in een kind-<a>, in data-url, of (done-rij) op het element zelf staan -> alle drie ondersteunen
+    var a=row.querySelector('a[href]');
+    var url=(row.getAttribute('data-url')||'')||(a?(a.getAttribute('href')||''):'')||((row.tagName==='A')?(row.getAttribute('href')||''):'');
     if(!url || url==='#') return false;
     var taskId=row.getAttribute('data-task')||state.activeProject||'';
     var label=row.getAttribute('data-label')||'Bestand';

@@ -153,6 +153,11 @@ function _takProjects(discIds){
     return ls.some(function(l){ return discIds.indexOf(l.discId)>=0; });
   });
 }
+// Website-tak: een project hoort thuis op precies ÉÉN tak (takOfProject geeft content-takken voorrang op
+// Website). Toon op Website daarom enkel projecten waarvan de THUIS-tak 'webprestaties' is, zodat een primair
+// video-/branding-project met een los webdesign-sublabel niet (met zijn shoot-'in te plannen'-acties) naar de
+// Website-tak lekt. (Bug 86ca93hzg) De projecten blijven sowieso vindbaar onder 'Alle projecten'.
+function _webProjects(){ return _takProjects(TAK_WEBSITE.discIds).filter(function(p){ return takOfProject(p)==='webprestaties'; }); }
 // terug-tak van een project (voor openProject('auto') + detail-terugknop)
 function takOfProject(p){
   if(!p) return 'start';
@@ -445,12 +450,19 @@ function panelTak(key){
   const zicht=isContent?all:all.filter(p=>p.status!=='done');
   const leeg='<div class="empty"><div class="em-ic">'+(T.stamp?'<img src="assets/'+T.stamp+'" width="56" height="56" alt="">':ic('doc',56))+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog geen '+esc(T.label.toLowerCase())+'-projecten</b><p style="margin:6px 0 14px">Zin om hier samen iets op te starten?</p><button class="btn btn-branch br-'+T.br+'" onclick="openOfferteWizard(\''+(key==='video'?'video':key)+'\')">'+ic('plus',15)+' Start een aanvraag</button></div>';
   if(isContent){
-    if(!zicht.length) return leeg;
+    // Afgewerkte (gefactureerde) projecten blijven vindbaar via het archief — ook op de content-takken zelf,
+    // niet enkel onder 'Alle projecten'/Website. (Bug 86ca95yxj) takArchiefSectie heeft een eigen lege-staat.
+    var arch=takArchiefSectie(key, T);
+    if(!zicht.length){
+      // geen lopende projecten: toon de uitnodiging, en hang het archief eronder ALS er afgeronde projecten zijn
+      var hasArch=!state.demoMode && ((window.S27DATA&&S27DATA.done&&S27DATA.done())||[]).some(function(d){ var ls=(d.labels&&d.labels.length)?d.labels:[{discId:''}]; return ls.some(function(l){ return T.discIds.indexOf(l.discId)>=0; }); });
+      return leeg+(hasArch?arch:'');
+    }
     // vlakke, chronologische lijst (Vincent 2026-06-11): geen actiepunt-clusters, gewoon
     // alle lopende projecten onder elkaar in volgorde van aanmaak.
     var rows=zicht.slice().sort(function(a,b){ return (a.dateCreated||0)-(b.dateCreated||0); })
       .map(function(p){ return videoProjRij(p, key); }).join('');
-    return '<div class="vrij-lijst">'+rows+'</div>';
+    return '<div class="vrij-lijst">'+rows+'</div>'+arch;
   }
   const lopend=zicht.length ? projDienst(all, key) : leeg;
   return takContactCard(key, T, zicht)+lopend+takArchiefSectie(key, T);
@@ -4345,8 +4357,8 @@ function deliverOpenLabel(type){ return type==='video'?'Bekijk video':type==='im
 function deliverFileRow(d, opts){
   opts=opts||{}; const t=d.type==='video'?'video':d.type==='img'?'img':'doc';
   const open = d.url ? `<a class="btn btn-branch br-${opts.br||'blue'} btn-sm" href="${esc(d.url)}" target="_blank" rel="noopener">${ic(t==='video'?'play':'arrow',14)} ${deliverOpenLabel(t)}</a>` : '';
-  const actions = opts.done ? spill('done') : `${open}${opts.review!==false?`<button class="btn btn-outline btn-sm" onclick="fileFeedback(this)">Feedback indienen</button><button class="btn btn-branch btn-sm br-green" onclick="fileApprove(this)">Goedkeuren</button>`:''}`;
-  return `<div class="deliv-file" data-label="${esc(d.label||'Bestand')}"${opts.taskId?` data-task="${esc(opts.taskId)}"`:''}>
+  const actions = opts.done ? `${spill('done')}${d.url?`<button class="btn btn-outline btn-sm" onclick="fileDownload(this)">${ic('download',14)} Bekijk &amp; download</button>`:''}` : `${open}${opts.review!==false?`<button class="btn btn-outline btn-sm" onclick="fileFeedback(this)">Feedback indienen</button><button class="btn btn-branch btn-sm br-green" onclick="fileApprove(this)">Goedkeuren</button>`:''}`;
+  return `<div class="deliv-file" data-label="${esc(d.label||'Bestand')}" data-url="${esc(d.url||'')}"${opts.taskId?` data-task="${esc(opts.taskId)}"`:''}>
     <span class="df-ic">${ic(t,18)}</span>
     <div class="df-tx"><b>${esc(d.label||'Bestand')}</b>${d.url?`<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:42ch;display:inline-block">${esc((d.url||'').replace(/^https?:\/\//,''))}</span>`:''}</div>
     <div class="df-act">${actions}</div>
@@ -4360,7 +4372,7 @@ function approvedTaskRow(t){
     return `<div class="approved-row"><span class="check-circ">${ic('check',13)}</span><span>${esc(t.naam)}</span></div>`;
   }
   const fid='atask-'+(++_aTaskSeq);
-  const files=(t.bestanden||[]).map(f=>{ const tp=f.type==='video'?'video':f.type==='img'?'img':'doc'; return `<div class="deliv-file"${t.id?` data-task="${esc(t.id)}"`:''} style="background:var(--paper-2,#FAF7F2)"><span class="df-ic">${ic(tp,18)}</span><div class="df-tx"><b>${esc(f.label||'Bestand')}</b><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:42ch;display:inline-block">${esc((f.url||'').replace(/^https?:\/\//,''))}</span></div><div class="df-act">${f.url?`<a class="btn btn-outline btn-sm" href="${esc(f.url)}" target="_blank" rel="noopener">${ic('arrow',14)} Bekijk</a>`:''}</div></div>`; }).join('');
+  const files=(t.bestanden||[]).map(f=>{ const tp=f.type==='video'?'video':f.type==='img'?'img':'doc'; return `<div class="deliv-file" data-label="${esc(f.label||'Bestand')}" data-url="${esc(f.url||'')}"${t.id?` data-task="${esc(t.id)}"`:''} style="background:var(--paper-2,#FAF7F2)"><span class="df-ic">${ic(tp,18)}</span><div class="df-tx"><b>${esc(f.label||'Bestand')}</b><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:42ch;display:inline-block">${esc((f.url||'').replace(/^https?:\/\//,''))}</span></div><div class="df-act">${f.url?`<button class="btn btn-outline btn-sm" onclick="fileDownload(this)">${ic('download',14)} Bekijk &amp; download</button>`:''}</div></div>`; }).join('');
   return `<div class="approved-row approved-clickable" role="button" tabindex="0" onclick="toggleApprovedFiles('${fid}',this)"><span class="check-circ">${ic('check',13)}</span><span>${esc(t.naam)}</span><span class="ar-files-hint">${ic('download',13)} ${(t.bestanden||[]).length} bestand${(t.bestanden||[]).length===1?'':'en'}</span><svg class="chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></div><div class="approved-files" id="${fid}" style="display:none"><div class="subtask-files">${files}</div></div>`;
 }
 function toggleApprovedFiles(fid, el){ const box=document.getElementById(fid); if(!box)return; const open=box.style.display==='none'; box.style.display=open?'':'none'; if(el)el.classList.toggle('open',open); }
@@ -4525,7 +4537,8 @@ function _ondEditRij(s, br){
   var dls='';
   if(s.status==='done' && files.length){
     dls='<div class="ond-info open-static"><div class="ond-files">'+files.map(function(f){
-      return '<a class="deliv-file ond-file" data-label="'+esc(f.label||'Bestand')+'" href="'+esc(f.url)+'" target="_blank" rel="noopener"><span class="df-ic">'+ic(f.type==='video'?'video':f.type==='img'?'img':'doc',16)+'</span><span class="ond-file-nm">'+esc(f.label||'Bestand')+'</span>'+ic('download',14)+'</a>';
+      // Bug 86ca92rhm: open de review-overlay (gesigneerde download, werkt ook zonder Drive-toegang) i.p.v. de rauwe Drive-link
+      return '<div class="deliv-file ond-file" role="button" tabindex="0" style="cursor:pointer" data-label="'+esc(f.label||'Bestand')+'" data-url="'+esc(f.url||'')+'" data-task="'+esc(s.id)+'" onclick="fileDownload(this)" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();fileDownload(this);}"><span class="df-ic">'+ic(f.type==='video'?'video':f.type==='img'?'img':'doc',16)+'</span><span class="ond-file-nm">'+esc(f.label||'Bestand')+'</span>'+ic('download',14)+'</div>';
     }).join('')+'</div></div>';
   }
   // gedeelde Drive-fotomap(pen): altijd bekijkbaar als galerij in het portaal
@@ -4999,7 +5012,7 @@ function statNotLinked(kind){
 }
 function webTakTab(){
   if(state._webTakTab) return state._webTakTab;
-  return _takProjects(TAK_WEBSITE.discIds).some(function(p){return p.status!=='done';}) ? 'projecten' : 'stats';
+  return _webProjects().some(function(p){return p.status!=='done';}) ? 'projecten' : 'stats';
 }
 function webSetTakTab(t){ state._webTakTab=t; renderPanel('webprestaties'); if(typeof syncUrl==='function') syncUrl(); }
 function webTakSubnav(){
@@ -5016,7 +5029,7 @@ function panelWebprestaties(){
   // sub-sectie 'Projecten' (webdesign + support-tickets) boven de statistieken (Dakstructuur Q)
   if(webTakTab()==='projecten'){
     var T=TAK_WEBSITE;
-    var all=_takProjects(T.discIds);
+    var all=_webProjects();
     var actief=all.filter(function(p){return p.status!=='done';});
     // 1:1 met video & fotografie: vlakke chronologische lijst van lopende projecten (geen
     // clusters/contactkaart/plan-meeting/archief). Bij precies 1 lopend project landt goTab
