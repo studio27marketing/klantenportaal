@@ -2655,7 +2655,7 @@ function _bugClientName(){ var s=state.session||{}; return String(s.displayName|
 function _bugBedrijfNaam(){ try{ return (window.S27DATA&&S27DATA.bedrijfsnaam&&S27DATA.bedrijfsnaam())||state._adminActiveName||(state.session&&state.session.bedrijfsnaam)||''; }catch(e){ return ''; } }
 function openBugReport(){
   state._bugFrom={mode:state.viewMode, tab:currentTab, project:state.activeProject};
-  state.viewMode='bugreport'; state._bugFile=null;
+  state.viewMode='bugreport'; state._bugFiles=[];
   var team = (typeof isRichView==='function' && isRichView());   // teamweergave (staff, niet de clientview)
   var wieBlok;
   if(team){
@@ -2682,7 +2682,7 @@ function openBugReport(){
       +'<input type="text" id="bugTitel" class="shoot-zoek" style="margin:4px 0 14px" maxlength="140" placeholder="Korte omschrijving van wat je zag">'
       +'<label class="ms-label">Wat zie je / wat verwacht je?</label>'
       +'<textarea id="bugBody" class="mp-note" rows="12" placeholder="Op welk scherm, wat ging er mis, wat had je verwacht\u2026"></textarea>'
-      +'<div style="margin-top:12px"><label class="btn btn-outline btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">'+ic('upload',14)+' Schermafbeelding toevoegen<input type="file" accept="image/*" style="display:none" onchange="bugPickFile(this)"></label><span id="bugFileChip" class="fs" style="margin-left:10px;color:var(--ink-3)"></span></div>'
+      +'<div style="margin-top:12px"><label class="btn btn-outline btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">'+ic('upload',14)+' Schermafbeelding(en) toevoegen<input type="file" accept="image/*" multiple style="display:none" onchange="bugPickFiles(this)"></label><span class="fs" style="margin-left:10px;color:var(--ink-3)">Je kan er meerdere toevoegen (max 6)</span><div id="bugFileChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div></div>'
       +'<div class="shoot-msg" id="bugMsg"></div>'
       +'<div style="margin-top:18px"><button class="btn btn-primary" onclick="bugVerstuur(this)">'+ic('send',15)+' Versturen</button></div>'
     +'</div>'
@@ -2691,12 +2691,22 @@ function openBugReport(){
   var t=$id('bugTitel'); if(t) t.focus();
 }
 function bugPickWie(n){ state._bugWie=String(n||''); }
-function bugPickFile(inp){
-  state._bugFile=(inp.files&&inp.files[0])||null;
-  var c=$id('bugFileChip'); if(c) c.textContent=state._bugFile?('\u2713 '+state._bugFile.name):'';
+// Punt Arne: meerdere schermafbeeldingen toevoegen (max 6), met verwijderbare chips.
+function _bugRenderChips(){
+  var c=$id('bugFileChips'); if(!c) return;
+  var fs=state._bugFiles||[];
+  c.innerHTML=fs.map(function(f,i){ return '<span style="display:inline-flex;align-items:center;gap:6px;background:var(--paper-3,#F1EBE2);border-radius:999px;padding:5px 10px;font-size:12.5px">'+ic('img',13)+'<span style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(f.name||'afbeelding')+'</span><button type="button" onclick="bugRemoveFile('+i+')" aria-label="Verwijderen" style="border:0;background:none;cursor:pointer;color:var(--ink-3);font-size:14px;line-height:1;padding:0">\u2715</button></span>'; }).join('');
 }
+function bugPickFiles(inp){
+  state._bugFiles=state._bugFiles||[];
+  var files=(inp&&inp.files)?[].slice.call(inp.files):[];
+  files.forEach(function(f){ if(state._bugFiles.length<6 && f && f.size<=8*1024*1024 && /^image\//.test(f.type||'')) state._bugFiles.push(f); });
+  if(inp) inp.value='';   // reset zodat dezelfde naam opnieuw kan + de knop herbruikbaar blijft
+  _bugRenderChips();
+}
+function bugRemoveFile(i){ if(state._bugFiles) state._bugFiles.splice(i,1); _bugRenderChips(); }
 function closeBugReport(){
-  var f=state._bugFrom||{}; state._bugFile=null;
+  var f=state._bugFrom||{}; state._bugFiles=[];
   if(f.mode==='project'&&f.project) openProject(f.project,'auto');
   else goTab(f.tab||'start');
 }
@@ -2716,11 +2726,15 @@ async function bugVerstuur(btn){
   state._bugWie=melder;
   btn.disabled=true; btn.innerHTML='Versturen\u2026';
   var payload={titel:String(titel).trim(),omschrijving:String(body).trim(),melder_naam:melder,bedrijfsnaam:_bugBedrijfNaam(),context:location.href+' \u00b7 '+(state.activeBedrijf||'')};
-  if(state._bugFile&&state._bugFile.size<=22*1024*1024){
-    try{
-      var b64=await new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){res(String(r.result).split(',')[1]||'');}; r.onerror=rej; r.readAsDataURL(state._bugFile); });
-      payload.filename=state._bugFile.name; payload.file_data=b64;
-    }catch(e){}
+  var _bf=(state._bugFiles||[]).slice(0,6);
+  if(_bf.length){
+    payload.files=[];
+    for(var _bi=0;_bi<_bf.length;_bi++){
+      try{
+        var b64=await new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){res(String(r.result).split(',')[1]||'');}; r.onerror=rej; r.readAsDataURL(_bf[_bi]); });
+        if(b64) payload.files.push({filename:_bf[_bi].name, file_data:b64});
+      }catch(e){}
+    }
   }
   var res; try{ res=await api(ENDPOINTS.bugReport,payload); }catch(e){ res=null; }
   if(res&&res.ok&&res.data&&res.data.ok){
