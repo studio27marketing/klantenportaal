@@ -9,7 +9,9 @@
  *      + controleert issuer / audience / expiry   (projectId = studio27-cloud)
  *   3. Leest het GEVERIFIEERDE bedrijf_id uit de custom claims (NIET uit de body)
  *   4. Rate limiting per gebruiker (alleen als een KV-namespace gebonden is)
- *   5. Forward naar de juiste Make-webhook met header X-Gateway-Secret
+ *   5. [NIEUW] OPTIONELE D1-dispatch (achter env.D1_ENDPOINTS feature-flag) —
+ *      OFF by default: zonder flag is er ZERO gedragsverandering, 100% Make.
+ *   6. Forward naar de juiste Make-webhook met header X-Gateway-Secret
  *
  * Zero-dependency: dit bestand kan rechtstreeks in de Cloudflare Workers-editor
  * geplakt worden — geen build, geen npm.
@@ -18,8 +20,15 @@
  *   PROJECT_ID       = "studio27-cloud"                                  (plain)
  *   ALLOWED_ORIGINS  = "https://www.studio27.be,https://studio27.be"     (plain)
  *   GATEWAY_SECRET   = <openssl rand -hex 32>                            (SECRET!)
+ *   D1_ENDPOINTS     = '["meetingsList","bedrijfContent", ...]'  (plain, OPTIONEEL)
+ *                      JSON-array string van ingeschakelde D1-keys. Sub-acties als
+ *                      "bedrijfBeheer:get_team". Leeg/ongezet => geen enkel endpoint
+ *                      gebruikt D1 (100% Make, geen gedragsverandering).
+ *   MEETINGS_BOOKING_URL = "https://..."  (plain, OPTIONEEL — booking-deeplink)
  * Binding (optioneel, aanbevolen voor rate limiting):
  *   KV               = een KV-namespace
+ * Binding (NIEUW, vereist zodra een D1-endpoint in D1_ENDPOINTS staat):
+ *   CRMDB            = D1Database  →  s27-crm-db (0c50db87-9a69-4cdc-9f43-4c1dc92dd801)
  * ============================================================================= */
 
 // Pad → Make-webhook. Deze URLs zijn niet geheim (staan al in dashboard.js).
@@ -240,6 +249,695 @@ async function handlePerfReport(request, env) {
   return new Response(text, { status: r.status, headers: { 'Content-Type': 'application/json', ...cors } });
 }
 
+/* =============================================================================
+ * ===========================  D1 SECTION (NIEUW)  ============================
+ * =============================================================================
+ *  ⚠️ OFF BY DEFAULT. Niets hieronder draait tenzij env.D1_ENDPOINTS een
+ *     JSON-array van keys bevat (bv. '["meetingsList","bedrijfBeheer:get_team"]').
+ *     Bij lege/ongezette D1_ENDPOINTS gedraagt de gateway zich 100% identiek aan
+ *     vroeger: elke request gaat door naar Make (zie hoofd-fetch hieronder).
+ *
+ *  Architectuur (AUDIT_HUB_MIGRATION.md §9, Optie A):
+ *   - Binding env.CRMDB (D1Database) → s27-crm-db.
+ *   - Per endpoint een async handler h_<key>(c) met
+ *       c = { env, db (=env.CRMDB), bedrijfId, body, claims, maps, util }.
+ *     Een handler geeft het response-BODY object terug (dezelfde JSON die de
+ *     Make-webhook vandaag teruggeeft) — of null/undefined om DOOR TE VALLEN
+ *     naar Make (fail-closed: bv. bedrijf niet in D1).
+ *   - Elke query scope't STRIKT op de geverifieerde claim-id (c.bedrijfId).
+ *     Body bedrijf_id/task_id/room_id worden NOOIT vertrouwd.
+ *
+ *  Identiteit: Firebase-claim bedrijf_id == companies.id == companies.clickup_id
+ *  (geverifieerd 491/491). Dus WHERE id=? / WHERE company_id=? / WHERE bedrijf_id=?
+ *  binden de claim rechtstreeks; geen vertaallaag nodig.
+ * ========================================================================== */
+
+/* ---- maps: status- en discipline-vertaling (audit G2/G3) ----------------- */
+const maps = {
+  // D1 hyphen-status -> portal underscore-status (audit G2).
+  statusD1ToPortal(s) {
+    switch (String(s || '')) {
+      case 'op-te-starten':         return 'to_do';
+      case 'in-progress':           return 'in_progress';
+      case 'feedback-klant':        return 'doorgestuurd';
+      case 'doorgestuurd':          return 'doorgestuurd';
+      case 'on-hold':               return 'on_hold';
+      case 'done':                  return 'done';
+      case 'klaar-voor-facturatie': return 'done';
+      case 'gefactureerd':          return 'done';
+      default:                      return 'to_do'; // unknown -> to_do
+    }
+  },
+  // tasks.branch -> portal discipline-key (audit G3).
+  branchToDisc(b) {
+    switch (String(b || '')) {
+      case 'strat':  return 'strategie';
+      case 'video':  return 'video_fotografie';
+      case 'web':    return 'webdesign';
+      case 'social': return 'social';
+      case 'ads':    return 'ads';
+      case 'brand':  return 'branding';
+      case 'opl':    return 'opleiding';
+      case 'auto':   return 'automation';
+      case 'seo':    return 'seo';
+      default:       return '';
+    }
+  },
+};
+
+/* ---- util: datum-coercie (audit G11) ------------------------------------- */
+const util = {
+  // Coerce een datum naar een epoch-MILLISECONDS STRING (frontend parseInt()'t deze
+  // voor meetings.datum, projectDetail taken[].datum, chat datum). null/0 -> ''.
+  msStr(v) {
+    if (v === null || v === undefined || v === '') return '';
+    // Reeds numeriek (D1 epoch-ms integer) of een numerieke string.
+    if (typeof v === 'number') {
+      if (!isFinite(v) || v === 0) return '';
+      return String(Math.trunc(v));
+    }
+    const s = String(v).trim();
+    if (!s) return '';
+    // Pure cijferreeks -> al epoch-ms.
+    if (/^\d+$/.test(s)) {
+      if (s === '0') return '';
+      return s;
+    }
+    // Anders: probeer als datum te parsen (ISO/tekst) -> epoch-ms.
+    const t = Date.parse(s);
+    if (isNaN(t) || t === 0) return '';
+    return String(t);
+  },
+  // ISO-string waar de frontend new Date() rechtstreeks aanroept. null/0 -> ''.
+  iso(v) {
+    if (v === null || v === undefined || v === '') return '';
+    let t;
+    if (typeof v === 'number') {
+      if (!isFinite(v) || v === 0) return '';
+      t = v;
+    } else {
+      const s = String(v).trim();
+      if (!s) return '';
+      if (/^\d+$/.test(s)) {
+        if (s === '0') return '';
+        t = parseInt(s, 10);
+      } else {
+        t = Date.parse(s);
+      }
+    }
+    if (isNaN(t) || t === 0) return '';
+    try { return new Date(t).toISOString(); } catch (e) { return ''; }
+  },
+};
+
+/* ---- team_members id-set loader (per-isolate cache) ----------------------
+   Voor is_klant-afleiding: from_member NOT IN team_members ⇒ klant. Gecachet per
+   isolate (13 staff-rows, verandert zelden). Niet load-bearing voor de huidige
+   handlers (chatList leidt is_klant af via een LEFT JOIN), maar beschikbaar
+   gesteld zoals de DESIGN vraagt voor toekomstige handlers.                   */
+let _teamIdsCache = { ids: null, exp: 0 };
+async function getTeamMemberIds(db) {
+  const now = Date.now();
+  if (_teamIdsCache.ids && now < _teamIdsCache.exp) return _teamIdsCache.ids;
+  const set = new Set();
+  try {
+    const res = await db.prepare('SELECT id FROM team_members').all();
+    for (const r of (res && res.results) || []) set.add(String(r.id));
+  } catch (e) { /* op fout: lege set; chatList valt terug op de JOIN */ }
+  _teamIdsCache = { ids: set, exp: now + 5 * 60 * 1000 }; // 5 min
+  return set;
+}
+
+/* ---- d1Scoped: helper die afdwingt dat de claim-id mee-gebind wordt --------
+   Elke portal-query MOET op de geverifieerde claim-id scopen. Deze helper bindt
+   de claim als eerste parameter (?1) zodat de aanroeper niet kan vergeten te
+   scopen. De individuele handlers binden de claim sowieso expliciet; dit is de
+   gedeelde vangrail uit DESIGN/R3.                                            */
+async function d1Scoped(db, sql, bedrijfId, extra) {
+  const binds = [bedrijfId].concat(extra || []);
+  return db.prepare(sql).bind(...binds).all();
+}
+
+/* ---- D1 dispatch ---------------------------------------------------------- */
+// Map van dispatchKey -> handler. Sub-acties gebruiken "endpoint:action".
+const D1_HANDLERS = {
+  'bedrijfContent':            h_bedrijfContent,
+  'bedrijfBeheer:get_team':    h_bedrijfBeheer_get_team,
+  'bedrijfBeheer:get_offertes':h_bedrijfBeheer_get_offertes,
+  'meetingsList':              h_meetingsList,
+  'dashboard':                 h_dashboard,
+  'chatList':                  h_chatList,
+  'chatPost':                  h_chatPost,
+};
+
+async function d1Dispatch(dispatchKey, c) {
+  const handler = D1_HANDLERS[dispatchKey];
+  if (!handler) return null; // geen handler -> val door naar Make
+  // Een onverwachte fout in een handler mag de live-portal NOOIT breken:
+  // log en val door naar Make (zelfde gedrag als vroeger).
+  return await handler(c);
+}
+
+/* =============================================================================
+ * ===========================  D1 HANDLERS (NIEUW)  ==========================
+ *  Allemaal achter de D1_ENDPOINTS-flag. Read-only tenzij anders vermeld.
+ *  chatPost is een WRITE-handler en blijft achter de flag UIT tot P2.
+ * ========================================================================== */
+
+// ===== bedrijfContent (read-only) ==========================================
+async function h_bedrijfContent(c) {
+  const { db, bedrijfId } = c;
+
+  // --- Company profile (scope strikt op de geverifieerde claim-id) ---
+  const co = await db.prepare(
+    "SELECT id, naam, kbo, mw, website, fact_email, fact_opm, hoofd_contact, portal_overrides " +
+    "FROM companies WHERE id = ?"
+  ).bind(bedrijfId).first();
+
+  // Fail-closed: geen company voor deze claim -> val door naar Make.
+  if (!co) return null;
+  // Defensieve her-check (single-record read): row-id moet de claim zijn.
+  if (String(co.id) !== String(bedrijfId)) return null;
+
+  // --- algemene_voorkeuren: geen kolom (audit G8). Alleen uit portal_overrides
+  //     json als die een STRING draagt; anders '' (frontend tolereert). ---
+  let algVoork = '';
+  if (co.portal_overrides) {
+    try {
+      const ov = JSON.parse(co.portal_overrides);
+      const cand = (ov && (ov.algemene_voorkeuren ?? ov.brand_prefs ?? ov.voorkeuren));
+      if (typeof cand === 'string') algVoork = cand;
+    } catch (e) { /* portal_overrides niet text-bearing -> '' */ }
+  }
+
+  // --- Contactpersonen (scope op bedrijf_id = claim) ---
+  const cps = await db.prepare(
+    "SELECT id, voornaam, achternaam, email, gsm, notif " +
+    "FROM contacts WHERE bedrijf_id = ? ORDER BY achternaam, voornaam"
+  ).bind(bedrijfId).all();
+  const rows = (cps && cps.results) || [];
+
+  const contactpersonen = rows.map((r) => ({
+    id:         String(r.id || ''),
+    voornaam:   r.voornaam || '',
+    achternaam: r.achternaam || '',
+    email:      r.email || '',
+    gsm:        r.gsm || '',
+    rol:        '',                 // contacts heeft GEEN rol-kolom (G9) -> '' (renderContactRow valt terug op 'Contactpersoon')
+    voorkeur:   r.notif || '',      // notif leeg voor alle 261 (R17) -> '' verbergt de chip; NIET 'Geen' hier
+    ondernemingsleider: false,      // geen kolom -> false
+  }));
+
+  // --- contact{} : hoofdcontact voor de bedrijfsgegevens/instellingen-view.
+  //     companies.hoofd_contact is een NAAM-string (bv. 'Koen Van dun'), GEEN
+  //     contact-id, dus match op volledige naam; anders val terug op 1e contact.
+  let hc = null;
+  const hcName = String(co.hoofd_contact || '').trim().toLowerCase();
+  if (hcName) {
+    hc = rows.find((r) => ((r.voornaam || '') + ' ' + (r.achternaam || '')).trim().toLowerCase() === hcName) || null;
+  }
+  if (!hc) hc = rows[0] || null;
+  const contact = {
+    voornaam:   hc ? (hc.voornaam || '') : '',
+    achternaam: hc ? (hc.achternaam || '') : '',
+    gsm:        hc ? (hc.gsm || '') : '',
+    email:      hc ? (hc.email || '') : (co.fact_email || ''),
+  };
+
+  // --- categorieen: files-tabel = 0 rows (G5). Lege structuur; echte huisstijl
+  //     laadt via het aparte huisstijlList-endpoint (buiten scope).
+  const categorieen = { logos: [], fonts: [], kleuren: [], brand_pdfs: [], fotos: [], overig: [] };
+
+  // --- Bouw de TOP-LEVEL body (gateway wrapt als {ok,status,data}).
+  //     GEEN 'error' key bij succes (die triggert de mock-data fallback).
+  return {
+    bedrijfsnaam:           co.naam || '',
+    btw:                    co.kbo || '',                          // companies.kbo -> btw
+    aantal_medewerkers:     (co.mw == null ? '' : co.mw),          // mw NULL voor alle 491 -> '' (get_team overschrijft)
+    website:                co.website || '',
+    facturatie_email:       co.fact_email || '',                  // fact_email -> facturatie_email
+    facturatie_opmerkingen: co.fact_opm || '',                    // fact_opm -> facturatie_opmerkingen
+    algemene_voorkeuren:    algVoork,                             // platte tekst, geen double-escape (G8/G12)
+    contact:                contact,
+    contactpersonen:        contactpersonen,
+    categorieen:            categorieen,
+  };
+}
+
+// ===== bedrijfBeheer:get_team (read-only) ==================================
+async function h_bedrijfBeheer_get_team(c) {
+  const { db, bedrijfId } = c;
+
+  // Company-velden: scope strikt op de geverifieerde claim-id.
+  // Renames: kbo->btw, mw->aantal_medewerkers, website->website.
+  const co = await db
+    .prepare('SELECT kbo, mw, website FROM companies WHERE id = ? LIMIT 1')
+    .bind(bedrijfId)
+    .first();
+
+  // Fail-closed: onbekende company -> lege, frontend-veilige team-payload.
+  if (!co) {
+    return { ok: true, aantal_medewerkers: '', btw: '', website: '', contact_count: 0, contactpersonen: [] };
+  }
+
+  // Contacts: autoritatieve bron voor contactpersonen[]. Via bedrijf_id
+  // (NOOIT join op companies.hoofd_contact — dat is een NAAM-string).
+  const rowsRes = await db
+    .prepare('SELECT id, voornaam, achternaam, email, gsm, notif FROM contacts WHERE bedrijf_id = ? ORDER BY rowid')
+    .bind(bedrijfId)
+    .all();
+  const contacts = (rowsRes && rowsRes.results) ? rowsRes.results : [];
+
+  const contactpersonen = contacts.map(function (r) {
+    return {
+      id: String(r.id || ''),
+      voornaam: r.voornaam || '',
+      achternaam: r.achternaam || '',
+      email: r.email || '',
+      gsm: r.gsm || '',
+      rol: '',               // geen rol-kolom -> '' (renderContactRow valt terug op 'Contactpersoon')
+      voorkeur: r.notif || '', // notif leeg (R17) -> '' verbergt de chip; edit-modal default 'Geen' blijft
+    };
+  });
+
+  // mw NULL voor alle 491 -> '' zodat frontend het overslaat (L2131) en de
+  // bedrijfContent-waarde bewaard blijft. Niet-null mw passeert as-is.
+  const aantal = (co.mw === null || co.mw === undefined) ? '' : co.mw;
+
+  return {
+    ok: true,
+    aantal_medewerkers: aantal,
+    btw: co.kbo || '',
+    website: co.website || '',
+    contact_count: contactpersonen.length,
+    contactpersonen: contactpersonen,
+  };
+}
+
+// ===== bedrijfBeheer:get_offertes (read-only) ==============================
+async function h_bedrijfBeheer_get_offertes(c) {
+  const { db, bedrijfId, util } = c;
+
+  // Resolve de eigen bedrijfsnaam SERVER-SIDE uit de claim-id (nooit uit body).
+  // Nodig voor de bedrijf_naam-fallback (offertes zonder bedrijf_id). Scope op claim.
+  const company = await db
+    .prepare('SELECT id, naam FROM companies WHERE id = ?1 OR clickup_id = ?1 LIMIT 1')
+    .bind(bedrijfId)
+    .first();
+
+  // Onbekende company -> lege lijst (fail-closed). Frontend toont "Nog geen offertes".
+  if (!company) return { ok: true, offertes: [] };
+
+  const claimId = company.id;
+  const naam = company.naam || '';
+
+  // Scope: bedrijf_id == claim, OF (bedrijf_id leeg EN bedrijf_naam == onze naam).
+  // De bedrijf_id='' guard op de fallback voorkomt cross-company-lek.
+  // Drop status='draft' (mirror van offerteVisible() boundary); houd
+  // sent/viewed/completed/declined/expired (raw lifecycle, geen vertaling).
+  const rowsRes = await db
+    .prepare(
+      "SELECT id, titel, status, budget, panda_link, verval " +
+      "FROM offertes " +
+      "WHERE (bedrijf_id = ?1 OR (bedrijf_id = '' AND bedrijf_naam = ?2)) " +
+      "AND status <> 'draft' " +
+      "ORDER BY (verval IS NULL) ASC, verval DESC, created_at DESC"
+    )
+    .bind(claimId, naam)
+    .all();
+
+  const list = ((rowsRes && rowsRes.results) || []).map(function (o) {
+    return {
+      id: String(o.id || ''),
+      naam: o.titel || '',                          // titel -> naam (PLAIN)
+      link: o.panda_link || '',                     // panda_link -> link
+      budget: (o.budget == null ? '' : o.budget),   // REAL; frontend coerce't via Number()
+      vervaldatum: util.msStr(o.verval),            // verval (epoch-ms int|NULL) -> ms-string|''
+      status: o.status || '',                       // RAW PandaDoc lifecycle (PLAIN)
+    };
+  });
+
+  return { ok: true, offertes: list };
+}
+
+// ===== meetingsList (read-only) ============================================
+async function h_meetingsList(c) {
+  // Scope op de geverifieerde claim-id (companies.id == clickup_id == bedrijf_id).
+  // Nooit body bedrijf_id/bedrijfsnaam vertrouwen. Vervangt de fragiele client-titel-match.
+  // Filter INTERN-meetings (G10/§3). NULL/empty type rows blijven behouden
+  // (type IS NULL OR type != 'INTERN' — '!=' alleen zou NULL droppen onder 3-valued logic).
+  const { db, bedrijfId, util } = c;
+
+  const rowsRes = await db
+    .prepare(
+      "SELECT id AS meeting_id, titel, datum, status " +
+      "FROM meetings " +
+      "WHERE bedrijf_id = ? AND (type IS NULL OR type != 'INTERN') " +
+      "ORDER BY datum ASC"
+    )
+    .bind(bedrijfId)
+    .all();
+  const rows = (rowsRes && rowsRes.results) || [];
+
+  const meetings = rows.map((r) => ({
+    meeting_id: String(r.meeting_id || ''),
+    titel: r.titel == null ? '' : String(r.titel),
+    // Frontend parseInt()'t dit -> epoch-MILLISECONDS STRING. NULL/0 -> '' ("nog te bevestigen").
+    datum: util.msStr(r.datum),
+    // meetings.status is raw ClickUp ('niet klaar'); doorgegeven, nauwelijks gerenderd. Niet status-mapped.
+    status: r.status == null ? '' : String(r.status),
+    // Geen Meet/booking-kolom (alleen ff_url Fireflies). Frontend onderdrukt link sowieso (L4089).
+    link: '',
+  }));
+
+  // Geen booking_url-kolom in D1. Emit een worker-constante zodat de Meetings-CTA
+  // kan deep-linken i.p.v. de DM-modal-fallback. ⚠️ INTEGRATOR: zet de echte URL.
+  const BOOKING_URL = (c.env && c.env.MEETINGS_BOOKING_URL) || '';
+
+  const out = { meetings };
+  if (BOOKING_URL) out.booking_url = BOOKING_URL;
+  return out;
+}
+
+// ===== dashboard (read-only) ===============================================
+// ⚠️ Houd flag-OFF tot de 8 ClickUp-discipline-lijsten in tasks zijn gesynct
+//    (audit P1/G4): tasks zijn nu offerte-intake-stubs met NULL deadline.
+async function h_dashboard(c) {
+  const { db, bedrijfId, maps, util } = c;
+
+  // ---- 1. company (klant + contact-basis) -----------------------------------
+  const company = await db
+    .prepare('SELECT id, naam, pm, hoofd_contact FROM companies WHERE id = ?')
+    .bind(bedrijfId)
+    .first();
+  // Fail-closed: onbekende claim -> null -> gateway valt door naar Make.
+  if (!company || String(company.id) !== String(bedrijfId)) return null;
+
+  const bedrijfsnaam = company.naam || '';
+
+  // ---- 2. tasks (company-scoped, niet-archived) -----------------------------
+  const DONE = ['done', 'klaar-voor-facturatie', 'gefactureerd'];
+  const FEEDBACK = ['feedback-klant', 'doorgestuurd'];
+
+  const taskRowsRes = await db
+    .prepare(
+      'SELECT id, name, branch, status, deadline, fb_link, type_job, last_activity_at, completed_at ' +
+      'FROM tasks WHERE company_id = ? AND COALESCE(archived,0) = 0'
+    )
+    .bind(bedrijfId)
+    .all();
+  const taskRows = (taskRowsRes && taskRowsRes.results) || [];
+
+  const mapProject = (t) => {
+    const portalStatus = maps.statusD1ToPortal(t.status);
+    const disc = maps.branchToDisc(t.branch);
+    return {
+      task_id:          t.id || '',
+      naam:             t.name || 'Project',
+      discipline:       disc,                        // portal-key (G3)
+      status:           portalStatus,               // portal underscore-key (G2)
+      // dashboard-datums worden direct new Date()'d -> ISO (NIET ms-string).
+      opleverdatum:     util.iso(t.deadline),       // '' bij NULL
+      type:             t.type_job || '',
+      laatst_geupdatet: util.iso(t.last_activity_at), // '' bij NULL
+      voortgang_pct:    undefined,                  // geen kolom -> weglaten (optioneel)
+      feedback_link:    t.fb_link || '',
+      kan_beginnen:     false,                       // geen kolom -> safe default
+      shoot_gepland:    false,
+      deliverables:     [],                          // files-tabel 0 rows (G5)
+    };
+  };
+
+  const isDone = (s) => DONE.indexOf(s) !== -1;
+  const actieve_projecten = [];
+  const historie_3mnd = [];
+  for (const t of taskRows) {
+    const proj = mapProject(t);
+    if (isDone(t.status)) {
+      const ts = Number(t.completed_at || t.last_activity_at || 0);
+      const cutoff = Date.now() - 90 * 86400000;
+      if (ts >= cutoff) {
+        proj.afgerond_op = util.iso(t.completed_at || t.last_activity_at);
+        historie_3mnd.push(proj);
+      }
+    } else {
+      actieve_projecten.push(proj);
+    }
+  }
+
+  // ---- 3. stats (aggregate counts) ------------------------------------------
+  const donePh = DONE.map(() => '?').join(',');
+  const fbPh = FEEDBACK.map(() => '?').join(',');
+  const now = Date.now();
+  const weekAhead = now + 7 * 86400000;
+  const days30Ago = now - 30 * 86400000;
+
+  const statActief = await db
+    .prepare(
+      'SELECT COUNT(*) AS n FROM tasks WHERE company_id = ? AND COALESCE(archived,0)=0 ' +
+      'AND status NOT IN (' + donePh + ')'
+    ).bind(bedrijfId, ...DONE).first();
+
+  const statFeedback = await db
+    .prepare(
+      'SELECT COUNT(*) AS n FROM tasks WHERE company_id = ? AND COALESCE(archived,0)=0 ' +
+      'AND status IN (' + fbPh + ')'
+    ).bind(bedrijfId, ...FEEDBACK).first();
+
+  const statWeek = await db
+    .prepare(
+      "SELECT COUNT(*) AS n FROM meetings WHERE bedrijf_id = ? AND COALESCE(type,'')<>'INTERN' " +
+      'AND CAST(COALESCE(datum,0) AS INTEGER) BETWEEN ? AND ?'
+    ).bind(bedrijfId, now, weekAhead).first();  // numerieke binds: INTEGER-vergelijking (geen TEXT-affinity-bug)
+
+  const statOpgeleverd = await db
+    .prepare(
+      'SELECT COUNT(*) AS n FROM tasks WHERE company_id = ? ' +
+      'AND status IN (' + donePh + ') AND completed_at IS NOT NULL ' +
+      'AND CAST(completed_at AS INTEGER) >= ?'
+    ).bind(bedrijfId, ...DONE, days30Ago).first();
+
+  const stats = {
+    actieve_projecten: (statActief && statActief.n) || 0,
+    openstaande_feedback: (statFeedback && statFeedback.n) || 0,
+    deze_week: (statWeek && statWeek.n) || 0,
+    opgeleverd_30d: (statOpgeleverd && statOpgeleverd.n) || 0,
+  };
+
+  // ---- 4. aankomende_meetings (toekomst, niet-INTERN) -----------------------
+  const meetingRowsRes = await db
+    .prepare(
+      "SELECT id, titel, type, datum FROM meetings WHERE bedrijf_id = ? " +
+      "AND COALESCE(type,'')<>'INTERN' AND CAST(COALESCE(datum,0) AS INTEGER) >= ? " +
+      'ORDER BY CAST(COALESCE(datum,0) AS INTEGER) ASC LIMIT 10'
+    )
+    .bind(bedrijfId, now)  // numerieke bind: INTEGER-vergelijking (geen TEXT-affinity-bug)
+    .all();
+  const meetingRows = (meetingRowsRes && meetingRowsRes.results) || [];
+
+  const aankomende_meetings = meetingRows.map((m) => ({
+    titel:    m.titel || 'Meeting',
+    datum:    util.iso(m.datum),   // ISO (dashboard new Date()'t direct)
+    tijdslot: '',                  // geen slot-kolom
+    type:     m.type || '',
+    link:     '',                  // geen Meet-URL-kolom (alleen ff_url, intern)
+  }));
+
+  // ---- 5. contact (account manager) -----------------------------------------
+  let am = { am_naam: '', am_email: '', am_rol: '' };
+  const pmName = (company.pm || '').trim();
+  if (pmName) {
+    const tm = await db
+      .prepare('SELECT naam, email, functie FROM team_members WHERE LOWER(naam) = LOWER(?) LIMIT 1')
+      .bind(pmName)
+      .first();
+    am = {
+      am_naam: (tm && tm.naam) || pmName,
+      am_email: (tm && tm.email) || '',
+      am_rol: (tm && tm.functie) || 'Account manager',
+    };
+  }
+
+  // ---- 6. modules: null = toon alle tabs (geen regressie; R17). -------------
+  // Active disciplines afgeleid voor toekomstig gebruik, maar NIET gebruikt om te disablen.
+  const branchRowsRes = await db
+    .prepare('SELECT DISTINCT branch FROM tasks WHERE company_id = ? AND COALESCE(archived,0)=0')
+    .bind(bedrijfId)
+    .all();
+  const branchRows = (branchRowsRes && branchRowsRes.results) || [];
+  const activeDiscs = {};
+  for (const b of branchRows) {
+    const d = maps.branchToDisc(b.branch);
+    if (d) activeDiscs[d] = true;
+  }
+  const modules = null; // null => frontend toont alle tabs (backward-safe)
+
+  // ---- assemble response BODY (top-level; gateway wrapt {ok,status,data}) ---
+  return {
+    klant: { bedrijfsnaam: bedrijfsnaam },
+    stats: stats,
+    actieve_projecten: actieve_projecten,
+    historie_3mnd: historie_3mnd,
+    aankomende_meetings: aankomende_meetings,
+    contact: am,
+    modules: modules,
+  };
+}
+
+// ===== chatList (read-only) ================================================
+// ⚠️ Houd flag-OFF tot ClickUp-comments zijn gebackfilld (R10): chat_messages=0
+//    rows vandaag, dus een flip zou bestaande threads blanken.
+async function h_chatList(c) {
+  const { db, bedrijfId, body, util } = c;
+
+  // Room SERVER-SIDE afgeleid uit de claim. NOOIT body.bedrijf_id/room_id vertrouwen.
+  const roomId = 'co_' + bedrijfId;
+
+  // Optionele per-task-scoping: alleen filteren op task_ref als body een task_id stuurt.
+  // NIET voor auth (room_id WHERE fence't al op de claim-company).
+  const taskId = body && body.task_id ? String(body.task_id) : '';
+
+  let sql =
+    'SELECT m.id AS id, m.from_member AS from_member, m.text AS text, ' +
+    '       m.files AS files, m.ts AS ts, ' +
+    '       tm.naam AS tm_naam, ' +
+    '       c.voornaam AS c_voornaam, c.achternaam AS c_achternaam, ' +
+    '       co.naam AS company_naam ' +
+    'FROM chat_messages m ' +
+    'LEFT JOIN team_members tm ON tm.id = m.from_member ' +
+    'LEFT JOIN contacts c ON (c.id = m.from_member OR lower(c.email) = lower(m.from_member)) ' +
+    '       AND c.bedrijf_id = ? ' +
+    'LEFT JOIN companies co ON co.id = ? ' +
+    'WHERE m.room_id = ?';
+  const binds = [bedrijfId, bedrijfId, roomId];
+  if (taskId) {
+    sql += ' AND m.task_ref = ?';
+    binds.push(taskId);
+  }
+  sql += ' ORDER BY m.ts ASC';
+
+  let rows = [];
+  try {
+    const res = await db.prepare(sql).bind(...binds).all();
+    rows = (res && res.results) ? res.results : [];
+  } catch (e) {
+    // Fail-closed: bij DB-fout een lege thread (frontend rendert leeg, geen error-key).
+    return { comments: [] };
+  }
+
+  const comments = rows.map((r) => {
+    const isStaff = !!r.tm_naam; // from_member resolveerde naar een team member => staff
+    const isKlant = !isStaff;    // from_member NOT IN team_members => klant
+
+    // auteur-prioriteit: team_member naam -> contact-volledige-naam -> company-naam -> 'Studio 27'
+    let auteur = '';
+    if (isStaff) {
+      auteur = r.tm_naam || '';
+    } else {
+      const fn = (r.c_voornaam || '').trim();
+      const ln = (r.c_achternaam || '').trim();
+      const full = (fn + ' ' + ln).trim();
+      auteur = full || r.company_naam || '';
+    }
+    if (!auteur) auteur = isKlant ? (r.company_naam || '') : 'Studio 27';
+
+    // attachments: chat_messages.files is JSON. Map naar {filename,url}. Tolerant.
+    let attachments = [];
+    if (r.files) {
+      try {
+        const parsed = typeof r.files === 'string' ? JSON.parse(r.files) : r.files;
+        if (Array.isArray(parsed)) {
+          attachments = parsed.map((f) => ({
+            filename: (f && (f.filename || f.naam || f.name)) || 'bestand',
+            url: (f && (f.url || f.drive_url)) || '',
+          })).filter((a) => a.url);
+        }
+      } catch (e) { /* malformed files json -> geen attachments */ }
+    }
+
+    return {
+      id: String(r.id || ''),
+      auteur: auteur,
+      is_klant: isKlant,        // strikt boolean; frontend checkt === true
+      tekst: r.text || '',      // platte tekst, geen Make-encoding
+      datum: util.msStr(r.ts),  // epoch-MILLISECONDS STRING ('' voor null/0)
+      attachments: attachments, // altijd een array
+    };
+  });
+
+  return { comments: comments };
+}
+
+// ===== chatPost (WRITE — blijft achter de flag UIT tot P2) =================
+// ⚠️ WRITE-endpoint. Schrijft alleen portal-owned tabellen (chat_rooms upsert +
+//    chat_messages insert), die NIET in de ClickUp->D1-mirror zitten, dus geen
+//    portal_overrides-stamp nodig (audit R1). Blijft UIT in D1_ENDPOINTS tot P2.
+async function h_chatPost(c) {
+  const { db, bedrijfId, body, claims, util } = c;
+
+  // Room-id volledig server-side uit de claim. Negeer body room_id/from_member/bedrijf_id.
+  const roomId = 'co_' + bedrijfId;
+
+  // Leid from_member SERVER-SIDE af (nooit body author/klant_naam).
+  // Prefer contacts.id waar email == claims.email AND bedrijf_id == claim;
+  // anders de lowercased claim-email.
+  const claimEmail = String((claims && claims.email) || '').trim().toLowerCase();
+  let fromMember = claimEmail;
+  if (claimEmail) {
+    const ct = await db
+      .prepare('SELECT id FROM contacts WHERE bedrijf_id = ? AND lower(email) = ? LIMIT 1')
+      .bind(bedrijfId, claimEmail)
+      .first();
+    if (ct && ct.id) fromMember = ct.id;
+  }
+  if (!fromMember) {
+    // Geen bruikbare identiteit -> fail closed naar Make i.p.v. een anonieme row schrijven.
+    return null;
+  }
+
+  // Message body: live frontend stuurt comment_text; v4/v2 kunnen bericht/tekst sturen.
+  const text = String(
+    (body && (body.comment_text != null ? body.comment_text
+      : body.bericht != null ? body.bericht
+      : body.tekst != null ? body.tekst
+      : '')) || ''
+  );
+
+  // task_ref: optionele per-project anker. Body task_id is untrusted voor SCOPING
+  // (we queryen er nooit op), maar onschadelijk als label op onze eigen row.
+  const taskRef = String((body && body.task_id) || '');
+
+  const now = Date.now();              // server-stamp, epoch-ms (NIET body-gestuurd)
+  const id = crypto.randomUUID();
+
+  // 1) Upsert de company chat-room indien afwezig (greenfield: alleen id='team' bestaat).
+  await db
+    .prepare(
+      "INSERT INTO chat_rooms (id, type, name, members, created_at) " +
+      "VALUES (?, 'group', '', '[]', ?) " +
+      "ON CONFLICT(id) DO NOTHING"
+    )
+    .bind(roomId, now)
+    .run();
+
+  // 2) Insert de message. chat_messages/* zijn portal-owned (R1), niet geclobbered
+  //    door de ClickUp->D1-sync, dus geen portal_overrides-stamp nodig.
+  await db
+    .prepare(
+      "INSERT INTO chat_messages (id, room_id, from_member, text, files, task_ref, ts) " +
+      "VALUES (?, ?, ?, ?, '[]', ?, ?)"
+    )
+    .bind(id, roomId, fromMember, text, taskRef, now)
+    .run();
+
+  // Response: v2-shape. Live frontend negeert de body (fire-and-forget).
+  return { ok: true, comment_id: id, posted_at: util.msStr(now) };
+}
+
+/* =============================================================================
+ * =========================  EINDE D1 SECTION (NIEUW)  =======================
+ * ========================================================================== */
+
 /* ---- Worker -------------------------------------------------------------- */
 export default {
   async fetch(request, env, ctx) {
@@ -300,6 +998,10 @@ export default {
     }
 
     // 3. Body + server-vertrouwd bedrijf_id, dan doorsturen naar Make
+    //    LET OP: de JSON-parse is HIERHEEN verplaatst (was net hieronder), zodat
+    //    body.action al beschikbaar is voor de D1-dispatchkey. De override (bedrijf_id/
+    //    uid/email/session_token) blijft EXACT identiek en gebeurt nog steeds vóór de
+    //    Make-forward — dus voor Make verandert er niets.
     let body = {};
     try { body = await request.json(); } catch (e) { body = {}; }
     if (body && typeof body === 'object') {
@@ -311,6 +1013,41 @@ export default {
       // van geldige lengte zodat die legacy-check slaagt. (Bij cutover vervangen door X-Gateway-Secret.)
       body.session_token = 'gw-verified-' + claims.sub;
     }
+
+    /* ===== D1-DISPATCH (NIEUW — OFF BY DEFAULT) ============================
+       Komt NA het afleiden van bedrijfId uit de geverifieerde claim en NA de
+       body-override, maar VÓÓR de Make-forward. Zonder env.D1_ENDPOINTS is
+       D1_ENABLED leeg en gebeurt hier NIETS → 100% Make, geen gedragsverandering.
+       Een handler die null/undefined teruggeeft (bv. bedrijf niet in D1) valt
+       door naar Make. Elke onverwachte fout in D1 valt eveneens door naar Make,
+       zodat de live-portal nooit door D1 gebroken kan worden.                 */
+    let D1_ENABLED;
+    try { D1_ENABLED = new Set(JSON.parse(env.D1_ENDPOINTS || '[]')); }
+    catch (e) { D1_ENABLED = new Set(); }
+
+    if (D1_ENABLED.size && env.CRMDB) {
+      const dispatchKey = path === 'bedrijfBeheer'
+        ? 'bedrijfBeheer:' + (body && body.action ? String(body.action) : '')
+        : path;
+      if (D1_ENABLED.has(dispatchKey)) {
+        try {
+          const out = await d1Dispatch(dispatchKey, {
+            env,
+            db: env.CRMDB,
+            bedrijfId,
+            body,
+            claims,
+            maps,
+            util,
+          });
+          if (out !== null && out !== undefined) return json(out, 200, ch);
+          // null/undefined => bewust doorvallen naar Make (fail-closed).
+        } catch (e) {
+          // D1-fout mag de portal niet breken → val door naar Make (zelfde als vroeger).
+        }
+      }
+    }
+    /* ===== EINDE D1-DISPATCH ============================================== */
 
     let makeRes;
     try {

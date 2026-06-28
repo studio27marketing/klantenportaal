@@ -7,6 +7,15 @@ compatibility_date = "2024-11-01"
 [vars]
 PROJECT_ID = "studio27-cloud"
 ALLOWED_ORIGINS = "https://www.studio27.be,https://studio27.be"
+# D1-migratie (zie AUDIT_HUB_MIGRATION.md): per-endpoint feature-flag.
+# LEEG ("[]") = ALLES blijft via Make/ClickUp lopen, ZERO gedragsverandering.
+# Zet keys pas aan NA een pariteitstest (Make vs D1), bv.:
+#   D1_ENDPOINTS = '["meetingsList","bedrijfBeheer:get_team","bedrijfBeheer:get_offertes","bedrijfContent"]'
+# Houd dashboard / chatList / chatPost voorlopig UIT (data nog niet gesynct — zie audit P-tasks/P2).
+D1_ENDPOINTS = "[]"
+# Optioneel: echte Studio 27 booking-deeplink voor meetingsList. Zonder deze var
+# laat meetingsList booking_url weg en valt de frontend terug op de DM/booking-modal.
+# MEETINGS_BOOKING_URL = "https://..."
 
 # Rate limiting + sleutel-cache. Maak de namespace aan met:
 #   npx wrangler kv namespace create KV
@@ -14,3 +23,10 @@ ALLOWED_ORIGINS = "https://www.studio27.be,https://studio27.be"
 # [[kv_namespaces]]
 # binding = "KV"
 # id = "PLAK_KV_NAMESPACE_ID_HIER"
+
+# D1-databank van de hub (s27-crm-db). Vereist zodra een endpoint in D1_ENDPOINTS staat.
+# Met D1_ENDPOINTS="[]" wordt deze binding niet gebruikt — toevoegen is gedragsneutraal.
+[[d1_databases]]
+binding = "CRMDB"
+database_name = "s27-crm-db"
+database_id = "0c50db87-9a69-4cdc-9f43-4c1dc92dd801"
