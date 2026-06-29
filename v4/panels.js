@@ -620,6 +620,8 @@ const OFFERTE_MOCK=[
   {id:'om3',naam:'Website & SEO-traject',status:'Goedgekeurd',link:'#',budget:'6800',vervaldatum:''}
 ];
 function offerteAfgerond(st){ return /goedgekeur|approv|completed|done|afgerond|declin|geweiger|verlopen|expired|gefactureerd|gewonnen|verloren/i.test(String(st||'')); }
+// Niet-gewonnen eindstatus (geweigerd/verlopen/verloren) — eigen groep, los van goedgekeurd
+function offerteGeweigerd(st){ return /declin|geweiger|afgew|reject|verlopen|expired|verloren|\blost\b/i.test(String(st||'')); }
 // Alleen tonen vanaf 'verzonden' (sent) — concept/to do/draft blijven verborgen
 function offerteVisible(st){ return !/draft|concept|to ?do|todo|backlog|aangevraagd|in afwachting/i.test(String(st||'').trim()); }
 function offerteStatusLabel(st){ var s=String(st||'').toLowerCase().trim(); var m={sent:'Verzonden',viewed:'Bekeken',completed:'Goedgekeurd',approved:'Goedgekeurd',declined:'Geweigerd',expired:'Verlopen',draft:'Concept'}; return m[s]||(st?String(st).charAt(0).toUpperCase()+String(st).slice(1):''); }
@@ -639,11 +641,14 @@ function panelOffertes(){
   var offs = live ? raw.filter(function(o){return offerteVisible(o.status);}) : raw;  // verberg concept/draft
   var formSection = '<div class="section-head" style="margin-top:36px"><h2>Nieuwe offerte aanvragen</h2></div><p class="sdesc" style="margin:-4px 0 14px;max-width:60ch">Vertel ons kort wat je nodig hebt — je krijgt meteen een richtprijs en wij kijken alles persoonlijk na.</p>'+offerteRequestForm();
   if(!offs.length) return head+'<div class="empty" style="padding:40px 20px"><div class="em-ic">'+ic('doc',52)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog geen offertes</b><p style="margin:6px 0 0">Hier verschijnen je verzonden offertes zodra we er één klaarzetten — of vraag er hieronder meteen één aan.</p></div>'+formSection;
-  var lopend=offs.filter(function(o){return !offerteAfgerond(o.status);}), afge=offs.filter(function(o){return offerteAfgerond(o.status);});
+  var lopend=offs.filter(function(o){return !offerteAfgerond(o.status);});
+  var voltooid=offs.filter(function(o){return offerteAfgerond(o.status) && !offerteGeweigerd(o.status);});
+  var geweigerd=offs.filter(function(o){return offerteGeweigerd(o.status);});
   return head
     +'<p class="sdesc" style="margin:-4px 0 16px;max-width:60ch">Klik een offerte open om ze te bekijken of goed te keuren (PandaDoc). Een vraag? Stel ze per offerte — ze komt rechtstreeks bij je Studio 27-contact terecht.</p>'
     +(lopend.length?'<div class="section-head" style="margin-top:4px"><h2>Lopend</h2><span class="count">'+lopend.length+'</span></div><div style="display:flex;flex-direction:column;gap:10px">'+lopend.map(offerteRow).join('')+'</div>':'')
-    +(afge.length?'<div class="section-head" style="margin-top:30px"><h2>Goedgekeurd &amp; eerdere</h2><span class="count">'+afge.length+'</span></div><div style="display:flex;flex-direction:column;gap:10px">'+afge.map(offerteRow).join('')+'</div>':'')
+    +(voltooid.length?'<div class="section-head" style="margin-top:30px"><h2>Goedgekeurd</h2><span class="count">'+voltooid.length+'</span></div><div style="display:flex;flex-direction:column;gap:10px">'+voltooid.map(offerteRow).join('')+'</div>':'')
+    +(geweigerd.length?'<div class="section-head" style="margin-top:30px"><h2>Geweigerd</h2><span class="count">'+geweigerd.length+'</span></div><div style="display:flex;flex-direction:column;gap:10px">'+geweigerd.map(offerteRow).join('')+'</div>':'')
     +formSection;
 }
 function contactRow(c, isMe){
