@@ -32,6 +32,7 @@ let authListenerStarted = false;
 
 function emit(phase, extra) {
   lastState = Object.assign({ phase }, extra || {});
+  dg('emit: ' + phase + ((extra && extra.email) ? (' (' + extra.email + ')') : ''));
   if (phase !== 'loading' && authWatchdog) {
     clearTimeout(authWatchdog);
     authWatchdog = null;
@@ -51,9 +52,10 @@ function armAuthWatchdog() {
 // Na een geslaagde tweede factor expliciet doorgaan naar 'ready' i.p.v. enkel op
 // onAuthStateChanged te wachten — die vuurt in de popup/redirect-MFA-flow niet altijd
 // betrouwbaar, waardoor je "de code invult maar niet wordt doorverwezen".
-function finishSignedIn() {
-  const u = auth && auth.currentUser;
+function finishSignedIn(forcedUser) {
+  const u = forcedUser || (auth && auth.currentUser);
   const em = String((u && u.email) || '').trim().toLowerCase();
+  dg('finishSignedIn: ' + (u ? em : 'GEEN user'));
   if (u && /@studio27\.be$/.test(em)) emit('ready', { user: u, email: em });
   else if (u) emit('no_access', { email: em });
 }
@@ -142,9 +144,9 @@ async function resolveMfa(error) {
     if (!code) { dg('geen code ingevoerd'); emit('signed_out'); return; }
     dg('code ingevoerd (' + code.length + ' cijfers) → verifiëren…');
     const assertion = fb.TotpMultiFactorGenerator.assertionForSignIn(hint.uid, code);
-    await resolver.resolveSignIn(assertion);
+    const fin = await resolver.resolveSignIn(assertion);
     dg('tweede factor OK ✓');
-    finishSignedIn();
+    finishSignedIn(fin && fin.user);
     return;
   }
   if (phoneId && hint.factorId === phoneId) {
@@ -156,8 +158,8 @@ async function resolveMfa(error) {
     if (!code) { emit('signed_out'); return; }
     const cred = fb.PhoneAuthProvider.credential(verificationId, code);
     const assertion = fb.PhoneMultiFactorGenerator.assertion(cred);
-    await resolver.resolveSignIn(assertion);
-    finishSignedIn();
+    const finP = await resolver.resolveSignIn(assertion);
+    finishSignedIn(finP && finP.user);
     return;
   }
   throw error;
@@ -224,28 +226,14 @@ const S27TeamAuth = {
     // Enkel in de GEÏNSTALLEERDE app (standalone) kan een popup geen venster openen → redirect.
     // In een gewone (mobiele) browser-tab is een popup betrouwbaarder dan een cross-domein-redirect
     // op Safari. Wordt de popup geblokkeerd, dan valt de catch hieronder alsnog terug op redirect.
-    let standalone = false;
-    try { standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true; } catch (e) { standalone = false; }
-    if (standalone) { try { await fb.signInWithRedirect(auth, provider); } catch (e) { emit('signed_out', { error: friendly(e) }); } return; }
-    try {
-      await fb.signInWithPopup(auth, provider);
-      dg('Google-popup OK');
-    } catch (e) {
-      dg('popup → ' + ((e && e.code) || e));
-      if (e && e.code === 'auth/multi-factor-auth-required') {
-        try { await resolveMfa(e); }   // tweede factor afhandelen → onAuthStateChanged doet de rest
-        catch (e2) { dg('MFA-fout: ' + ((e2 && e2.code) || e2)); emit('signed_out', { error: friendly(e2) }); }
-        return;
-      }
-      // popup geblokkeerd/niet ondersteund (mobiele browser) → terugvallen op redirect
-      const fallbackCodes = ['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment', 'auth/cancelled-popup-request', 'auth/web-storage-unsupported'];
-      if (e && fallbackCodes.indexOf(e.code) >= 0) {
-        dg('popup geblokkeerd → redirect');
-        try { await fb.signInWithRedirect(auth, provider); } catch (e3) { emit('signed_out', { error: friendly(e3) }); }
-        return;
-      }
-      emit('signed_out', { error: friendly(e) });
-    }
+    // Altijd via redirect, GEEN popup. De Google-popup wordt door de Cross-Origin-Opener-Policy
+    // geblokkeerd in z'n terugkoppeling (zie console: "window.closed call blocked"), waardoor de
+    // sessie na de tweede factor niet doorzette en je niet werd doorverwezen. Redirect is rotsvast:
+    // volledige navigatie naar Google en terug; init() handelt de terugkeer + 2FA af
+    // (getRedirectResult -> resolveMfa -> finishSignedIn -> ready).
+    dg('redirect naar Google…');
+    try { await fb.signInWithRedirect(auth, provider); }
+    catch (e) { dg('redirect-fout: ' + ((e && e.code) || e)); emit('signed_out', { error: friendly(e) }); }
   },
   // Eerste keer: TOTP (2-staps) instellen. Vereist eerst een Google-sessie; daarna
   // genereren we een sleutel, jij voegt ze toe in je authenticator en bevestigt met een code.
