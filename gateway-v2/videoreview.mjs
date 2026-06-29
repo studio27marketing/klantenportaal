@@ -247,6 +247,39 @@ async function signedFileUrl(env, key, ttlSec) {
   return `/videofile?key=${encodeURIComponent(key)}&exp=${exp}&tok=${tok}`;
 }
 
+// HR-documenten (hrdocs/<cand>/<doc>/<naam>): zelfde HMAC-mechaniek, eigen prefix `hf`.
+// Geëxporteerd zodat teamportaal.mjs een getekende, expirerende dossierlink kan minten
+// ná Firebase-auth + admin-rolcheck (het dossier mag niet zomaar lekken).
+export async function signedHrFileUrl(env, key, ttlSec) {
+  // Korte TTL (6u): dossierdocs zijn gevoeliger dan video-bijlagen en de link wordt
+  // toch vers gemint bij elke dossier-opening (teamKandidaatDocs/-Contract, admin-only).
+  const exp = Math.floor(Date.now() / 1000) + (ttlSec || STREAM_TTL_SEC);
+  const tok = await signTok(env, `hf|${key}|${exp}`);
+  return `/hrfile?key=${encodeURIComponent(key)}&exp=${exp}&tok=${tok}`;
+}
+export async function handleHrFile(request, env) {
+  const u = new URL(request.url);
+  const key = str(u.searchParams.get('key'));
+  const exp = str(u.searchParams.get('exp'));
+  const tok = str(u.searchParams.get('tok'));
+  if (!key.startsWith('hrdocs/') || key.includes('..')) return new Response('Ongeldige sleutel', { status: 400 });
+  if (!(await tokOk(env, `hf|${key}|${exp}`, tok, exp))) {
+    return new Response('Link verlopen — herlaad het portaal.', { status: 403 });
+  }
+  if (!env.R2) return new Response('Opslag niet beschikbaar', { status: 500 });
+  const obj = await env.R2.get(key);
+  if (!obj) return new Response('Niet gevonden', { status: 404 });
+  const h = new Headers();
+  obj.writeHttpMetadata(h);
+  h.set('cache-control', 'private, max-age=3600');
+  h.set('x-content-type-options', 'nosniff');
+  const ct = h.get('content-type') || '';
+  const dl = u.searchParams.get('dl') === '1';
+  const fn = (str(u.searchParams.get('name')) || (key.split('/').pop() || 'document')).replace(/[^\w.\- ]+/g, '_').slice(0, 120) || 'document';
+  h.set('content-disposition', (!dl && INLINE_TYPES.has(ct)) ? 'inline' : ('attachment; filename="' + fn + '"'));
+  return new Response(obj.body, { headers: h });
+}
+
 export async function videoReviewUpload(bedrijfId, body, env) {
   const taskId = cleanId(body && body.task_id);
   const g = await guardTask(env, bedrijfId, taskId);

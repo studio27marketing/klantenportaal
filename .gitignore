@@ -1,13 +1,50 @@
-_bottest.html
-_prodtest.html
-s27-make-backups/
-_adsdata_test.json
+# =====================================================================
+# Studio 27 platform — .gitignore
+# =====================================================================
 
-_htest.cjs
-v4/_htest.cjs
-
-# Cloudflare Worker dev-secrets — NOOIT committen (bevat CLICKUP_TOKEN)
+# --- Geheimen: NOOIT committen ---------------------------------------
 .dev.vars
 **/.dev.vars
 gateway-v2/.dev.vars
+.env
+.env.*
+*.pem
+*service-account*.json
+*credentials*.json
+# Dev-doc met historische private key (uit de bron gehaald; sleutel moet geroteerd worden)
+OCHTEND_AUTH_V2.md
+
+# --- Cloudflare / build caches ---------------------------------------
 .wrangler/
+**/.wrangler/
+dist/
+.mf/
+
+# --- Node ------------------------------------------------------------
+node_modules/
+**/node_modules/
+npm-debug.log*
+
+# --- Backups / redesign-snapshots / rommel ---------------------------
+backups/
+_backup-portaal-vanilla-20260625-075216/
+_redesign-backups/
+**/_redesign-backups/
+MAKE_BACKUPS/
+s27-make-backups/
+*.bak
+*.bak-uxrework
+app.js.bak-uxrework
+team.css.bak-uxrework
+
+# --- Lokale test- / scratch-bestanden --------------------------------
+_bottest.html
+_prodtest.html
+_adsdata_test.json
+_htest.cjs
+v4/_htest.cjs
+
+# --- OS / editor -----------------------------------------------------
+.DS_Store
+**/.DS_Store
+.claude/worktrees/

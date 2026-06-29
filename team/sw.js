@@ -1,6 +1,6 @@
-/* Studio 27 Teamportaal service worker — eigen cache-namespace (los van het klantportaal). */
-var CACHE = 's27-team-v5';
-var SHELL = ['/', '/index.html', '/styles.css?v=5', '/glass.css?v=5', '/team.css?v=5', '/app.js?v=5', '/auth.js?v=5', '/wordmark.svg', '/icon.svg', '/manifest.webmanifest?v=5'];
+/* Studio 27 Teamportaal service worker — network-first (nooit stale code serveren). */
+var CACHE = 's27-team-v141';
+var SHELL = ['/', '/index.html', '/wordmark.svg', '/icon.svg'];
 
 self.addEventListener('install', function (e) {
   self.skipWaiting();
@@ -13,16 +13,19 @@ self.addEventListener('activate', function (e) {
 });
 self.addEventListener('message', function (e) { if (e.data && e.data.type === 'FLUSH') { caches.keys().then(function (ks) { ks.forEach(function (k) { caches.delete(k); }); }); } });
 
+// NETWORK-FIRST: haal altijd vers op (verse app.js/auth.js/index.html); cache enkel als
+// offline-fallback. Zo kan een oude shell de login nooit blokkeren.
 self.addEventListener('fetch', function (e) {
   var req = e.request;
-  if (req.method !== 'GET') return;
+  if (req.method !== 'GET') return;                        // API-POSTs nooit aanraken
   var url = new URL(req.url);
-  if (url.origin !== self.location.origin) return; // API-calls (andere origin) nooit cachen
-  if (req.mode === 'navigate') { e.respondWith(fetch(req).catch(function () { return caches.match('/index.html'); })); return; }
-  e.respondWith(caches.match(req).then(function (hit) {
-    return hit || fetch(req).then(function (res) {
-      if (res && res.ok) { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(req, copy); }); }
+  if (url.origin !== self.location.origin) return;         // cross-origin (gateway) nooit cachen
+  e.respondWith(
+    fetch(req).then(function (res) {
+      if (res && res.ok && res.type === 'basic') { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(req, copy); }); }
       return res;
-    }).catch(function () { return hit; });
-  }));
+    }).catch(function () {
+      return caches.match(req).then(function (hit) { return hit || (req.mode === 'navigate' ? caches.match('/index.html') : undefined); });
+    })
+  );
 });

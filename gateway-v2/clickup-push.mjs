@@ -37,6 +37,10 @@ const normStatus = (s) => String(s == null ? '' : s).trim().toLowerCase();
 // Statussen die een klantmelding triggeren (genormaliseerd lowercase). Geldt voor
 // gewone taken én social-media-taken; matcht de NIEUWE status na een taskStatusUpdated.
 const NOTIFY_STATUSES = ['feedback klant', 'doorgestuurd', 'input gevraagd', 'feedback verwerkt', 'on hold'];   // 'feedback klant' = nieuwe standaard-statusnaam (was 'doorgestuurd'); 'doorgestuurd' blijft voor Social
+// INTERNE lijsten: nooit een melding naar de klant pushen, ook niet bij interne comments of
+// statuswijzigingen. Offertes = teamwerk (concept-mail-stappen e.d.); Bugs = klant-onzichtbaar.
+// Tickets staan hier BEWUST NIET in: een klant volgt z'n eigen supportticket en wil die updates wél.
+const ADMIN_ONLY_LISTS = new Set(['901520180289', '901523867681']);   // Offertes + Portaal-Bugs
 const STATUS_COPY = {
   'feedback klant':    { title: 'Klaar voor jou', body: (n) => '“' + n + '” staat klaar voor jouw feedback in je portaal.' },
   'doorgestuurd':      { title: 'Klaar voor jou', body: (n) => '“' + n + '” staat klaar in je portaal.' },
@@ -126,6 +130,10 @@ async function processEvent(env, event, taskId) {
   const tr = await cuGet(env, '/task/' + taskId);
   if (!tr.ok || !tr.data) return;
   const task = tr.data;
+  // INTERNE taak (offerte/bug): nooit naar de klant pushen — ook niet bij interne comments
+  // (bv. 'concept-mail klaarstaat in concepten') of statuswijzigingen. Lost de leak op die
+  // Ilke zag na een offerte-aanvraag (bedrijf-gekoppelde offertetaak triggerde een klant-melding).
+  if (ADMIN_ONLY_LISTS.has(str(task.list && task.list.id))) return;
   // Statuswijziging: enkel melden bij een notify-waardige NIEUWE status (goedkope check vóór resolutie).
   if (event === 'taskStatusUpdated' && !NOTIFY_STATUSES.includes(normStatus(task.status && task.status.status))) return;
   const { bedrijfId, contacts } = await resolveContactsForTask(env, task);

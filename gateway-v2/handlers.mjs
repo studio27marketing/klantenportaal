@@ -18,6 +18,8 @@
  *   - ctx is optioneel (KV-cache via ctx.waitUntil); ontbreekt in de node-harness.
  * ============================================================================= */
 
+import { logAiUsage, aiUsageFrom } from './aicost.mjs';   // AI-kostenmonitor (gedeelde meetlaag)
+
 /* ---- ClickUp veld-/lijst-constanten -------------------------------------- */
 export const CU_BASE = 'https://api.clickup.com/api/v2';
 export const TEAM_ID = '24419872';
@@ -82,7 +84,6 @@ export const TJ = {
 };
 export const TJ_UUID_TO_KEY = Object.fromEntries(Object.entries(TJ).map(([k, v]) => [v, k]));
 export const TICKET_TYPEJOB_SUPPORT = TJ.support; // TYPE JOB-optie 'Support' (schrijven = UUID)
-export const KANBEGINNEN_JA = 'a3800974-cb47-4744-a2d1-1abc842b9bfd';          // 'Kan beginnen?'-optie JA (orderindex 0)
 
 export const FIELD = {
   bedrijf:        '4b1fb333-f47a-41bb-a976-dce63ed36657', // relatie 'Bedrijf' (scope-guard)
@@ -90,7 +91,6 @@ export const FIELD = {
   offertes:       'eb145449-a8bd-4865-a931-23eed06a9df4', // relatie 'Offertes' op bedrijf-taak
   modules:        'b8effbfe-c4d6-42fb-b8ac-bc7d48a71734', // labels 'Actieve portaal-modules'
   typeJob:        '3e76c134-a270-483c-a82a-d9a6817f375d', // dropdown TYPE JOB
-  kanBeginnen:    'e99f30c7-7b5f-4ab4-ad48-9881dec38d91', // dropdown 'Kan beginnen?' (enkel optie JA, orderindex 0). GEZET = value-key aanwezig.
   // contact-velden
   voornaam:       '626a0441-8824-4381-a89a-4639ac547e23',
   achternaam:     '79cbda71-626b-424c-8f78-d0785c52126a',
@@ -103,6 +103,7 @@ export const FIELD = {
   facturatieEmail:'9613b4aa-2285-485b-80a6-d1d34a96884c',
   facturatieOpm:  '36d11828-4199-4373-81db-e72f960cf902',
   website:        '90b63173-378a-4fa8-bae8-1a513eea4eca',
+  websiteEditorLink:'f478b5e0-abf4-4fb4-a91c-c522f18a6cd5', // url 'Website editor link' (link naar de site-editor van de klant)
   aantalMedewerkers:'e72680d9-9706-40b8-9e67-564bc21855d7',
   portaalToegang: 'f0de5c6c-0eea-4809-8e40-145fc7359a3d', // tekst-CSV e-mails met portaaltoegang
   // projectDetail-velden
@@ -122,6 +123,15 @@ export const FIELD = {
   offerteVervaldatum:'317437a7-2508-453f-a7b9-faf040c541a9',
   offertePandadocId:'748009c1-6e97-4b87-b6bd-fadeeaa24701', // short_text 'PandaDoc Offerte ID' (offertes-lijst)
   offerteBedrijfsnaam:'8da934b5-7747-4ad3-ac2f-cc53cf2985e8', // short_text 'Bedrijfsnaam' (offertes-lijst)
+  uniekeCode:     'da5a77e8-8f99-4300-880e-0c5920906b5f', // short_text 'Unieke Code' (offertes-lijst; traceer-ID, normaal door de Make offerte-intake gezet — portaal-aanvragen omzeilden die en lieten 't veld leeg, Bug 86cacpemz)
+  // MODERNE list_relationship-velden op de offerte-taak (waar de Make-flow koppelt; ondersteunen MEERDERE).
+  offerteContacten:'68a1c8f6-bdf7-417e-bced-c8bda463a239', // list_relationship 'Contactpersonen' -> 901520180286 (de echte contact-koppeling)
+  offerteMeetings:'c3bf6723-1572-4b1b-ae1c-ef4f13f4dbca',  // list_relationship 'Meetings' -> 901520180293 (bidirectioneel: op meeting = 'Offertes')
+  // MEETING-taak-velden (Meetings-lijst 901520180293)
+  meetingType:    '7e9217d7-63e6-4838-9c70-15a080e33d24', // dropdown TYPE MEETING (0=SALES, 1=PROJECT)
+  meetingBedrijven:'64868b3a-9f0b-4f3b-a0ec-e3a81e002e17',// list_relationship 'Bedrijven' -> 901520180288 (op de meeting)
+  meetingContacten:'9127fbd0-1380-4309-ade1-88c6ba92d1e4',// list_relationship 'Contactpersonen' -> 901520180286 (op de meeting)
+  firefliesUrl:   '5e63f66f-3e45-451c-ad00-84ce358e8111', // url 'Fireflies URL' (opname/transcript)
   // bedrijf-velden (extra) - Metricool blogId/brandId op de bedrijf-taak
   metricoolId:    '40f6ccd2-b25e-4385-bbca-3bfdf602e542', // short_text 'Metricool ID'
   ga4PropertyId:  'e3e12841-2eee-48a0-b68e-6e35cec159ca', // short_text 'GA4 property-ID' (Webprestaties; bestaat al in ClickUp)
@@ -139,6 +149,13 @@ export const FIELD = {
 
 // S27 Make-bot user-id: attachments van deze user gelden als 'studio27'.
 const S27_BOT_USER_ID = '6022087';
+
+// Unieke Code: korte, collision-resistente traceer-ID voor portaal-gegenereerde offertes. De Make
+// offerte-intake zet deze normaal; portaal-aanvragen omzeilen die intake en lieten het veld leeg
+// (Bug 86cacpemz). Make LEEST de code (geen formaatvalidatie), het 'P27-'-prefix maakt portaal-origine herkenbaar.
+function genUniekeCode() {
+  return 'P27-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+}
 
 // WhatsApp via Twilio (fail-soft): alleen actief als alle TWILIO_*-secrets bestaan.
 // Per ontvanger een eigen nummer-secret: TWILIO_WA_ARNE, TWILIO_WA_VINCENT, ... (E.164, bv +32470...).
@@ -423,6 +440,8 @@ export const cu = {
       headers: { ...cuHeaders(env), 'Content-Type': 'application/json' },
       body: JSON.stringify(jsonBody || {}),
     }, env),
+  del: (env, path) =>
+    cuFetch(CU_BASE + path, { method: 'DELETE', headers: cuHeaders(env) }, env),
   // POST /task/{id}/field/{fieldId} - generiek custom-field-zetten.
   field: (env, taskId, fieldId, value) =>
     cu.post(env, `/task/${taskId}/field/${fieldId}`, { value }),
@@ -493,7 +512,7 @@ async function driveFetch(env, url, init) {
 }
 
 // Drive-map (company-folder-id) van de bedrijf-taak lezen via ClickUp.
-async function driveCompanyFolderId(env, bedrijfId) {
+export async function driveCompanyFolderId(env, bedrijfId) {
   const br = await cu.get(env, `/task/${bedrijfId}`);
   if (!br.ok || !br.data) return '';
   return driveFolderIdFromUrl(getCF(br.data, FIELD_DRIVE_MAP));
@@ -511,33 +530,44 @@ async function driveCreateFolder(env, name, parentId) {
   return r.ok && r.data && r.data.id ? str(r.data.id) : '';
 }
 
-// Vind (of maak) de 'Huisstijl'-subfolder onder de company-folder. '' bij fout.
-async function driveHuisstijlFolderId(env, companyFolderId, { create = false } = {}) {
-  if (!companyFolderId) return '';
-  const q = `'${companyFolderId}' in parents and name = '${HUISSTIJL_FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+// Vind (of maak) een subfolder met exacte naam onder parentId (idempotent). '' bij fout/
+// niet-gevonden-zonder-create. Escapet apostroffen in de naam (project-/taaknamen).
+export async function driveFindOrCreateSubfolder(env, parentId, name, { create = true } = {}) {
+  if (!parentId || !name) return '';
+  const safe = String(name).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const q = `'${parentId}' in parents and name = '${safe}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
   const url = `${DRIVE_FILES}?${DRIVE_SD}&corpora=drive&driveId=${DRIVE_SHARED_ID}&q=${encodeURIComponent(q)}&fields=files(id,name)`;
   const r = await driveFetch(env, url, { method: 'GET' });
   const found = r.ok && r.data && Array.isArray(r.data.files) && r.data.files[0];
   if (found && found.id) return str(found.id);
-  if (create) return driveCreateFolder(env, HUISSTIJL_FOLDER_NAME, companyFolderId);
+  if (create) return driveCreateFolder(env, name, parentId);
   return '';
+}
+
+// Vind (of maak) de 'Huisstijl'-subfolder onder de company-folder. '' bij fout.
+async function driveHuisstijlFolderId(env, companyFolderId, { create = false } = {}) {
+  if (!companyFolderId) return '';
+  return driveFindOrCreateSubfolder(env, companyFolderId, HUISSTIJL_FOLDER_NAME, { create });
 }
 
 // driveEnsure: zorg dat de bedrijf-taak een company-folder + Huisstijl-subfolder heeft.
 // Leest de Drive-map (0a0781cc); ontbreekt die -> maak een nieuwe klant-map AAN in de
 // shared drive (productie-doel: alle klantmappen automatisch in S27-Drive) en schrijf de
 // folder-URL terug naar ClickUp. Idempotent. Fail-open (200 + ensured-flag).
-async function driveEnsure(bedrijfId, body, env) {
+export async function driveEnsure(bedrijfId, body, env) {
   let companyFolderId = await driveCompanyFolderId(env, bedrijfId);
   let created = false;
   if (!companyFolderId) {
     // bedrijfsnaam als mapnaam (val terug op de taaknaam, anders het id).
     const br = await cu.get(env, `/task/${bedrijfId}`);
     const naam = (br.ok && br.data && str(br.data.name).trim()) || `Klant ${bedrijfId}`;
-    companyFolderId = await driveCreateFolder(env, naam, DRIVE_SHARED_ID);
+    // HERGEBRUIK een bestaande klant-map met exact dezelfde naam in de shared-drive root
+    // (veel klanten hebben al een map) i.p.v. een duplicaat te maken; anders nieuw.
+    const existing = await driveFindOrCreateSubfolder(env, DRIVE_SHARED_ID, naam, { create: false });
+    companyFolderId = existing || await driveCreateFolder(env, naam, DRIVE_SHARED_ID);
     if (companyFolderId) {
-      created = true;
-      // Drive-map-URL terugschrijven naar ClickUp (url-customfield).
+      created = !existing;
+      // Drive-map-URL terugschrijven naar ClickUp (url-customfield) → volgende keer direct.
       const url = `https://drive.google.com/drive/folders/${companyFolderId}`;
       await cu.field(env, bedrijfId, FIELD_DRIVE_MAP, url);
     }
@@ -579,6 +609,40 @@ async function huisstijlList(bedrijfId, body, env) {
     .filter((f) => f.mimeType !== 'application/vnd.google-apps.folder')
     .map(driveFileOut);
   return { status: 200, body: { ok: true, files: out } };
+}
+
+// driveListFolder: lijst bestanden (+ submappen) in één folder van de shared drive. Generieker
+// dan huisstijlList: geeft {files, folders} terug zodat de social-content-view kan drillen.
+// Fail-open ({files:[],folders:[]}). 'thumbs' (thumbnailLink) is handig voor de social-content-grid.
+export async function driveListFolder(env, folderId) {
+  if (!folderId) return { files: [], folders: [] };
+  const q = `'${folderId}' in parents and trashed = false`;
+  const fields = 'files(id,name,mimeType,size,modifiedTime,webViewLink,webContentLink,iconLink,thumbnailLink)';
+  const url = `${DRIVE_FILES}?${DRIVE_SD}&corpora=drive&driveId=${DRIVE_SHARED_ID}&orderBy=folder,modifiedTime desc&pageSize=300&q=${encodeURIComponent(q)}&fields=${encodeURIComponent(fields)}`;
+  const r = await driveFetch(env, url, { method: 'GET' });
+  const all = (r.ok && r.data && Array.isArray(r.data.files)) ? r.data.files : [];
+  const folders = all.filter((f) => f.mimeType === 'application/vnd.google-apps.folder').map((f) => ({ id: str(f.id), name: str(f.name) }));
+  const fileObjs = all.filter((f) => f.mimeType !== 'application/vnd.google-apps.folder').map((f) => { const o = driveFileOut(f); o.thumb = str(f.thumbnailLink || ''); o.icon = str(f.iconLink || ''); return o; });
+  return { files: fileObjs, folders };
+}
+
+// driveResolveContentFolder: bepaal de "social-content"-folder van een klant. Volgorde:
+//   1) expliciet meegegeven folderId (de UI onthoudt de keuze)
+//   2) een submap met een herkenbare naam onder de company-folder ('S Share / Share / Social / …)
+//   3) de company-folder zelf (fallback)
+// Geeft {folderId, source, folderName, company, candidates}. source vertelt de UI of er
+// nog configuratie nodig is ('company' = geen herkenbare social-map gevonden).
+const DRIVE_CONTENT_CANDIDATES = ["'S Share", 'S Share', "'s Share", 'Share', 'Socials', 'Social', 'Social media', 'Socialmedia', 'Social Media', 'Content', 'Te posten', 'Posts'];
+export async function driveResolveContentFolder(env, bedrijfId, opts = {}) {
+  const explicit = str(opts.folderId || '').trim();
+  if (explicit) return { folderId: explicit, source: 'explicit', folderName: str(opts.folderName || ''), company: '', candidates: DRIVE_CONTENT_CANDIDATES };
+  const company = await driveCompanyFolderId(env, bedrijfId);
+  if (!company) return { folderId: '', source: 'none', company: '', candidates: DRIVE_CONTENT_CANDIDATES };
+  for (const name of DRIVE_CONTENT_CANDIDATES) {
+    const id = await driveFindOrCreateSubfolder(env, company, name, { create: false });
+    if (id) return { folderId: id, source: 'auto', folderName: name, company, candidates: DRIVE_CONTENT_CANDIDATES };
+  }
+  return { folderId: company, source: 'company', folderName: '', company, candidates: DRIVE_CONTENT_CANDIDATES };
 }
 
 // huisstijlUpload: multipart/related upload naar de Huisstijl-folder. body.filename +
@@ -1042,7 +1106,7 @@ export function buildProces(rootTask, descendants) {
   const mRel = getRelationIds(rootTask, FIELD.meeting);
   if (mRel.length) meeting = { gepland: true, naam: '', task_id: str(mRel[0]) };
 
-  // afgeleide acties: enkel nog feedback-acties (inplannen loopt nu via plan-items/Kan beginnen,
+  // afgeleide acties: enkel nog feedback-acties (inplannen loopt nu via plan-items/projectstatus,
   // niet meer als generieke 'plan een afspraak'-knop). De frontend rendert de feedback bovendien
   // IN-PORTAL (geen externe link meer).
   const acties = [];
@@ -1071,14 +1135,13 @@ export function buildProces(rootTask, descendants) {
 // Enkel OPEN taken (status.type 'open' = te doen) tellen; al afgehandelde shoots/meetings
 // hoeven niet meer ingepland te worden. Shoot heeft voorrang (concrete kalenderboeking).
 // Een (sub)taak is door de KLANT in te plannen wanneer:
-//  - wij 'Kan beginnen' hebben aangevinkt (veld gezet -> value-key aanwezig), EN
+//  - het PROJECT (hoofdtaak) op status 'in progress' staat. Dit VERVANGT het oude 'Kan beginnen'-veld:
+//    zodra het project loopt en er nog een shoot/meeting onder hangt, krijgt de klant de melding.
+//    (Het team zet het project op 'in progress' wanneer het werk start; dat is het sein.) EN
 //  - er nog GEEN due_date staat (gezette due_date = reeds ingepland -> melding weg), EN
 //  - de taak niet 'done'/afgerond is, EN
 //  - het een shoot (TYPE JOB = Shoot/6) of een meeting ('meeting' in naam/beschrijving) is.
 // Meerdere shoots/meetings tegelijk kan (bv. contentproject met meerdere shootdata).
-function kanBeginnenGezet(t) {
-  return getCF(t, FIELD.kanBeginnen) != null;       // enkel optie 'JA'; gezet = value-key aanwezig
-}
 function heeftDueDate(t) {
   const d = Number(t && t.due_date);
   return Number.isFinite(d) && d > 0;
@@ -1099,10 +1162,14 @@ export function buildPlan(rootTask, descendants) {
   const pool = [rootTask].concat(descendants || []);
   const items = [];
   const seen = new Set();
+  // De klant mag pas inplannen zodra het PROJECT (hoofdtaak) loopt ('in progress'). Vervangt het
+  // oude 'Kan beginnen'-veld: staat het project nog 'op te starten' / on hold / in review / afgerond,
+  // dan verschijnt er geen plan-melding. Loopt het project, dan wordt elke nog-niet-geplande shoot/
+  // meeting eronder een 'Plan shoot'/'Plan moment'-melding.
+  if (statusMapper(rootTask && rootTask.status).key !== 'in_progress') return { items };
   for (const t of pool) {
     const id = str(t.id);
     if (seen.has(id)) continue;
-    if (!kanBeginnenGezet(t)) continue;        // wij hebben 't nog niet vrijgegeven
     if (heeftDueDate(t)) continue;             // reeds ingepland (due date) -> geen melding
     if (isDoneTask(t)) continue;               // afgerond -> geen melding
     const type = planTypeOf(t);
@@ -1651,11 +1718,28 @@ async function resolveActiveSocial(bedrijfId, env) {
   return SOCIAL_FALLBACK;
 }
 
+// Anker voor de PROJECTCHAT: alle chat van een project hoort op de TOP-LEVEL parent-taak
+// (TYPE JOB = Projectmanagement). Wordt er over een subtaak gecommuniceerd, dan landt het bericht
+// nog steeds ENKEL op die top-level parent (Vincent 2026-06-19). Voor een top-level taak = no-op
+// (top_level_parent ontbreekt of is gelijk aan de taak zelf), dus geen extra ClickUp-call in het
+// normale geval — de GET vervangt gewoon de scope-check-GET die hier toch al gebeurde.
+async function resolveChatAnchor(env, taskId, taskMaybe) {
+  let task = taskMaybe || null;
+  if (!task) { const tr = await cu.get(env, `/task/${taskId}`); task = (tr.ok && tr.data) ? tr.data : null; }
+  if (!task) return { id: str(taskId), task: { custom_fields: [] } };
+  const tlp = str(task.top_level_parent || '');
+  if (tlp && tlp !== str(task.id)) {
+    const pr = await cu.get(env, `/task/${tlp}`);
+    if (pr.ok && pr.data) return { id: str(pr.data.id), task: pr.data };
+  }
+  return { id: str(task.id), task };
+}
+
 export async function chatList(bedrijfId, body, env) {
-  const taskId = cleanId(body && body.task_id);
-  if (!taskId) return { status: 200, body: { ok: true, comments: [] } };
-  const tr = await cu.get(env, `/task/${taskId}`);
-  const task = tr.ok && tr.data ? tr.data : { custom_fields: [] };
+  const reqId = cleanId(body && body.task_id);
+  if (!reqId) return { status: 200, body: { ok: true, comments: [] } };
+  const anchor = await resolveChatAnchor(env, reqId);   // chat altijd vanaf de top-level parent lezen
+  const taskId = anchor.id; const task = anchor.task;
   const sc = scopeCheckTask(task, bedrijfId, SCOPE_FAIL_CLOSED.read);
   if (!sc.ok) {
     return { status: 403, body: { ok: false, error: 'scope_mismatch', message: 'Geen toegang tot deze taak.', comments: [] } };
@@ -1675,7 +1759,18 @@ export async function chatList(bedrijfId, body, env) {
       attachments: [],
     });
   }
-  return { status: 200, body: { ok: true, comments } };
+  // Read-receipt voor het team: heeft de klant het nieuwste TEAM-bericht gelezen? De klant zet bij het
+  // openen van de projectchat een KV-marker (chatMarkRead). Newest team = nieuwste comment ZONDER de
+  // '💬 ['-klantprefix. (Additief veld; de klant-UI negeert het, enkel staff rendert het.)
+  let read_receipt = null;
+  try {
+    let lastTeamTs = 0;
+    for (const c of comments) { if (!c.is_klant) { const d = Number(c.datum) || 0; if (d > lastTeamTs) lastTeamTs = d; } }
+    let clientRead = 0;
+    if (env.KV) { const v = await env.KV.get(`chatread:${cleanId(bedrijfId)}:${taskId}:klant`); clientRead = Number(v) || 0; }
+    read_receipt = { client_read_at: clientRead, last_team_ts: lastTeamTs, read_by_client: lastTeamTs > 0 && clientRead >= lastTeamTs };
+  } catch (e) { /* fail-soft */ }
+  return { status: 200, body: { ok: true, comments, read_receipt } };
 }
 
 /* ---- bedrijfContent ------------------------------------------------------ */
@@ -1856,7 +1951,7 @@ export async function dashboard(bedrijfId, body, env) {
       if (isAfgerondStatus(c.status)) continue;
       const cUuid = typeJobUuid(c);
       const cst = String((c.status && c.status.status) || '').toLowerCase();
-      if (cUuid === TJ.shoot && !(Number(c.due_date) > 0)) actiesTodo++;
+      if (cUuid === TJ.shoot && st.key === 'in_progress' && !(Number(c.due_date) > 0)) actiesTodo++;   // tel een shoot pas als 'in te plannen'-actie zodra het PROJECT loopt ('in progress') en de shoot nog geen datum heeft — 1-op-1 met buildPlan (project 'in progress'), geen onverklaarde teller zonder bijhorende 'Plan shoot'-kaart
       else if (cUuid === TJ.edit && (cst.includes('doorgestuur') || cst.includes('feedback klant'))) actiesTodo++;
     }
     actieve.push({
@@ -1874,7 +1969,7 @@ export async function dashboard(bedrijfId, body, env) {
       opleverdatum: fmtDateFromMs(t.due_date),
       laatst_geupdatet: fmtDateTimeFromMs(t.date_updated),
       feedback_link: st.key === 'doorgestuurd' ? `https://studio27.be/design-feedback?taskId=${t.id}` : '',
-      plan_items: buildPlan(t, descendantsOf(String(t.id), childrenByParent)).items, // plannbare shoots/meetings (Kan beginnen + geen due) -> Start-melding
+      plan_items: buildPlan(t, descendantsOf(String(t.id), childrenByParent)).items, // plannbare shoots/meetings (project loopt 'in progress' + geen due) -> Start-melding
       sae: buildSae(t),                                        // assignees [{naam, initialen}]
     });
   }
@@ -1904,6 +1999,10 @@ export async function dashboard(bedrijfId, body, env) {
           let sn = str(last.comment_text);
           if (vanKlant) { const i = sn.indexOf(']'); if (i > 0) sn = sn.slice(i + 1); }
           p.last_chat = { tekst: sn.replace(/\s+/g, ' ').trim().slice(0, 90), ts: Number(last.date) || 0, van_klant: vanKlant };
+          // Team-inbox read-receipt: als het nieuwste bericht van het TEAM kwam, lees of de klant het al las.
+          if (!vanKlant && env.KV) {
+            try { const cr = Number(await env.KV.get(`chatread:${cleanId(bedrijfId)}:${p.task_id}:klant`)) || 0; p.last_chat.client_read_at = cr; p.last_chat.read_by_client = cr >= (Number(last.date) || 0); } catch (e) { /* */ }
+          }
         }
       } catch (e) { /* fail-soft: geen kaart */ }
     })),
@@ -1948,6 +2047,10 @@ export async function dashboard(bedrijfId, body, env) {
         web: !!(gv(FIELD.ga4PropertyId) || gv(FIELD.gscSiteUrl)),
       };
     })(),
+    // Website-editor-link (bedrijf-veld 'Website editor link'): de klant kan vanuit de Website-tab
+    // rechtstreeks naar de editor van zijn site. Lege string als het veld niet ingevuld is -> frontend
+    // toont de knop dan niet (nooit een dode link). Zelfde GET (cr) als modules/koppelingen, geen extra RTT.
+    website_editor_link: str(cr.ok && cr.data ? getCF(cr.data, FIELD.websiteEditorLink) : '').trim(),
   };
   return { status: 200, body: out };
 }
@@ -1999,6 +2102,7 @@ export async function meetingsList(bedrijfId, body, env) {
  * Cache: GEEN - planning wijzigt vaak; een 60s-cache zou een net-geboekt/verwijderd
  *   blok 1 minuut verbergen en zo dubbele-boekingen of valse vrije slots geven.
  */
+const MEETING_MARGIN_MS = 60 * 60000;   // 1u marge tussen meetings (uitlooptijd voor uitloop)
 export async function beschikbaarheid(bedrijfId, body, env) {
   const taskId = cleanId(body && body.task_id);
   const van = str(body && body.van);   // epoch-ms, 1:1 doorgeven (geen conversie)
@@ -2093,6 +2197,35 @@ export async function beschikbaarheid(bedrijfId, body, env) {
     };
   }
 
+  // ---- MEETING-MODUS (body.meeting=1, vanuit de meeting-planner) -------------------------------
+  // Extra regels die ENKEL voor klant-meetings gelden (de gewone taak-/shoot-picker stuurt geen
+  // meeting-vlag mee en blijft dus ongewijzigd):
+  //  (b) Telewerk blokkeert FYSIEKE meetings: terugkerende thuiswerkdagen (KV team:wh.thuisdagen)
+  //      → hele dag bezet. Bij een ONLINE meeting (Google Meet) blijven die dagen vrij. De ad-hoc
+  //      '🏠 Thuiswerk'-dag (hele-dag-agenda-event) zit sowieso al in de freeBusy en blokkeert dus
+  //      ook online (bewust conservatief → geen dubbele/foute boeking).
+  //  (c) 1u marge tussen afspraken: blaas elk TIJDGEBONDEN blok ±1u op zodat een nieuwe meeting nooit
+  //      binnen een uur van een bestaande afspraak valt (collega's mogen afspraken na elkaar, met 1u
+  //      uitlooptijd ertussen). Hele-dag-/afwezig-blokken (telewerk, verlof) niet opblazen.
+  //  (d) De 'max 1 shoot per content creator per dag'-limiet geldt BEWUST NIET voor meetings: een
+  //      shoot blokkeert enkel zijn eigen tijd (+marge), niet de hele dag — dus géén dag-collapse hier.
+  if (!isPool && body && (body.meeting === 1 || body.meeting === '1' || body.meeting === true)) {
+    const vanN = Number(van) || Date.now();
+    const totN = Number(tot) || (vanN + 21 * 86400000);
+    const isOnline = body.online === 1 || body.online === '1' || body.online === true;
+    if (!isOnline) {
+      try {
+        const thuisArr = await Promise.all(leden.map((m) => recurringThuisBlocks(env, m.id, vanN, totN)));
+        for (const arr of thuisArr) for (const b of arr) blokken.push(b);
+      } catch (e) { /* fail-open: geen telewerk-blokkades */ }
+    }
+    blokken = blokken.map((b) => {
+      const durB = Number(b.due) - Number(b.start);
+      if (b.afwezig || !(durB > 0) || durB >= 8 * 3600000) return b;   // hele-dag/afwezig niet opblazen
+      return { start: Number(b.start) - MEETING_MARGIN_MS, due: Number(b.due) + MEETING_MARGIN_MS, est: 0, afwezig: false };
+    });
+  }
+
   return {
     status: 200,
     body: {
@@ -2107,6 +2240,82 @@ export async function beschikbaarheid(bedrijfId, body, env) {
       ...extra,
     },
   };
+}
+
+/* ===========================================================================
+ * WERKUREN PER TEAMLID — gedeeld met het teamportaal (instellingenscherm + AI-
+ * dagplan) en met de klant-meetingplanner hieronder. KV: team:wh:<memberId>.
+ * Dag-index = JS getDay(): 0=zo..6=za. Default 08:00–17:00, ma–vr, geen thuisdag.
+ * =========================================================================== */
+export const WH_DEFAULT = { start: '08:00', end: '17:00', werkdagen: [1, 2, 3, 4, 5], thuisdagen: [] };
+export const whKey = (id) => 'team:wh:' + Number(id);
+export function whNormHm(v, fb) { const m = /^(\d{1,2}):(\d{2})$/.exec(str(v).trim()); if (!m) return fb; const h = Math.max(0, Math.min(23, Number(m[1]))); const mi = Math.max(0, Math.min(59, Number(m[2]))); return String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0'); }
+export function whNormDays(arr, fb) { if (!Array.isArray(arr)) return fb.slice(); const s = new Set(); arr.forEach((x) => { const n = Number(x); if (n >= 0 && n <= 6) s.add(n); }); return Array.from(s).sort((a, b) => a - b); }
+export async function getWorkhours(env, memberId) {
+  let raw = null; try { raw = await env.KV.get(whKey(memberId), 'json'); } catch (e) { /* */ }
+  if (!raw || typeof raw !== 'object') return { start: WH_DEFAULT.start, end: WH_DEFAULT.end, werkdagen: WH_DEFAULT.werkdagen.slice(), thuisdagen: [] };
+  return { start: whNormHm(raw.start, WH_DEFAULT.start), end: whNormHm(raw.end, WH_DEFAULT.end), werkdagen: whNormDays(raw.werkdagen, WH_DEFAULT.werkdagen), thuisdagen: whNormDays(raw.thuisdagen, []) };
+}
+
+// email → ClickUp-lid (uit de team:leden:v2-cache; valt terug op de teamLeden-handler).
+async function teamLedenRaw(env) {
+  try { const hit = await env.KV.get('team:leden:v2', 'json'); if (hit && Array.isArray(hit.leden) && hit.leden.length) return hit.leden; } catch (e) { /* */ }
+  try { const r = await teamLeden('', { __staff: true }, env); if (r && r.body && Array.isArray(r.body.leden)) return r.body.leden; } catch (e) { /* */ }
+  return [];
+}
+const nextYmdH = (ymd) => { const d = new Date(ymd + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); return msToBrusselsYmd(d.getTime()); };
+
+/* Extra 'busy'-intervallen voor één meeting-host: (a) hele thuiswerkdagen en (b)
+ * ECHT ingeplande ClickUp-taken (start_date gezet via de weekplanner → tijdblok van
+ * est-duur). Taken met enkel een deadline blokkeren niets. Vorm = {start,end} ISO,
+ * exact zoals Google FreeBusy, zodat het frontend ze ongewijzigd als bezet leest. */
+async function meetingHostExtraBusy(env, email, timeMinMs, timeMaxMs) {
+  const out = [];
+  const leden = await teamLedenRaw(env);
+  const lid = leden.find((l) => str(l.email).toLowerCase() === str(email).toLowerCase());
+  if (!lid) return out;
+  let wh; try { wh = await getWorkhours(env, lid.id); } catch (e) { wh = { thuisdagen: [] }; }
+  // (a) thuiswerkdagen → hele dag bezet voor klant-meetings
+  if (wh.thuisdagen && wh.thuisdagen.length) {
+    const endYmd = msToBrusselsYmd(timeMaxMs);
+    let ymd = msToBrusselsYmd(timeMinMs);
+    for (let g = 0; g < 40 && ymd <= endYmd; g++) {
+      const wd = new Date(ymd + 'T12:00:00Z').getUTCDay();
+      if (wh.thuisdagen.indexOf(wd) >= 0) out.push({ start: gcalTime(brusselsWallToMs(ymd, '00:00')), end: gcalTime(brusselsWallToMs(ymd, '23:59')) });
+      ymd = nextYmdH(ymd);
+    }
+  }
+  // (b) ingeplande taken (due in venster, start_date aanwezig) → tijdblok van est-duur
+  try {
+    const tasks = await pageAll(env, (p) => `/team/${TEAM_ID}/task?assignees%5B%5D=${encodeURIComponent(lid.id)}&include_closed=false&subtasks=true&due_date_gt=${timeMinMs - 1}&due_date_lt=${timeMaxMs}&page=${p}`, 4);
+    for (const t of tasks) {
+      const s = Number(t.start_date) || 0; if (!s) continue;   // enkel echt ingeplande taken
+      const est = Number(t.time_estimate) || 0;
+      let e = Number(t.due_date) || 0;
+      if (!(e > s) || (e - s) > 12 * 3600000) e = s + (est > 0 ? Math.max(900000, est) : 3600000);   // blokduur = est (cap 12u)
+      if (e <= timeMinMs || s >= timeMaxMs) continue;
+      out.push({ start: gcalTime(s), end: gcalTime(e) });
+    }
+  } catch (e) { /* fail-open: geen taak-blokkades */ }
+  return out;
+}
+
+/* Terugkerende thuiswerkdagen (KV team:wh.thuisdagen) → hele-dag-bezet-blokken in MS-vorm, zodat de
+ * klant-meetingplanner ze als bezet leest (fysieke meeting onmogelijk op een thuiswerkdag). Aparte,
+ * lichtere helper dan meetingHostExtraBusy: levert {start,due} in ms (geen ISO) en GEEN taak-blokken
+ * (die heeft beschikbaarheid al via cuPlanningBlocks → anders dubbel). */
+async function recurringThuisBlocks(env, memberId, vanMs, totMs) {
+  const out = [];
+  let wh; try { wh = await getWorkhours(env, memberId); } catch (e) { return out; }
+  if (!wh.thuisdagen || !wh.thuisdagen.length) return out;
+  const endYmd = msToBrusselsYmd(totMs);
+  let ymd = msToBrusselsYmd(vanMs);
+  for (let g = 0; g < 40 && ymd <= endYmd; g++) {
+    const wd = new Date(ymd + 'T12:00:00Z').getUTCDay();
+    if (wh.thuisdagen.indexOf(wd) >= 0) out.push({ start: brusselsWallToMs(ymd, '00:00'), due: brusselsWallToMs(ymd, '23:59'), est: 0, afwezig: true });
+    ymd = nextYmdH(ymd);
+  }
+  return out;
 }
 
 /* ---- meetingAvailability (Google free/busy; port van Make-scenario 5945987) --
@@ -2127,8 +2336,10 @@ export async function meetingAvailability(bedrijfId, body, env) {
     return { status: 200, body: { ok: false, error: 'sa_not_configured', message: 'Beschikbaarheid tijdelijk niet beschikbaar.', calendars: {}, hosts: GCAL_HOSTS } };
   }
   const subject = str(env.GCAL_SUBJECT);
-  const timeMin = gcalTime(Date.now() + 48 * 3600000); // now + 48h
-  const timeMax = gcalTime(Date.now() + 21 * 86400000); // now + 21d
+  const nowMs = Date.now();
+  const timeMinMs = nowMs + 48 * 3600000, timeMaxMs = nowMs + 21 * 86400000;
+  const timeMin = gcalTime(timeMinMs); // now + 48h
+  const timeMax = gcalTime(timeMaxMs); // now + 21d
 
   let token;
   try {
@@ -2149,6 +2360,19 @@ export async function meetingAvailability(bedrijfId, body, env) {
       calendars = data.calendars; // 1:1 doorgeven (per email: { busy:[{start,end}] })
     }
   } catch (e) { /* fail-open: lege calendars */ }
+
+  // Verrijk per host met thuiswerkdagen + ingeplande ClickUp-taken, zodat klanten
+  // geen meeting boeken op een thuiswerkdag of bovenop geplande taken. Het frontend
+  // (computeFreeFromBusy) leest deze extra busy-intervallen ongewijzigd mee.
+  try {
+    await Promise.all(GCAL_FREEBUSY_ITEMS.map(async (email) => {
+      const extra = await meetingHostExtraBusy(env, email, timeMinMs, timeMaxMs);
+      if (!extra.length) return;
+      if (!calendars[email] || typeof calendars[email] !== 'object') calendars[email] = { busy: [] };
+      if (!Array.isArray(calendars[email].busy)) calendars[email].busy = [];
+      calendars[email].busy = calendars[email].busy.concat(extra);
+    }));
+  } catch (e) { /* fail-open: enkel google-busy */ }
 
   return { status: 200, body: { ok: true, calendars, hosts: GCAL_HOSTS } };
 }
@@ -2242,11 +2466,11 @@ export async function bedrijfUpload(bedrijfId, body, env) {
 
 /* ---- chatPost (GET scope + POST comment; prefix kritisch) ---------------- */
 export async function chatPost(bedrijfId, body, env) {
-  const taskId = cleanId(body && body.task_id);
+  const reqId = cleanId(body && body.task_id);
   const commentText = str(body && body.comment_text);
   const klantNaam = str((body && body.klant_naam) || 'Onbekend');
-  const tr = await cu.get(env, `/task/${taskId}`);
-  const task = tr.ok && tr.data ? tr.data : { custom_fields: [] };
+  const anchor = await resolveChatAnchor(env, reqId);   // projectchat altijd op de top-level parent
+  const taskId = anchor.id; const task = anchor.task;
   const sc = scopeCheckTask(task, bedrijfId, SCOPE_FAIL_CLOSED.write);
   if (!sc.ok) {
     return { status: 403, body: { ok: false, error: 'scope_mismatch', message: 'Geen toegang tot deze taak.' } };
@@ -2265,14 +2489,14 @@ export async function chatPost(bedrijfId, body, env) {
 
 /* ---- chatAttachment (GET scope + upload + comment) ----------------------- */
 export async function chatAttachment(bedrijfId, body, env) {
-  const taskId = cleanId(body && body.task_id);
+  const reqId = cleanId(body && body.task_id);
   const filename = str(body && body.filename);
   const klantNaam = str((body && body.klant_naam) || 'Onbekend');
   const commentText = str(body && body.comment_text);
   const raw = (body && (body.file_data != null ? body.file_data : body.data)) || '';
 
-  const tr = await cu.get(env, `/task/${taskId}`);
-  const task = tr.ok && tr.data ? tr.data : { custom_fields: [] };
+  const anchor = await resolveChatAnchor(env, reqId);   // bijlage + comment altijd op de top-level parent
+  const taskId = anchor.id; const task = anchor.task;
   const sc = scopeCheckTask(task, bedrijfId, SCOPE_FAIL_CLOSED.write);
   if (!sc.ok) {
     return { status: 403, body: { ok: false, error: 'scope_mismatch', message: 'Geen toegang tot deze taak.' } };
@@ -2295,6 +2519,72 @@ export async function chatAttachment(bedrijfId, body, env) {
     status: 200,
     body: { ok: !!uploadOk, attachment_id: attId, attachment_url: attUrl, comment_id: commentId, filename, posted_at: nowISO() },
   };
+}
+
+/* ---- chatMarkRead — klant markeert de projectchat als gelezen (read-receipt voor het team) ----
+ * Schrijft KV chatread:<bedrijf>:<ankertaak>:klant = nu (ms). Enkel een ECHTE klant telt: bij
+ * staff-impersonatie (body.__staff, server-side gezet) doen we niets — anders zou 'meekijken als
+ * klant' een valse gelezen-status zetten. Anker = top_level_parent, identiek aan chatList/chatPost. */
+export async function chatMarkRead(bedrijfId, body, env) {
+  if (body && body.__staff === true) return { status: 200, body: { ok: true, skipped: 'staff' } };
+  const reqId = cleanId(body && body.task_id);
+  if (!reqId) return { status: 200, body: { ok: true } };
+  const anchor = await resolveChatAnchor(env, reqId);
+  const taskId = anchor.id; const task = anchor.task;
+  const sc = scopeCheckTask(task, bedrijfId, SCOPE_FAIL_CLOSED.write);
+  if (!sc.ok) return { status: 403, body: { ok: false, error: 'scope_mismatch' } };
+  const ts = Date.now();
+  try { if (env.KV) await env.KV.put(`chatread:${cleanId(bedrijfId)}:${taskId}:klant`, String(ts), { expirationTtl: 60 * 86400 }); } catch (e) { /* fail-soft */ }
+  return { status: 200, body: { ok: true, read_at: ts } };
+}
+
+/* ---- botLog — log een klantvraag aan de AI-assistent (monitoring, GEEN reactie/handoff) ----
+ * KV botlog:<bedrijf>:<ts>-<rand> = {q, i(intent), t(ts)}. Staff-impersonatie wordt NIET gelogd
+ * (anders vervuilt 'meekijken als klant' de data). Fire-and-forget: faalt stil, altijd 200. */
+export async function botLog(bedrijfId, body, env) {
+  if (body && body.__staff === true) return { status: 200, body: { ok: true, skipped: 'staff' } };
+  const q = String((body && body.vraag) || '').trim().slice(0, 400);
+  if (!q) return { status: 200, body: { ok: true } };
+  const bid = cleanId(bedrijfId);
+  if (!bid) return { status: 200, body: { ok: true } };
+  const intent = String((body && body.intent) || 'overig').replace(/[^a-z]/gi, '').slice(0, 24) || 'overig';
+  const ts = Date.now();
+  try {
+    if (env.KV) await env.KV.put(`botlog:${bid}:${ts}-${Math.floor(Math.random() * 1e6)}`, JSON.stringify({ q, i: intent, t: ts }), { expirationTtl: 120 * 86400 });
+  } catch (e) { /* fail-soft */ }
+  return { status: 200, body: { ok: true } };
+}
+
+/* ---- botLogList — (STAFF) de gelogde AI-vragen van een klant ophalen voor observatie/analyse ----
+ * Enkel staff (body.__staff, server-side gezet). bedrijfId = het acting-as-bedrijf. Leest KV
+ * botlog:<bedrijf>:* (key-list = goedkoop), nieuwste eerst, en haalt de 100 recentste op (gebonden
+ * aantal KV-gets) + een intent-frequentietelling over die set. 'totaal' = aantal gelogde vragen. */
+export async function botLogList(bedrijfId, body, env) {
+  if (!body || body.__staff !== true) return { status: 403, body: { ok: false, error: 'staff_only' } };
+  const bid = cleanId(bedrijfId);
+  if (!bid || !env.KV) return { status: 200, body: { ok: true, vragen: [], intents: {}, totaal: 0 } };
+  const prefix = `botlog:${bid}:`;
+  let cursor, names = [];
+  try {
+    do {
+      const page = await env.KV.list({ prefix, cursor, limit: 1000 });
+      names = names.concat(page.keys.map(k => k.name));
+      cursor = page.list_complete ? null : page.cursor;
+    } while (cursor && names.length < 3000);
+  } catch (e) { return { status: 200, body: { ok: true, vragen: [], intents: {}, totaal: 0 } }; }
+  names.sort((a, b) => (Number(b.slice(prefix.length).split('-')[0]) || 0) - (Number(a.slice(prefix.length).split('-')[0]) || 0));
+  const top = names.slice(0, 100);
+  const vragen = [], intents = {};
+  for (const name of top) {
+    try {
+      const raw = await env.KV.get(name);
+      if (!raw) continue;
+      const o = JSON.parse(raw);
+      vragen.push({ vraag: String(o.q || ''), intent: String(o.i || 'overig'), ts: Number(o.t) || 0 });
+      const k = String(o.i || 'overig'); intents[k] = (intents[k] || 0) + 1;
+    } catch (e) { /* skip */ }
+  }
+  return { status: 200, body: { ok: true, vragen, intents, totaal: names.length } };
 }
 
 /* ---- commsChat* — altijd-open klantchat op de vaste communicatietaak (taskId server-side) ----
@@ -2402,33 +2692,36 @@ export async function directMessage(bedrijfId, body, env) {
 /* ---- bugReport (WRITE, team-only): portaal-bugs/feedback van het team -> bugs-lijst --- */
 export const BUGS_LIST = '901523867681';   // 'Portaal — Bugs & Feedback' (geen bedrijf-relatie = klant-onzichtbaar)
 export async function bugReport(bedrijfId, body, env) {
-  if (!(body && body.__staff === true)) {
-    return { status: 403, body: { ok: false, message: 'Alleen voor het Studio 27-team.' } };
-  }
+  // Portaalfeedback mag door IEDEREEN (klant én team) — geen staff-gate meer (Vincent 19-06).
+  const isStaff = !!(body && body.__staff === true);
   const titel = str(body && body.titel).trim().slice(0, 140);
   const omschrijving = str(body && body.omschrijving).trim().slice(0, 6000);
   const context = str(body && body.context).slice(0, 300);
+  const bedrijfsnaam = str(body && body.bedrijfsnaam).replace(/[\r\n]+/g, ' ').slice(0, 120);
   const melderNaam = str(body && body.melder_naam).replace(/[^\w \u00c0-\u017f-]/g, '').slice(0, 40);
   const melder = str(body && body.account_email);
   if (!titel && !omschrijving) return { status: 400, body: { ok: false, message: 'Beschrijf eerst even de bug of feedback.' } };
   // melder -> ClickUp-assignee (Vincent 12-06: snel zien wie het indiende) — naam-match op
   // de workspace-ledenlijst (zelfde bron als de dropdown), e-mail-match als vangnet. Best-effort.
   let melderId = 0;
-  try {
-    const tl = await teamLeden(bedrijfId, { __staff: true }, env);
-    const leden = (tl && tl.body && Array.isArray(tl.body.leden)) ? tl.body.leden : [];
-    const nm = melderNaam.trim().toLowerCase();
-    const hit = (nm && leden.find((l) => str(l.naam).trim().toLowerCase() === nm))
-      || (melder && leden.find((l) => l.email && l.email === melder)) || null;
-    melderId = hit ? Number(hit.id) : 0;
-  } catch (e) { melderId = 0; }
+  if (isStaff) {
+    try {
+      const tl = await teamLeden(bedrijfId, { __staff: true }, env);
+      const leden = (tl && tl.body && Array.isArray(tl.body.leden)) ? tl.body.leden : [];
+      const nm = melderNaam.trim().toLowerCase();
+      const hit = (nm && leden.find((l) => str(l.naam).trim().toLowerCase() === nm))
+        || (melder && leden.find((l) => l.email && l.email === melder)) || null;
+      melderId = hit ? Number(hit.id) : 0;
+    } catch (e) { melderId = 0; }
+  }
   let created;
   try {
     created = await cu.post(env, `/list/${BUGS_LIST}/task`, {
-      name: `🐞 ${titel || omschrijving.slice(0, 80)}`,
+      name: `🐞 ${isStaff ? '' : '[KLANT] '}${titel || omschrijving.slice(0, 80)}`,
       description: [
-        'PORTAAL-FEEDBACK (via de 🐞-knop in de team-weergave)', '',
+        `PORTAAL-FEEDBACK (${isStaff ? 'via de 🐞-knop in de team-weergave' : 'gemeld door een klant via het portaal'})`, '',
         (melderNaam || melder) ? `Gemeld door: ${[melderNaam, melder ? `(${melder})` : ''].filter(Boolean).join(' ')}` : '',
+        (!isStaff && bedrijfsnaam) ? `Bedrijf: ${bedrijfsnaam}` : '',
         context ? `Pagina/context: ${context}` : '',
         '', omschrijving || '(geen omschrijving)',
       ].filter((x) => x !== '').join('\n'),
@@ -2443,22 +2736,25 @@ export async function bugReport(bedrijfId, body, env) {
     return { status: 502, body: { ok: false, message: 'De melding kon niet opgeslagen worden — probeer zo opnieuw.' } };
   }
   const bugId = str(created.data.id);
-  // optionele screenshot/bijlage (zelfde caps als tickets)
-  let attached = false;
-  if (body && body.file_data && str(body.filename)) {
-    const fname = str(body.filename).replace(/[^\w. ()-]/g, '').slice(0, 140);
-    const b64 = str(body.file_data);
-    if (b64.length <= 31 * 1024 * 1024) {
-      try {
-        const bin = atob(b64.replace(/^data:[^;]+;base64,/, '').replace(/\s+/g, ''));
-        const bytes = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-        if (bytes.length && bytes.length <= 22 * 1024 * 1024) {
-          const up = await cu.uploadAttachment(env, bugId, bytes, fname || 'screenshot.png');
-          attached = !!(up && up.ok);
-        }
-      } catch (e) { /* bijlage best-effort */ }
-    }
+  // optionele screenshot(s)/bijlage(n) — MEERDERE toegestaan (punt Arne). Nieuw: body.files[] = [{filename,file_data}].
+  // Backward-compat: de losse body.filename/body.file_data blijft werken. Per bestand dezelfde caps als tickets, max 6.
+  const _bugFiles = [];
+  if (body && Array.isArray(body.files)) { for (const f of body.files) { if (f && f.file_data && str(f.filename)) _bugFiles.push(f); } }
+  if (body && body.file_data && str(body.filename)) _bugFiles.push({ filename: body.filename, file_data: body.file_data });
+  let attached = 0;
+  for (const f of _bugFiles.slice(0, 6)) {
+    const fname = str(f.filename).replace(/[^\w. ()-]/g, '').slice(0, 140);
+    const b64 = str(f.file_data);
+    if (b64.length > 31 * 1024 * 1024) continue;
+    try {
+      const bin = atob(b64.replace(/^data:[^;]+;base64,/, '').replace(/\s+/g, ''));
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      if (bytes.length && bytes.length <= 22 * 1024 * 1024) {
+        const up = await cu.uploadAttachment(env, bugId, bytes, fname || 'screenshot.png');
+        if (up && up.ok) attached++;
+      }
+    } catch (e) { /* bijlage best-effort, ga door met de volgende */ }
   }
   return { status: 200, body: { ok: true, bug_id: bugId, attached } };
 }
@@ -2545,6 +2841,32 @@ export async function portalVersionPush(bedrijfId, body, env) {
 // ClickUp-taak aan Ilke (bewezen kanaal: push + inbox). Respons meldt de route.
 const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
 const GMAIL_SUBJECT = 'marketing@studio27.be';
+// Herbruikbare Gmail-verzender (DWD via marketing@, afzender no-reply@-alias). Geeft {ok}.
+export async function sendGmail(env, { to, subject, body, replyTo, fromName }) {
+  try {
+    const token = await mintGoogleToken(env, GMAIL_SUBJECT, GMAIL_SCOPE);
+    // Header-injectie-guard: strip CR/LF uit alle header-waarden (to/replyTo/fromName komen
+    // (deels) uit door-derden-beïnvloedbare velden → een \r\n zou extra headers injecteren
+    // in een mail vanuit het vertrouwde no-reply@studio27.be). Subject is al base64-encoded.
+    const hdr = (v) => String(v == null ? '' : v).replace(/[\r\n]+/g, ' ').trim();
+    const encSubj = `=?UTF-8?B?${btoa(unescape(encodeURIComponent(String(subject || '')))).replace(/=+$/, '')}?=`;
+    const raw = [
+      `To: ${hdr(to)}`,
+      `From: "${hdr(fromName) || 'Studio 27'}" <no-reply@studio27.be>`,
+      replyTo ? `Reply-To: ${hdr(replyTo)}` : '',
+      `Subject: ${encSubj}`,
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      String(body || ''),
+    ].filter((l) => l !== '').join('\r\n');
+    const b64 = btoa(unescape(encodeURIComponent(raw))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const r = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw: b64 }),
+    });
+    return { ok: r.ok };
+  } catch (e) { return { ok: false }; }
+}
 const CONTACT_TO = 'ilke@studio27.be';
 export async function contactVraag(bedrijfId, body, env) {
   const onderwerp = str(body && body.onderwerp).trim().slice(0, 140);
@@ -2574,7 +2896,6 @@ export async function contactVraag(bedrijfId, body, env) {
       const cf = [
         { id: FIELD.bedrijf, value: { add: [_bid], rem: [] } },
         { id: FIELD.typeJob, value: TICKET_TYPEJOB_SUPPORT },
-        { id: FIELD.kanBeginnen, value: KANBEGINNEN_JA },
       ];
       if (contactId) cf.push({ id: FIELD.contact, value: { add: [contactId], rem: [] } });
       const cr = await cu.post(env, `/list/${TICKET_LIST}/task`, {
@@ -2586,7 +2907,6 @@ export async function contactVraag(bedrijfId, body, env) {
         _vraagTicket = str(cr.data.id);
         await cu.relation(env, _vraagTicket, FIELD.bedrijf, { add: [_bid], rem: [] }).catch(() => {});
         await cu.field(env, _vraagTicket, FIELD.typeJob, TICKET_TYPEJOB_SUPPORT).catch(() => {});
-        await cu.field(env, _vraagTicket, FIELD.kanBeginnen, KANBEGINNEN_JA).catch(() => {});
         if (contactId) await cu.relation(env, _vraagTicket, FIELD.contact, { add: [contactId], rem: [] }).catch(() => {});
         await cu.comment(env, _vraagTicket, `💬 [Klant: ${bnaam || 'klant'}]\n\n${bericht}`, false, 48338421).catch(() => {});
       }
@@ -3143,9 +3463,23 @@ async function deleteContact(bedrijfId, body, env, contactEmail) {
 export const OFFERTE_LIST = LIST.offertes;                  // 901520180289
 export const PANDADOC_BASE = 'https://api.pandadoc.com/public/v1';
 export const PANDADOC_TEMPLATE_OFFERTE = 'HQRvZ3sdrEm2GcuNsdP2Uf'; // 'Offerte template + vraag voor facturatiegegevens'
+// Per-merk PandaDoc-template (door Vincent aangeleverd, 2026-06-25).
+export const PANDADOC_TEMPLATE_BY_ORG = {
+  S27: 'HQRvZ3sdrEm2GcuNsdP2Uf',   // 'Studio 27 | Template'
+  '27A': 'HRvVbZPTBaLS7qHe2PVr82', // '27 Automations | Template'
+  '27M': 'HrQD84cMM4xc4NKbwA6tVi', // '27 Moments | Template'
+  ZVD: 'xFdNjvgQ4MuYFouuf2zMqj',   // 'Zorg Voor Digitaal | Template'
+};
+export function pandadocTemplateForOrg(org) { return PANDADOC_TEMPLATE_BY_ORG[str(org).toUpperCase()] || PANDADOC_TEMPLATE_OFFERTE; }
 // Rollen op de template (uit /templates/.../details): Projectmanager + Klant.
 export const PANDADOC_ROLE_PM = 'Projectmanager';
 export const PANDADOC_ROLE_KLANT = 'Klant';
+// De PM-/afzenderrol is sinds 2026-06-25 overal 'Projectmanager' (Vincent hernoemde het 27M-veld
+// zodat alle merk-templates consistent zijn). Map + helpers blijven voor flexibiliteit.
+export const PANDADOC_PMROLE_BY_ORG = { S27: 'Projectmanager', '27A': 'Projectmanager', '27M': 'Projectmanager', ZVD: 'Projectmanager' };
+export function pandadocPmRoleForOrg(org) { return PANDADOC_PMROLE_BY_ORG[str(org).toUpperCase()] || PANDADOC_ROLE_PM; }
+export const PANDADOC_PM_AUTO_ORGS = [];   // merken zonder toewijsbare PM-recipient (auto-afzender) — momenteel geen
+export function pandadocSkipPmForOrg(org) { return PANDADOC_PM_AUTO_ORGS.indexOf(str(org).toUpperCase()) >= 0; }
 // Quote-sectie-naam in de template (pricing.quotes[0].sections[0].name). pricing_tables[].name
 // moet matchen met de pricing-table/quote-naam in de template; de enige sectie heet 'Adverteren'.
 export const PANDADOC_PRICING_TABLE_NAME = 'Adverteren'; // (legacy, niet meer gebruikt)
@@ -3173,6 +3507,48 @@ export const PANDADOC_PM = {
   last_name: 'Meeusen',
   phone: '',
 };
+
+// Dienst -> content-library-blok (Vincent's PandaDoc bibliotheek, S27_-blokken). Wordt gebruikt
+// door de gratis offerte-aanvraag (clientview): enkel de aangevinkte diensten-blokken blijven in
+// de offerte staan. SEO valt onder het webdesign-blok (geen apart SEO-blok). 'website' == webdesign.
+export const PANDADOC_DIENST_BLOCKS = {
+  strategie: 'L6Ak67EWQXC44xbDPPRz8M', // S27_STRATEGIE
+  branding:  'j3hMXdoyYzNzcoEoPNcR7o', // S27_BRANDING
+  video:     '2HLU4YCSizxqhviyJmfRkb', // S27_VIDEOENFOTO
+  website:   'zQrtQGUbKa2e7qggiSCUem', // S27_WEBDESIGN
+  seo:       'zQrtQGUbKa2e7qggiSCUem', // SEO -> webdesign-blok
+  ads:       'N4YDp5eMjbjxQtb6uxKpf5', // S27_ADVERTEREN
+  social:    'UHNiWrbiNKi4Uyzh2VdobY', // S27_SOCIALMEDIA
+};
+
+// Bouw content_placeholders voor de offerte-template: vul het (eerste) Content-Placeholder-blok
+// met enkel de gekozen diensten-blokken. Webdesign blijft staan zodra website/SEO/Ads gekozen is
+// (afspraak Vincent: het overkoepelende webdesign-blok blijft voorlopig altijd staan bij die drie).
+// Zolang de template GEEN content-placeholder bevat -> []  (mechanisme staat dan uit, offerte =
+// onveranderd; Vincent voegt het placeholder-blok later toe in de template-editor).
+// Vaste offerte-volgorde van de diensten-blokken (los van de aanvink-volgorde van de klant).
+const PANDADOC_DIENST_ORDER = ['strategie', 'branding', 'video', 'website', 'seo', 'social', 'ads'];
+export async function pandadocDienstPlaceholders(env, diensten) {
+  const sel = new Set((diensten || []).map((d) => str(d).toLowerCase().trim()).filter(Boolean));
+  if (!sel.size) return [];
+  if (sel.has('website') || sel.has('seo') || sel.has('ads')) sel.add('website');
+  const ids = []; const seen = new Set();
+  for (const d of PANDADOC_DIENST_ORDER) {
+    if (!sel.has(d)) continue;
+    const id = PANDADOC_DIENST_BLOCKS[d];
+    if (id && !seen.has(id)) { seen.add(id); ids.push(id); }
+  }
+  if (!ids.length) return [];
+  try {
+    const r = await fetch(`${PANDADOC_BASE}/templates/${PANDADOC_TEMPLATE_OFFERTE}/details`, {
+      headers: { Authorization: `API-Key ${str(env && env.PANDADOC_API_KEY)}` },
+    });
+    const d = await r.json().catch(() => null);
+    const ph = (d && d.content_placeholders) || [];
+    if (!ph.length || !ph[0].block_id) return []; // nog geen placeholder in de template -> uit
+    return [{ block_id: ph[0].block_id, content_library_items: ids.map((id) => ({ id })) }];
+  } catch (e) { return []; }
+}
 
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -3216,7 +3592,7 @@ function deriveKlantFromTasks(bedrijfTask, contactTask) {
 // Bouw EXACT de PandaDoc create-call (POST /public/v1/documents). Wordt 1:1 gebruikt
 // door fetch() én teruggegeven voor inspectie. Documenten worden ALTIJD als concept
 // aangemaakt (geen 'send' in de body; verzenden is een aparte POST /documents/{id}/send).
-export function buildPandadocCreate(env, { docName, items, klant, pm }) {
+export function buildPandadocCreate(env, { docName, items, klant, pm, contentPlaceholders, template, pmRole, skipPm }) {
   // Groepeer de items per sectie-tabel (productgroep -> template-prijstabel). We vullen de
   // tabellen rechtstreeks (standaardvelden name/price/qty), dus geen data_merge nodig.
   const byTable = {};
@@ -3231,17 +3607,21 @@ export function buildPandadocCreate(env, { docName, items, klant, pm }) {
     name: t,
     sections: [{ title: t, default: true, rows: byTable[t] }],
   }));
+  // Klant-recipient: e-mail alleen meesturen als we er een hebben (anders rol zonder e-mail,
+  // wat PandaDoc toelaat bij een concept; de klant-gegevens komen verder uit de tokens).
+  const klantRecipient = Object.assign({ role: PANDADOC_ROLE_KLANT }, klant.email ? { email: klant.email } : {},
+    klant.first_name ? { first_name: klant.first_name } : {},
+    klant.last_name ? { last_name: klant.last_name } : {});
+  // Sommige templates (27M) hebben de afzender als auto-rol ('Zender' = de API-eigenaar) i.p.v. een
+  // toewijsbare 'Projectmanager'-recipient -> dan geen PM-recipient meesturen (skipPm).
+  const recipients = skipPm ? [klantRecipient] : [
+    { role: pmRole || PANDADOC_ROLE_PM, email: pm.email, first_name: pm.first_name, last_name: pm.last_name },
+    klantRecipient,
+  ];
   const body = {
     name: docName,
-    template_uuid: PANDADOC_TEMPLATE_OFFERTE,
-    recipients: [
-      { role: PANDADOC_ROLE_PM, email: pm.email, first_name: pm.first_name, last_name: pm.last_name },
-      // Klant-recipient: e-mail alleen meesturen als we er een hebben (anders rol zonder e-mail,
-      // wat PandaDoc toelaat bij een concept; de klant-gegevens komen verder uit de tokens).
-      Object.assign({ role: PANDADOC_ROLE_KLANT }, klant.email ? { email: klant.email } : {},
-        klant.first_name ? { first_name: klant.first_name } : {},
-        klant.last_name ? { last_name: klant.last_name } : {}),
-    ],
+    template_uuid: template || PANDADOC_TEMPLATE_OFFERTE,
+    recipients,
     tokens: [
       { name: 'Klant.Company', value: klant.company || '' },
       { name: 'Klant.FirstName', value: klant.first_name || '' },
@@ -3253,6 +3633,9 @@ export function buildPandadocCreate(env, { docName, items, klant, pm }) {
     ],
     pricing_tables,
   };
+  // Dienst-blokken: vul het content-placeholder-blok van de template met enkel de gekozen
+  // diensten (zie pandadocDienstPlaceholders). Leeg/afwezig -> veld weglaten (template ongewijzigd).
+  if (contentPlaceholders && contentPlaceholders.length) body.content_placeholders = contentPlaceholders;
   return {
     url: `${PANDADOC_BASE}/documents`,
     method: 'POST',
@@ -3300,7 +3683,7 @@ async function pandadocSession(env, docId, email, lifetimeSec = 2592000) {
 }
 
 // Voer de PandaDoc-create UIT (alleen als de flag aan staat). Geeft { id } of { error }.
-async function pandadocCreate(env, call) {
+export async function pandadocCreate(env, call) {
   if (str(env && env.PANDADOC_CREATE_ENABLED) !== 'true') {
     return { skipped: true, id: '', reason: 'create_disabled' };
   }
@@ -3373,6 +3756,8 @@ export async function offerteGenereren(bedrijfId, body, env) {
   // (3b) Bedrijf-relatie nazetten via het dedicated relation-endpoint (custom_fields bij create
   // zet relaties niet altijd betrouwbaar; idempotent + best-effort, mirror van de cu.field-gotcha).
   await cu.relation(env, offerteTaskId, FIELD.bedrijf, { add: [String(bedrijfId)] }).catch(() => {});
+  // (3c) Unieke Code (traceer-ID) zelf zetten — de budget-wizard omzeilt de Make offerte-intake (Bug 86cacpemz).
+  await cu.field(env, offerteTaskId, FIELD.uniekeCode, genUniekeCode()).catch(() => {});
 
   // (4) PandaDoc CONCEPT-document. Payload ALTIJD bouwen; create alleen bij flag (0 credits default).
   const docName = `Offerte ${company} - ${datum}`;
@@ -3941,6 +4326,38 @@ async function metaGet(env, path, params, token) {
   if (!r.ok || !d || d.error) return { ok: false, data: d, err: (d && d.error && d.error.message) || ('http_' + r.status) };
   return { ok: true, data: d };
 }
+// ADV-3 WRITE: POST naar de Graph-API (token enkel server-side).
+async function metaPost(env, path, params) {
+  const token = str(env && env.META_SYSTEM_TOKEN); if (!token) return { ok: false, err: 'no_token' };
+  const body = new URLSearchParams(Object.assign({ access_token: token }, params || {}));
+  try {
+    const r = await fetch(`${META_GRAPH}/${path}`, { method: 'POST', body });
+    const d = await r.json().catch(() => null);
+    if (!r.ok || !d || d.error) return { ok: false, err: (d && d.error && d.error.message) || ('http_' + r.status) };
+    return { ok: true, data: d };
+  } catch (e) { return { ok: false, err: 'unreachable' }; }
+}
+// ADV-3: pas ÉÉN goedgekeurde wijziging toe op een Meta-campagne. Budget HARD gecapt op ±20%
+// van de VERS opgehaalde huidige waarde (de prompt-cap is niet te vertrouwen, dus server-side clampen).
+export async function metaApplyChange(env, change) {
+  const id = str(change && change.id).replace(/[^0-9]/g, ''); if (!id) return { ok: false, err: 'no_id' };
+  const kind = str(change && change.kind);
+  if (kind === 'pause' || kind === 'activate') {
+    const r = await metaPost(env, id, { status: kind === 'pause' ? 'PAUSED' : 'ACTIVE' });
+    return r.ok ? { ok: true, applied: { kind, status: kind === 'pause' ? 'PAUSED' : 'ACTIVE' } } : { ok: false, err: r.err };
+  }
+  if (kind === 'budget') {
+    const cur = await metaGet(env, id, { fields: 'daily_budget,name' });
+    const curBud = cur.ok ? Number(cur.data && cur.data.daily_budget) : 0;
+    if (!curBud) return { ok: false, err: 'geen_dagbudget' };   // CBO/lifetime → niet via deze weg aanpasbaar
+    let pct = Number(change.pct) || 0; pct = Math.max(-20, Math.min(20, pct));
+    let nb = Math.round(curBud * (1 + pct / 100)); if (nb < 1) nb = 1;
+    if (nb === curBud) return { ok: true, applied: { kind, from: curBud, to: nb, unchanged: true } };
+    const r = await metaPost(env, id, { daily_budget: String(nb) });
+    return r.ok ? { ok: true, applied: { kind, from: curBud, to: nb, pct } } : { ok: false, err: r.err };
+  }
+  return { ok: false, err: 'unsupported' };
+}
 function metaActionVal(actions, types) {
   if (!Array.isArray(actions)) return 0;
   let n = 0; for (const a of actions) { if (a && types.includes(a.action_type)) n += Number(a.value) || 0; }
@@ -3948,12 +4365,22 @@ function metaActionVal(actions, types) {
 }
 function metaCreativeFormat(cr) {
   if (!cr) return 'image';
-  if (cr.video_id) return 'video';
+  // Bug Johanna: video's werden als 'Carrousel'/'Foto' bestempeld omdat alleen cr.video_id (top-level)
+  // werd gecheckt, terwijl de video-id vaak in object_story_spec.video_data of asset_feed_spec zit.
+  // Vaste prioriteit: (1) klassieke carrousel, (2) echte single video, (3) dynamische multi-asset-carrousel,
+  // (4) asset-feed met 1 video = video, (5) anders foto.
   const oss = cr.object_story_spec || {};
+  const afs = cr.asset_feed_spec || {};
+  const afsImgN = Array.isArray(afs.images) ? afs.images.length : 0;
+  const afsVidN = Array.isArray(afs.videos) ? afs.videos.length : 0;
   if (oss.link_data && Array.isArray(oss.link_data.child_attachments) && oss.link_data.child_attachments.length > 1) return 'carousel';
-  if (cr.asset_feed_spec && Array.isArray(cr.asset_feed_spec.images) && cr.asset_feed_spec.images.length > 1) return 'carousel';
+  if (cr.video_id || (oss.video_data && oss.video_data.video_id) || String(cr.object_type || '').toUpperCase() === 'VIDEO') return 'video';
+  if (afsImgN > 1 || afsVidN > 1 || (afsImgN + afsVidN) > 1) return 'carousel';
+  if (afsVidN === 1) return 'video';
   return 'image';
 }
+// relatieve Graph-permalink (bv. /<pageid>/videos/<id>/) -> absolute facebook.com-URL, anders dode 'Bekijk op Facebook'-link
+function metaAbsFbUrl(u) { u = str(u); if (!u) return ''; if (/^https?:\/\//i.test(u)) return u; if (u.charAt(0) === '/') return 'https://www.facebook.com' + u; return u; }
 function metaAdVideoId(cr) {
   return cr.video_id || (cr.object_story_spec && cr.object_story_spec.video_data && cr.object_story_spec.video_data.video_id)
     || (cr.asset_feed_spec && Array.isArray(cr.asset_feed_spec.videos) && cr.asset_feed_spec.videos[0] && cr.asset_feed_spec.videos[0].video_id) || '';
@@ -3984,22 +4411,24 @@ function metaCarouselCards(cr) {
     const ch = metaChildAtts(cr);
     for (const c of ch) {
       if (!c) continue;
-      out.push({ image: c.picture || '', video_id: c.video_id || '', title: c.name || c.description || '', link: c.link || '' });
+      // child_attachments dragen vaak ENKEL image_hash (geen 'picture') -> hash bewaren zodat we hem later via /adimages resolven
+      out.push({ image: c.picture || '', image_hash: c.image_hash || '', video_id: c.video_id || '', title: c.name || c.description || '', link: c.link || '' });
     }
     if (!out.length) {
       const afs = (cr && cr.asset_feed_spec) || {};
       const imgs = Array.isArray(afs.images) ? afs.images : [];
       const vids = Array.isArray(afs.videos) ? afs.videos : [];
-      for (const im of imgs) { if (im && (im.url || im.permalink_url)) out.push({ image: im.url || im.permalink_url, video_id: '', title: '', link: '' }); }
-      for (const v of vids) { if (v && v.video_id) out.push({ image: v.thumbnail_url || '', video_id: String(v.video_id), title: '', link: '' }); }
+      for (const im of imgs) { if (im && (im.url || im.permalink_url || im.hash)) out.push({ image: im.url || im.permalink_url || '', image_hash: im.hash || '', video_id: '', title: '', link: '' }); }
+      for (const v of vids) { if (v && v.video_id) out.push({ image: v.thumbnail_url || '', image_hash: '', video_id: String(v.video_id), title: '', link: '' }); }
     }
-    return out.filter((c) => c.image || c.video_id);
+    // kaarten met enkel een image_hash NIET droppen (worden zo dadelijk geresolved)
+    return out.filter((c) => c.image || c.video_id || c.image_hash);
   } catch (e) { return []; }
 }
 
 const META_YMD = /^\d{4}-\d{2}-\d{2}$/;
 // time-params: time_range bij geldige from/to, anders date_preset (legacy).
-function metaTimeParams(from, to, preset) {
+export function metaTimeParams(from, to, preset) {
   if (META_YMD.test(from) && META_YMD.test(to)) return { time_range: JSON.stringify({ since: from, until: to }) };
   return { date_preset: preset || 'last_7d' };
 }
@@ -4011,7 +4440,7 @@ function metaShiftYmd(ymd, mode) {
   return d.toISOString().slice(0, 10);
 }
 // rolling vergelijkings-venster: zelfde lengte ervoor / 1 maand / 1 jaar geleden.
-function metaCompareWindow(from, to, mode) {
+export function metaCompareWindow(from, to, mode) {
   if (mode === 'previous') {
     const pf = Date.parse(from + 'T00:00:00Z'), pt = Date.parse(to + 'T00:00:00Z');
     const len = Math.max(86400000, pt - pf + 86400000);
@@ -4019,13 +4448,14 @@ function metaCompareWindow(from, to, mode) {
   }
   return [metaShiftYmd(from, mode), metaShiftYmd(to, mode)];
 }
-async function metaKpiWindow(env, act, timeParams) {
-  const kins = await metaGet(env, `${act}/insights`, Object.assign({ level: 'account', fields: 'spend,impressions,reach,clicks,inline_link_clicks,ctr,cpc,cpm,frequency,actions' }, timeParams));
+export async function metaKpiWindow(env, act, timeParams) {
+  const kins = await metaGet(env, `${act}/insights`, Object.assign({ level: 'account', fields: 'spend,impressions,reach,clicks,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click,cpm,frequency,actions' }, timeParams));
   const k = (kins.ok && kins.data && Array.isArray(kins.data.data) && kins.data.data[0]) || {};
   return { ok: kins.ok, err: kins.err, kpis: {
     spend: Number(k.spend) || 0, impressions: Number(k.impressions) || 0, reach: Number(k.reach) || 0,
     clicks: Number(k.clicks) || 0, linkClicks: Number(k.inline_link_clicks) || 0,
-    ctr: Number(k.ctr) || 0, cpc: Number(k.cpc) || 0, cpm: Number(k.cpm) || 0,
+    ctr: Number(k.inline_link_click_ctr) || 0, cpc: Number(k.cost_per_inline_link_click) || 0,
+    cpm: (Number(k.impressions)||0) > 0 ? Math.round((Number(k.spend)||0)/(Number(k.impressions)||0)*1000*100)/100 : 0, // item 12: CPM = besteed/vertoningen*1000
     frequency: Number(k.frequency) || 0, results: metaActionVal(k.actions, META_RESULT_ACTIONS),
   } };
 }
@@ -4061,13 +4491,13 @@ export async function metaAds(bedrijfId, body, env) {
     // ÉÉN campagne-insights-call over het vergelijkingsvenster (spiegelt `cins`, met inline_link_clicks).
     const cinsPrev = await metaGet(env, `${act}/insights`, Object.assign({
       level: 'campaign', limit: '200',
-      fields: 'campaign_id,spend,impressions,clicks,inline_link_clicks,ctr,cpc,cpm,reach,frequency,actions',
+      fields: 'campaign_id,spend,impressions,clicks,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click,cpm,reach,frequency,actions',
     }, ctr2));
     if (cinsPrev.ok && Array.isArray(cinsPrev.data.data)) for (const m of cinsPrev.data.data) {
       prevC[m.campaign_id] = {
         spend: Number(m.spend) || 0, impressions: Number(m.impressions) || 0, clicks: Number(m.clicks) || 0, linkClicks: Number(m.inline_link_clicks) || 0,
-        reach: Number(m.reach) || 0, cpm: Number(m.cpm) || 0, frequency: Number(m.frequency) || 0,
-        ctr: Number(m.ctr) || 0, cpc: Number(m.cpc) || 0, results: metaActionVal(m.actions, META_RESULT_ACTIONS),
+        reach: Number(m.reach) || 0, cpm: (Number(m.impressions)||0) > 0 ? Math.round((Number(m.spend)||0)/(Number(m.impressions)||0)*1000*100)/100 : 0, frequency: Number(m.frequency) || 0,
+        ctr: Number(m.inline_link_click_ctr) || 0, cpc: Number(m.cost_per_inline_link_click) || 0, results: metaActionVal(m.actions, META_RESULT_ACTIONS),
       };
     }
     compareLabel = compare === 'previous' ? 'vorige periode' : (compare === 'month' ? 'vorige maand' : 'vorig jaar');
@@ -4080,7 +4510,7 @@ export async function metaAds(bedrijfId, body, env) {
   });
   const cins = await metaGet(env, `${act}/insights`, Object.assign({
     level: 'campaign', limit: '200',
-    fields: 'campaign_id,spend,impressions,clicks,inline_link_clicks,ctr,cpc,cpm,reach,frequency,actions',
+    fields: 'campaign_id,spend,impressions,clicks,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click,cpm,reach,frequency,actions',
   }, tp));
   const cmap = {};
   if (cins.ok && Array.isArray(cins.data.data)) for (const row of cins.data.data) cmap[row.campaign_id] = row;
@@ -4090,8 +4520,8 @@ export async function metaAds(bedrijfId, body, env) {
       id: c.id, name: c.name || '', objective: c.objective || '', status: c.effective_status || '',
       budget: Number(c.daily_budget || c.lifetime_budget || 0) / 100,
       spend: Number(m.spend) || 0, impressions: Number(m.impressions) || 0, clicks: Number(m.clicks) || 0, linkClicks: Number(m.inline_link_clicks) || 0,
-      reach: Number(m.reach) || 0, cpm: Number(m.cpm) || 0, frequency: Number(m.frequency) || 0,
-      ctr: Number(m.ctr) || 0, cpc: Number(m.cpc) || 0, results: metaActionVal(m.actions, META_RESULT_ACTIONS),
+      reach: Number(m.reach) || 0, cpm: (Number(m.impressions)||0) > 0 ? Math.round((Number(m.spend)||0)/(Number(m.impressions)||0)*1000*100)/100 : 0, frequency: Number(m.frequency) || 0,
+      ctr: Number(m.inline_link_click_ctr) || 0, cpc: Number(m.cost_per_inline_link_click) || 0, results: metaActionVal(m.actions, META_RESULT_ACTIONS),
       prev: prevC[c.id] || null,
     };
   }).filter((c) => c.spend > 0);
@@ -4131,7 +4561,8 @@ function metaRichKpi(row) {
   return {
     spend, impressions: Number(row.impressions) || 0, reach: Number(row.reach) || 0,
     clicks: Number(row.clicks) || 0, linkClicks: Number(row.inline_link_clicks) || 0,
-    ctr: Number(row.ctr) || 0, cpc: Number(row.cpc) || 0, cpm: Number(row.cpm) || 0,
+    ctr: Number(row.inline_link_click_ctr) || 0, cpc: Number(row.cost_per_inline_link_click) || 0,
+    cpm: (Number(row.impressions)||0) > 0 ? Math.round(spend/(Number(row.impressions)||0)*1000*100)/100 : 0, // item 12: CPM = besteed/vertoningen*1000
     frequency: Number(row.frequency) || 0,
     leads, cpl: leads > 0 ? Math.round((spend / leads) * 100) / 100 : 0,
     results: metaActionVal(row.actions, META_RESULT_ACTIONS),
@@ -4149,7 +4580,7 @@ export async function metaAdsRich(bedrijfId, body, env) {
   const compare = ['previous', 'month', 'year'].indexOf(str(body && body.compare)) >= 0 ? str(body.compare) : 'none';
   const tp = metaTimeParams(from, to, preset);
   const act = `act_${acct}`;
-  const INS = 'spend,impressions,reach,clicks,inline_link_clicks,ctr,cpc,cpm,frequency,actions';
+  const INS = 'spend,impressions,reach,clicks,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click,cpm,frequency,actions';
 
   const accInfo = await metaGet(env, act, { fields: 'currency,timezone_name,name' });
   const currency = (accInfo.ok && accInfo.data && accInfo.data.currency) || 'EUR';
@@ -4246,9 +4677,9 @@ export async function metaCampaignAds(bedrijfId, body, env) {
   const act = `act_${acct}`;
 
   const adRes = await metaGet(env, `${act}/ads`, {
-    fields: 'name,effective_status,campaign_id,creative{thumbnail_url,image_url,object_type,video_id,effective_object_story_id,object_story_spec,asset_feed_spec},insights{spend,impressions,clicks,inline_link_clicks,ctr,cpc}',
+    fields: 'name,effective_status,campaign_id,creative{thumbnail_url,image_url,object_type,video_id,effective_object_story_id,object_story_spec,asset_feed_spec},insights{spend,impressions,clicks,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click}',
     filtering: JSON.stringify([{ field: 'campaign.id', operator: 'EQUAL', value: campId }]),
-    effective_status: '["ACTIVE"]', limit: '50',
+    effective_status: '["ACTIVE","PAUSED"]', limit: '50',   // item 8c: ook PAUSED zodat de team-tabelnamen altijd een visual hebben
   });
   const adRows = (adRes.ok && Array.isArray(adRes.data.data)) ? adRes.data.data : [];
 
@@ -4296,33 +4727,62 @@ export async function metaCampaignAds(bedrijfId, body, env) {
     } catch (e) { /* fail-soft: zonder source valt de frontend terug op permalink/poster */ }
   }));
 
+  // ── image_hash → full-res URL in BULK (klassieke carrousel: child_attachments dragen vaak ENKEL
+  // image_hash, geen picture). Eén /adimages-call per ~40 hashes op het account-token resolvet ze allemaal,
+  // anders blijven de kaarten leeg en valt de frontend terug op één enkele foto. Volledig fail-soft.
+  const hashSet = new Set();
+  for (const m of adMeta) { for (const c of (m.cards || [])) { if (c.image_hash && !c.image) hashSet.add(c.image_hash); } }
+  const hashUrl = {};       // full-res (lightbox)
+  const hashUrlSmall = {};  // url_128 lichte variant (snelle preview/grid)
+  if (hashSet.size) {
+    const hashes = [...hashSet];
+    for (let i = 0; i < hashes.length; i += 40) {
+      try {
+        const chunk = hashes.slice(i, i + 40);
+        const r = await metaGet(env, `${act}/adimages`, { hashes: JSON.stringify(chunk), fields: 'hash,url,url_128,permalink_url' });
+        const d = (r.ok && r.data) ? r.data : null;
+        const put = (im, key) => { if (!im) return; const k = im.hash || key; if (im.url || im.permalink_url) hashUrl[k] = im.url || im.permalink_url; if (im.url_128) hashUrlSmall[k] = im.url_128; };
+        if (d && Array.isArray(d.data)) { for (const im of d.data) put(im, im && im.hash); }
+        else if (d && typeof d === 'object') { for (const k of Object.keys(d)) put(d[k], k); }
+      } catch (e) { /* fail-soft: zonder URL valt de kaart terug op de ad-still */ }
+    }
+  }
+
   const ads = await Promise.all(adMeta.map(async ({ a, cr, ptok, fmt, cards, adVid }) => {
     const ins = (a.insights && Array.isArray(a.insights.data) && a.insights.data[0]) || {};
     const sid = cr.effective_object_story_id || '';
     const still = metaCreativeStill(cr);       // full-res still uit de spec (geen thumbnail)
     const out = {
       id: a.id, name: a.name || '', campaignId: a.campaign_id || '', format: fmt,
+      status: a.effective_status || '',   // Bug Johanna: doorgeven zodat de clientview inactieve (PAUSED/…) ads kan markeren
       thumb: cr.thumbnail_url || cr.image_url || '', image: still || cr.image_url || '',
       spend: Number(ins.spend) || 0, impressions: Number(ins.impressions) || 0,
-      clicks: Number(ins.clicks) || 0, linkClicks: Number(ins.inline_link_clicks) || 0, ctr: Number(ins.ctr) || 0, cpc: Number(ins.cpc) || 0,
+      clicks: Number(ins.clicks) || 0, linkClicks: Number(ins.inline_link_clicks) || 0, ctr: Number(ins.inline_link_click_ctr) || 0, cpc: Number(ins.cost_per_inline_link_click) || 0,
     };
     // Video-bron uit de batch (source = afspeelbare .mp4; permalink = fallback-link).
     if (fmt === 'video' && adVid) {
       const vi = vidInfo[String(adVid)] || {};
       if (vi.source) out.videoSrc = vi.source;
-      if (vi.permalink) out.videoPermalink = vi.permalink;
+      if (vi.permalink) out.videoPermalink = metaAbsFbUrl(vi.permalink);
       if (vi.picture && !out.poster) out.poster = vi.picture;
     }
-    // Carrousel: vul per kaart de afspeelbare videobron in (indien video-kaart).
+    // Carrousel: resolve image_hash -> full-res URL, vul per kaart de afspeelbare videobron in (indien video-kaart).
+    // De gedeelde ad-still is een NOOD-fallback voor MAXIMAAL 1 beeldloze kaart: anders zou bij een /adimages-fail
+    // ELKE kaart dezelfde foto tonen (misleidende kloon-carrousel). Beeldloze kloon-kaarten vallen weg, zodat de
+    // frontend dan terecht 1 enkele foto toont i.p.v. N identieke. Permalink-only-kaart valt ook weg (zou een
+    // lege <img> opleveren die nooit een onerror-fallback vuurt).
     if (fmt === 'carousel') {
+      let usedStill = false;
       out.cards = cards.map((c) => {
-        const card = { image: c.image || '', title: c.title || '' };
+        const card = { image: c.image || (c.image_hash ? (hashUrl[c.image_hash] || '') : '') || '', thumb: (c.image_hash ? (hashUrlSmall[c.image_hash] || '') : '') || '', title: c.title || '' };
         if (c.video_id) {
           const vi = vidInfo[String(c.video_id)] || {};
           if (vi.source) card.video = vi.source;
-          if (vi.permalink) card.permalink = vi.permalink;
+          if (vi.permalink) card.permalink = metaAbsFbUrl(vi.permalink);
           if (!card.image && vi.picture) card.image = vi.picture;
+          if (!card.thumb && vi.picture) card.thumb = vi.picture;
         }
+        if (!card.image && !card.video && !usedStill && (still || out.poster)) { card.image = still || out.poster || ''; usedStill = true; }
         return card;
       }).filter((c) => c.image || c.video);
       if (out.cards[0] && out.cards[0].image && !still) out.image = out.cards[0].image;
@@ -4340,9 +4800,10 @@ export async function metaCampaignAds(bedrijfId, body, env) {
 
     // ── Genormaliseerde, schone media-vorm voor de frontend (additief) ──────
     try {
-      const cm = { type: fmt, image: out.image || '', video: out.videoSrc || '', permalink: out.videoPermalink || '', poster: out.poster || '', cards: [] };
+      // thumb = lichte preview-bron (Graph thumbnail_url ~64-90px / url_128) zodat de frontend eerst iets toont en de full-res pas daarna laadt
+      const cm = { type: fmt, image: out.image || '', thumb: cr.thumbnail_url || out.poster || '', video: out.videoSrc || '', permalink: out.videoPermalink || '', poster: out.poster || '', cards: [] };
       if (fmt === 'carousel') {
-        cm.cards = (out.cards || []).map((c) => ({ image: c.image || '', video: c.video || '', title: c.title || '', permalink: c.permalink || '' }));
+        cm.cards = (out.cards || []).map((c) => ({ image: c.image || '', thumb: c.thumb || c.image || '', video: c.video || '', title: c.title || '', permalink: c.permalink || '' }));
       }
       out.creativeMedia = cm;
     } catch (e) { /* never throw — out blijft bruikbaar zonder creativeMedia */ }
@@ -4358,8 +4819,12 @@ export async function metaCampaignAds(bedrijfId, body, env) {
  * campagnes en een dagtrend op onder de MCC (login-customer-id). Zelfde output-vorm als metaAds,
  * zodat de frontend dezelfde KPI-/trend-/campagne-rendering kan hergebruiken.
  */
-const GADS_API = 'https://googleads.googleapis.com/v20';
+const GADS_API = 'https://googleads.googleapis.com/v23';   // v20 werd door Google geblokkeerd (UNSUPPORTED_VERSION) -> bijgewerkt naar v23
 const GADS_MCC = '4589076421';
+// Google Ads-fout die NIET vanzelf overgaat (fout/ongeldig klant-id, geen toegang, account uit/geschorst,
+// 4xx): herproberen heeft geen zin -> de frontend toont een duidelijke 'controleer de Google Ads ID'-melding
+// i.p.v. eindeloos te laden. 5xx/netwerk = transient (blijft retry-baar).
+const gadsPermanentErr = (msg) => !!(msg && /not found|invalid|permission|denied|not.?enabled|disabled|suspend|no.?customer|developer.?token|unauthor|cannot.?be.?accessed|http_4/i.test(String(msg)));
 const GADS_PRESETS = { today: 'TODAY', yesterday: 'YESTERDAY', last_7d: 'LAST_7_DAYS', last_14d: 'LAST_14_DAYS', last_30d: 'LAST_30_DAYS', this_month: 'THIS_MONTH', last_month: 'LAST_MONTH' };
 const GADS_CHANNEL = { SEARCH: 'Search', DISPLAY: 'Display', SHOPPING: 'Shopping', VIDEO: 'Video', PERFORMANCE_MAX: 'Performance Max', MULTI_CHANNEL: 'Multichannel', LOCAL: 'Lokaal', LOCAL_SERVICES: 'Lokale diensten', SMART: 'Smart', DISCOVERY: 'Demand Gen', DEMAND_GEN: 'Demand Gen' };
 let _gadsTok = { v: '', exp: 0 };
@@ -4384,16 +4849,68 @@ async function gadsQuery(env, token, customerId, query) {
       body: JSON.stringify({ query }),
     });
     const d = await r.json().catch(() => null);
-    if (!r.ok) return { ok: false, rows: [], err: (d && d.error && d.error.message) || ('http_' + r.status) };
+    if (!r.ok) {
+      // Google searchStream-fouten komen vaak ARRAY-omwikkeld ([{error:{...,details:[{errors:[{message}]}]}}]).
+      // Pak de meest specifieke boodschap (bv. 'Version vXX is deprecated', 'Invalid customer ID') i.p.v.
+      // een kale http-code, zodat de account_error-melding in het portaal de échte reden toont.
+      const ge = Array.isArray(d) ? (d[0] && d[0].error) : (d && d.error);
+      const inner = ge && ge.details && ge.details[0] && ge.details[0].errors && ge.details[0].errors[0];
+      return { ok: false, rows: [], err: (inner && inner.message) || (ge && ge.message) || ('http_' + r.status) };
+    }
     const rows = [];
     if (Array.isArray(d)) for (const b of d) for (const row of (b.results || [])) rows.push(row);
     return { ok: true, rows };
   } catch (e) { return { ok: false, rows: [], err: 'unreachable' }; }
 }
+// ADV-3 WRITE: mutate-call op het Google Ads-account (token + dev-token server-side).
+async function gadsMutate(env, token, customerId, endpoint, payload) {
+  try {
+    const r = await fetch(`${GADS_API}/customers/${customerId}/${endpoint}`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'developer-token': str(env.GOOGLE_ADS_DEVELOPER_TOKEN), 'login-customer-id': GADS_MCC, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json().catch(() => null);
+    if (!r.ok) { const ge = Array.isArray(d) ? (d[0] && d[0].error) : (d && d.error); const inner = ge && ge.details && ge.details[0] && ge.details[0].errors && ge.details[0].errors[0]; return { ok: false, err: (inner && inner.message) || (ge && ge.message) || ('http_' + r.status) }; }
+    return { ok: true, data: d };
+  } catch (e) { return { ok: false, err: 'unreachable' }; }
+}
+// ADV-3: pas ÉÉN goedgekeurde wijziging toe op een Google Ads-campagne. Status (pauzeren/heractiveren)
+// + budget (campaignBudget ±20% van de verse waarde). Bod = (nog) niet via deze weg.
+export async function googleApplyChange(env, customerId, change) {
+  const token = await googleAdsToken(env, Date.now()); if (!token) return { ok: false, err: 'no_token' };
+  const cid = str(customerId).replace(/[^0-9]/g, '');
+  const kind = str(change && change.kind);
+  const id = str(change && change.id).replace(/[^0-9]/g, '');
+  if (!cid || !id) return { ok: false, err: 'no_id' };
+  if (kind === 'pause' || kind === 'activate') {
+    const status = kind === 'pause' ? 'PAUSED' : 'ENABLED';
+    const op = { updateMask: 'status', update: { resourceName: `customers/${cid}/campaigns/${id}`, status } };
+    const r = await gadsMutate(env, token, cid, 'campaigns:mutate', { operations: [op] });
+    return r.ok ? { ok: true, applied: { kind, status } } : { ok: false, err: r.err };
+  }
+  if (kind === 'budget') {
+    // budget zit op de campaignBudget-resource → die opzoeken + de huidige micros ophalen
+    const q = await gadsQuery(env, token, cid, `SELECT campaign_budget.resource_name, campaign_budget.amount_micros FROM campaign WHERE campaign.id = ${id}`);
+    const row = (q.rows || [])[0]; const cb = row && row.campaignBudget;
+    const resName = cb && cb.resourceName; const curMicros = Number(cb && cb.amountMicros) || 0;
+    if (!resName || !curMicros) return { ok: false, err: 'geen_budget' };
+    let pct = Number(change.pct) || 0; pct = Math.max(-20, Math.min(20, pct));
+    let nm = Math.round(curMicros * (1 + pct / 100) / 10000) * 10000;   // micros, afgerond op 0,01
+    if (nm < 10000) nm = 10000;
+    if (nm === curMicros) return { ok: true, applied: { kind, from: curMicros, to: nm, unchanged: true } };
+    const op = { updateMask: 'amount_micros', update: { resourceName: resName, amountMicros: nm } };
+    const r = await gadsMutate(env, token, cid, 'campaignBudgets:mutate', { operations: [op] });
+    return r.ok ? { ok: true, applied: { kind, from: curMicros, to: nm, pct } } : { ok: false, err: r.err };
+  }
+  return { ok: false, err: 'unsupported' };
+}
 export async function googleAds(bedrijfId, body, env) {
   const br = await cu.get(env, `/task/${bedrijfId}`);
-  const acct = (br.ok && br.data ? str(getCF(br.data, FIELD.googleAdsId)) : '').replace(/[^0-9]/g, '');
-  if (!/^\d{8,12}$/.test(acct)) return { status: 200, body: { ok: true, linked: false } };
+  const acctRaw = (br.ok && br.data ? str(getCF(br.data, FIELD.googleAdsId)) : '').trim();
+  const acct = acctRaw.replace(/[^0-9]/g, '');
+  if (!acct) return { status: 200, body: { ok: true, linked: false } };                                   // geen ID = geen koppeling (neutraal)
+  if (!/^\d{10}$/.test(acct)) return { status: 200, body: { ok: true, linked: false, reason: 'bad_id', account: acctRaw } };   // wel een ID, maar geen 10 cijfers = fout ingevuld
   if (!str(env && env.GOOGLE_ADS_DEVELOPER_TOKEN) || !str(env && env.GOOGLE_ADS_REFRESH_TOKEN)) return { status: 200, body: { ok: true, linked: false, reason: 'no_token' } };
   const token = await googleAdsToken(env, Date.now());
   if (!token) return { status: 200, body: { ok: true, linked: false, reason: 'no_token' } };
@@ -4462,9 +4979,12 @@ export async function googleAds(bedrijfId, body, env) {
     return { date: s.date || '', spend: Number(m.costMicros || 0) / 1e6, impressions: Number(m.impressions || 0), clicks: Number(m.clicks || 0), conversions: Number(m.conversions || 0), convValue: Number(m.conversionsValue || 0) };
   });
 
-  const error = (!kpiRes.ok && !campRes.ok) ? (kpiRes.err || campRes.err || 'fetch_failed') : null;
+  const rawErr = (!kpiRes.ok && !campRes.ok) ? (kpiRes.err || campRes.err || 'fetch_failed') : null;
   const period = useRange ? { from, to, compare } : { preset, compare: 'none' };
-  return { status: 200, body: { ok: true, linked: true, account: acct, currency: 'EUR', period, kpis, prevKpis, compareLabel, campaigns, trend, error } };
+  // Permanente accountfout (fout/ongeldig id, geen toegang) -> linked:false + reden, zodat de frontend
+  // een duidelijke melding toont en NIET eindeloos herprobeert. Transiente fout blijft 'error' (retry).
+  if (gadsPermanentErr(rawErr)) return { status: 200, body: { ok: true, linked: false, reason: 'account_error', account: acct, detail: rawErr } };
+  return { status: 200, body: { ok: true, linked: true, account: acct, currency: 'EUR', period, kpis, prevKpis, compareLabel, campaigns, trend, error: rawErr } };
 }
 
 /* ---- googleAdsRich (READ, ADMIN-only/staff) — uitgebreide Google-rapportage --------------
@@ -4475,8 +4995,10 @@ export async function googleAds(bedrijfId, body, env) {
  * Account UITSLUITEND uit de bedrijf-taak (FIELD.googleAdsId, tenant-safe); token server-side. */
 export async function googleAdsRich(bedrijfId, body, env) {
   const br = await cu.get(env, `/task/${bedrijfId}`);
-  const acct = (br.ok && br.data ? str(getCF(br.data, FIELD.googleAdsId)) : '').replace(/[^0-9]/g, '');
-  if (!/^\d{8,12}$/.test(acct)) return { status: 200, body: { ok: true, linked: false } };
+  const acctRaw = (br.ok && br.data ? str(getCF(br.data, FIELD.googleAdsId)) : '').trim();
+  const acct = acctRaw.replace(/[^0-9]/g, '');
+  if (!acct) return { status: 200, body: { ok: true, linked: false } };                                   // geen ID = geen koppeling (neutraal)
+  if (!/^\d{10}$/.test(acct)) return { status: 200, body: { ok: true, linked: false, reason: 'bad_id', account: acctRaw } };   // wel een ID, maar geen 10 cijfers = fout ingevuld
   if (!str(env && env.GOOGLE_ADS_DEVELOPER_TOKEN) || !str(env && env.GOOGLE_ADS_REFRESH_TOKEN)) return { status: 200, body: { ok: true, linked: false, reason: 'no_token' } };
   const token = await googleAdsToken(env, Date.now());
   if (!token) return { status: 200, body: { ok: true, linked: false, reason: 'no_token' } };
@@ -4493,7 +5015,7 @@ export async function googleAdsRich(bedrijfId, body, env) {
     return {
       spend, impressions, clicks, conversions: conv,
       ctr: impressions > 0 ? (clicks / impressions * 100) : 0,
-      cpc: Number(m.averageCpc || 0) / 1e6, cpm: Number(m.averageCpm || 0) / 1e6,
+      cpc: Number(m.averageCpc || 0) / 1e6, cpm: impressions > 0 ? Math.round(spend/impressions*1000*100)/100 : 0, // item 12: CPM = besteed/vertoningen*1000
       convValue: Number(m.conversionsValue || 0),
       costPerConv: conv > 0 ? spend / conv : 0,
       convRate: clicks > 0 ? (conv / clicks * 100) : 0,
@@ -4501,12 +5023,19 @@ export async function googleAdsRich(bedrijfId, body, env) {
   };
   const KPIQ = (where) => `SELECT ${METR} FROM customer WHERE ${where}`;
 
-  const [accRes, campRes, dailyRes, agRes, kwRes] = await Promise.all([
+  const [accRes, campRes, dailyRes, agRes, kwRes, convRes] = await Promise.all([
     gadsQuery(env, token, acct, KPIQ(dateFilter)),
     gadsQuery(env, token, acct, `SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, campaign_budget.amount_micros, ${METR}, metrics.search_impression_share FROM campaign WHERE ${dateFilter} AND metrics.impressions > 0 ORDER BY metrics.cost_micros DESC`),
     gadsQuery(env, token, acct, `SELECT campaign.id, segments.date, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions, metrics.conversions_value FROM campaign WHERE ${dateFilter} ORDER BY segments.date`),
     gadsQuery(env, token, acct, `SELECT campaign.id, ad_group.id, ad_group.name, ad_group.status, ${METR} FROM ad_group WHERE ${dateFilter} AND metrics.impressions > 0`),
-    gadsQuery(env, token, acct, `SELECT campaign.id, campaign.name, ad_group.name, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.ctr, metrics.average_cpc, metrics.conversions FROM keyword_view WHERE ${dateFilter} AND metrics.impressions > 0 ORDER BY metrics.cost_micros DESC LIMIT 250`),
+    // ZOEKTERMEN (search_term_view = de ECHTE zoekopdrachten waarop de klant gevonden wordt),
+    // NIET keyword_view (= de biedwoorden waar wij op inzetten). segments.keyword.info.text = het biedwoord dat de term triggerde.
+    gadsQuery(env, token, acct, `SELECT campaign.id, campaign.name, ad_group.name, search_term_view.search_term, segments.search_term_match_type, segments.keyword.info.text, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.ctr, metrics.average_cpc, metrics.conversions FROM search_term_view WHERE ${dateFilter} AND metrics.impressions > 0 ORDER BY metrics.cost_micros DESC LIMIT 250`),
+    // LEADS PER TYPE (segments.conversion_action) — Bug Arne. Per campagne × dag × type. Eén query dekt het
+    // account-overzicht (sommeren), de per-campagne-uitsplitsing én de dag-evolutie per leadtype (grafiek per
+    // type). Kost is niet per actie toewijsbaar -> enkel aantal; CPL berekent de frontend als spend/aantal. Geen
+    // waarde (die is fictief, mag nergens getoond worden). Fail-soft.
+    gadsQuery(env, token, acct, `SELECT campaign.id, segments.date, segments.conversion_action_name, segments.conversion_action_category, metrics.conversions FROM campaign WHERE ${dateFilter} AND metrics.conversions > 0 ORDER BY segments.date`),
   ]);
 
   const kpis = richKpi((accRes.rows && accRes.rows[0] ? accRes.rows[0].metrics : {}));
@@ -4523,15 +5052,15 @@ export async function googleAdsRich(bedrijfId, body, env) {
       gadsQuery(env, token, acct, KPIQ(cmpWhere)),
       gadsQuery(env, token, acct, `SELECT campaign.id, ${METR} FROM campaign WHERE ${cmpWhere} AND metrics.impressions > 0`),
       gadsQuery(env, token, acct, `SELECT campaign.id, ad_group.id, ${METR} FROM ad_group WHERE ${cmpWhere} AND metrics.impressions > 0`),
-      gadsQuery(env, token, acct, `SELECT campaign.id, ad_group.name, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.ctr, metrics.average_cpc, metrics.conversions FROM keyword_view WHERE ${cmpWhere} AND metrics.impressions > 0 LIMIT 250`),
+      gadsQuery(env, token, acct, `SELECT campaign.id, ad_group.name, search_term_view.search_term, segments.search_term_match_type, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.ctr, metrics.average_cpc, metrics.conversions FROM search_term_view WHERE ${cmpWhere} AND metrics.impressions > 0 LIMIT 250`),
     ]);
     if (prev.ok) prevKpis = richKpi((prev.rows && prev.rows[0] ? prev.rows[0].metrics : {}));
     for (const r of (prevCampRes.rows || [])) prevCamp[String((r.campaign || {}).id || '')] = richKpi(r.metrics);
     for (const r of (prevAgRes.rows || [])) prevAg[String((r.adGroup || {}).id || '')] = richKpi(r.metrics);
     for (const r of (prevKwRes.rows || [])) {
-      const c = r.campaign || {}, ag = r.adGroup || {}, m = r.metrics || {}, kw = ((r.adGroupCriterion || {}).keyword) || {};
+      const c = r.campaign || {}, ag = r.adGroup || {}, m = r.metrics || {}, term = (r.searchTermView || {}).searchTerm || '', mt = (r.segments || {}).searchTermMatchType || '';
       const spend = Number(m.costMicros || 0) / 1e6, impressions = Number(m.impressions || 0), clicks = Number(m.clicks || 0);
-      prevKw[kwKey(String(c.id || ''), ag.name || '', kw.text || '', kw.matchType || '')] = { spend, impressions, clicks, ctr: impressions > 0 ? (clicks / impressions * 100) : 0, cpc: Number(m.averageCpc || 0) / 1e6, conversions: Number(m.conversions || 0) };
+      prevKw[kwKey(String(c.id || ''), ag.name || '', term, mt)] = { spend, impressions, clicks, ctr: impressions > 0 ? (clicks / impressions * 100) : 0, cpc: Number(m.averageCpc || 0) / 1e6, conversions: Number(m.conversions || 0) };
     }
     compareLabel = compare === 'previous' ? 'vorige periode' : (compare === 'month' ? 'vorige maand' : 'vorig jaar');
   }
@@ -4548,6 +5077,27 @@ export async function googleAdsRich(bedrijfId, body, env) {
   }
   Object.keys(agByCamp).forEach((cid) => agByCamp[cid].sort((a, b) => b.spend - a.spend));
 
+  // Leads per type (Bug Arne): per campagne + account-breed geaggregeerd, plus de dag-evolutie per leadtype.
+  // Enkel aantal (waarde is fictief -> nooit tonen); CPL wordt frontend-zijde berekend. Fail-soft.
+  const convByCamp = {}, convAcc = {}, leadDailyByCamp = {};
+  for (const r of (convRes.rows || [])) {
+    const cid = String((r.campaign || {}).id || ''), s = r.segments || {}, m = r.metrics || {};
+    const name = str(s.conversionActionName) || 'Overige', cat = str(s.conversionActionCategory) || '', date = str(s.date) || '';
+    const count = Number(m.conversions || 0);
+    if (!count) continue;
+    const cm = convByCamp[cid] || (convByCamp[cid] = {});
+    const cc = cm[name] || (cm[name] = { name, category: cat, count: 0 });
+    cc.count += count;
+    const ca = convAcc[name] || (convAcc[name] = { name, category: cat, count: 0 });
+    ca.count += count;
+    if (date) {                                                                      // dag-evolutie per leadtype per campagne (grafiek per type)
+      const ld = leadDailyByCamp[cid] || (leadDailyByCamp[cid] = {});
+      (ld[name] || (ld[name] = [])).push({ date, count });
+    }
+  }
+  const convListOf = (map) => Object.keys(map || {}).map((k) => map[k]).sort((a, b) => b.count - a.count);
+  const conversionTypes = convListOf(convAcc);
+
   const campaigns = (campRes.rows || []).map((r) => {
     const c = r.campaign || {}, m = r.metrics || {}, cid = String(c.id || '');
     return Object.assign({
@@ -4555,19 +5105,22 @@ export async function googleAdsRich(bedrijfId, body, env) {
       channel: GADS_CHANNEL[c.advertisingChannelType] || str(c.advertisingChannelType),
       budget: Number((r.campaignBudget || {}).amountMicros || 0) / 1e6,
       imprShare: Number(m.searchImpressionShare || 0) * 100,
-      daily: dailyByCamp[cid] || [], adGroups: agByCamp[cid] || [], prev: prevCamp[cid] || null,
+      daily: dailyByCamp[cid] || [], adGroups: agByCamp[cid] || [], conversionTypes: convListOf(convByCamp[cid]), leadDaily: leadDailyByCamp[cid] || {}, prev: prevCamp[cid] || null,
     }, richKpi(m));
   });
 
   const keywords = (kwRes.rows || []).map((r) => {
-    const c = r.campaign || {}, ag = r.adGroup || {}, m = r.metrics || {}, kw = ((r.adGroupCriterion || {}).keyword) || {};
+    const c = r.campaign || {}, ag = r.adGroup || {}, m = r.metrics || {}, term = (r.searchTermView || {}).searchTerm || '', mt = (r.segments || {}).searchTermMatchType || '', trig = ((((r.segments || {}).keyword) || {}).info || {}).text || '';
     const spend = Number(m.costMicros || 0) / 1e6, impressions = Number(m.impressions || 0), clicks = Number(m.clicks || 0);
-    return { campaign: c.name || '', campaignId: String(c.id || ''), adGroup: ag.name || '', text: kw.text || '', matchType: kw.matchType || '', spend, impressions, clicks, ctr: impressions > 0 ? (clicks / impressions * 100) : 0, cpc: Number(m.averageCpc || 0) / 1e6, conversions: Number(m.conversions || 0), prev: prevKw[kwKey(String(c.id || ''), ag.name || '', kw.text || '', kw.matchType || '')] || null };
+    return { campaign: c.name || '', campaignId: String(c.id || ''), adGroup: ag.name || '', text: term, matchType: mt, triggeredBy: trig, spend, impressions, clicks, ctr: impressions > 0 ? (clicks / impressions * 100) : 0, cpc: Number(m.averageCpc || 0) / 1e6, conversions: Number(m.conversions || 0), prev: prevKw[kwKey(String(c.id || ''), ag.name || '', term, mt)] || null };
   });
 
-  const error = (!accRes.ok && !campRes.ok) ? (accRes.err || campRes.err || 'fetch_failed') : null;
+  const rawErr = (!accRes.ok && !campRes.ok) ? (accRes.err || campRes.err || 'fetch_failed') : null;
   const period = useRange ? { from, to, compare } : { preset, compare: 'none' };
-  return { status: 200, body: { ok: true, linked: true, account: acct, currency: 'EUR', period, kpis, prevKpis, compareLabel, campaigns, keywords, error } };
+  // Permanente accountfout (fout/ongeldig id, geen toegang) -> linked:false + reden, zodat de frontend
+  // een duidelijke melding toont en NIET eindeloos herprobeert. Transiente fout blijft 'error' (retry).
+  if (gadsPermanentErr(rawErr)) return { status: 200, body: { ok: true, linked: false, reason: 'account_error', account: acct, detail: rawErr } };
+  return { status: 200, body: { ok: true, linked: true, account: acct, currency: 'EUR', period, kpis, prevKpis, compareLabel, campaigns, keywords, conversionTypes, error: rawErr } };
 }
 
 /* ---- googleMonthly (READ, ADMIN-only/staff) — maandoverzicht Google-conversies ----------
@@ -4582,8 +5135,11 @@ export async function googleMonthly(bedrijfId, body, env) {
   const token = await googleAdsToken(env, Date.now());
   if (!token) return { status: 200, body: { ok: true, linked: false, reason: 'no_token' } };
 
+  // item 1 (Maandoverzicht laadt niet): het filter `AND metrics.impressions > 0` botste met de
+  // segments.month-aggregatie → query weigerde (r.ok=false → lege tab). Filter weg; lege maanden
+  // worden client-side genegeerd en alle 12 maanden zijn voor een maandoverzicht net gewenst.
   const res = await gadsQuery(env, token, acct,
-    `SELECT campaign.id, campaign.name, segments.month, metrics.cost_micros, metrics.clicks, metrics.conversions, metrics.conversions_value FROM campaign WHERE segments.date DURING LAST_12_MONTHS AND metrics.impressions > 0 ORDER BY segments.month`);
+    `SELECT campaign.id, campaign.name, segments.month, metrics.cost_micros, metrics.clicks, metrics.conversions, metrics.conversions_value FROM campaign WHERE segments.date DURING LAST_12_MONTHS ORDER BY segments.month`);
 
   if (!res.ok) {
     return { status: 200, body: { ok: true, linked: true, account: acct, currency: 'EUR', campaigns: [], months: [], error: res.err || 'fetch_failed' } };
@@ -5022,28 +5578,69 @@ async function aiConfig(env) {
   _aiCfgCache = { val, exp: now + 60 * 1000 };   // 60s cache, zodat een prompt-wijziging snel doorwerkt
   return val;
 }
-async function aiComplete(env, model, system, user) {
+// meta (optioneel, 6e arg) = { platform, skill, member_id, member_naam, bedrijf_id, bedrijf_naam }
+// voor de AI-kostenmonitor. Elke geslaagde call logt provider/model/tokens/kost fail-soft.
+// Dit is het CENTRALE haakje: zowel het klantenportaal als (via aiCompleteRaw) het teamportaal
+// lopen door deze functie, dus instrumenteren we hier één keer i.p.v. bij elke caller.
+export async function aiComplete(env, model, system, user, maxTokens, meta) {
   model = str(model) || AI_DEFAULT_MODEL;
+  const mt = Number(maxTokens) || 700;   // standaard kort; structured-output callers geven meer mee
+  // await't om te garanderen dat het KV-event wegschrijft vóór de worker de response teruggeeft
+  // (een niet-gewachte put kan in Workers gedropt worden). De AI-call duurt toch al seconden.
+  const _log = async (mdl, d, ok) => { try { const u = aiUsageFrom(mdl, d); await logAiUsage(env, Object.assign({ platform: 'onbekend', skill: 'overig' }, meta || {}, { model: mdl, in_tokens: u.in, out_tokens: u.out, ok: ok !== false })); } catch (e) { /* nooit de AI-call breken */ } };
   try {
-    if (/^(gpt|o\d)/i.test(model)) {
-      const key = str(env && env.OPENAI_API_KEY); if (!key) return { err: 'no_openai_key' };
-      const r = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, max_tokens: 700, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] }),
+    if (/^gemini/i.test(model)) {
+      const key = str(env && env.GEMINI_API_KEY); if (!key) return { err: 'no_gemini_key' };
+      // Flash/Lite-modellen: thinking UIT (snel + geen lege output bij korte antwoorden). Pro-modellen
+      // VEREISEN thinking mode (budget 0 = fout) → daar thinking aan laten en het output-budget ruim houden.
+      const isPro = /pro/i.test(model);
+      const gcfg = { maxOutputTokens: isPro ? Math.max(mt, 1024) : mt };
+      if (!isPro) gcfg.thinkingConfig = { thinkingBudget: 0 };
+      const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ role: 'user', parts: [{ text: user }] }], generationConfig: gcfg }),
       });
       const d = await r.json().catch(() => null);
       if (!r.ok) return { err: str((d && d.error && d.error.message) || r.status) };
+      await _log(model, d, true);
+      const cand = d && Array.isArray(d.candidates) && d.candidates[0];
+      const txt = (cand && cand.content && Array.isArray(cand.content.parts)) ? cand.content.parts.map((p) => str(p.text)).join('') : '';
+      return txt ? { text: txt } : { err: 'empty' };
+    }
+    if (/^(gpt|o\d)/i.test(model)) {
+      const key = str(env && env.OPENAI_API_KEY); if (!key) return { err: 'no_openai_key' };
+      // Nieuwere modellen (gpt-5.x, o-reeks) vereisen max_completion_tokens i.p.v. max_tokens; redeneer-
+      // modellen verbruiken interne tokens → ruim budget zodat er een antwoord overblijft. max_completion_tokens
+      // werkt ook voor gpt-4o/4.1, dus gebruiken we het overal.
+      const reasoning = /^(o\d|gpt-5)/i.test(model);
+      const r = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, max_completion_tokens: reasoning ? Math.max(mt, 1200) : mt, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] }),
+      });
+      const d = await r.json().catch(() => null);
+      if (!r.ok) return { err: str((d && d.error && d.error.message) || r.status) };
+      await _log(model, d, true);
       const txt = d && d.choices && d.choices[0] && d.choices[0].message ? str(d.choices[0].message.content) : '';
       return txt ? { text: txt } : { err: 'empty' };
     }
     const key = str(env && env.ANTHROPIC_API_KEY); if (!key) return { err: 'no_anthropic_key' };
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST', headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, max_tokens: 700, system, messages: [{ role: 'user', content: user }] }),
-    });
-    const d = await r.json().catch(() => null);
-    if (!r.ok) return { err: str((d && d.error && d.error.message) || r.status) };
-    const txt = d && Array.isArray(d.content) && d.content[0] ? str(d.content[0].text) : '';
+    const callClaude = async (mdl) => {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST', headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: mdl, max_tokens: mt, system, messages: [{ role: 'user', content: user }] }),
+      });
+      const d = await r.json().catch(() => null);
+      return { ok: r.ok, status: r.status, d };
+    };
+    let res = await callClaude(model);
+    let usedModel = model;
+    // model geretireerd/ongeldig → val terug op het -latest alias (altijd beschikbaar)
+    if (!res.ok && model !== AI_DEFAULT_MODEL && (res.status === 404 || /model|not_found/i.test(str(res.d && res.d.error && res.d.error.message)))) {
+      res = await callClaude(AI_DEFAULT_MODEL); usedModel = AI_DEFAULT_MODEL;
+    }
+    if (!res.ok) return { err: str((res.d && res.d.error && res.d.error.message) || res.status) };
+    await _log(usedModel, res.d, true);   // log het MODEL DAT ECHT DRAAIDE (na eventuele fallback)
+    const txt = res.d && Array.isArray(res.d.content) && res.d.content[0] ? str(res.d.content[0].text) : '';
     return txt ? { text: txt } : { err: 'empty' };
   } catch (e) { return { err: 'network' }; }
 }
@@ -5055,7 +5652,7 @@ export async function aiChat(bedrijfId, body, env) {
   const cfg = await aiConfig(env);
   const context = str(body && body.projecten_context);
   const user = `Vraag van ${klantNaam}:\n${vraag}\n\nLopende projecten van deze klant (context, niets verzinnen):\n${context || '(geen projectdata beschikbaar)'}`;
-  const res = await aiComplete(env, cfg.model, cfg.systemPrompt, user);
+  const res = await aiComplete(env, cfg.model, cfg.systemPrompt, user, undefined, { platform: 'klant', skill: 'klant-chatbot', bedrijf_id: bedrijfId, bedrijf_naam: klantNaam });
   if (!res || res.err || !res.text) {
     // graceful: de FE toont dan haar doorverwijs-zin. error-veld helpt bij debuggen (logs).
     return { status: 200, body: { ok: false, error: (res && res.err) || 'ai_unavailable', answer: '' } };
@@ -5223,7 +5820,7 @@ async function gcalEventsForHost(env, email, van, tot) {
   for (let p = 0; p < 5; p++) {
     const qs = new URLSearchParams({
       timeMin: gcalTime(van), timeMax: gcalTime(tot), singleEvents: 'true', maxResults: '250',
-      fields: 'items(summary,description,start,end,transparency,status,eventType),nextPageToken',
+      fields: 'items(id,summary,description,location,htmlLink,start,end,transparency,status,eventType,attendees(email,displayName,responseStatus)),nextPageToken',
     });
     if (pageToken) qs.set('pageToken', pageToken);
     const r = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?' + qs.toString(), {
@@ -5236,6 +5833,19 @@ async function gcalEventsForHost(env, email, van, tot) {
     if (!pageToken) break;
   }
   return items;
+}
+// Werk een bestaand event bij op de PRIMARY-agenda van `email` (DWD-impersonatie van
+// die persoon → schrijfrecht op zijn eigen agenda). PATCH = enkel de meegegeven velden.
+async function gcalPatchEvent(env, email, eventId, patch) {
+  const token = await mintGoogleToken(env, email, GCAL_SCOPE_EVENTS);
+  const r = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events/' + encodeURIComponent(eventId) + '?sendUpdates=all', {
+    method: 'PATCH',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch || {}),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error('patch_http_' + r.status);
+  return { id: str(data.id || eventId), titel: str(data.summary || ''), locatie: str(data.location || ''), beschrijving: str(data.description || '') };
 }
 // freeBusy-vangnet met status per kalender (fouten NIET verzwijgen). Venster gecapt
 // op 60d (lange freeBusy-windows zijn onbetrouwbaar; events.list is het primaire pad).
@@ -5505,9 +6115,9 @@ export const _shootEngineTest = { ymdRangeV2, addDaysYmdV2, blockHitsWorkdayV2, 
 // TEAMPORTAAL: privé-helpers die teamportaal.mjs hergebruikt zodat planning/status/
 // agenda-logica 1:1 gelijk loopt met het klantportaal (geen tweede waarheid).
 export const _teamHelpers = {
-  cuPlanningBlocks, isDoneTask, kanBeginnenGezet, heeftDueDate, planTypeOf,
+  cuPlanningBlocks, isDoneTask, heeftDueDate, planTypeOf,
   brusselsWallToMs, msToBrusselsYmd, msToBrusselsHm,
-  gcalEventsForHost, isClickupSyncEvent, gcalEventToInterval, aiComplete,
+  gcalEventsForHost, gcalPatchEvent, isClickupSyncEvent, gcalEventToInterval, aiComplete,
 };
 
 /* ---- publicShootAvailability (PUBLIEK, geen auth, geen klant-scope) ----------
@@ -5637,7 +6247,7 @@ export async function shootPlaces(bedrijfId, body, env) {
 // de Startdatum (7086dc88) = due van de LAATSTE relevante shoot. Relevant = de shoots waar de
 // Edit-taak via ClickUp-dependencies op wacht; geen dependencies = alle shoots van het project.
 // Pas als ál die shoots een datum hebben, wordt de startdatum geschreven (anders blijft hij leeg
-// en houdt de 'Kan beginnen'-automatisering de montage uit de planning). 'Planning gedrag' =
+// en houdt de startdatum-automatisering de montage uit de planning). 'Planning gedrag' =
 // Vast/Negeren wordt gerespecteerd (handmatige override door het team). Fail-soft per stap.
 async function syncEditStartdates(env, shootTask, bookedDueMs) {
   const parentId = str((shootTask && shootTask.parent) || (shootTask && shootTask.top_level_parent));
@@ -5699,23 +6309,28 @@ export async function shootSubmit(bedrijfId, body, env) {
   const endMs = startMs + Math.max(1, Math.round(effHours * 3600000));
 
   // Host-keuze: verse server-side beschikbaarheid (ENGINE V2: incl. meetings + eigen
-  // Google-agenda, zonder niet-goedgekeurd verlof) -> random vrij poollid op die dag.
-  let pickedHost = null;
+  // Google-agenda, zonder niet-goedgekeurd verlof) -> ZOVEEL willekeurige vrije poolleden als er
+  // content creators nodig zijn. KRITIEK: bij 2+ creators moeten er ook 2+ assignees aan de
+  // ClickUp-taak hangen (niet slechts één) — de slotpicker liet enkel slots toe met genoeg vrije creators.
+  let pickedHosts = [];
   try {
     const todayYmd = msToBrusselsYmd(Date.now());
     const span = Math.round((brusselsWallToMs(datum, '12:00') - brusselsWallToMs(todayYmd, '12:00')) / 86400000) + 1;
     const map = await shootEngineDayMap(env, { horizonDays: Math.max(7, Math.min(366, span)) });
     const day = map.days.find((d) => d.date === datum);
-    const free = (day && Array.isArray(day.free_ids)) ? day.free_ids : [];
-    if (free.length) {
-      const pid = free[Math.floor(Math.random() * free.length)];
-      pickedHost = SHOOT_HOSTS.find((h) => Number(h.id) === Number(pid)) || { id: pid, name: '' };
-    }
+    const free = (day && Array.isArray(day.free_ids)) ? day.free_ids.slice() : [];
+    // Fisher-Yates shuffle -> de eerste N vrije creators nemen (zonder herhaling)
+    for (let i = free.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const tmp = free[i]; free[i] = free[j]; free[j] = tmp; }
+    const need = Math.max(1, aantalPersonen);
+    pickedHosts = free.slice(0, Math.min(need, free.length))
+      .map((pid) => SHOOT_HOSTS.find((h) => Number(h.id) === Number(pid)) || { id: pid, name: '' });
   } catch (e) { /* fail-open: PM wijst handmatig toe */ }
+  const pickedNames = pickedHosts.map((h) => h.name).filter(Boolean);
+  const onderbezet = pickedHosts.length < Math.max(1, aantalPersonen);   // minder vrij dan nodig -> PM vult aan
 
-  // (1) native velden via PUT (persisteren WEL): start/eind + assignee.
+  // (1) native velden via PUT (persisteren WEL): start/eind + ALLE toegewezen creators.
   const putBody = { start_date: startMs, start_date_time: true, due_date: endMs, due_date_time: true };
-  if (pickedHost) putBody.assignees = { add: [Number(pickedHost.id)], rem: [] };
+  if (pickedHosts.length) putBody.assignees = { add: pickedHosts.map((h) => Number(h.id)), rem: [] };
   await cu.put(env, `/task/${taskId}`, putBody);
 
   // (2) Startdatum (date custom field) - via POST /field (custom_fields via PUT persisteren niet).
@@ -5756,7 +6371,8 @@ export async function shootSubmit(bedrijfId, body, env) {
   L.push(`Startuur: ${startuur} (aankomst op locatie)`);
   if (duurLabel) L.push(`Duur: ${duurLabel}`);
   L.push(`Aantal creators: ${aantalPersonen}`);
-  if (pickedHost && pickedHost.name) L.push(`Voorlopig toegewezen: ${pickedHost.name}`);
+  if (pickedNames.length) L.push(`Voorlopig toegewezen: ${pickedNames.join(', ')}`);
+  if (onderbezet) L.push(`LET OP: slechts ${pickedHosts.length}/${aantalPersonen} creators vrij — vul handmatig aan.`);
   L.push('');
   L.push('Startlocatie:');
   if (straat) L.push(straat);
@@ -5776,7 +6392,8 @@ export async function shootSubmit(bedrijfId, body, env) {
   C.push(`Klant: ${voornaam}${email ? ` (${email})` : ''}`);
   C.push(`Datum: ${datumLeesbaar} · ${startuur}${duurLabel ? ` · ${duurLabel}` : ''}`);
   C.push(`Aantal personen: ${aantalPersonen}`);
-  if (pickedHost && pickedHost.name) C.push(`Voorlopig toegewezen: ${pickedHost.name}`);
+  if (pickedNames.length) C.push(`Voorlopig toegewezen: ${pickedNames.join(', ')}`);
+  if (onderbezet) C.push(`⚠️ Slechts ${pickedHosts.length}/${aantalPersonen} content creators waren vrij — gelieve handmatig aan te vullen.`);
   if (pcg || straat) C.push(`Startlocatie: ${[straat, pcg].filter(Boolean).join(', ')}`);
   if (contactNaam || contactGsm) C.push(`Contact op locatie: ${[contactNaam, contactGsm].filter(Boolean).join(' · ')}`);
   if (extraInfo) C.push(`Extra info: ${extraInfo}`);
@@ -5787,7 +6404,10 @@ export async function shootSubmit(bedrijfId, body, env) {
   // (6) montage-startdatums automatisch laten volgen op de laatste relevante shoot (dependencies-aware)
   try { await syncEditStartdates(env, task, endMs); } catch (e) { /* automatisering mag de booking niet breken */ }
 
-  return { status: 200, body: { ok: true, taskId, assignedTo: pickedHost ? pickedHost.id : null, assignedName: pickedHost ? pickedHost.name : '' } };
+  return { status: 200, body: { ok: true, taskId,
+    assignedTo: pickedHosts.map((h) => h.id),
+    assignedName: pickedNames.join(' & '),
+    assignedCount: pickedHosts.length, neededCount: aantalPersonen } };
 }
 
 /* ---- metricoolMediaUpload (WRITE) — klant uploadt een foto/video als post-visual ----
@@ -5833,6 +6453,7 @@ export async function metricoolMediaUpload(bedrijfId, body, env) {
 const ADSWS_KEY = (bedrijfId) => `adsws:${str(bedrijfId).slice(0, 64)}`;
 const ADSWS_MAX_UPLOADS = 200;
 const ADSWS_MAX_NOTES = 20000;
+const ADSWS_MAX_AGENDA = 8000;   // agendapunten ter voorbereiding van de meeting (bug Arne)
 const ADSWS_MAX_RECS_BYTES = 200 * 1024; // ~200KB JSON-budget voor het recs-object
 
 // Lees de ruwe blob (object) of {} uit KV. Faalt nooit; null/parse-fouten → {}.
@@ -5854,6 +6475,7 @@ export async function adsWorkspace(bedrijfId, body, env) {
     body: {
       ok: true,
       notes: str(stored.notes || ''),
+      agenda: str(stored.agenda || ''),
       recs: (stored.recs != null ? stored.recs : null),
       uploads: (Array.isArray(stored.uploads) ? stored.uploads : []),
     },
@@ -5870,6 +6492,9 @@ export async function adsWorkspaceSave(bedrijfId, body, env) {
 
   if ('notes' in b) {
     blob.notes = str(b.notes).slice(0, ADSWS_MAX_NOTES);
+  }
+  if ('agenda' in b) {
+    blob.agenda = str(b.agenda).slice(0, ADSWS_MAX_AGENDA);
   }
   if ('recs' in b) {
     // recs = vrij object (bewerkbare aanbevelingen). null wist het; te grote blobs negeren we.
@@ -5906,11 +6531,13 @@ export async function adsUploadAdd(bedrijfId, body, env) {
   let type = str(rawItem.type).toLowerCase().trim();
   if (type !== 'link' && type !== 'image' && type !== 'file') type = 'link';
   const stamp = (b.ts != null && b.ts !== '') ? str(b.ts) : String(uploads.length);
+  const cat = (str(rawItem.cat).toLowerCase().trim().slice(0, 24)) || 'algemeen';   // categorie/scope (meta/google/algemeen); leeg → algemeen
   const item = {
     id: `u${uploads.length}-${stamp}`,
     type,
     name: str(rawItem.name).slice(0, 500),
     url: str(rawItem.url).slice(0, 4000),
+    cat,
   };
 
   uploads.push(item);
@@ -5984,11 +6611,10 @@ export async function ticketCreate(bedrijfId, body, env) {
   // (1) taak aanmaken; relaties + dropdowns meteen in de create + (2) nogmaals via POST /field
   //     (gordel-en-bretels tegen de custom-field-persist-gotcha). TYPE JOB=Support maakt het
   //     ticket een 'support'-discipline-project in het dashboard (DISCIPLINE_MAP 19) zodat de
-  //     klant het onder Projecten kan opvolgen; Kan beginnen=JA conform de team-werkwijze.
+  //     klant het onder Projecten kan opvolgen.
   const createFields = [
     { id: FIELD.bedrijf, value: { add: [bid], rem: [] } },
     { id: FIELD.typeJob, value: TICKET_TYPEJOB_SUPPORT },
-    { id: FIELD.kanBeginnen, value: KANBEGINNEN_JA },
   ];
   if (contactId) createFields.push({ id: FIELD.contact, value: { add: [contactId], rem: [] } });
   let created;
@@ -6007,7 +6633,6 @@ export async function ticketCreate(bedrijfId, body, env) {
   const taskId = str(created.data.id);
   await cu.relation(env, taskId, FIELD.bedrijf, { add: [bid], rem: [] }).catch(() => {});
   await cu.field(env, taskId, FIELD.typeJob, TICKET_TYPEJOB_SUPPORT).catch(() => {});
-  await cu.field(env, taskId, FIELD.kanBeginnen, KANBEGINNEN_JA).catch(() => {});
   if (contactId) await cu.relation(env, taskId, FIELD.contact, { add: [contactId], rem: [] }).catch(() => {});
 
   // (3) optionele bijlage — server-side caps (frontend bewaakt ook, maar is omzeilbaar):
@@ -6105,9 +6730,9 @@ export async function ticketAttach(bedrijfId, body, env) {
  * read-only scope. Per klant resolven we GA4-property + GSC-site uit de bedrijf-taak (website-veld);
  * WEB_OVERRIDES is de pilot-bootstrap (later vervangen door een ClickUp-veld 'GA4 Property ID').
  * Output spiegelt de ads-handlers (period/trend) zodat de frontend dezelfde rendering hergebruikt. */
-const GA_SCOPE = 'https://www.googleapis.com/auth/analytics.readonly';
+export const GA_SCOPE = 'https://www.googleapis.com/auth/analytics.readonly';
 const GSC_SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
-const WEB_SUBJECT = 'marketing@studio27.be';
+export const WEB_SUBJECT = 'marketing@studio27.be';
 const GA4_PRESETS = { today: ['today', 'today'], yesterday: ['yesterday', 'yesterday'], last_7d: ['7daysAgo', 'yesterday'], last_14d: ['14daysAgo', 'yesterday'], last_30d: ['30daysAgo', 'yesterday'], last_90d: ['90daysAgo', 'yesterday'] };
 const GSC_LAG_DAYS = 3;
 // Pilot-bootstrap: sleutel = bedrijfId OF domein -> { ga4 property-id, gsc siteUrl }.
@@ -6125,7 +6750,7 @@ function gscDateRange(preset, from, to) {
   const start = new Date(end.getTime() - (days - 1) * 86400000);
   return [_ymd(start), _ymd(end)];
 }
-async function ga4Report(token, property, reqBody) {
+export async function ga4Report(token, property, reqBody) {
   try {
     const r = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${property}:runReport`, {
       method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(reqBody),
@@ -6272,6 +6897,85 @@ export const READ_HANDLERS = {
   // NB: de AI-chatbot loopt (op vraag) weer via Make, niet via de worker. De aiChat-handler
   // hierboven blijft dormant (ongebruikt) staan, klaar mocht de keuze ooit omdraaien.
 };
+// Leesbare labels voor de gevraagde diensten (frontend stuurt de keys).
+const DIENST_LABELS = {
+  strategie: 'Strategie', branding: 'Branding', video: 'Video & fotografie',
+  website: 'Website (webdesign)', seo: 'SEO', ads: 'Online adverteren (Ads)', social: 'Social media',
+};
+/* ---------------------------------------------------------------------------
+   OFFERTE-AANVRAAG (WRITE) — klantvriendelijk tekstformulier i.p.v. de budget-wizard.
+   De klant (clientview) beschrijft wat hij nodig heeft + kiest diensten; GEEN budgetten.
+   -> ClickUp-offertetaak in 'Offertes - S27' (titel = korte omschrijving, beschrijving = volledig
+      bericht + diensten, due = NU, bedrijf + contact gekoppeld) + PandaDoc CONCEPT + id-sync.
+   FE-contract: api(ENDPOINTS.offerteAanvraag, { korte, bericht, diensten:[key,...] })
+   Per-dienst block-verwijdering in PandaDoc = Phase 2 (zodra de template per-dienst-blokken heeft).
+   --------------------------------------------------------------------------- */
+export async function offerteAanvraag(bedrijfId, body, env) {
+  const korte = str(body && body.korte).trim();
+  const bericht = str(body && body.bericht).trim();
+  const diensten = Array.isArray(body && body.diensten)
+    ? body.diensten.map((d) => str(d).trim()).filter(Boolean).slice(0, 12) : [];
+  if (!korte) return { status: 400, body: { ok: false, error: 'no_title', message: 'Geef een korte omschrijving van je aanvraag.' } };
+  if (!bericht) return { status: 400, body: { ok: false, error: 'no_message', message: 'Vertel ons wat je nodig hebt.' } };
+  if (!diensten.length) return { status: 400, body: { ok: false, error: 'no_services', message: 'Kies minstens één dienst.' } };
+
+  const br = await cu.get(env, `/task/${bedrijfId}`);
+  const bedrijfTask = br.ok && br.data ? br.data : null;
+  if (!bedrijfTask || !bedrijfTask.id) return { status: 404, body: { ok: false, error: 'company_not_found', message: 'Bedrijf niet gevonden.' } };
+  const contactIds = getRelationIds(bedrijfTask, FIELD.contact);
+  let contactTask = null;
+  if (contactIds.length) { const cr = await cu.get(env, `/task/${contactIds[0]}`); if (cr.ok && cr.data) contactTask = cr.data; }
+  const klant = deriveKlantFromTasks(bedrijfTask, contactTask);
+  const company = klant.company || `Klant ${bedrijfId}`;
+  const dienstLabels = diensten.map((d) => DIENST_LABELS[d] || d);
+
+  const omschrijving =
+    `${bericht}\n\n` +
+    `Gevraagde diensten: ${dienstLabels.join(', ')}\n` +
+    `Aangevraagd via het klantenportaal door ${str(klant.first_name)} ${str(klant.last_name)}`.trim() + ` (${company}) op ${fmtDateTime()}.`;
+  const nowMs = Date.now();
+  const created = await cu.post(env, `/list/${OFFERTE_LIST}/task`, {
+    name: korte.slice(0, 250),
+    description: omschrijving,
+    due_date: nowMs, due_date_time: true,
+    custom_fields: [
+      { id: FIELD.bedrijf, value: { add: [String(bedrijfId)], rem: [] } },
+      { id: FIELD.offerteBedrijfsnaam, value: company },
+    ],
+  });
+  if (!created.ok || !created.data || !created.data.id) {
+    return { status: 502, body: { ok: false, error: 'clickup_create_failed', message: 'Je aanvraag kon niet worden aangemaakt — probeer het later opnieuw.' } };
+  }
+  const offerteTaskId = str(created.data.id);
+  const offerteTaskUrl = str(created.data.url) || `https://app.clickup.com/t/${offerteTaskId}`;
+  // relaties nazetten via het dedicated relation-endpoint (betrouwbaarder dan custom_fields-bij-create)
+  await cu.relation(env, offerteTaskId, FIELD.bedrijf, { add: [String(bedrijfId)] }).catch(() => {});
+  if (contactIds.length) await cu.relation(env, offerteTaskId, FIELD.contact, { add: [String(contactIds[0])] }).catch(() => {});
+  // Unieke Code (traceer-ID) zelf zetten — portaal-aanvragen omzeilen de Make offerte-intake die deze normaal genereert (Bug 86cacpemz).
+  await cu.field(env, offerteTaskId, FIELD.uniekeCode, genUniekeCode()).catch(() => {});
+
+  // PandaDoc CONCEPT uit de bestaande hoofdtemplate (geen producten -> lege pricing). Best-effort:
+  // een PandaDoc-fout mag de ClickUp-taak (het echte signaal voor Arne/Vincent) nooit blokkeren.
+  // De gekozen diensten bepalen welke content-blokken in de offerte blijven staan (zodra de
+  // template een Content-Placeholder-blok bevat; tot dan is contentPlaceholders [] = no-op).
+  let pandadocId = '';
+  try {
+    const docName = `Offerte ${company} - ${fmtDateNL()}`;
+    const contentPlaceholders = await pandadocDienstPlaceholders(env, diensten);
+    const pdCall = buildPandadocCreate(env, { docName, items: [], klant, pm: PANDADOC_PM, contentPlaceholders });
+    const pd = await pandadocCreate(env, pdCall);
+    pandadocId = str(pd.id);
+    if (pandadocId) await cu.field(env, offerteTaskId, FIELD.offertePandadocId, pandadocId).catch(() => {});
+  } catch (e) { /* concept faalde — taak staat er, team maakt PandaDoc handmatig */ }
+
+  return {
+    status: 200,
+    body: {
+      ok: true, offerte_task_id: offerteTaskId, offerte_task_url: offerteTaskUrl, pandadoc_id: pandadocId,
+      message: 'Je aanvraag is verzonden. We stellen je offerte op en bezorgen ze je binnenkort.',
+    },
+  };
+}
 export const WRITE_HANDLERS = {
   bedrijfVoorkeuren,
   facturatieSave,
@@ -6279,6 +6983,9 @@ export const WRITE_HANDLERS = {
   bedrijfUpload,
   chatPost,
   chatAttachment,
+  chatMarkRead,
+  botLog,
+  botLogList,
   commsChatPost,
   commsChatAttachment,
   directMessage,
@@ -6286,6 +6993,8 @@ export const WRITE_HANDLERS = {
   inplannen,
   // Offerte genereren (ClickUp-offertetaak + PandaDoc CONCEPT-document, geen Make).
   offerteGenereren,
+  // Offerte-aanvraag: klantvriendelijk tekstformulier (clientview) i.p.v. de budget-wizard.
+  offerteAanvraag,
   // Metricool: klant keurt een geplande post goed (KV + ClickUp-melding) of geeft feedback.
   metricoolApprove,
   metricoolFeedback,

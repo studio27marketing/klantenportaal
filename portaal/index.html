@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="./team-chat.js"></script>
+<script src="./config.js?v=2"></script>
+<script type="module" src="./auth.js?v=2"></script>
+<script src="./shared/portal-shell.js?v=3"></script>
+<style>
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{font-family:'Outfit',system-ui,sans-serif;background:#050A30;color:#F7F3EA;font-weight:300;-webkit-font-smoothing:antialiased;}
+  ::selection{background:#D1F24C;color:#050A30;}
+  .mono{font-family:'JetBrains Mono',ui-monospace,monospace;}
+  [data-lucide]{width:1em;height:1em;}
+  a{text-decoration:none;color:inherit;}
+  input{font-family:inherit;}
+  @keyframes pUp{from{transform:translateY(16px);}to{transform:translateY(0);}}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  .pcard{animation:pUp .55s cubic-bezier(.16,1,.3,1) backwards;}
+  .pcard:nth-child(2){animation-delay:.1s;}
+  .pcard:nth-child(3){animation-delay:.2s;}
+</style>
+</helmet>
+
+<div style="min-height:100vh;display:flex;flex-direction:column;position:relative;overflow:hidden;">
+
+  <!-- ambient brand glow -->
+  <div style="position:absolute;top:-220px;right:-160px;width:560px;height:560px;border-radius:50%;background:radial-gradient(circle,rgba(40,175,249,.22),transparent 70%);pointer-events:none;"></div>
+  <div style="position:absolute;bottom:-260px;left:-180px;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(209,242,76,.10),transparent 70%);pointer-events:none;"></div>
+
+  <!-- ============ LOGIN GATE ============ -->
+  <sc-if value="{{ notAuthed }}" hint-placeholder-val="{{ true }}">
+    <div style="position:relative;z-index:2;flex:1;display:flex;align-items:center;justify-content:center;padding:40px;">
+      <div style="width:100%;max-width:420px;">
+        <img src="assets/Logo-neg.svg" style="height:30px;margin-bottom:38px;" alt="27 automations">
+        <div style="font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:600;color:#28AFF9;margin-bottom:12px;">Eén login · vier omgevingen</div>
+        <h1 style="font-size:34px;font-weight:200;letter-spacing:-.02em;line-height:1.1;margin:0 0 30px;">Meld je aan bij het <span style="font-weight:500;">27 platform</span>.</h1>
+
+        <div style="min-height:20px;margin-bottom:12px;"><sc-if value="{{ hasError }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:#FF9E8F;font-weight:500;"><i data-lucide="alert-circle" style="font-size:15px;"></i>{{ error }}</span></sc-if></div>
+
+        <button onClick="{{ submit }}" style="width:100%;font-weight:600;font-size:16px;background:#D1F24C;color:#050A30;border:none;border-radius:14px;padding:13px 16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;" style-hover="background:#c5e83f;">Aanmelden met Google<i data-lucide="arrow-right" style="font-size:19px;"></i></button>
+
+        <div style="display:flex;align-items:center;gap:9px;margin-top:22px;font-size:12.5px;color:rgba(247,243,234,.4);"><i data-lucide="shield-check" style="font-size:15px;color:#28AFF9;"></i>Eén keer aanmelden geeft toegang tot 27CRM, 27Productie, 27HR en 27Finance.</div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ PORTAL ============ -->
+  <sc-if value="{{ authed }}" hint-placeholder-val="{{ false }}">
+  <div style="position:relative;z-index:2;display:flex;flex-direction:column;min-height:100vh;">
+    <header style="display:flex;align-items:center;gap:14px;padding:26px 40px;">
+      <img src="assets/Logo-neg.svg" style="height:26px;" alt="27 automations">
+      <div style="width:1px;height:24px;background:rgba(247,243,234,.16);"></div>
+      <span style="font-size:14px;font-weight:500;color:rgba(247,243,234,.62);letter-spacing:.01em;">Portaal</span>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:14px;">
+        <div style="display:flex;align-items:center;gap:9px;font-size:12.5px;font-weight:600;color:#D1F24C;background:rgba(209,242,76,.1);border-radius:99px;padding:7px 14px;">
+          <span style="position:relative;display:grid;place-items:center;width:8px;height:8px;"><span style="width:8px;height:8px;border-radius:99px;background:#D1F24C;"></span><span style="position:absolute;inset:0;border-radius:99px;background:#D1F24C;opacity:.4;animation:pulse 2.4s infinite;"></span></span>
+          Alle systemen operationeel
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding-left:6px;">
+          <team-chat me="Vincent Verleije" accent="#28AFF9"></team-chat>
+          <span style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#0F2EA3,#28AFF9);display:grid;place-items:center;font-size:14px;font-weight:600;color:#fff;">{{ userInitial }}</span>
+          <span style="font-size:13.5px;font-weight:500;color:rgba(247,243,234,.82);">{{ userName }}</span>
+          <button onClick="{{ bugClick }}" title="Bug aanmelden" style="width:34px;height:34px;border-radius:10px;background:rgba(247,243,234,.08);border:none;color:rgba(247,243,234,.7);cursor:pointer;display:grid;place-items:center;" style-hover="background:rgba(40,175,249,.18);"><i data-lucide="bug" style="font-size:17px;"></i></button>
+          <button onClick="{{ logout }}" title="Afmelden" style="width:34px;height:34px;border-radius:10px;background:rgba(247,243,234,.08);border:none;color:rgba(247,243,234,.7);cursor:pointer;display:grid;place-items:center;" style-hover="background:rgba(255,158,143,.18);"><i data-lucide="log-out" style="font-size:17px;"></i></button>
+        </div>
+      </div>
+    </header>
+
+    <main style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:20px 40px 64px;max-width:1180px;margin:0 auto;width:100%;">
+      <div style="margin-bottom:44px;max-width:680px;">
+        <div style="font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:600;color:#28AFF9;margin-bottom:18px;">Welkom terug, {{ userName }}</div>
+        <h1 style="font-size:54px;font-weight:200;letter-spacing:-.025em;line-height:1.04;margin:0;">Kies je <span style="font-weight:500;">omgeving</span>.</h1>
+        
+      </div>
+
+      <div style="display:grid;grid-template-columns:{{ cardCols }};gap:18px;">
+        <sc-for list="{{ envs }}" as="e" hint-placeholder-count="3">
+          <a href="{{ e.href }}" target="{{ e.target }}" class="pcard" style="position:relative;display:flex;align-items:center;gap:18px;background:{{ e.bg }};border:1px solid {{ e.border }};border-radius:22px;padding:22px 24px;overflow:hidden;transition:transform .22s cubic-bezier(.16,1,.3,1),box-shadow .22s;" style-hover="transform:translateY(-4px);box-shadow:0 24px 56px -28px rgba(40,175,249,.45);">
+            <div style="position:absolute;top:-60px;right:-50px;width:170px;height:170px;border-radius:50%;background:{{ e.orb }};pointer-events:none;"></div>
+            <span style="position:relative;width:52px;height:52px;border-radius:14px;background:{{ e.iconBg }};color:{{ e.iconFg }};display:grid;place-items:center;flex:none;"><i data-lucide="{{ e.icon }}" style="font-size:26px;"></i></span>
+            <div style="position:relative;flex:1;min-width:0;">
+              <div style="font-size:21px;font-weight:600;letter-spacing:-.01em;color:{{ e.titleColor }};line-height:1.1;">{{ e.title }}</div>
+              <div style="font-size:13px;color:{{ e.subColor }};font-weight:500;margin-top:4px;">{{ e.tag }}</div>
+            </div>
+            <span style="position:relative;width:42px;height:42px;border-radius:12px;background:{{ e.ctaBg }};color:{{ e.ctaFg }};display:grid;place-items:center;flex:none;"><i data-lucide="arrow-right" style="font-size:20px;"></i></span>
+          </a>
+        </sc-for>
+      </div>
+    </main>
+
+    <footer style="padding:22px 40px;border-top:1px solid rgba(247,243,234,.08);display:flex;align-items:center;gap:8px;font-size:12.5px;color:rgba(247,243,234,.4);">
+      <span class="mono">27 automations</span><span style="opacity:.5;">·</span>Werkplek voor Studio 27, 27A &amp; ZVD
+    </footer>
+  </div>
+  </sc-if>
+
+  <!-- ============ BUG MELDEN MODAL ============ -->
+  <sc-if value="{{ bugOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeBug }}" style="position:fixed;inset:0;z-index:140;background:rgba(5,10,48,.5);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:24px;">
+      <div onClick="{{ stopBug }}" style="background:#F7F3EA;color:#050A30;border-radius:22px;width:100%;max-width:480px;box-shadow:0 40px 80px -20px rgba(5,10,48,.6);overflow:hidden;">
+        <div style="display:flex;align-items:center;gap:11px;padding:18px 22px;border-bottom:1px solid #EFEADD;">
+          <span style="width:34px;height:34px;border-radius:10px;background:#050A30;display:grid;place-items:center;flex:none;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D1F24C" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="6" width="8" height="13" rx="4"></rect><path d="M19 8l-3 1.5M5 8l3 1.5M3 13h3M18 13h3M5 18l3-1.5M19 18l-3-1.5M9 6a3 3 0 0 1 6 0"></path></svg></span>
+          <h3 style="font-size:18px;font-weight:600;margin:0;flex:1;">Bug aanmelden</h3>
+          <button onClick="{{ closeBug }}" style="width:32px;height:32px;border-radius:9px;border:1px solid #DFD9C8;background:#fff;cursor:pointer;display:grid;place-items:center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#5E5A4F" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+        </div>
+        <div style="padding:22px;display:flex;flex-direction:column;gap:16px;max-height:70vh;overflow:auto;">
+          <div style="display:flex;gap:12px;">
+            <div style="flex:1;"><div style="font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#A39E8E;margin-bottom:9px;">Vanuit scherm</div><div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#3D3A33;border:1px solid #EAE4D5;border-radius:11px;padding:10px 13px;background:#F2EDE1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ bugScreen }}</div></div>
+            <div style="flex:1;"><div style="font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#A39E8E;margin-bottom:9px;">Aangemeld door</div><div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#3D3A33;border:1px solid #EAE4D5;border-radius:11px;padding:10px 13px;background:#F2EDE1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ bugReporter }}</div></div>
+          </div>
+          <div><div style="font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#A39E8E;margin-bottom:9px;">Titel</div><input type="text" value="{{ bugTitle }}" onInput="{{ setBugTitle }}" placeholder="Korte samenvatting van de bug…" style="font-family:inherit;font-size:14px;color:#3D3A33;border:1px solid #DFD9C8;border-radius:11px;padding:10px 13px;background:#fff;width:100%;box-sizing:border-box;"></div>
+          <div><div style="font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#A39E8E;margin-bottom:9px;">Omschrijving</div><textarea value="{{ bugDesc }}" onInput="{{ setBugDesc }}" placeholder="Wat ging er mis? Stappen om te reproduceren, verwacht vs werkelijk gedrag…" style="font-family:inherit;font-size:14px;color:#3D3A33;border:1px solid #DFD9C8;border-radius:11px;padding:10px 13px;background:#fff;width:100%;box-sizing:border-box;min-height:96px;resize:vertical;"></textarea></div>
+          <div><div style="font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#A39E8E;margin-bottom:9px;">Bijlagen (screenshots / afbeeldingen)</div>
+            <sc-for list="{{ bugFiles }}" as="f" hint-placeholder-count="0"><div style="display:flex;align-items:center;gap:9px;background:#fff;border:1px solid #EAE4D5;border-radius:10px;padding:8px 11px;margin-bottom:7px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2458EA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2.5"></rect><circle cx="8.5" cy="8.5" r="1.6"></circle><path d="m21 16-4.5-4.5L7 21"></path></svg><span style="flex:1;font-size:12.5px;color:#3D3A33;font-family:'JetBrains Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ f.name }}</span><button onClick="{{ f.remove }}" style="border:none;background:none;cursor:pointer;display:grid;place-items:center;color:#B83A2A;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#B83A2A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></div></sc-for>
+            <button onClick="{{ addBugFile }}" style="display:inline-flex;align-items:center;gap:8px;border:1px dashed #C4BEAC;background:#fff;color:#5E5A4F;border-radius:11px;padding:9px 13px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8E8979" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"></path></svg>Bestand toevoegen</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;padding:0 22px 22px;">
+          <button onClick="{{ closeBug }}" style="flex:1;font-family:inherit;font-size:14px;font-weight:600;background:#fff;color:#5E5A4F;border:1px solid #DFD9C8;border-radius:12px;padding:11px 0;cursor:pointer;">Annuleren</button>
+          <button onClick="{{ submitBug }}" style="flex:2;font-family:inherit;font-size:14px;font-weight:600;background:#050A30;color:#fff;border:none;border-radius:12px;padding:11px 0;cursor:pointer;">Bug indienen</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ showToast }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:150;background:#050A30;color:#F7F3EA;border:1px solid rgba(40,175,249,.4);border-radius:13px;padding:13px 20px;font-size:13.5px;font-weight:500;box-shadow:0 20px 50px -16px rgba(5,10,48,.7);display:flex;align-items:center;gap:10px;"><span style="width:8px;height:8px;border-radius:99px;background:#D1F24C;flex:none;"></span>{{ toastMsg }}</div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { authed:false, ready:true, error:'', userName:'', userInitial:'2', bugModal:null, toast:'' };
+  componentDidMount(){
+    this._icons();
+    var self=this, tries=0;
+    try{ var sp=new URLSearchParams(location.search); this._next=sp.get('next')||''; }catch(e){ this._next=''; }
+    (function wait(){
+      if(typeof window!=='undefined' && window.S27TeamAuth){
+        window.S27TeamAuth.subscribe(function(st){
+          if(!st) return;
+          if(st.phase==='ready'){
+            var nx=self._next; if(nx && /^\/(crm|finance|hr|productie)\//.test(nx)){ try{ location.replace(nx); }catch(e){} return; }
+            var nm=(st.email||'').split('@')[0].split(/[._-]/)[0]; nm = nm? nm.charAt(0).toUpperCase()+nm.slice(1) : 'Collega';
+            self.setState({ authed:true, ready:true, error:'', userName:nm, userInitial:(nm[0]||'2').toUpperCase() });
+          } else if(st.phase==='signed_out'){ self.setState({ authed:false, ready:true, error: st.error||'' }); }
+          else { self.setState({ ready:true, error: st.error||'' }); }
+        });
+        try{ window.S27TeamAuth.init({gatewayBase:(window.S27PORTAL&&window.S27PORTAL.GATEWAY)||''}); }catch(e){ self.setState({ authed:false, ready:true, error:'De inlogmodule kon niet starten. Herlaad de pagina.' }); }
+        return;
+      }
+      if(tries++<80) setTimeout(wait,80);
+      else self.setState({ authed:false, ready:true, error:'De inlogmodule laadde niet. Herlaad de pagina.' });
+    })();
+  }
+  componentDidUpdate(){ this._icons(); }
+  _icons(){ if(typeof window!=='undefined' && window.lucide){ try{ window.lucide.createIcons(); }catch(e){} } }
+  submit(){ try{ this.setState({error:''}); if(window.S27TeamAuth) window.S27TeamAuth.google(); }catch(e){} }
+  logout(){ try{ if(window.S27TeamAuth) window.S27TeamAuth.logout(); }catch(e){} this.setState({ authed:false }); }
+  _gw(){ return (typeof window!=='undefined' && window.S27PORTAL && window.S27PORTAL.GATEWAY)||''; }
+  apiPost(ep,body){ var self=this; if(typeof window==='undefined'||!window.S27TeamAuth) return Promise.resolve(null); return window.S27TeamAuth.token().then(function(tok){ if(!tok) return null; return fetch(self._gw()+'/'+ep,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify(body||{})}).then(function(r){return r.json();}).catch(function(){return null;}); }); }
+  toast(msg){ var self=this; this.setState({ toast:msg }); clearTimeout(this._tt); this._tt=setTimeout(function(){ self.setState({toast:''}); },3600); }
+  openBug(){ this.setState({ bugModal:{ si:'27 Portaal · Overzicht', reporter:(this.state.userName||'Teamlid'), title:'', desc:'', files:[] } }); }
+  setBug(k,v){ this.setState(function(s){ var b=Object.assign({},s.bugModal); b[k]=v; return { bugModal:b }; }); }
+  addBugFile(){ this.setState(function(s){ var f=(s.bugModal.files||[]).slice(); f.push({n:'schermafbeelding-'+(Date.now().toString().slice(-4))+'.png'}); return { bugModal:Object.assign({},s.bugModal,{files:f}) }; }); }
+  removeBugFile(i){ this.setState(function(s){ var f=(s.bugModal.files||[]).slice(); f.splice(i,1); return { bugModal:Object.assign({},s.bugModal,{files:f}) }; }); }
+  closeBug(){ this.setState({ bugModal:null }); }
+  submitBug(){ var self=this; var b=this.state.bugModal; if(!b) return; var title=(b.title||'').trim(); var desc=(b.desc||'').trim(); if(!title&&!desc){ this.toast('Geef de bug een korte titel.'); return; } this.setState({ bugModal:null }); this.toast('Bug aangemeld bij het team.'); this.apiPost('teamFeatureRequest',{ titel:'[BUG] '+(title||desc.slice(0,60)), omschrijving:desc, portaal:'Teamportaal', onderdeel:b.si, soort:'bug' }).then(function(d){ if(d&&d.ok===false){ self.toast('Aanmelden mislukt — probeer later opnieuw.'); } }); }
+  renderVals(){
+    const s=this.state;
+    const vw = (typeof window!=='undefined'?window.innerWidth:1280);
+    return {
+      authed: s.authed, notAuthed: (s.ready && !s.authed),
+      submit: ()=>this.submit(),
+      logout: ()=>this.logout(),
+      error: s.error, hasError: !!s.error,
+      userName: s.userName||'', userInitial: s.userInitial||'2',
+      bugClick:()=>this.openBug(), bugOpen:!!s.bugModal, bugScreen:s.bugModal?s.bugModal.si:'', bugReporter:s.bugModal?s.bugModal.reporter:'',
+      bugTitle:s.bugModal?s.bugModal.title:'', bugDesc:s.bugModal?s.bugModal.desc:'',
+      bugFiles:(s.bugModal?(s.bugModal.files||[]):[]).map((f,i)=>({name:f.n, remove:()=>this.removeBugFile(i)})),
+      closeBug:()=>this.closeBug(), stopBug:(e)=>{e.stopPropagation();},
+      setBugTitle:(e)=>this.setBug('title',e.target.value), setBugDesc:(e)=>this.setBug('desc',e.target.value),
+      addBugFile:()=>this.addBugFile(), submitBug:()=>this.submitBug(),
+      showToast:!!s.toast, toastMsg:s.toast||'',
+      cardCols: vw<760 ? '1fr' : 'repeat(2,1fr)',
+      envs: [
+        {
+          title:'27CRM', tag:'Sales · Klanten · Projecten', href:'/crm/', target:'_self', icon:'building-2',
+          bg:'#F7F3EA', border:'rgba(247,243,234,.0)', orb:'radial-gradient(circle,rgba(40,175,249,.14),transparent 70%)',
+          iconBg:'#0F2EA3', iconFg:'#fff', titleColor:'#050A30', subColor:'#5E5A4F', bodyColor:'#5E5A4F', checkColor:'#1D8A5B',
+          ctaBg:'#050A30', ctaFg:'#fff',
+          desc:'Het commerciële hart: bedrijven, contacten, offertes, meetings en projectbriefings — met AI onder elke discipline.',
+          points:['Offertes opvolgen met sales-stappen','Meeting-transcripties & recap-mails','Bruidsparen van 27M apart beheerd']
+        },
+        {
+          title:'27HR', tag:'Recruitment · Onboarding', href:'/hr/', target:'_self', icon:'users-round',
+          bg:'linear-gradient(155deg,#0B1550,#0F2EA3)', border:'rgba(40,175,249,.28)', orb:'radial-gradient(circle,rgba(209,242,76,.16),transparent 70%)',
+          iconBg:'#D1F24C', iconFg:'#050A30', titleColor:'#F7F3EA', subColor:'rgba(247,243,234,.6)', bodyColor:'rgba(247,243,234,.74)', checkColor:'#D1F24C',
+          ctaBg:'#D1F24C', ctaFg:'#050A30',
+          desc:'Het HR-orchestratieplatform: vacatures, kandidatenpijplijn, agenda en onboarding — volledig AI-ondersteund.',
+          points:['Vacatures op meerdere kanalen','Kandidaten-pijplijn met AI-match','Agenda & onboardingstrajecten']
+        },
+        {
+          title:'27Finance', tag:'Offertes · Cijfers · Facturatie', href:'/finance/', target:'_self', icon:'line-chart',
+          bg:'#F7F3EA', border:'rgba(247,243,234,.0)', orb:'radial-gradient(circle,rgba(40,175,249,.18),transparent 70%)',
+          iconBg:'#28AFF9', iconFg:'#050A30', titleColor:'#050A30', subColor:'#5E5A4F', bodyColor:'#5E5A4F', checkColor:'#1D8A5B',
+          ctaBg:'#050A30', ctaFg:'#fff',
+          desc:'Het financiële beeld van de groep: offertes uit PandaDoc, won/lost en conversie, facturatie en cijfers per merk — met AI-adviseurs.',
+          points:['Pipeline & conversie live','Facturatie en cashflow-voorstel','AI-adviseurs voor finance & sales']
+        },
+        {
+          title:'27Productie', tag:'Taken · Planning · Capaciteit', href:'/productie/', target:'_self', icon:'square-kanban',
+          bg:'linear-gradient(155deg,#0B1550,#0F2EA3)', border:'rgba(40,175,249,.28)', orb:'radial-gradient(circle,rgba(209,242,76,.16),transparent 70%)',
+          iconBg:'#D1F24C', iconFg:'#050A30', titleColor:'#F7F3EA', subColor:'rgba(247,243,234,.6)', bodyColor:'rgba(247,243,234,.74)', checkColor:'#D1F24C',
+          ctaBg:'#D1F24C', ctaFg:'#050A30',
+          desc:'De werkvloer van de groep: alle taken per discipline — web, video, social, ads, automations en meer — met board, kalender en sleepbare weekplanner.',
+          points:['Board, kalender & weekplanner','Statusflow met klant-feedbackrondes','Teamlid- én managerweergave']
+        },
+        {
+          title:'27Marketing', tag:'Klantenportaal · Reviews · Content', href:'https://portaal.studio27.be', target:'_blank', icon:'megaphone',
+          bg:'#F7F3EA', border:'rgba(247,243,234,.0)', orb:'radial-gradient(circle,rgba(126,154,85,.18),transparent 70%)',
+          iconBg:'#1D8A5B', iconFg:'#fff', titleColor:'#050A30', subColor:'#5E5A4F', bodyColor:'#5E5A4F', checkColor:'#1D8A5B',
+          ctaBg:'#050A30', ctaFg:'#fff',
+          desc:'Het klantenportaal van de groep: waar klanten reviews achterlaten, content goedkeuren en hun lopende trajecten volgen.',
+          points:['Klanten keuren content goed','Reviews & feedbackrondes','Inzicht in lopende trajecten']
+        }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

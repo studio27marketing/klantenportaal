@@ -1,0 +1,255 @@
+/* =============================================================
+   27 Automations — Color & Type Foundations
+   Brand: Studio 27 / 27 Automations (Belgian AI automation studio)
+   Source: Stylesheet v2 (Outfit Light + Off-Black + decorative shapes)
+   ============================================================= */
+
+/* Brand font: Outfit (variable, 100–900) — bundled locally from uploaded TTF.
+   Light (300) is the brand specimen weight; Regular/Medium/Semibold used
+   for hierarchy. JetBrains Mono loaded from Google Fonts for the mono slot. */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+
+@font-face {
+  font-family: 'Outfit';
+  src: url('fonts/Outfit-VariableFont_wght.ttf') format('truetype-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* ---------- BRAND COLORS (Stylesheet v2) ---------- */
+  --brand-deep-blue:   #0F2EA3;   /* C100 M92 Y0  K0 — primary blue */
+  --brand-off-black:   #050A30;   /* C94  M88 Y48 K64 — darkest, near-black navy */
+  --brand-azure-blue:  #2458EA;   /* C82  M67 Y0  K0 — action / link / the "pipe" */
+  --brand-bright-blue: #1D58FF;   /* brighter azure used in pipe nodes / accents */
+  --brand-sky-blue:    #28AFF9;   /* C65  M17 Y0  K0 — accent */
+  --brand-lemon-lime:  #D1F24C;   /* C23  M0  Y84 K0 — pop / highlight */
+  --brand-warm-white:  #F7F3EA;   /* C2   M3  Y7  K0 — paper / canvas */
+  --brand-ink:         #050A30;   /* = Off-Black, anchor for text on light */
+
+  /* Brand gradient — the "27" numeral runs Deep Blue → Sky Blue.
+     Use ONLY on the numeral / small brand accents, never on large fills. */
+  --brand-gradient: linear-gradient(100deg, #0F2EA3 0%, #2458EA 45%, #28AFF9 100%); /* @kind color */
+
+  /* ---------- NEUTRAL SCALE (warm-leaning, off the warm-white base) ---------- */
+  --neutral-0:   #FFFFFF;
+  --neutral-50:  #F7F3EA;   /* = warm white */
+  --neutral-100: #EFEADD;
+  --neutral-200: #DFD9C8;
+  --neutral-300: #C4BEAC;
+  --neutral-400: #8E8979;
+  --neutral-500: #5E5A4F;
+  --neutral-600: #3D3A33;
+  --neutral-700: #26241F;
+  --neutral-800: #161512;
+  --neutral-900: #050A30;   /* = Off-Black */
+
+  /* ---------- SEMANTIC FOREGROUND / BACKGROUND ----------
+     Two valid dark surfaces:
+       --bg-inverse  (Deep Blue)  — vivid, branded, for hero / signature panels
+       --bg-ink      (Off-Black)  — quieter, near-black, for body-copy sections,
+                                    code, photography overlays                       */
+  --bg:           var(--brand-warm-white);
+  --bg-elevated:  #FFFFFF;
+  --bg-subtle:    var(--neutral-100);
+  --bg-inverse:   var(--brand-deep-blue);
+  --bg-ink:       var(--brand-off-black);
+
+  --fg:           var(--brand-ink);          /* primary text on light */
+  --fg-muted:     var(--neutral-500);
+  --fg-subtle:    var(--neutral-400);
+  --fg-on-blue:   var(--brand-warm-white);   /* text on Deep Blue / Off-Black */
+  --fg-on-lime:   var(--brand-off-black);    /* text on Lime */
+
+  --border:       var(--neutral-200);
+  --border-strong:var(--neutral-300);
+  --border-ink:   var(--brand-off-black);
+
+  /* ---------- GLASS / FROSTED SURFACES ----------
+     The site's signature "glass look": translucent panels with a backdrop
+     blur, sitting over photography or over a Deep-Blue + pipe-motif field.
+     Pair the *-bg with --glass-blur on backdrop-filter, the matching
+     *-border (1px) and *-shadow. Three contexts:
+       photo  — dark frost over imagery (hero text box)
+       blue   — lighter-blue frost over Deep-Blue/pipe panels (feature cards)
+       light  — warm frost over the warm-white canvas (nav bar)            */
+  --glass-blur:          blur(16px); /* @kind other */
+  --glass-photo-bg:      rgba(5, 10, 48, 0.34);
+  --glass-photo-border:  rgba(247, 243, 234, 0.18);
+  --glass-blue-bg:       rgba(86, 120, 240, 0.16);
+  --glass-blue-border:   rgba(160, 190, 255, 0.22);
+  --glass-light-bg:      rgba(255, 253, 248, 0.72);
+  --glass-light-border:  rgba(255, 255, 255, 0.6);
+  --glass-shadow:        0 8px 40px -12px rgba(5, 10, 48, 0.28); /* @kind shadow */
+
+  /* ---------- ACTION / LINK / FOCUS ---------- */
+  --link:         var(--brand-azure-blue);
+  --link-hover:   var(--brand-deep-blue);
+  --focus-ring:   var(--brand-azure-blue);
+
+  /* ---------- STATUS (semantic, palette-aligned) ---------- */
+  --success: #D1F24C;            /* = Lemon Lime */
+  --success-bg: #F4FBDB;
+  --success-fg: #4A6B0E;
+  --info:    #28AFF9;            /* = Sky Blue */
+  --info-bg: #E0F1FD;
+  --info-fg: #0F2EA3;
+  --warning: #C99410;
+  --warning-bg: #FBF1D9;
+  --warning-fg: #6B4D04;
+  --danger:  #B83A2A;
+  --danger-bg: #F7E0DB;
+  --danger-fg: #6E2218;
+
+  /* ---------- TYPOGRAPHY ----------
+     Brand specimen: "Outfit Light". One family, weight does the work.
+     Headlines lean light (300) for an airy, optimistic register;
+     UI/labels step up to 500/600 for clarity.                         */
+  --font-sans:    'Outfit', system-ui, -apple-system, Segoe UI, sans-serif;
+  --font-display: 'Outfit', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --fw-light:     300; /* @kind font */
+  --fw-regular:   400; /* @kind font */
+  --fw-medium:    500; /* @kind font */
+  --fw-semibold:  600; /* @kind font */
+  --fw-bold:      700; /* @kind font */
+
+  /* Type scale — display-leaning, generous (Outfit Light likes air) */
+  --fs-display-2xl: clamp(56px, 9vw, 128px); /* @kind font */
+  --fs-display-xl:  clamp(44px, 6vw, 88px); /* @kind font */
+  --fs-display-lg:  clamp(36px, 4.5vw, 64px); /* @kind font */
+  --fs-h1:          clamp(32px, 3.4vw, 48px); /* @kind font */
+  --fs-h2:          clamp(26px, 2.6vw, 36px); /* @kind font */
+  --fs-h3:          22px; /* @kind font */
+  --fs-h4:          18px; /* @kind font */
+  --fs-body-lg:     18px; /* @kind font */
+  --fs-body:        16px; /* @kind font */
+  --fs-body-sm:     14px; /* @kind font */
+  --fs-caption:     12px; /* @kind font */
+  --fs-eyebrow:     12px; /* @kind font */
+
+  --lh-tight:   1.02; /* @kind other */
+  --lh-snug:    1.15; /* @kind other */
+  --lh-normal:  1.5; /* @kind other */
+  --lh-loose:   1.65; /* @kind other */
+
+  --tracking-tight:   -0.015em; /* @kind other */
+  --tracking-display: -0.02em;
+  --tracking-normal:  0;
+  --tracking-eyebrow: 0.14em;
+
+  /* ---------- SPACING (4px base) ---------- */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+  --sp-12: 48px; --sp-16: 64px; --sp-20: 80px; --sp-24: 96px;
+  --sp-32: 128px;
+
+  /* ---------- RADIUS ----------
+     The website's "class look": large, soft, friendly rounding.
+     Cards default to --r-2xl (28px); buttons to --r-md (14px);
+     the nav bar / big containers use --r-3xl (40px).            */
+  --r-xs: 6px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 24px;
+  --r-2xl: 28px;
+  --r-3xl: 40px;
+  --r-pill: 999px;
+
+  /* ---------- SHADOWS ----------
+     The site uses very soft, low-contrast elevation — cards barely
+     lift off the warm-white canvas. Keep shadows gentle and diffuse. */
+  --shadow-xs: 0 1px 2px rgba(5, 10, 48, 0.04);
+  --shadow-sm: 0 2px 8px rgba(5, 10, 48, 0.05);
+  --shadow-md: 0 10px 30px -10px rgba(5, 10, 48, 0.08);
+  --shadow-lg: 0 24px 50px -18px rgba(5, 10, 48, 0.12);
+  --shadow-xl: 0 40px 80px -24px rgba(5, 10, 48, 0.16);
+  --shadow-card: 0 4px 24px -8px rgba(5, 10, 48, 0.06);  /* the default "class look" card lift */
+
+  /* ---------- MOTION ---------- */
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1); /* @kind other */
+  --ease-out:      cubic-bezier(0.16, 1, 0.3, 1); /* @kind other */
+  --ease-in:       cubic-bezier(0.7, 0, 0.84, 0); /* @kind other */
+  --dur-fast:   140ms; /* @kind other */
+  --dur-base:   220ms; /* @kind other */
+  --dur-slow:   420ms; /* @kind other */
+}
+
+/* =============================================================
+   SEMANTIC ELEMENT STYLES
+   ============================================================= */
+html { color-scheme: light; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-light);
+  line-height: var(--lh-normal);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, .h1 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h1);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-display);
+  font-weight: var(--fw-light);
+  margin: 0;
+}
+h2, .h2 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tracking-tight);
+  font-weight: var(--fw-light);
+  margin: 0;
+}
+h3, .h3 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  line-height: var(--lh-snug);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--tracking-tight);
+  margin: 0;
+}
+h4, .h4 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h4);
+  line-height: var(--lh-snug);
+  font-weight: var(--fw-medium);
+  margin: 0;
+}
+p { margin: 0; max-width: 65ch; text-wrap: pretty; }
+
+.display-2xl { font: var(--fw-light) var(--fs-display-2xl)/var(--lh-tight) var(--font-display); letter-spacing: var(--tracking-display); }
+.display-xl  { font: var(--fw-light) var(--fs-display-xl)/var(--lh-tight)  var(--font-display); letter-spacing: var(--tracking-display); }
+.display-lg  { font: var(--fw-light) var(--fs-display-lg)/var(--lh-tight)  var(--font-display); letter-spacing: var(--tracking-display); }
+
+.eyebrow {
+  font-size: var(--fs-eyebrow);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  font-weight: var(--fw-semibold);
+  color: var(--fg-muted);
+}
+
+.body-lg { font-size: var(--fs-body-lg); line-height: var(--lh-normal); font-weight: var(--fw-light); }
+.body    { font-size: var(--fs-body);    line-height: var(--lh-normal); font-weight: var(--fw-light); }
+.body-sm { font-size: var(--fs-body-sm); line-height: var(--lh-normal); font-weight: var(--fw-regular); color: var(--fg-muted); }
+.caption { font-size: var(--fs-caption); line-height: var(--lh-normal); font-weight: var(--fw-regular); color: var(--fg-subtle); }
+
+a       { color: var(--link); text-decoration: none; text-underline-offset: 3px; font-weight: var(--fw-medium); }
+a:hover { color: var(--link-hover); text-decoration: underline; }
+
+strong  { font-weight: var(--fw-semibold); }
+
+code, pre, kbd { font-family: var(--font-mono); font-size: 0.92em; }
+code { background: var(--neutral-100); padding: 2px 6px; border-radius: var(--r-xs); }
+
+::selection { background: var(--brand-lemon-lime); color: var(--brand-off-black); }
+
+:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: var(--r-xs); }

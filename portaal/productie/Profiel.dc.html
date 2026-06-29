@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{font-family:'Outfit',system-ui,sans-serif;background:#F7F3EA;color:#050A30;font-weight:300;-webkit-font-smoothing:antialiased;}
+  ::selection{background:#D1F24C;color:#050A30;}
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-thumb{background:#DFD9C8;border-radius:99px;border:3px solid #F7F3EA;}
+  @keyframes toastIn{from{opacity:0;transform:translate(-50%,16px);}to{opacity:1;transform:translate(-50%,0);}}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:6px;border-radius:99px;background:#E4DDCC;outline:none;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#050A30;cursor:pointer;border:3px solid #FFFDF8;box-shadow:0 1px 4px rgba(5,10,48,.3);}
+  [data-lucide]{width:1em;height:1em;}
+</style>
+</helmet>
+
+<div style="min-height:100vh;display:flex;flex-direction:column;">
+
+  <sc-if value="{{ showHeader }}" hint-placeholder-val="{{ true }}">
+  <header style="position:sticky;top:0;z-index:40;background:#050A30;color:#F7F3EA;padding:0 22px;height:66px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 20px -8px rgba(5,10,48,.5);">
+    <button onClick="{{ goBack }}" title="Terug" style="display:inline-flex;align-items:center;gap:8px;background:rgba(247,243,234,.08);border:1px solid rgba(247,243,234,.14);border-radius:10px;padding:8px 13px 8px 11px;cursor:pointer;color:#F7F3EA;font-family:inherit;font-size:13px;font-weight:600;" style-hover="background:rgba(247,243,234,.16);"><i data-lucide="arrow-left" style="font-size:16px;"></i>Terug</button>
+    <div style="width:1px;height:26px;background:rgba(247,243,234,.16);"></div>
+    <img src="assets/Icon-blue.svg" style="height:24px;" alt="27">
+    <span style="font-size:18px;font-weight:600;letter-spacing:-.015em;">Mijn profiel</span>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:10px;">
+      <span style="font-size:12px;color:rgba(247,243,234,.55);font-weight:500;">Profiel van</span>
+      <div style="display:flex;align-items:center;gap:8px;background:rgba(247,243,234,.08);border:1px solid rgba(247,243,234,.14);border-radius:10px;padding:7px 11px;">
+        <i data-lucide="user-round" style="font-size:15px;color:#D1F24C;"></i>
+        <select value="{{ userKey }}" onChange="{{ setUser }}" style="border:none;background:transparent;color:#F7F3EA;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;outline:none;">
+          <sc-for list="{{ userOpts }}" as="o" hint-placeholder-count="5">
+            <option value="{{ o.value }}" style="color:#050A30;">{{ o.label }}</option>
+          </sc-for>
+        </select>
+      </div>
+    </div>
+  </header>
+  </sc-if>
+
+  <main style="flex:1;max-width:1080px;width:100%;margin:0 auto;padding:{{ mainPad }};">
+
+    <!-- IDENTITY -->
+    <div style="display:flex;align-items:center;gap:20px;background:#050A30;border-radius:24px;padding:26px 30px;color:#F7F3EA;margin-bottom:26px;position:relative;overflow:hidden;">
+      <span style="width:74px;height:74px;border-radius:50%;background:{{ avatarColor }};color:#fff;display:grid;place-items:center;font-size:26px;font-weight:700;flex:none;letter-spacing:.01em;">{{ initials }}</span>
+      <div style="flex:1;min-width:0;">
+        <h1 style="font-size:27px;font-weight:400;letter-spacing:-.01em;margin:0 0 8px;">{{ fullName }}</h1>
+        <div style="display:flex;flex-wrap:wrap;gap:9px;align-items:center;">
+          <span style="font-size:12.5px;font-weight:600;background:#D1F24C;color:#050A30;border-radius:99px;padding:5px 13px;">{{ role }}</span>
+          <span style="font-size:12.5px;font-weight:500;background:rgba(247,243,234,.1);border:1px solid rgba(247,243,234,.16);border-radius:99px;padding:5px 13px;display:inline-flex;align-items:center;gap:6px;"><i data-lucide="building-2" style="font-size:13px;"></i>{{ org }}</span>
+          <span style="font-size:13px;color:rgba(247,243,234,.65);display:inline-flex;align-items:center;gap:6px;"><i data-lucide="mail" style="font-size:14px;"></i>{{ email }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABS -->
+    <div style="display:flex;gap:6px;background:#EFEADD;border-radius:14px;padding:5px;margin-bottom:26px;width:fit-content;flex-wrap:wrap;">
+      <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3">
+        <button onClick="{{ t.pick }}" style="{{ t.style }}"><i data-lucide="{{ t.icon }}" style="font-size:16px;"></i>{{ t.label }}</button>
+      </sc-for>
+    </div>
+
+    <sc-if value="{{ tabPayroll }}" hint-placeholder-val="{{ true }}">
+    <!-- VERLOFSALDO -->
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap;">
+      <div>
+        <div style="font-size:11.5px;letter-spacing:.13em;text-transform:uppercase;font-weight:600;color:#8E8979;">Verlofsaldo</div>
+        <h2 style="font-size:22px;font-weight:300;letter-spacing:-.01em;margin:3px 0 0;">Mijn beschikbaarheid · {{ year }}</h2>
+      </div>
+      <button onClick="{{ requestLeave }}" style="font-family:inherit;font-size:13px;font-weight:600;background:#050A30;color:#fff;border:none;border-radius:11px;padding:10px 16px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;" style-hover="background:#0F2EA3;"><i data-lucide="plus" style="font-size:16px;"></i>Verlof aanvragen</button>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px;">
+      <sc-for list="{{ balances }}" as="b" hint-placeholder-count="3">
+        <div style="background:#FFFDF8;border-radius:20px;padding:22px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06);display:flex;align-items:center;gap:18px;opacity:{{ b.opacity }};">
+          <div style="width:92px;height:92px;border-radius:50%;background:{{ b.ring }};display:grid;place-items:center;flex:none;">
+            <div style="width:70px;height:70px;border-radius:50%;background:#FFFDF8;display:grid;place-items:center;">
+              <span style="font-size:26px;font-weight:600;color:{{ b.numColor }};line-height:1;">{{ b.big }}</span>
+            </div>
+          </div>
+          <div style="min-width:0;">
+            <div style="font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:{{ b.color }};display:inline-flex;align-items:center;gap:6px;margin-bottom:4px;"><i data-lucide="{{ b.icon }}" style="font-size:14px;"></i>{{ b.label }}</div>
+            <div style="font-size:14px;font-weight:500;color:#050A30;">{{ b.headline }}</div>
+            <div style="font-size:12.5px;color:#8E8979;margin-top:3px;">{{ b.sub }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:34px;align-items:start;">
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <sc-for list="{{ extras }}" as="e" hint-placeholder-count="3">
+          <div style="display:flex;align-items:center;gap:13px;background:#FFFDF8;border:1px solid #EFEADD;border-radius:14px;padding:13px 16px;">
+            <span style="width:36px;height:36px;border-radius:10px;background:{{ e.bg }};color:{{ e.col }};display:grid;place-items:center;flex:none;"><i data-lucide="{{ e.icon }}" style="font-size:18px;"></i></span>
+            <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">{{ e.label }}</div></div>
+            <span style="font-size:17px;font-weight:600;color:#050A30;">{{ e.value }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="background:#FFFDF8;border-radius:18px;padding:18px 20px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06);">
+        <div style="font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#A39E8E;margin-bottom:13px;">Geplande afwezigheden</div>
+        <div style="display:flex;flex-direction:column;gap:11px;">
+          <sc-for list="{{ planned }}" as="p" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <span style="width:9px;height:9px;border-radius:50%;background:{{ p.col }};flex:none;"></span>
+              <div style="flex:1;min-width:0;"><div style="font-size:13.5px;font-weight:500;">{{ p.type }}</div><div style="font-size:12px;color:#8E8979;">{{ p.dates }}</div></div>
+              <span style="font-size:11.5px;font-weight:600;color:{{ p.stCol }};background:{{ p.stBg }};border-radius:99px;padding:4px 11px;white-space:nowrap;">{{ p.status }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+
+    </sc-if>
+
+    <sc-if value="{{ tabAI }}" hint-placeholder-val="{{ false }}">
+    <!-- TONE OF VOICE -->
+    <div style="margin-bottom:14px;">
+      <div style="font-size:11.5px;letter-spacing:.13em;text-transform:uppercase;font-weight:600;color:#8E8979;">Persoonlijke AI</div>
+      <h2 style="font-size:22px;font-weight:300;letter-spacing:-.01em;margin:3px 0 4px;">Mijn tone of voice</h2>
+      <p style="font-size:13.5px;color:#5E5A4F;margin:0;max-width:620px;line-height:1.5;">De AI gebruikt deze voorkeuren wanneer ze in jouw naam schrijft — e-mails, vacatureteksten, offertes en social posts.</p>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1.15fr .85fr;gap:14px;align-items:start;">
+      <div style="background:#FFFDF8;border-radius:20px;padding:24px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06);display:flex;flex-direction:column;gap:22px;">
+
+        <div>
+          <div style="font-size:12.5px;font-weight:600;margin-bottom:9px;">Stijl-preset</div>
+          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:9px;">
+            <sc-for list="{{ presets }}" as="p" hint-placeholder-count="4">
+              <button onClick="{{ p.pick }}" style="{{ p.style }}"><span style="font-size:13.5px;font-weight:600;">{{ p.label }}</span><span style="font-size:11.5px;opacity:.7;margin-top:2px;">{{ p.desc }}</span></button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:9px;"><span style="font-weight:600;">Formeel</span><span style="font-weight:600;">Informeel</span></div>
+          <input type="range" min="0" max="100" value="{{ formeel }}" onInput="{{ setFormeel }}" style="width:100%;">
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:9px;"><span style="font-weight:600;">Beknopt</span><span style="font-weight:600;">Uitgebreid</span></div>
+          <input type="range" min="0" max="100" value="{{ uitgebreid }}" onInput="{{ setUitgebreid }}" style="width:100%;">
+        </div>
+
+        <div style="display:flex;gap:24px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:12.5px;font-weight:600;margin-bottom:9px;">Aanspreking</div>
+            <div style="display:flex;background:#F2EDE1;border-radius:11px;padding:4px;gap:4px;">
+              <button onClick="{{ setJe }}" style="{{ jeStyle }}">Je / jij</button>
+              <button onClick="{{ setU }}" style="{{ uStyle }}">U</button>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:12.5px;font-weight:600;margin-bottom:9px;">Emoji’s</div>
+            <button onClick="{{ toggleEmoji }}" style="{{ emojiStyle }}"><span style="width:9px;height:9px;border-radius:50%;background:{{ emojiDot }};"></span>{{ emojiLabel }}</button>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:12.5px;font-weight:600;margin-bottom:9px;">Beschrijf je stijl in eigen woorden</div>
+          <textarea value="{{ vrij }}" onInput="{{ setVrij }}" placeholder="bv. Warm en menselijk, geen jargon, korte zinnen, altijd met een concrete volgende stap." style="width:100%;min-height:84px;font-family:inherit;font-size:13.5px;line-height:1.55;color:#26241F;border:1px solid #E4DDCC;border-radius:12px;padding:12px 14px;background:#fff;resize:vertical;outline:none;"></textarea>
+        </div>
+
+        <div>
+          <div style="font-size:12.5px;font-weight:600;margin-bottom:9px;">Standaard handtekening</div>
+          <textarea value="{{ sign }}" onInput="{{ setSign }}" style="width:100%;min-height:64px;font-family:inherit;font-size:13.5px;line-height:1.55;color:#26241F;border:1px solid #E4DDCC;border-radius:12px;padding:12px 14px;background:#fff;resize:vertical;outline:none;"></textarea>
+        </div>
+
+        <button onClick="{{ saveTone }}" style="align-self:flex-start;font-family:inherit;font-size:13.5px;font-weight:600;background:#D1F24C;color:#050A30;border:none;border-radius:12px;padding:11px 20px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;" style-hover="background:#c2e63d;"><i data-lucide="check" style="font-size:16px;"></i>Tone of voice opslaan</button>
+      </div>
+
+      <div style="position:sticky;top:84px;background:#050A30;border-radius:20px;padding:22px;color:#F7F3EA;">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px;"><span style="width:30px;height:30px;border-radius:9px;background:#D1F24C;color:#050A30;display:grid;place-items:center;"><i data-lucide="sparkles" style="font-size:16px;"></i></span><span style="font-size:14px;font-weight:600;">AI-voorbeeld</span></div>
+        <div style="font-size:11.5px;color:rgba(247,243,234,.5);margin-bottom:10px;">Zo schrijft de AI in jouw naam:</div>
+        <div style="background:rgba(247,243,234,.06);border:1px solid rgba(247,243,234,.1);border-radius:14px;padding:16px 17px;font-size:13.5px;line-height:1.62;color:#EDEAE0;white-space:pre-line;">{{ preview }}</div>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ tabNotif }}" hint-placeholder-val="{{ false }}">
+    <!-- NOTIFICATIES -->
+    <div style="margin-bottom:14px;">
+      <div style="font-size:11.5px;letter-spacing:.13em;text-transform:uppercase;font-weight:600;color:#8E8979;">Voorkeuren</div>
+      <h2 style="font-size:22px;font-weight:300;letter-spacing:-.01em;margin:3px 0 4px;">Notificaties</h2>
+      <p style="font-size:13.5px;color:#5E5A4F;margin:0;max-width:640px;line-height:1.5;">Kies per soort melding via welke weg je verwittigd wil worden — push, WhatsApp of e-mail. Wijzigingen worden meteen bewaard.</p>
+    </div>
+    <div style="background:#FFFDF8;border-radius:20px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06);overflow:hidden;">
+      <sc-for list="{{ notifRows }}" as="r" hint-placeholder-count="5">
+        <div style="display:flex;align-items:center;gap:16px;padding:16px 18px;border-top:1px solid #F2EDE1;flex-wrap:wrap;">
+          <div style="flex:1;min-width:200px;">
+            <div style="font-size:14px;font-weight:600;color:#050A30;">{{ r.label }}</div>
+            <div style="font-size:12.5px;color:#8E8979;margin-top:2px;">{{ r.desc }}</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <sc-for list="{{ r.channels }}" as="c" hint-placeholder-count="3">
+              <button onClick="{{ c.toggle }}" style="{{ c.style }}"><i data-lucide="{{ c.icon }}" style="font-size:15px;"></i>{{ c.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px;background:#FFFDF8;border:1px solid #EFEADD;border-radius:14px;padding:14px 16px;margin-top:14px;max-width:520px;">
+      <span style="width:36px;height:36px;border-radius:10px;background:#E4F7E9;color:#1E7C4A;display:grid;place-items:center;flex:none;"><i data-lucide="phone" style="font-size:18px;"></i></span>
+      <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">WhatsApp-nummer</div><div style="font-size:12px;color:#8E8979;">Voor meldingen via WhatsApp</div></div>
+      <input value="{{ waNumber }}" onInput="{{ setWa }}" placeholder="+32 4.." style="width:160px;font-family:inherit;font-size:13.5px;color:#26241F;border:1px solid #E4DDCC;border-radius:10px;padding:9px 12px;background:#fff;outline:none;" />
+    </div>
+    </sc-if>
+  </main>
+
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:90;background:#050A30;color:#F7F3EA;padding:14px 20px;border-radius:14px;box-shadow:0 20px 50px -18px rgba(5,10,48,.6);font-size:13.5px;font-weight:500;display:flex;align-items:center;gap:10px;animation:toastIn .25s cubic-bezier(.16,1,.3,1);"><i data-lucide="check-circle-2" style="font-size:18px;color:#D1F24C;"></i>{{ toast }}</div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  PEOPLE(){return {
+    Vincent:{full:'Vincent Verleije', role:'Zaakvoerder', org:'Studio 27', email:'vincent@studio27.be', vak:[20,11], feest:[10,5], jeugd:[0,0], recup:3, ziekte:1},
+    Arne:{full:'Arne Claes', role:'Sales / Ads', org:'Studio 27', email:'arne@studio27.be', vak:[20,8], feest:[10,4], jeugd:[0,0], recup:2, ziekte:0},
+    Ilke:{full:'Ilke Meeusen', role:'Account manager', org:'Studio 27', email:'ilke@studio27.be', vak:[20,12], feest:[10,5], jeugd:[0,0], recup:1, ziekte:2},
+    Johanna:{full:'Johanna Peeters', role:'Adverteerder', org:'Studio 27', email:'johanna@studio27.be', vak:[20,6], feest:[10,4], jeugd:[0,0], recup:0, ziekte:1},
+    Klaas:{full:'Klaas Govaerts', role:'Automations & support', org:'27 Automations', email:'klaas@27automations.be', vak:[20,9], feest:[10,5], jeugd:[0,0], recup:2, ziekte:0},
+    Guus:{full:'Guus Janssens', role:'Content-creator', org:'27M', email:'guus@27m.be', vak:[20,5], feest:[10,4], jeugd:[5,2], recup:1, ziekte:0},
+    Bjorn:{full:'Bjorn Borgers', role:'Editor', org:'27M', email:'bjorn@27m.be', vak:[20,7], feest:[10,5], jeugd:[0,0], recup:1, ziekte:1},
+    Ines:{full:'Ines De Cock', role:'Social', org:'27M', email:'ines@27m.be', vak:[20,10], feest:[10,5], jeugd:[0,0], recup:0, ziekte:0},
+    Viktor:{full:'Viktor Maes', role:'Content-creator', org:'27M', email:'viktor@27m.be', vak:[20,4], feest:[10,3], jeugd:[5,1], recup:0, ziekte:0},
+    Danique:{full:'Danique Wouters', role:'Content-creator', org:'27M', email:'danique@27m.be', vak:[20,6], feest:[10,4], jeugd:[5,3], recup:1, ziekte:0},
+    Anouk:{full:'Anouk de Hoon', role:'Designer', org:'Studio 27', email:'anouk@studio27.be', vak:[20,9], feest:[10,5], jeugd:[0,0], recup:2, ziekte:1},
+    Griet:{full:'Griet Smans', role:'Designer', org:'Studio 27', email:'griet@studio27.be', vak:[20,8], feest:[10,4], jeugd:[0,0], recup:1, ziekte:0},
+    Celien:{full:'Celien Bogaerts', role:'Boekhouding', org:'ZVD', email:'celien@zvd.be', vak:[20,11], feest:[10,5], jeugd:[0,0], recup:0, ziekte:2},
+  };}
+  PRESETS(){return {
+    warm:{label:'Warm & Kempisch', desc:'menselijk, dichtbij', formeel:25, uitgebreid:55, aanspreking:'je', emoji:true},
+    prof:{label:'Professioneel', desc:'helder, zakelijk', formeel:70, uitgebreid:55, aanspreking:'u', emoji:false},
+    speels:{label:'Speels', desc:'luchtig, energiek', formeel:15, uitgebreid:45, aanspreking:'je', emoji:true},
+    direct:{label:'Direct & kort', desc:'to the point', formeel:50, uitgebreid:20, aanspreking:'je', emoji:false},
+  };}
+  initials(full){const parts=String(full||'').trim().split(/\s+/).filter(w=>!/^(van|de|den|der|het)$/i.test(w));const a=(parts[0]||'')[0]||'';const b=(parts[1]||parts[0]||'').slice(0,1);return (a+(parts.length>1?b:(parts[0]||'').slice(1,2))).toUpperCase();}
+  personColor(n){const pal=['#0F2EA3','#2458EA','#28AFF9','#7FA830','#C99410','#B0432F','#6E8BF5','#4A6B0E'];let s=0;const str=String(n||'');for(let i=0;i<str.length;i++)s+=str.charCodeAt(i);return pal[s%pal.length];}
+
+  state = { userKey:'Vincent', tone:null, toast:null, tab:'payroll', notif:null, wa:'' };
+
+  resolveUser(){
+    const PE=this.PEOPLE();
+    let key=null;
+    try{ const u=new URLSearchParams(location.search).get('user'); if(u){ const m=Object.keys(PE).find(k=>k.toLowerCase()===u.toLowerCase()); if(m) key=m; } }catch(e){}
+    if(!key){ try{ const a=JSON.parse(localStorage.getItem('s27_auth')||'{}'); const fn=String(a.name||'').trim().split(/\s+/)[0]; const m=Object.keys(PE).find(k=>k.toLowerCase()===fn.toLowerCase()); if(m) key=m; }catch(e){} }
+    return key||'Vincent';
+  }
+  loadTone(key){
+    const def={ preset:'warm', formeel:25, uitgebreid:55, aanspreking:'je', emoji:true, vrij:'', sign:'Met vriendelijke groet,\n'+(this.PEOPLE()[key]?this.PEOPLE()[key].full:key) };
+    try{ const raw=localStorage.getItem('s27_tone_'+key); if(raw){ return Object.assign({}, def, JSON.parse(raw)); } }catch(e){}
+    return def;
+  }
+  matchKey(name){ const PE=this.PEOPLE(); const n=String(name||'').trim(); if(!n) return null;
+    let m=Object.keys(PE).find(k=>k.toLowerCase()===n.toLowerCase()); if(m) return m;
+    const fn=n.split(/\s+/)[0]; m=Object.keys(PE).find(k=>k.toLowerCase()===fn.toLowerCase()); if(m) return m;
+    m=Object.keys(PE).find(k=>PE[k].full.toLowerCase()===n.toLowerCase()); return m||null; }
+  componentDidMount(){ const key=(this.props&&this.props.embedded&&this.props.user&&this.matchKey(this.props.user))||this.resolveUser(); this.setState({ userKey:key, tone:this.loadTone(key), notif:this.loadNotif(key), wa:this.loadWa(key) }); this._icons(); }
+  componentDidUpdate(){ this._icons(); }
+  _icons(){ if(typeof window!=='undefined' && window.lucide){ try{ window.lucide.createIcons(); }catch(e){} } }
+
+  NOTIF_TYPES(){return [
+    {key:'taken',label:'Taken & deadlines',desc:'Nieuwe toewijzingen en naderende deadlines'},
+    {key:'chat',label:'Chatvermeldingen',desc:'Wanneer iemand je @vermeldt in een gesprek'},
+    {key:'verlof',label:'Verlofstatus',desc:'Goedgekeurd of afgewezen door HR'},
+    {key:'klant',label:'Klantactiviteit',desc:'Nieuwe offertes, klantberichten en feedback'},
+    {key:'weekly',label:'Wekelijks overzicht',desc:'Elke maandagochtend een samenvatting'},
+  ];}
+  CHANNELS(){return [{key:'push',label:'Push',icon:'bell'},{key:'whatsapp',label:'WhatsApp',icon:'message-circle'},{key:'mail',label:'E-mail',icon:'mail'}];}
+  defNotif(){return {taken:{push:true,whatsapp:false,mail:true},chat:{push:true,whatsapp:false,mail:false},verlof:{push:true,whatsapp:true,mail:true},klant:{push:false,whatsapp:false,mail:true},weekly:{push:false,whatsapp:false,mail:true}};}
+  loadNotif(key){try{const r=localStorage.getItem('s27_notif_'+key);if(r)return Object.assign(this.defNotif(),JSON.parse(r));}catch(e){}return this.defNotif();}
+  saveNotif(){const key=this.state.userKey;try{localStorage.setItem('s27_notif_'+key,JSON.stringify(this.state.notif));}catch(e){}}
+  toggleNotif(typeKey,chKey){this.setState(s=>{const n=JSON.parse(JSON.stringify(s.notif||this.defNotif()));n[typeKey]=n[typeKey]||{};n[typeKey][chKey]=!n[typeKey][chKey];return {notif:n};},()=>this.saveNotif());}
+  loadWa(key){try{return localStorage.getItem('s27_wa_'+key)||'';}catch(e){return '';}}
+  setWa(e){const v=e.target.value;this.setState({wa:v});try{localStorage.setItem('s27_wa_'+this.state.userKey,v);}catch(_){}}
+
+  goBack(){ if(typeof window!=='undefined'){ if(history.length>1) history.back(); else window.location.href='/'; } }
+  setUser(e){ const key=e.target.value; this.setState({ userKey:key, tone:this.loadTone(key), notif:this.loadNotif(key), wa:this.loadWa(key) }); }
+  setTone(patch){ this.setState(s=>({ tone:Object.assign({}, s.tone, patch) })); }
+  pickPreset(k){ const p=this.PRESETS()[k]; this.setTone({ preset:k, formeel:p.formeel, uitgebreid:p.uitgebreid, aanspreking:p.aanspreking, emoji:p.emoji }); }
+  saveTone(){ const key=this.state.userKey; try{ localStorage.setItem('s27_tone_'+key, JSON.stringify(this.state.tone)); }catch(e){} this.flash('Tone of voice opgeslagen'); }
+  requestLeave(){ this.flash('Verlofaanvraag geopend — HR ontvangt je aanvraag'); }
+  flash(msg){ this.setState({toast:msg}); clearTimeout(this._tt); this._tt=setTimeout(()=>this.setState({toast:null}),2600); }
+
+  ringFor(arr, color){ const total=arr[0], used=arr[1], rest=total-used; const pct= total>0? Math.round(rest/total*100):0; return { total, used, rest, ring:'conic-gradient('+color+' '+pct+'%, #ECE7DA 0)' }; }
+
+  renderVals(){
+    const s=this.state; const PE=this.PEOPLE();
+    const key=s.userKey||'Vincent'; const u=PE[key]||PE.Vincent;
+    const tone=s.tone||this.loadTone(key);
+
+    const tab=s.tab||'payroll';
+    const TT=[['payroll','Payroll','palmtree'],['ai','AI-voorkeuren','sparkles'],['notif','Notificaties','bell']];
+    const tabs=TT.map(t=>{const on=tab===t[0];return {label:t[1],icon:t[2],pick:()=>this.setState({tab:t[0]}),
+      style:'display:inline-flex;align-items:center;gap:8px;font-family:inherit;font-size:13px;font-weight:600;border:none;cursor:pointer;border-radius:10px;padding:9px 16px;background:'+(on?'#050A30':'transparent')+';color:'+(on?'#F7F3EA':'#5E5A4F')+';'};});
+    const notif=s.notif||this.defNotif();const CH=this.CHANNELS();
+    const notifRows=this.NOTIF_TYPES().map(t=>({label:t.label,desc:t.desc,channels:CH.map(c=>{const on=!!(notif[t.key]&&notif[t.key][c.key]);return {label:c.label,icon:c.icon,toggle:()=>this.toggleNotif(t.key,c.key),
+      style:'display:inline-flex;align-items:center;gap:7px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;border-radius:10px;padding:8px 13px;border:1.5px solid '+(on?'#0F2EA3':'#E4DDCC')+';background:'+(on?'#ECF0FF':'#fff')+';color:'+(on?'#0F2EA3':'#9A958A')+';'};})}));
+
+    const userOpts=Object.keys(PE).map(k=>({ value:k, label:PE[k].full }));
+
+    const vak=this.ringFor(u.vak,'#2458EA');
+    const feest=this.ringFor(u.feest,'#C99410');
+    const jeugd=this.ringFor(u.jeugd,'#4A6B0E');
+    const balances=[
+      { label:'Vakantiedagen', icon:'palmtree', color:'#2458EA', numColor:'#050A30', ring:vak.ring, big:vak.rest, headline:vak.rest+' dagen beschikbaar', sub:vak.used+' van '+vak.total+' opgenomen', opacity:1 },
+      { label:'Feestdagen', icon:'party-popper', color:'#9A7308', numColor:'#050A30', ring:feest.ring, big:feest.rest, headline:feest.rest+' dagen beschikbaar', sub:feest.used+' van '+feest.total+' opgenomen', opacity:1 },
+      u.jeugd[0]>0
+        ? { label:'Jeugdvakantie', icon:'sun', color:'#4A6B0E', numColor:'#050A30', ring:jeugd.ring, big:jeugd.rest, headline:jeugd.rest+' dagen beschikbaar', sub:jeugd.used+' van '+jeugd.total+' opgenomen', opacity:1 }
+        : { label:'Jeugdvakantie', icon:'sun', color:'#8E8979', numColor:'#A39E8E', ring:'conic-gradient(#ECE7DA 100%, #ECE7DA 0)', big:'—', headline:'Niet van toepassing', sub:'Geldt voor wie pas startte op de arbeidsmarkt', opacity:.7 },
+    ];
+
+    const extras=[
+      { label:'Recupdagen beschikbaar', icon:'rotate-ccw', bg:'#F4FBDB', col:'#4A6B0E', value:u.recup },
+      { label:'Ziektedagen dit jaar', icon:'thermometer', bg:'#FBE9E4', col:'#B0432F', value:u.ziekte },
+      { label:'Onbetaald verlof', icon:'circle-dollar-sign', bg:'#EAE4D5', col:'#8E8979', value:0 },
+    ];
+
+    const planned=[
+      { type:'Vakantie', dates:'14 – 18 jul', col:'#2458EA', status:'Goedgekeurd', stCol:'#4A6B0E', stBg:'#F4FBDB' },
+      { type:'Recupdag', dates:'8 aug', col:'#4A6B0E', status:'Goedgekeurd', stCol:'#4A6B0E', stBg:'#F4FBDB' },
+      { type:'Brugdag · O.L.V. Hemelvaart', dates:'15 aug', col:'#C99410', status:'Aangevraagd', stCol:'#6B4D04', stBg:'#FBF1D9' },
+    ];
+
+    const PR=this.PRESETS();
+    const presets=Object.keys(PR).map(k=>{ const p=PR[k]; const active=tone.preset===k; return { label:p.label, desc:p.desc, pick:()=>this.pickPreset(k),
+      style:'display:flex;flex-direction:column;align-items:flex-start;text-align:left;font-family:inherit;cursor:pointer;border-radius:13px;padding:12px 14px;border:1.5px solid '+(active?'#0F2EA3':'#E4DDCC')+';background:'+(active?'#ECF0FF':'#fff')+';color:'+(active?'#1E3A8A':'#5E5A4F')+';' }; });
+
+    const segBase='font-family:inherit;font-size:12.5px;font-weight:600;border:none;cursor:pointer;border-radius:9px;padding:8px 16px;';
+    const jeStyle=segBase+'background:'+(tone.aanspreking==='je'?'#050A30':'transparent')+';color:'+(tone.aanspreking==='je'?'#F7F3EA':'#5E5A4F')+';';
+    const uStyle=segBase+'background:'+(tone.aanspreking==='u'?'#050A30':'transparent')+';color:'+(tone.aanspreking==='u'?'#F7F3EA':'#5E5A4F')+';';
+    const emojiStyle='font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;border-radius:11px;padding:9px 15px;display:inline-flex;align-items:center;gap:9px;border:1.5px solid '+(tone.emoji?'#4A6B0E':'#E4DDCC')+';background:'+(tone.emoji?'#F4FBDB':'#fff')+';color:'+(tone.emoji?'#4A6B0E':'#5E5A4F')+';';
+
+    // live preview
+    const greet = tone.aanspreking==='u' ? 'Geachte mevrouw De Vries,' : 'Dag Lotte,';
+    const opener = tone.formeel>55 ? 'Hartelijk dank voor uw bericht.' : (tone.formeel<25 ? 'Toffe vraag, bedankt om te laten weten!' : 'Bedankt voor je berichtje!');
+    const core = tone.uitgebreid>60
+      ? 'We hebben alles met aandacht bekeken en bezorgen je hieronder graag een volledig overzicht van de mogelijkheden, met telkens de voor- en nadelen, zodat je een weloverwogen keuze kunt maken.'
+      : (tone.uitgebreid<30 ? 'We pakken dit op en komen er snel bij je op terug.' : 'We bekijken het en laten je binnenkort iets weten met een concreet voorstel.');
+    const emo = tone.emoji ? ' \uD83D\uDE0A' : '';
+    const preview = greet+'\n\n'+opener+' '+core+emo+'\n\n'+(tone.sign||'');
+
+    let embedded=!!(this.props&&this.props.embedded);
+    try{ if(typeof location!=='undefined' && new URLSearchParams(location.search).get('embed')) embedded=true; }catch(e){}
+    return {
+      showHeader:!embedded, mainPad: embedded?'4px 0 20px':'30px 24px 60px',
+      userKey:key, userOpts, setUser:(e)=>this.setUser(e),
+      fullName:u.full, role:u.role, org:u.org, email:u.email,
+      initials:this.initials(u.full), avatarColor:this.personColor(u.full),
+      year:'2026',
+      balances, extras, planned,
+      requestLeave:()=>this.requestLeave(),
+      presets,
+      formeel:tone.formeel, uitgebreid:tone.uitgebreid,
+      setFormeel:(e)=>this.setTone({formeel:Number(e.target.value), preset:'custom'}),
+      setUitgebreid:(e)=>this.setTone({uitgebreid:Number(e.target.value), preset:'custom'}),
+      setJe:()=>this.setTone({aanspreking:'je', preset:'custom'}), setU:()=>this.setTone({aanspreking:'u', preset:'custom'}),
+      jeStyle, uStyle,
+      toggleEmoji:()=>this.setTone({emoji:!tone.emoji, preset:'custom'}),
+      emojiStyle, emojiLabel: tone.emoji?'Aan':'Uit', emojiDot: tone.emoji?'#4A6B0E':'#C4BEAC',
+      vrij:tone.vrij||'', setVrij:(e)=>this.setTone({vrij:e.target.value}),
+      sign:tone.sign||'', setSign:(e)=>this.setTone({sign:e.target.value}),
+      saveTone:()=>this.saveTone(),
+      preview,
+      goBack:()=>this.goBack(),
+      toast:s.toast,
+      tabs, tabPayroll:tab==='payroll', tabAI:tab==='ai', tabNotif:tab==='notif',
+      notifRows, waNumber:s.wa||'', setWa:(e)=>this.setWa(e),
+    };
+  }
+}
+</script>
+</body>
+</html>

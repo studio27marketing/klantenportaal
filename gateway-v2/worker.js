@@ -51,9 +51,14 @@ import {
 import { handlePush, handlePushNotify } from './push.mjs';
 import { handleClickupHook } from './clickup-push.mjs';
 import * as vr from './videoreview.mjs';
+import * as fc from './feedbackcore.mjs';   // gestandaardiseerd feedback-systeem (pdf/audio/foto/office per-link)
 import * as rem from './reminders.mjs';
 import { handleShootLab } from './shootlab.mjs';
-import { TEAM_HANDLERS } from './teamportaal.mjs';
+import { TEAM_HANDLERS, computeCapaciteit, computeFinance, computeRendement, computeAllAiPlans, handleHealthIngest, warmSearchIndex, warmAdsOverview, warmAdsAdvies, mcpOauthCallback, hrMigrateFromClickup, hrApplyIntake, runHealthChecks, hrIngestCvsBatch, hrSyncInbox, opsGenerateFromOffertes, opsGenerateForOfferte, opsPayrollSeedTeam, opsPayrollImportLeaves, pandadocCreateProbe, pandadocDeleteById, webflowIntake, firefliesWebhook } from './teamportaal.mjs';
+import { offerteGet as _offerteGet } from './crmdb.mjs';
+import { aiCostsRollup, brusselsYmd } from './aicost.mjs';   // AI-kostenmonitor: nachtelijke dag-rollup
+import { crmSyncAll, crmSyncOffertes, pandadocSyncStatuses, pandadocHandleWebhook, pandadocCreateWebhook, pandadocCleanupWebhooks, crmSetOfferteCutoff } from './crm.mjs';   // CRM/Finance: ClickUp -> D1 + PandaDoc status (poll + live webhook + self-register) + transitie-cutoff
+import * as files from './files.mjs';   // centrale bestandenmodule: R2-multipart (tot 2GB) + externe links + magic links, gedeelde D1-tabel `files`
 
 // Video-review (frame-accurate klantfeedback op Bestanden-veld-video's): registratie
 // hier i.p.v. in handlers.mjs zodat de module zelfstandig blijft (zie videoreview.mjs).
@@ -63,6 +68,27 @@ WRITE_HANDLERS.videoReviewUpload = vr.videoReviewUpload;
 WRITE_HANDLERS.videoReviewSubmit = vr.videoReviewSubmit;
 WRITE_HANDLERS.videoReviewApprove = vr.videoReviewApprove;
 WRITE_HANDLERS.fotoApprove = vr.fotoApprove;
+// Gestandaardiseerd feedback-systeem (per-link review over alle bestandstypes)
+READ_HANDLERS.fileReviewContext = fc.fileReviewContext;
+WRITE_HANDLERS.fileReviewUpload = fc.fileReviewUpload;
+WRITE_HANDLERS.linkApprove = fc.linkApprove;
+WRITE_HANDLERS.linkFeedback = fc.linkFeedback;
+
+// Centrale bestandenmodule (per taak/offerte/bedrijf): TEAM-only (is_staff afgedwongen door de
+// isTeamApi-gate), gedeelde D1-tabel `files` + R2-bucket. De binaire deel-upload (/filespart) en de
+// publieke routes (/filebin, /f/<token>) staan los hieronder in de fetch-router.
+TEAM_HANDLERS.filesList = files.filesList;
+TEAM_HANDLERS.filesAddLink = files.filesAddLink;
+TEAM_HANDLERS.filesStart = files.filesStart;
+TEAM_HANDLERS.filesComplete = files.filesComplete;
+TEAM_HANDLERS.filesAbort = files.filesAbort;
+TEAM_HANDLERS.filesRename = files.filesRename;
+TEAM_HANDLERS.filesSetVisibility = files.filesSetVisibility;
+TEAM_HANDLERS.filesTrash = files.filesTrash;
+TEAM_HANDLERS.filesRestore = files.filesRestore;
+TEAM_HANDLERS.filesDelete = files.filesDelete;
+TEAM_HANDLERS.filesShareCreate = files.filesShareCreate;
+TEAM_HANDLERS.filesShareRevoke = files.filesShareRevoke;
 
 // Staff-only (is_staff) rijke-rapportage-handlers: gescoped op het acting-as-bedrijf, (bedrijfId, body, env).
 // webTraffic/webSearch = Webprestaties (GA4 + GSC); v1 team-only, later evt. naar READ_HANDLERS voor klanten.
@@ -138,7 +164,7 @@ const SENSITIVE = new Set([
   'uploadProject', 'uploadAlg', 'bedrijfUpload', 'huisstijlUpload', 'huisstijlDelete',
   'chatAttachment', 'chatPost', 'commsChatPost', 'commsChatAttachment', 'directMessage', 'feedbackV2', 'newProjectIntake',
   'facturatieSave', 'projectFacturatieSave', 'bedrijfVoorkeuren', 'bedrijfContact',
-  'bedrijfBeheer', 'inplannen', 'offerteGenereren', 'metricoolApprove', 'metricoolUpdate',
+  'bedrijfBeheer', 'inplannen', 'offerteGenereren', 'offerteAanvraag', 'metricoolApprove', 'metricoolUpdate',
   'metricoolMediaUpload', 'metricoolCreate', 'shootSubmit', 'meetingBook', 'ticketCreate', 'ticketAttach',
 ]);
 const LIMIT_SENSITIVE = 15; // per minuut, per gebruiker
@@ -236,7 +262,7 @@ function corsHeaders(origin, allowed) {
   return {
     'Access-Control-Allow-Origin': ok ? origin : (allowed[0] || '*'),
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-No-Cache, X-Act-As-Bedrijf',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-No-Cache, X-Act-As-Bedrijf, X-Act-As-Member',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',
   };
@@ -426,10 +452,14 @@ async function tryHandle(path, bedrijfId, body, claims, env, ctx, ch, noCache) {
   const swr = true;
   // READS (met KV-cache voor dashboard/bedrijfContent)
   if (READ_HANDLERS[path]) {
-    const cacheable = (path === 'dashboard' || path === 'bedrijfContent' || path === 'metricoolPostStats' || path === 'projectDetailV2');
+    const cacheable = (path === 'dashboard' || path === 'bedrijfContent' || path === 'metricoolPostStats' || path === 'projectDetailV2' || path === 'metaCampaignAds');
     const run = () => READ_HANDLERS[path](bedrijfId, body, env);
-    // detail-cache per project: task_id in de cache-key (anders delen alle projecten één entry)
-    const ckey = (path === 'projectDetailV2') ? (path + ':' + String((body && body.task_id) || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32)) : path;
+    // detail-cache per project: task_id in de cache-key (anders delen alle projecten één entry).
+    // ads-creatives per campagne: campaign_id in de key (anders overschrijven campagnes elkaars cache);
+    // creatives wijzigen zelden -> 60s vers / 5min stil verversen volstaat ruim en maakt heropenen instant.
+    const ckey = (path === 'projectDetailV2') ? (path + ':' + String((body && body.task_id) || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32))
+      : (path === 'metaCampaignAds') ? (path + ':' + String((body && body.campaign_id) || '').replace(/[^0-9]/g, '').slice(0, 25))
+      : path;
     const res = cacheable
       ? await withCache(env, ctx, ckey, bedrijfId, noCache, run, swr)
       : await run();
@@ -471,7 +501,7 @@ async function tryHandle(path, bedrijfId, body, claims, env, ctx, ch, noCache) {
     // writes op de bedrijf-taak bust de read-caches van dat bedrijf
     // (offerteGenereren voegt een offerte toe -> raakt dashboard/get_offertes-views;
     //  ticketCreate maakt een nieuw support-project -> klant moet het meteen onder Projecten zien)
-    if (path === 'bedrijfVoorkeuren' || path === 'facturatieSave' || path === 'bedrijfUpload' || path === 'offerteGenereren' || path === 'ticketCreate') {
+    if (path === 'bedrijfVoorkeuren' || path === 'facturatieSave' || path === 'bedrijfUpload' || path === 'offerteGenereren' || path === 'offerteAanvraag' || path === 'ticketCreate') {
       bustCache(env, ctx, bedrijfId);
     }
     return json(res.body, res.status, ch);
@@ -558,6 +588,15 @@ export default {
           headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*' },
         });
       }
+      if (_pub === 'teamversion' && request.method === 'GET') {
+        // publiek: versienummer van het TEAMPORTAAL (eigen teller, los van het klantportaal).
+        // Teamclients (ook PWA) pollen dit en herladen hard zodra het hoger is dan hun eigen versie.
+        let v = 0;
+        try { v = Number(await env.KV.get('team:appversion')) || 0; } catch (e) { v = 0; }
+        return new Response(JSON.stringify({ v }), {
+          headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*' },
+        });
+      }
       if (_pub === 'fotostream' && request.method === 'GET') {
         return vr.handleFotoStream(request, env);
       }
@@ -566,6 +605,45 @@ export default {
       }
       if (_pub === 'videofile' && request.method === 'GET') {
         return vr.handleVideoFile(request, env);
+      }
+      // HR-dossierdocumenten (contract/case ...): R2-serve met HMAC-token (prefix hf),
+      // gemint door de HR-handlers ná admin-auth. Publiek/GET zoals de andere file-routes.
+      if (_pub === 'hrfile' && request.method === 'GET') {
+        return vr.handleHrFile(request, env);
+      }
+      // Centrale bestandenmodule: in-portaal kijk/download van een R2-bestand (HMAC-token prefix bn,
+      // gemint door filesList ná staff-auth). Range-support voor grote bestanden/video.
+      if (_pub === 'filebin' && request.method === 'GET') {
+        return files.handleFileBin(request, env);
+      }
+      // Publieke magic link (/f/<token>): bekijken/downloaden zonder login. 302 voor externe links,
+      // anders R2-stream met Range. Token + status + vervaldatum worden in D1 gecheckt.
+      if (_pub.indexOf('f/') === 0 && request.method === 'GET') {
+        return files.handleFileShare(request, env);
+      }
+      // CORS-preflight voor de stream-routes: pdf.js haalt de PDF cross-origin op en
+      // stuurt bij Range-requests een OPTIONS-preflight (Range is geen safelisted header).
+      if ((_pub === 'docstream' || _pub === 'audiostream' || _pub === 'feedbackfile') && request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: {
+          'access-control-allow-origin': '*',
+          'access-control-allow-methods': 'GET, OPTIONS',
+          'access-control-allow-headers': 'Range, Content-Type',
+          'access-control-max-age': '86400',
+        } });
+      }
+      if (_pub === 'docstream' && request.method === 'GET') {        // PDF/Office-PDF (HMAC ds), inline + Range
+        return fc.handleDocStream(request, env);
+      }
+      if (_pub === 'audiostream' && request.method === 'GET') {      // audio (HMAC as), Range
+        return fc.handleAudioStream(request, env);
+      }
+      if (_pub === 'feedbackfile' && request.method === 'GET') {     // klant-bijlage (HMAC ff)
+        return fc.handleFeedbackFile(request, env);
+      }
+      // MCP OAuth-callback: de externe app keert hier terug na login (GET met code+state).
+      // Publiek (geen Firebase-auth mogelijk in een OAuth-redirect); beveiligd via de eenmalige state.
+      if (_pub === 'mcpoauthcb' && request.method === 'GET') {
+        return mcpOauthCallback(request, env);
       }
     }
     const allowed = String(env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -590,6 +668,162 @@ export default {
     if (path === 'push/notify') return handlePushNotify(request, env, ctx, ch);
     // ClickUp-webhook -> push (publiek, HMAC-SHA256 X-Signature geverifieerd, GEEN Firebase-token).
     if (path === 'clickup/hook') return handleClickupHook(request, env, ctx, ch);
+    // Binaire R2-multipart-deel-upload (grote bestanden tot 2GB). De JSON-router kan geen binaire body
+    // aan, dus deze route verifieert het Firebase-token zelf en eist is_staff (enkel teamportaal upload).
+    if (path === 'filespart' && request.method === 'POST') {
+      const _az = request.headers.get('Authorization') || '';
+      const _it = _az.startsWith('Bearer ') ? _az.slice(7).trim() : '';
+      let _fc; try { _fc = await verifyFirebaseToken(_it, env.PROJECT_ID); } catch (e) { return json({ ok: false, error: 'invalid_token' }, 401, ch); }
+      if (!_fc || _fc.is_staff !== true) return json({ ok: false, error: 'forbidden' }, 403, ch);
+      return files.handleFilePart(request, env, ch);
+    }
+    if (path === 'health/ingest') { const r = await handleHealthIngest(request, env); return json(r.body, r.status, ch); }   // Apple Health iOS-Shortcut → KV (secret-gated)
+    // Website-sollicitatie → D1 (key-gated; het Make-/Webflow-formulier post hierheen i.p.v. ClickUp).
+    if (path === 'hr/apply' && request.method === 'POST') {
+      if ((request.headers.get('X-Intake-Key') || '') !== 'apply-27hr-8c4f1a92') return json({ ok: false, error: 'forbidden' }, 403, ch);
+      let b = {}; try { b = await request.json(); } catch (e) { b = {}; }
+      try { const out = await hrApplyIntake(env, b); return json(out, out && out.ok ? 200 : 400, ch); } catch (e) { return json({ ok: false, error: String(e && e.message) }, 200, ch); }
+    }
+    // Eenmalige seed: projecten + taken genereren uit offertes (key-gated; verwijderen na gebruik).
+    if (path === 'ops/generate' && request.method === 'POST') {
+      if ((request.headers.get('X-Intake-Key') || '') !== 'ops-seed-27gen-7b21d9') return json({ ok: false, error: 'forbidden' }, 403, ch);
+      let b = {}; try { b = await request.json(); } catch (e) { b = {}; }
+      try { const out = await opsGenerateFromOffertes(env, b || {}); return json(out, out && out.ok ? 200 : 400, ch); } catch (e) { return json({ ok: false, error: String(e && e.message) }, 200, ch); }
+    }
+    // Key-gated: projecttaken genereren voor ÉÉN offerte (test/handmatig), met AI-briefing.
+    if (path === 'ops/gentask' && request.method === 'POST') {
+      if ((request.headers.get('X-Intake-Key') || '') !== 'ops-seed-27gen-7b21d9') return json({ ok: false, error: 'forbidden' }, 403, ch);
+      let b = {}; try { b = await request.json(); } catch (e) { b = {}; }
+      try {
+        const off = await _offerteGet(env, String((b && b.offerte_id) || ''));
+        if (!off) return json({ ok: false, error: 'no_offerte' }, 200, ch);
+        const out = await opsGenerateForOfferte(env, off, { briefing: b.briefing !== false });
+        return json(out, out && out.ok ? 200 : 400, ch);
+      } catch (e) { return json({ ok: false, error: String(e && e.message) }, 200, ch); }
+    }
+    // Eenmalige CRM-sync + relink (key-gated): bedrijven/contacten/offertes 1:1 uit ClickUp + koppelen.
+    if (path === 'crm/sync' && request.method === 'POST') {
+      if ((request.headers.get('X-Intake-Key') || '') !== 'ops-seed-27gen-7b21d9') return json({ ok: false, error: 'forbidden' }, 403, ch);
+      try { const out = await crmSyncAll(env, {}); return json({ ok: true, out }, 200, ch); } catch (e) { return json({ ok: false, error: String(e && e.message) }, 200, ch); }
+    }
+    // Enkel offertes opnieuw syncen (key-gated): owner=assignee herimporteren zonder de volledige relink.
+    if (path === 'crm/syncoff' && request.method === 'POST') {
+      if ((request.headers.get('X-Intake-Key') || '') !== 'ops-seed-27gen-7b21d9') return json({ ok: false, error: 'forbidden' }, 403, ch);
+      try { const out = await crmSyncOffertes(env); return json({ ok: true, out }, 200, ch); } catch (e) { return json({ ok: false, error: String(e && e.message) }, 200, ch); }
+    }
+    // Kandidaten importeren (key-gated): body {sinceDays, forceStatus}. Bv. laatste 2 maanden onder 'nieuw'.
+    if (path === 'hr/import' && request.method === 'POST') {
+      if ((request.headers.get('X-Intake-Key') || '') !== 'ops-seed-27gen-7b21d9') return json({ ok: false, error: 'forbidden' }, 403, ch);
+      let b = {}; try { b = await request.json(); } catch (e) { b = {}; }
+      try { const out = await hrMigrateFromClickup(env, b || {}); return json(out, out && out.ok ? 200 : 400, ch); } catch (e) { return json({ ok: false, error: String(e && e.message) }, 200, ch); }
+    }
+    // Payroll: teamleden seeden uit ClickUp -> D1 team_members (idempotent, bewaart aanvullingen). Key-gated.
+    if (path === 'ops/teamseed' && request.method === 'POST') {
+      if ((request.headers.get('X-Intake-Key') || '') !== 'ops-seed-27gen-7b21d9') return json({ ok: false, error: 'forbidden' }, 403, ch);
+      let b = {}; try { b = await request.json(); } catch (e) { b = {}; }
+      try { const out = await opsPayrollSeedTeam(env, b || {}); return json(out, out && out.ok ? 200 : 400, ch); } catch (e) { return json({ ok: false, error: String(e && e.message) }, 200, ch); }
+    }
+    // Payroll: bestaande ClickUp-afwezigheid (Payroll-lijst) importeren -> D1 leaves (idempotent). Key-gated.
+    if (path === 'ops/payrollimport' && request.method === 'POST') {
+      if ((request.headers.get('X-Intake-Key') || '') !== 'ops-seed-27gen-7b21d9') return json({ ok: false, error: 'forbidden' }, 403, ch);
+      let b = {}; try { b = await request.json(); } catch (e) { b = {}; }
+      try { const out = await opsPayrollImportLeaves(env, b || {}); return json(out, out && out.ok ? 200 : 400, ch); } catch (e) { return json({ ok: false, error: String(e && e.message) }, 200, ch); }
+    }
+    // Eenmalige/handmatige PandaDoc status-sync (key-gated): body {all:true} of {limit:n}.
+    if (path === 'crm/pandasync' && request.method === 'POST') {
+      if ((request.headers.get('X-Intake-Key') || '') !== 'ops-seed-27gen-7b21d9') return json({ ok: false, error: 'forbidden' }, 403, ch);
+      let b = {}; try { b = await request.json(); } catch (e) { b = {}; }
+      try { const out = await pandadocSyncStatuses(env, b || {}); return json(out, out && out.ok ? 200 : 400, ch); } catch (e) { return json({ ok: false, error: String(e && e.message) }, 200, ch); }
+    }
+    // Tijdelijke Fireflies-connectietest (key-gated; geeft enkel tellingen terug, geen transcript/key).
+    if (path === 'crm/fftest' && request.method === 'POST') {
+      if ((request.headers.get('X-Intake-Key') || '') !== 'ops-seed-27gen-7b21d9') return json({ ok: false, error: 'forbidden' }, 403, ch);
+      let b = {}; try { b = await request.json(); } catch (e) { b = {}; }
+      try {
+        let ffId = String((b && b.ffId) || '');
+        if (!ffId && b && b.id && env.CRMDB) { const m = await env.CRMDB.prepare('SELECT ff FROM meetings WHERE id=?').bind(String(b.id)).first(); ffId = (m && m.ff) ? String(m.ff) : ''; }
+        if (!env.FIREFLIES_API_KEY) return json({ ok: false, reason: 'no_key' }, 200, ch);
+        if (!ffId) return json({ ok: false, reason: 'no_ffid' }, 200, ch);
+        const q = { query: 'query T($id:String!){ transcript(id:$id){ id title duration sentences{ text } summary{ overview } } }', variables: { id: ffId } };
+        const r = await fetch('https://api.fireflies.ai/graphql', { method: 'POST', headers: { Authorization: 'Bearer ' + env.FIREFLIES_API_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(q) });
+        const d = await r.json().catch(() => ({}));
+        const t = d && d.data && d.data.transcript;
+        if (!t) return json({ ok: false, reason: 'fireflies_error', http: r.status, errors: (d && d.errors) || null }, 200, ch);
+        return json({ ok: true, titel: t.title, regels: (t.sentences || []).length, overviewLen: (t.summary && t.summary.overview ? t.summary.overview.length : 0), duur: t.duration || 0 }, 200, ch);
+      } catch (e) { return json({ ok: false, error: String(e && e.message) }, 200, ch); }
+    }
+    // Offerte-cutoff zetten (transitie ClickUp): nieuwe ClickUp/Make-offertes niet in het portaal.
+    if (path === 'crm/offcutoff' && request.method === 'POST') {
+      if ((request.headers.get('X-Intake-Key') || '') !== 'ops-seed-27gen-7b21d9') return json({ ok: false, error: 'forbidden' }, 403, ch);
+      let b = {}; try { b = await request.json(); } catch (e) { b = {}; }
+      try { const out = await crmSetOfferteCutoff(env, b || {}); return json(out, out && out.ok ? 200 : 400, ch); } catch (e) { return json({ ok: false, error: String(e && e.message) }, 200, ch); }
+    }
+    // Webflow contactformulier-intake (publiek; Webflow form_submission webhook). Token + org in de URL.
+    if (path === 'webflow/intake' && request.method === 'POST') {
+      const _u = (() => { try { return new URL(request.url); } catch (e) { return null; } })();
+      const tok = _u ? (_u.searchParams.get('token') || '') : '';
+      const org = _u ? (_u.searchParams.get('org') || 'S27') : 'S27';
+      let want = ''; try { want = await env.KV.get('crm:webflow:token'); } catch (e) { /* */ }
+      if (!want || tok !== want) return json({ ok: false, error: 'unauthorized' }, 401, ch);
+      let b = {}; try { b = await request.json(); } catch (e) { b = {}; }
+      try { const out = await webflowIntake(env, b || {}, org); const st = (out && out.status) ? out.status : 200; const bd = (out && out.body) ? out.body : out; return json(bd, st, ch); } catch (e) { return json({ ok: false, error: String(e && e.message) }, 200, ch); }
+    }
+    // Genereert het Webflow-intake-token + geeft de webhook-URLs per merk (key-gated, eenmalig).
+    if (path === 'webflow/setup' && request.method === 'POST') {
+      if ((request.headers.get('X-Intake-Key') || '') !== 'ops-seed-27gen-7b21d9') return json({ ok: false, error: 'forbidden' }, 403, ch);
+      let tok = ''; try { tok = await env.KV.get('crm:webflow:token'); } catch (e) { /* */ }
+      let body = {}; try { body = await request.json(); } catch (e) { body = {}; }
+      if (!tok || (body && body.rotate)) { tok = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID().replace(/-/g, '') : (Date.now().toString(36) + Math.random().toString(36).slice(2)); try { await env.KV.put('crm:webflow:token', tok); } catch (e) { /* */ } }
+      const base = 'https://s27-portal-gateway-v2.studio27marketing.workers.dev/webflow/intake?token=' + tok;
+      return json({ ok: true, urls: { S27: base + '&org=S27', ZVD: base + '&org=ZVD', '27M': base + '&org=27M' } }, 200, ch);
+    }
+    // Fireflies webhook (publiek; Fireflies roept dit aan zodra een transcriptie klaar is). Token-gated in de URL.
+    if (path === 'fireflies/hook' && request.method === 'POST') {
+      const _u = (() => { try { return new URL(request.url); } catch (e) { return null; } })();
+      const tok = _u ? (_u.searchParams.get('token') || '') : '';
+      let want = ''; try { want = await env.KV.get('crm:fireflies:token'); } catch (e) { /* */ }
+      if (!want || tok !== want) return json({ ok: false, error: 'unauthorized' }, 401, ch);
+      let b = {}; try { b = await request.json(); } catch (e) { b = {}; }
+      try { const out = await firefliesWebhook(env, b || {}); return json(out, out && out.ok ? 200 : 200, ch); } catch (e) { return json({ ok: false, error: String(e && e.message) }, 200, ch); }
+    }
+    // Genereert het Fireflies-webhook-token + geeft de webhook-URL terug (key-gated, eenmalig).
+    if (path === 'fireflies/setup' && request.method === 'POST') {
+      if ((request.headers.get('X-Intake-Key') || '') !== 'ops-seed-27gen-7b21d9') return json({ ok: false, error: 'forbidden' }, 403, ch);
+      let tok = ''; try { tok = await env.KV.get('crm:fireflies:token'); } catch (e) { /* */ }
+      let body = {}; try { body = await request.json(); } catch (e) { body = {}; }
+      if (!tok || (body && body.rotate)) { tok = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID().replace(/-/g, '') : (Date.now().toString(36) + Math.random().toString(36).slice(2)); try { await env.KV.put('crm:fireflies:token', tok); } catch (e) { /* */ } }
+      const url = 'https://s27-portal-gateway-v2.studio27marketing.workers.dev/fireflies/hook?token=' + tok;
+      return json({ ok: true, webhook_url: url }, 200, ch);
+    }
+    // PandaDoc webhook (publiek; PandaDoc roept dit aan bij elke statuswijziging). Token-/signatuur-gated.
+    if (path === 'pandadoc/hook' && request.method === 'POST') {
+      const _u = (() => { try { return new URL(request.url); } catch (e) { return null; } })();
+      const sig = _u ? (_u.searchParams.get('signature') || '') : '';
+      const tok = _u ? (_u.searchParams.get('token') || '') : '';
+      const raw = await request.text().catch(() => '');
+      try { const out = await pandadocHandleWebhook(env, raw, sig, tok); return json(out, out && out.ok ? 200 : 401, ch); } catch (e) { return json({ ok: false, error: String(e && e.message) }, 200, ch); }
+    }
+    // Eenmalige zelf-registratie van de PandaDoc-webhook via hun API (key-gated).
+    if (path === 'crm/pandahooksetup' && request.method === 'POST') {
+      if ((request.headers.get('X-Intake-Key') || '') !== 'ops-seed-27gen-7b21d9') return json({ ok: false, error: 'forbidden' }, 403, ch);
+      let b = {}; try { b = await request.json(); } catch (e) { b = {}; }
+      try { const out = await pandadocCreateWebhook(env, b || {}); return json(out, out && out.ok ? 200 : 400, ch); } catch (e) { return json({ ok: false, error: String(e && e.message) }, 200, ch); }
+    }
+    if (path === 'crm/pandahookcleanup' && request.method === 'POST') {
+      if ((request.headers.get('X-Intake-Key') || '') !== 'ops-seed-27gen-7b21d9') return json({ ok: false, error: 'forbidden' }, 403, ch);
+      try { const out = await pandadocCleanupWebhooks(env); return json(out, out && out.ok ? 200 : 400, ch); } catch (e) { return json({ ok: false, error: String(e && e.message) }, 200, ch); }
+    }
+    // Zelf-opruimende PandaDoc-create-test (key-gated): maakt + verwijdert meteen een testconcept.
+    if (path === 'crm/offcreateprobe' && request.method === 'POST') {
+      if ((request.headers.get('X-Intake-Key') || '') !== 'ops-seed-27gen-7b21d9') return json({ ok: false, error: 'forbidden' }, 403, ch);
+      let _pb = {}; try { _pb = await request.json(); } catch (e) { _pb = {}; }
+      try { const out = await pandadocCreateProbe(env, _pb || {}); return json(out, out && out.ok ? 200 : 400, ch); } catch (e) { return json({ ok: false, error: String(e && e.message) }, 200, ch); }
+    }
+    if (path === 'crm/pandadelete' && request.method === 'POST') {
+      if ((request.headers.get('X-Intake-Key') || '') !== 'ops-seed-27gen-7b21d9') return json({ ok: false, error: 'forbidden' }, 403, ch);
+      let b = {}; try { b = await request.json(); } catch (e) { b = {}; }
+      try { const st = await pandadocDeleteById(env, String((b && b.id) || '')); return json({ ok: st === 204 || st === 200, http: st }, 200, ch); } catch (e) { return json({ ok: false, error: String(e && e.message) }, 200, ch); }
+    }
 
     const isAdminApi = (path === 'adminCompanies');   // admin-only ClickUp-read (enkel staff)
     const isStaffData = !!STAFF_DATA_HANDLERS[path];   // admin-only rijke rapportage (enkel staff, acting-as)
@@ -710,6 +944,10 @@ export default {
       if (!tbody || typeof tbody !== 'object') tbody = {};
       tbody.__staff = true;
       tbody.account_email = String((claims && claims.email) || '').trim().toLowerCase();
+      // ADMIN-IMPERSONATIE: optionele X-Act-As-Member header (numeriek). De handler
+      // honoreert dit ALLEEN als de echte gebruiker admin is (server-side gecheckt).
+      const _aam = (request.headers.get('X-Act-As-Member') || '').trim();
+      if (/^[0-9]{1,15}$/.test(_aam)) tbody.act_as_member = Number(_aam);
       try {
         const r = await TEAM_HANDLERS[path](null, tbody, env, ctx);
         return json(r.body, r.status, ch);
@@ -807,11 +1045,45 @@ export default {
    * leveren een snapshot op. Verwerkt in batches van 5 (concurrency-cap) en wrapt
    * alles in try/catch zodat één fout de hele run niet breekt. */
   async scheduled(event, env, ctx) {
+    // HR interim-sync (elk uur): nieuwe ClickUp-sollicitaties folden in D1 zolang het
+    // websiteformulier nog via Make→ClickUp binnenkomt. Wordt vanzelf een no-op zodra
+    // de intake rechtstreeks op D1 schrijft.
+    if (event && event.cron === '0 * * * *') {
+      const runHr = async () => { try { if (env.HRDB) await hrMigrateFromClickup(env); } catch (e) { /* fail-soft */ } };
+      const runMon = async () => { try { await runHealthChecks(env); } catch (e) { /* fail-soft */ } };   // connectie-health bijhouden
+      const runCv = async () => { try { if (env.HRDB) await hrIngestCvsBatch(env, 6); } catch (e) { /* fail-soft */ } };   // CV's stilaan naar tekst voor de AI-assistent
+      const runInbox = async () => { try { if (env.HRDB) { const r = await hrSyncInbox(env, { days: 14 }); await env.KV.put('hr:inbox:state', (r && r.ok) ? 'live' : (r && r.reason === 'no_scope' ? 'no_scope' : 'error')); if (r && r.ok) await env.KV.put('hr:inbox:lastsync', String(Date.now())); } } catch (e) { /* fail-soft */ } };   // nieuwe kandidaat-mails ophalen voor de notificaties
+      const runCrm = async () => { try { if (env.CRMDB) await crmSyncAll(env, {}); } catch (e) { /* fail-soft */ } };   // CRM/Finance: ClickUp -> D1 spiegeling. PandaDoc-status komt nu live via /pandadoc/hook (webhook), geen poll meer.
+      if (ctx && ctx.waitUntil) { ctx.waitUntil(runHr()); ctx.waitUntil(runMon()); ctx.waitUntil(runCv()); ctx.waitUntil(runInbox()); ctx.waitUntil(runCrm()); } else { await runHr(); await runMon(); await runCv(); await runInbox(); await runCrm(); }
+      return;
+    }
     // dagelijkse reminder-cron (07:00 UTC) -> reminder-engine (SLAPEND tot KV reminders:enabled='1'
     // + de ClickUp-velden bestaan; zie reminders.mjs). De maandelijkse tak blijft de ads-snapshot.
     if (event && event.cron === '0 7 * * *') {
       const runRem = async () => { try { await rem.reminderEngine(env, ctx); } catch (e) { /* fail-soft */ } };
-      if (ctx && ctx.waitUntil) ctx.waitUntil(runRem()); else await runRem();
+      const runCap = async () => { try { await computeCapaciteit(env); } catch (e) { /* fail-soft */ } };   // capaciteit-snapshot warm houden
+      const runFin = async () => { try { await computeFinance(env); } catch (e) { /* fail-soft */ } };       // cijfers-snapshot warm houden
+      const runRend = async () => { try { await computeRendement(env); } catch (e) { /* fail-soft */ } };    // projectrendement-snapshot warm houden
+      const runIdx = async () => { try { await warmSearchIndex(env); } catch (e) { /* fail-soft */ } };       // ⌘K-zoekindex warm houden
+      const runAds = async () => { try { await warmAdsOverview(env); await warmAdsAdvies(env); } catch (e) { /* fail-soft */ } };  // overzicht + AI-advies voorverwarmen (ochtend), advies ná het overzicht
+      // AI-kostenmonitor: gisteren's losse verbruiks-events samenvouwen tot één compacte dag-array (snel dashboard).
+      const runAiCost = async () => { try { const y = new Date(Date.now() - 86400000); await aiCostsRollup(env, brusselsYmd(y.getTime())); } catch (e) { /* fail-soft */ } };
+      if (ctx && ctx.waitUntil) { ctx.waitUntil(runRem()); ctx.waitUntil(runCap()); ctx.waitUntil(runFin()); ctx.waitUntil(runRend()); ctx.waitUntil(runIdx()); ctx.waitUntil(runAds()); ctx.waitUntil(runAiCost()); } else { await runRem(); await runCap(); await runFin(); await runRend(); await runIdx(); await runAds(); await runAiCost(); }
+      return;
+    }
+    // middag-cron (10:00 UTC ≈ 12:00 Brussel): adverteerdersoverzicht nog eens voorverwarmen → data max ½ dag oud.
+    if (event && event.cron === '0 10 * * *') {
+      const runAds = async () => { try { await warmAdsOverview(env); } catch (e) { /* fail-soft */ } };
+      if (ctx && ctx.waitUntil) ctx.waitUntil(runAds()); else await runAds();
+      return;
+    }
+    // dagelijkse AI-dagplan pre-compute (03:00 UTC ≈ 05:00 Brussel zomertijd) -> elk teamlid
+    // krijgt zijn dagplanning vooraf berekend in KV, zodat Home 's ochtends instant laadt.
+    if (event && event.cron === '0 3 * * *') {
+      const runAi = async () => { try { await computeAllAiPlans(env); } catch (e) { /* fail-soft */ } };
+      // Bestandenmodule: geprullenbakte bestanden ouder dan 30 dagen definitief opruimen (incl. R2-object).
+      const runPurge = async () => { try { await files.filesPurgeTrash(env, 30); } catch (e) { /* fail-soft */ } };
+      if (ctx && ctx.waitUntil) { ctx.waitUntil(runAi()); ctx.waitUntil(runPurge()); } else { await runAi(); await runPurge(); }
       return;
     }
     const run = async () => {

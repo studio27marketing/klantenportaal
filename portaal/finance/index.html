@@ -1,0 +1,1974 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="../gate-preload.js?v=1"></script>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<script src="./shared/s27-data.js"></script>
+<script src="./team-chat.js"></script>
+<script src="./agenda-panel.js"></script>
+<script src="./global-search.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="../config.js?v=2"></script>
+<script type="module" src="../auth.js?v=2"></script>
+<script type="module" src="../route-guard.js?v=1"></script>
+<script src="../shared/portal-shell.js?v=3"></script>
+<style>
+  *{box-sizing:border-box}
+  [data-lucide]{width:1em;height:1em;}
+  html,body{margin:0;padding:0}
+  body{background:#F7F3EA;color:#050A30;font-family:'Outfit',system-ui,sans-serif;font-weight:300;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  ::selection{background:#D1F24C;color:#050A30}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#DFD9C8;border-radius:999px;border:3px solid #F7F3EA}
+  @keyframes sfFadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  @keyframes sfFadeIn{from{opacity:0}to{opacity:1}}
+  @keyframes sfScaleIn{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
+  @keyframes sfDrawer{from{transform:translateX(40px);opacity:.4}to{transform:none;opacity:1}}
+</style>
+</helmet>
+<div style="min-height:100vh;width:100%;background:#F7F3EA;color:#050A30;font-family:'Outfit',system-ui,sans-serif;font-weight:300;display:flex;flex-direction:column">
+
+  <sc-if value="{{ anyMenuOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeAllMenus }}" style="position:fixed;inset:0;z-index:20"></div>
+  </sc-if>
+
+  <!-- ============ TOP NAV ============ -->
+  <header style="position:sticky;top:0;z-index:40;background:#050A30;color:#F7F3EA;height:64px;display:flex;align-items:center;gap:13px;padding:0 26px;box-shadow:0 2px 20px -8px rgba(5,10,48,.5)">
+    <button onClick="{{ toggleSidebar }}" style="display:{{ hamburgerDisplay }};width:38px;height:38px;border-radius:10px;background:rgba(247,243,234,.08);border:none;color:#F7F3EA;cursor:pointer;place-items:center;flex:none">{{ menuIcon }}</button>
+    <img src="assets/Icon-blue.svg" alt="27" style="height:25px;flex:none">
+    <span style="font-size:18px;font-weight:600;letter-spacing:.04em;color:#F7F3EA">FINANCE</span>
+    <div style="position:relative;flex:none">
+      <button onClick="{{ toggleEnv }}" style="display:flex;align-items:center;gap:8px;background:rgba(247,243,234,.08);border:1px solid rgba(247,243,234,.14);border-radius:10px;padding:6px 9px 6px 11px;cursor:pointer;color:#F7F3EA;font-size:12.5px;font-weight:600" style-hover="background:rgba(247,243,234,.15)"><span style="width:7px;height:7px;border-radius:99px;background:#28AFF9;flex:none"></span>27Finance{{ chevIcon }}</button>
+      <sc-if value="{{ envOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;top:46px;left:0;z-index:60;width:264px;background:#FFFDF8;border-radius:16px;box-shadow:0 26px 60px -16px rgba(5,10,48,.55);padding:8px;animation:sfScaleIn .18s cubic-bezier(.16,1,.3,1)">
+          <div style="font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:#8E8979;font-weight:700;padding:8px 10px 7px">Wissel van omgeving</div>
+          <a href="/crm/" style="display:flex;align-items:center;gap:11px;border-radius:11px;padding:10px;text-decoration:none;margin-bottom:3px" style-hover="background:#F2EEE3"><span style="width:34px;height:34px;border-radius:9px;background:#0F2EA3;color:#fff;display:grid;place-items:center;flex:none">{{ envCrmIcon }}</span><span style="flex:1"><span style="display:block;font-size:13.5px;font-weight:600;color:#050A30">27CRM</span><span style="display:block;font-size:11.5px;color:#8E8979">Sales · Klanten</span></span></a>
+          <a href="/hr/" style="display:flex;align-items:center;gap:11px;border-radius:11px;padding:10px;text-decoration:none;margin-bottom:3px" style-hover="background:#F2EEE3"><span style="width:34px;height:34px;border-radius:9px;background:#D1F24C;color:#050A30;display:grid;place-items:center;flex:none">{{ envHrIcon }}</span><span style="flex:1"><span style="display:block;font-size:13.5px;font-weight:600;color:#050A30">27HR</span><span style="display:block;font-size:11.5px;color:#8E8979">Recruitment · Onboarding</span></span></a>
+          <a href="/finance/" style="display:flex;align-items:center;gap:11px;border-radius:11px;padding:10px;background:#F2EEE3;text-decoration:none;margin-bottom:3px"><span style="width:34px;height:34px;border-radius:9px;background:#28AFF9;color:#050A30;display:grid;place-items:center;flex:none">{{ envFinIcon }}</span><span style="flex:1"><span style="display:block;font-size:13.5px;font-weight:600;color:#050A30">27Finance</span><span style="display:block;font-size:11.5px;color:#8E8979">Offertes · Cijfers</span></span>{{ envCheckIcon }}</a>
+          <a href="/productie/" style="display:flex;align-items:center;gap:11px;border-radius:11px;padding:10px;text-decoration:none" style-hover="background:#F2EEE3"><span style="width:34px;height:34px;border-radius:9px;background:#050A30;color:#D1F24C;display:grid;place-items:center;flex:none"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="6" height="14" rx="1.5"></rect><rect x="15" y="3" width="6" height="9" rx="1.5"></rect></svg></span><span style="flex:1"><span style="display:block;font-size:13.5px;font-weight:600;color:#050A30">27Productie</span><span style="display:block;font-size:11.5px;color:#8E8979">Taken · Planning</span></span></a>
+          <div style="height:1px;background:#EFEADD;margin:7px 4px"></div>
+          <a href="/" style="display:flex;align-items:center;gap:9px;border-radius:11px;padding:9px 10px;text-decoration:none;color:#5E5A4F;font-size:13px;font-weight:500" style-hover="background:#F2EEE3">{{ envGridIcon }}Portaaloverzicht</a>
+          <button onClick="{{ logout }}" style="display:flex;align-items:center;gap:9px;width:100%;border:none;background:none;border-radius:11px;padding:9px 10px;cursor:pointer;color:#6E2218;font-size:13px;font-weight:600;text-align:left;font-family:inherit" style-hover="background:#F7E0DB">{{ envLogoutIcon }}Afmelden</button>
+        </div>
+      </sc-if>
+    </div>
+    <global-search portal="fin" style="flex:1 1 280px;min-width:120px;max-width:460px;margin-left:6px;"></global-search>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+      <button onClick="{{ toggleAssistant }}" title="AI-assistent" style="background:{{ assistBtnBg }};color:{{ assistBtnColor }};border:1px solid rgba(40,175,249,.4);border-radius:10px;width:38px;height:38px;cursor:pointer;display:grid;place-items:center">{{ sparkIcon }}</button>
+      <agenda-panel me="Vincent Verleije" accent="#2458EA" ref="{{ agendaNavRef }}"></agenda-panel>
+      <team-chat me="Vincent Verleije" accent="#2458EA"></team-chat>
+      <button onClick="{{ bugClick }}" title="Bug aanmelden" style="position:relative;width:38px;height:38px;border-radius:10px;background:rgba(247,243,234,.08);border:none;color:#F7F3EA;cursor:pointer;display:grid;place-items:center;flex:none">{{ bugIcon }}</button>
+      <button onClick="{{ bellClick }}" title="Notificaties" style="position:relative;width:38px;height:38px;border-radius:10px;background:rgba(247,243,234,.08);border:none;color:#F7F3EA;cursor:pointer;display:grid;place-items:center;flex:none">{{ bellIcon }}<span style="position:absolute;top:8px;right:9px;width:7px;height:7px;border-radius:99px;background:#D1F24C;border:1.5px solid #050A30"></span></button>
+      <button onClick="{{ accountClick }}" title="Account" style="width:38px;height:38px;border-radius:10px;background:rgba(247,243,234,.08);border:none;color:#F7F3EA;cursor:pointer;display:grid;place-items:center;flex:none">{{ userIcon }}</button>
+    </div>
+  </header>
+
+  <!-- ============ LEFT RAIL ============ -->
+  <aside onMouseEnter="{{ sidebarEnter }}" onMouseLeave="{{ sidebarLeave }}" style="display:{{ railDisplay }};flex-direction:column;position:fixed;left:0;top:64px;bottom:0;width:{{ sbWidth }};background:#050A30;z-index:46;padding:14px 0;gap:2px;transition:width .22s cubic-bezier(.16,1,.3,1);box-shadow:{{ sbShadow }};overflow:hidden">
+    <sc-for list="{{ nav }}" as="n" hint-placeholder-count="5">
+      <button onClick="{{ n.goClose }}" title="{{ n.label }}" style="display:flex;align-items:center;gap:16px;width:100%;height:46px;flex:none;border:none;cursor:pointer;background:{{ n.railBg }};color:{{ n.railColor }};box-shadow:{{ n.railAccent }};padding:0 23px;font-family:inherit;font-size:14.5px;font-weight:{{ n.railWeight }};white-space:nowrap;transition:background .15s" style-hover="background:rgba(247,243,234,.07)">{{ n.railIconEl }}<span style="opacity:{{ labelOpacity }};transition:opacity .18s">{{ n.label }}</span></button>
+    </sc-for>
+    <div style="margin-top:auto;height:1px;background:rgba(247,243,234,.08);margin:8px 18px"></div>
+    <sc-if value="{{ sbExpanded }}" hint-placeholder-val="{{ false }}">
+      <div style="margin:2px 14px 6px">
+        <div style="font-size:10px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:rgba(247,243,234,.4);padding:0 4px;margin-bottom:7px;white-space:nowrap">Bekijk als</div>
+        <div style="display:flex;align-items:center;gap:9px;background:rgba(247,243,234,.06);border:1px solid rgba(247,243,234,.1);border-radius:12px;padding:8px 11px">
+          {{ viewAsUserIcon }}
+          <select value="{{ viewAsRole }}" onChange="{{ setPersona }}" style="flex:1;min-width:0;border:none;background:transparent;color:#F7F3EA;font-size:13.5px;font-weight:600;cursor:pointer;outline:none;font-family:inherit">
+            <sc-for list="{{ personaOpts }}" as="p" hint-placeholder-count="2">
+              <option value="{{ p.value }}" style="color:#050A30">{{ p.label }}</option>
+            </sc-for>
+          </select>
+        </div>
+      </div>
+    </sc-if>
+    <button onClick="{{ logout }}" title="Afmelden" style="display:flex;align-items:center;gap:16px;width:100%;height:46px;flex:none;border:none;cursor:pointer;background:none;color:rgba(247,243,234,.55);padding:0 23px;font-family:inherit;font-size:14px;font-weight:500;white-space:nowrap" style-hover="background:rgba(247,243,234,.07)">{{ railLogoutIcon }}<span style="opacity:{{ labelOpacity }};transition:opacity .18s">Afmelden</span></button>
+  </aside>
+  <sc-if value="{{ sbBackdrop }}" hint-placeholder-val="{{ false }}"><div onClick="{{ closeSidebar }}" style="position:fixed;inset:64px 0 0 0;z-index:45;background:rgba(5,10,48,.45)"></div></sc-if>
+
+  <!-- ============ MAIN ============ -->
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column;margin-left:{{ mainMargin }};transition:margin-left .22s cubic-bezier(.16,1,.3,1)">
+    <main style="flex: 1; padding: 26px 28px 64px; max-width: 1240px; width: 100%; margin: 0 auto; position: relative">
+
+      <!-- page heading + filter toolbar -->
+      <sc-if value="{{ showTopBar }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:20px">
+        <div>
+          <div style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:#5E5A4F;margin-bottom:8px">{{ pageEyebrow }}</div>
+          <h1 style="font-size:36px;font-weight:300;letter-spacing:-.02em;margin:0">{{ pageHeading }}</h1>
+        </div>
+        <div style="text-align:right;font-size:13px;color:#5E5A4F;line-height:1.5">maandag 23 juni 2026</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:24px">
+        <sc-for list="{{ finFilters }}" as="f" hint-placeholder-count="5">
+          <div style="position:relative">
+            <button onClick="{{ f.toggle }}" style="{{ f.btnStyle }}">{{ f.iconEl }}<span style="color:#8E8979;font-weight:500">{{ f.label }}</span><span style="font-weight:600;color:#050A30">{{ f.value }}</span>{{ f.chevEl }}</button>
+            <sc-if value="{{ f.open }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute;top:46px;left:0;z-index:30;min-width:220px;background:#FFFDF8;border:1px solid #EFEADD;border-radius:14px;box-shadow:0 20px 50px -16px rgba(5,10,48,.3);padding:6px;animation:sfScaleIn .18s cubic-bezier(.16,1,.3,1);max-height:340px;overflow:auto">
+                <sc-if value="{{ f.searchable }}" hint-placeholder-val="{{ false }}">
+                  <input value="{{ f.searchVal }}" onInput="{{ f.onSearch }}" placeholder="{{ f.searchPlaceholder }}" style="width:100%;box-sizing:border-box;border:1px solid #DFD9C8;border-radius:9px;padding:8px 11px;font-family:inherit;font-size:13px;color:#050A30;margin-bottom:5px;outline:none" />
+                </sc-if>
+                <sc-for list="{{ f.options }}" as="o" hint-placeholder-count="4">
+                  <button onClick="{{ o.pick }}" style="{{ o.style }}"><span style="flex:1">{{ o.label }}</span>{{ o.checkEl }}</button>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+        <button onClick="{{ compareToggle }}" title="{{ compareTitle }}" style="{{ compareBtnStyle }}">{{ compareIcon }}<span style="color:#8E8979;font-weight:500">Vergelijk</span><span style="font-weight:600;color:#050A30">{{ compareLabel }}</span></button>
+        <sc-if value="{{ finFiltersActive }}" hint-placeholder-val="{{ false }}"><button onClick="{{ finClear }}" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:#6E2218;background:none;border:none;cursor:pointer;padding:8px 6px">{{ finClearIcon }}Filters wissen</button></sc-if>
+      </div>
+      <sc-if value="{{ compareSummaryVisible }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-12px 0 24px;padding:10px 13px;border:1px solid #E4DDCC;border-radius:13px;background:#FFFDF8;color:#3D3A33;font-size:12.5px;">
+          {{ compareIcon }}<span style="font-weight:600;color:#050A30;">Vorige gelijke periode</span><span>{{ compareSummaryText }}</span>
+        </div>
+      </sc-if>
+      </sc-if>
+
+      <!-- ===== MIJN PROFIEL ===== -->
+      <sc-if value="{{ isProfiel }}" hint-placeholder-val="{{ false }}">
+        <div style="opacity:1">
+          <dc-import name="Profiel" embedded="true" user="{{ profielUser }}" hint-size="100%,820px"></dc-import>
+        </div>
+      </sc-if>
+
+      <!-- ===== MIJN AGENDA ===== -->
+      <sc-if value="{{ isAgenda }}" hint-placeholder-val="{{ false }}">
+        <div style="opacity:1;max-width:1180px;margin:0 auto;">
+          <div style="margin-bottom:24px;">
+            <div style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:#5E5A4F;margin-bottom:8px;">Planning</div>
+            <h1 style="font-size:34px;font-weight:300;letter-spacing:-.02em;margin:0;color:#050A30;">Mijn agenda</h1>
+          </div>
+          <agenda-panel inline me="{{ profielUser }}" accent="#2458EA"></agenda-panel>
+          <a href="/productie/#weekplanner" style="margin-top:18px;text-decoration:none;font-family:inherit;font-weight:600;font-size:14px;background:#050A30;color:#D1F24C;border:none;border-radius:12px;padding:10px 12px 10px 18px;cursor:pointer;display:inline-flex;align-items:center;gap:11px;">Teamweekplanner openen<span style="width:30px;height:30px;border-radius:9px;background:#D1F24C;color:#050A30;display:grid;place-items:center;"><i data-lucide="arrow-right" style="font-size:16px;"></i></span></a>
+        </div>
+      </sc-if>
+
+      <!-- ===== OVERZICHT ===== -->
+      <sc-if value="{{ isOverzicht }}" hint-placeholder-val="{{ true }}">
+        <div style="opacity:1">
+          <!-- hero KPI panel -->
+          <div style="position:relative;overflow:hidden;background:#0F2EA3;border-radius:32px;padding:30px 32px;box-shadow:0 24px 50px -22px rgba(15,46,163,.5)">
+            
+            <div style="position:relative;display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:22px">
+              <div>
+                <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:rgba(247,243,234,.7)">Financieel overzicht · {{ periodLabel }}</div>
+                <div style="font-size:22px;font-weight:300;color:#F7F3EA;letter-spacing:-.01em;margin-top:4px">{{ heroSubtitle }}</div>
+              </div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:rgba(247,243,234,.65)">{{ heroStamp }}</div>
+            </div><div style="position:relative;display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:14px">
+              <sc-for list="{{ heroKpis }}" as="k" hint-placeholder-count="4">
+                <button onClick="{{ k.go }}" style="{{ k.style }}">
+                  <div style="font-size:12px;color:rgba(247,243,234,.72);font-weight:500;display:flex;align-items:center;gap:6px">{{ k.label }}{{ k.drillEl }}</div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:500;color:#fff;letter-spacing:-.02em;line-height:1.05">{{ k.value }}</div>
+                  <div style="font-size:12px;{{ k.deltaColor }}">{{ k.delta }}</div>
+                </button>
+              </sc-for>
+            </div>
+            
+          </div>
+
+          <!-- recurring strip -->
+          <div style="margin-top:18px;background:#FFFDF8;border-radius:24px;padding:20px 24px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06);display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:15px">
+              <span style="width:48px;height:48px;border-radius:14px;background:#DEF3E5;color:#1F6E3F;display:grid;place-items:center;flex:none"><i data-lucide="repeat" style="font-size:23px"></i></span>
+              <div>
+                <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:600;color:#8E8979">Recurring omzet · per maand</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:300;letter-spacing:-.02em;color:#050A30;margin-top:3px;line-height:1">{{ recurMRR }}<span style="font-size:14px;color:#8E8979;font-weight:400"> /mnd</span></div>
+                <div style="font-size:12.5px;color:#5E5A4F;margin-top:4px">{{ recurCount }} · ≈ {{ recurAnnual }} per jaar</div>
+              </div>
+            </div>
+            <div style="flex:1;min-width:200px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+              <sc-for list="{{ recurTypeChips }}" as="t" hint-placeholder-count="3"><span style="display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:#26241F;background:#F7F3EA;border-radius:11px;padding:8px 13px"><span style="width:9px;height:9px;border-radius:3px;background:{{ t.color }}"></span>{{ t.label }}<span style="font-family:'JetBrains Mono',monospace;color:#5E5A4F;font-weight:500">{{ t.amount }}</span></span></sc-for>
+            </div>
+          </div>
+
+          <!-- second row: chart + side stats -->
+          <div style="display:grid;grid-template-columns:1.62fr 1fr;gap:18px;margin-top:18px">
+            <div style="background:#FFFDF8;border-radius:28px;padding:24px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06)">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+                <div>
+                  <h3 style="font-size:17px;font-weight:600;letter-spacing:-.01em;margin:0">Omzet- en pipeline-evolutie</h3>
+                  <div style="font-size:13px;color:#8E8979;margin-top:2px">Gewonnen omzet per maand, met open pipeline ernaast</div>
+                </div>
+                <div style="display:flex;gap:14px;font-size:12px;font-weight:500">
+                  <span style="display:flex;align-items:center;gap:6px;color:#5E5A4F"><span style="width:10px;height:10px;border-radius:3px;background:#0F2EA3"></span>Gewonnen</span>
+                  <span style="display:flex;align-items:center;gap:6px;color:#5E5A4F"><span style="width:10px;height:10px;border-radius:3px;background:#28AFF9"></span>Pipeline</span>
+                </div>
+              </div>
+              {{ omzetChart }}
+            </div>
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <div style="background:#FFFDF8;border-radius:28px;padding:22px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+                  <h3 style="font-size:15px;font-weight:600;margin:0">Won / Lost</h3>
+                  <button onClick="{{ goWon }}" style="font-size:12px;font-weight:500;color:#2458EA;background:none;border:none;cursor:pointer;font-family:inherit">Bekijk →</button>
+                </div>
+                {{ winLossBar }}
+                <div style="display:flex;justify-content:space-between;margin-top:14px">
+                  <div><div style="font-size:11px;color:#8E8979;font-weight:500">Conversie</div><div style="font-family:'JetBrains Mono',monospace;font-size:21px;font-weight:600">{{ conversionPct }}</div></div>
+                  <div style="text-align:right"><div style="font-size:11px;color:#8E8979;font-weight:500">Bekeken-ratio</div><div style="font-family:'JetBrains Mono',monospace;font-size:21px;font-weight:600">{{ viewedRatio }}</div></div>
+                </div>
+              </div>
+              <div style="background:#FFFDF8;border-radius:28px;padding:22px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06)">
+                <h3 style="font-size:15px;font-weight:600;margin:0 0 10px">Vervalt binnenkort</h3>
+                <sc-for list="{{ expiringSoon }}" as="o" hint-placeholder-count="2">
+                  <button onClick="{{ o.open }}" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;background:#FBF1D9;border:1px solid #F0E2BC;border-radius:14px;padding:10px 12px;margin-bottom:8px;cursor:pointer;font-family:inherit;text-align:left">
+                    <div><div style="font-size:13px;font-weight:500;color:#050A30">{{ o.company }}</div><div style="font-size:11px;color:#6B4D04">{{ o.expiryNote }}</div></div>
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:#6B4D04">{{ o.budget }}</div>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+
+          <!-- activity -->
+          <div style="background:#FFFDF8;border-radius:28px;padding:24px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06);margin-top:18px">
+            <h3 style="font-size:17px;font-weight:600;letter-spacing:-.01em;margin:0 0 4px">Recentste activiteit</h3>
+            <div style="font-size:13px;color:#8E8979;margin-bottom:14px">De keten van offerte naar factuur naar omzet, automatisch bijgehouden</div>
+            <sc-for list="{{ activity }}" as="a" hint-placeholder-count="5">
+              <div style="display:flex;align-items:center;gap:14px;padding:11px 0;border-top:1px solid #EFEADD">
+                <div style="{{ a.iconWrap }}">{{ a.iconEl }}</div>
+                <div style="flex:1"><span style="font-size:14px;font-weight:500">{{ a.title }}</span> <span style="font-size:14px;color:#5E5A4F">{{ a.detail }}</span></div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#8E8979">{{ a.time }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ===== OFFERTES ===== -->
+      <sc-if value="{{ isOffertes }}" hint-placeholder-val="{{ true }}">
+        <div style="opacity:1">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;background:#0F2EA3;border-radius:24px;padding:22px 26px;margin-bottom:18px;box-shadow:0 20px 44px -22px rgba(15,46,163,.5)">
+            <div style="flex:1;min-width:240px">
+              <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:600;color:rgba(247,243,234,.7);margin-bottom:3px">Prognose · open pipeline per organisatie</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:600;color:#fff;letter-spacing:-.02em">{{ offPipelineTotal }}</div>
+              <div style="font-size:12px;color:rgba(247,243,234,.6);margin-top:2px">Som van alle verzonden &amp; bekeken offertes — volgt de filters hierboven (periode, merk, persoon…).</div>
+            </div>
+            <div style="flex:1;min-width:280px;background:rgba(247,243,234,.08);border-radius:16px;padding:16px 18px">
+              <sc-if value="{{ offPipelineEmpty }}" hint-placeholder-val="{{ false }}"><div style="font-size:13px;color:rgba(247,243,234,.7)">Geen open offertes binnen deze filters.</div></sc-if>
+              {{ offPipelineBars }}
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px;justify-content:flex-end">
+            <button onClick="{{ openNewOff }}" style="display:inline-flex;align-items:center;gap:8px;background:#050A30;color:#fff;border:none;border-radius:11px;padding:9px 15px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">{{ plusIcon }}Nieuwe offerte</button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:26px">
+            <sc-for list="{{ offerteGroups }}" as="g" hint-placeholder-count="3">
+            <div>
+              <div style="display:flex;align-items:center;gap:11px;margin-bottom:13px;padding:0 4px">
+                <span style="width:10px;height:10px;border-radius:3px;background:{{ g.dotColor }};flex:none"></span>
+                <span style="font-size:14px;font-weight:700;color:#050A30;letter-spacing:-.01em">{{ g.brandLabel }}</span>
+                <span style="font-size:12px;color:#8E8979">{{ g.countLabel }}</span>
+                <span style="margin-left:auto;font-size:13px;font-weight:600;color:#5E5A4F;font-family:'JetBrains Mono',monospace">{{ g.total }}</span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:13px">
+            <sc-for list="{{ g.items }}" as="o" hint-placeholder-count="6">
+              <button onClick="{{ o.open }}" style="background:#FFFDF8;border:none;border-radius:22px;padding:20px 24px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06);cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:18px;align-items:center;text-align:left;font-family:inherit;transition:transform .2s,box-shadow .2s" style-hover="transform:translateY(-2px);box-shadow:0 10px 30px -10px rgba(5,10,48,.12)">
+                <div style="min-width:0">
+                  <div style="display:flex;align-items:center;gap:11px;margin-bottom:8px;flex-wrap:wrap">
+                    <span style="font-size:17px;font-weight:600;color:#050A30">{{ o.titel }}</span>
+                    <span style="font-size:11px;font-weight:600;border-radius:99px;padding:4px 11px;background:{{ o.statusBg }};color:{{ o.statusFg }}">{{ o.statusLabel }}</span>
+                  </div>
+                  <div style="display:flex;gap:16px;font-size:12.5px;color:#5E5A4F;flex-wrap:wrap;align-items:center">
+                    <span style="display:inline-flex;align-items:center;gap:6px">{{ o.bldIcon }}{{ o.company }}</span>
+                    <span style="display:inline-flex;align-items:center;gap:6px">{{ o.usrIcon }}{{ o.contact }}</span>
+                    <span style="display:inline-flex;align-items:center;gap:6px">door {{ o.owner }}</span>
+                    <span style="display:inline-flex;align-items:center;gap:6px">{{ o.brandDotEl }}{{ o.brandLabel }}</span>
+                    <span style="display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace">{{ o.calIcon }}{{ o.verval }}</span>
+                  </div>
+                  <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;padding-top:12px;margin-top:12px;border-top:1px solid #EFEADD">
+                    <span style="font-size:11px;font-weight:600;color:#8E8979;text-transform:uppercase;letter-spacing:.04em;margin-right:2px">Disciplines</span>
+                    <sc-for list="{{ o.discList }}" as="d" hint-placeholder-count="3"><span style="display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:#26241F;background:#F7F3EA;border-radius:8px;padding:5px 10px"><span style="width:9px;height:9px;border-radius:3px;background:{{ d.color }}"></span>{{ d.label }}<span style="color:#5E5A4F;font-weight:500;font-family:'JetBrains Mono',monospace">{{ d.amount }}</span></span></sc-for>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:22px">
+                  <div style="text-align:right"><div style="font-size:22px;font-weight:500;line-height:1;color:#050A30;font-family:'JetBrains Mono',monospace">{{ o.budget }}</div><div style="font-size:11px;color:#8E8979;margin-top:4px">{{ o.disciplines }}</div></div>
+                  <span style="width:38px;height:38px;border-radius:11px;background:#F7F3EA;display:grid;place-items:center;flex:none">{{ o.chevEl }}</span>
+                </div>
+              </button>
+            </sc-for>
+              </div>
+            </div>
+            </sc-for>
+            <div style="display:flex;justify-content:space-between;font-size:13px;color:#5E5A4F;padding:4px 6px">
+              <span>{{ offerteCountLabel }}</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-weight:500">Totaal budget: {{ offerteTotal }}</span>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ===== FACTURATIE ===== -->
+      <sc-if value="{{ isFacturatie }}" hint-placeholder-val="{{ true }}">
+        <div style="opacity:1">
+          <div style="background:#FFFDF8;border-radius:28px;padding:22px 24px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06);margin-bottom:18px">
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:18px">
+              <div>
+                <h3 style="font-size:18px;font-weight:600;margin:0 0 3px">Klaar voor facturatie</h3>
+                <div style="font-size:13px;color:#8E8979">Per klant gegroepeerd — <span style="font-family:'JetBrains Mono',monospace;color:#050A30;font-weight:600">{{ billKlaarTotaal }}</span> klaar om te factureren</div>
+              </div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+                <!-- STATUS multi-select -->
+                <div style="position:relative">
+                  <button onClick="{{ toggleBillStatus }}" style="display:inline-flex;align-items:center;gap:8px;background:#F7F3EA;border:1px solid #DFD9C8;border-radius:11px;padding:9px 13px;font-family:inherit;font-size:12.5px;font-weight:600;color:#050A30;cursor:pointer"><i data-lucide="filter" style="font-size:14px;color:#8E8979"></i>Status<span style="font-size:11px;font-weight:700;color:#0F2EA3;background:#E2E9FC;border-radius:99px;padding:1px 8px">{{ billStatusLabel }}</span><i data-lucide="chevron-down" style="font-size:14px;color:#8E8979"></i></button>
+                  <sc-if value="{{ billStatusOpen }}" hint-placeholder-val="{{ false }}">
+                    <div style="position:absolute;top:44px;right:0;width:236px;background:#FFFDF8;border:1px solid #EFEADD;border-radius:14px;box-shadow:0 20px 50px -16px rgba(5,10,48,.32);padding:7px;z-index:40">
+                      <sc-for list="{{ billStatusMenu }}" as="m" hint-placeholder-count="5">
+                        <button onClick="{{ m.toggle }}" style="display:flex;align-items:center;gap:10px;width:100%;border:none;background:transparent;border-radius:10px;padding:9px 10px;cursor:pointer;text-align:left;font-family:inherit" style-hover="background:#F2EEE3">
+                          <span style="width:18px;height:18px;border-radius:6px;border:1.5px solid {{ m.checkBorder }};background:{{ m.checkBg }};display:grid;place-items:center;flex:none">{{ m.checkEl }}</span>
+                          <span style="width:9px;height:9px;border-radius:3px;background:{{ m.dot }};flex:none"></span>
+                          <span style="flex:1;font-size:13px;font-weight:500;color:#050A30">{{ m.label }}</span>
+                        </button>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+                <span style="font-size:11.5px;color:#A8A293">Filter op klant via de balk bovenaan</span>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <sc-for list="{{ billGroups }}" as="g" hint-placeholder-count="4">
+                <div style="border:1px solid #EFEADD;border-radius:20px;overflow:hidden">
+                  <div style="display:flex;align-items:center;gap:14px;padding:14px 18px;background:#F7F3EA;flex-wrap:wrap">
+                    <span style="width:38px;height:38px;border-radius:11px;background:#E2E9FF;color:#2458EA;display:grid;place-items:center;flex:none"><i data-lucide="building-2" style="font-size:19px"></i></span>
+                    <div style="flex:1;min-width:160px">
+                      <div style="font-size:15px;font-weight:600;color:#050A30">{{ g.bedrijf }}</div>
+                      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:3px;font-size:12px;color:#8E8979"><span style="display:inline-flex;align-items:center;gap:5px"><i data-lucide="hash" style="font-size:13px"></i><span style="font-family:'JetBrains Mono',monospace">{{ g.kbo }}</span></span><span style="display:inline-flex;align-items:center;gap:5px"><i data-lucide="mail" style="font-size:13px"></i><span style="font-family:'JetBrains Mono',monospace">{{ g.mail }}</span></span></div>
+                    </div>
+                    <div style="text-align:right"><div style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:600;color:#050A30">{{ g.total }}</div><div style="font-size:11px;color:#8E8979">{{ g.countLabel }}</div></div>
+                  </div>
+                  <sc-for list="{{ g.items }}" as="i" hint-placeholder-count="2">
+                    <div style="display:flex;align-items:center;gap:12px;padding:12px 18px;border-top:1px solid #EFEADD;flex-wrap:wrap">
+                      <span style="flex:1;min-width:140px"><span style="display:block;font-size:13.5px;font-weight:500;color:#26241F">{{ i.taak }}</span><span style="display:block;font-size:11.5px;color:#8E8979;font-family:'JetBrains Mono',monospace;margin-top:1px">{{ i.project }}</span></span>
+                      <span style="font-size:11px;font-weight:600;border-radius:99px;padding:4px 11px;background:{{ i.statusBg }};color:{{ i.statusFg }};white-space:nowrap">{{ i.statusLabel }}</span>
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;color:#050A30;width:90px;text-align:right">{{ i.budget }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+              <sc-if value="{{ billGroupsEmpty }}" hint-placeholder-val="{{ false }}"><div style="text-align:center;padding:30px 0;color:#8E8979;font-size:13.5px">Geen taken klaar voor facturatie.</div></sc-if>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;background:#E0F1FD;border:1px solid #BBE2FB;border-radius:18px;padding:13px 18px;margin-bottom:18px">
+            {{ proposalIcon }}
+            <div style="font-size:13.5px;color:#0F2EA3;line-height:1.45"><strong style="font-weight:600">Voorstel, nog te koppelen aan de boekhouding.</strong> Facturatie leeft vandaag buiten het projectsysteem (Peppol + mailbox naar de boekhouder, keuze Yuki/Exact nog open). De velden en weergaven hieronder zijn een doordacht voorstel. Betaald-versus-openstaand werkt pas echt na een boekhoudkoppeling.</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:18px">
+            <sc-for list="{{ invoiceKpis }}" as="k" hint-placeholder-count="4">
+              <div style="{{ k.cardStyle }}">
+                <div style="font-size:12px;color:{{ k.labelColor }};font-weight:500">{{ k.label }}</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:600;letter-spacing:-.02em;color:{{ k.valueColor }};margin-top:4px">{{ k.value }}</div>
+                <div style="font-size:12px;color:{{ k.subColor }};margin-top:2px">{{ k.sub }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px">
+            <div style="background:#FFFDF8;border-radius:28px;padding:24px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06)">
+              <h3 style="font-size:16px;font-weight:600;margin:0 0 4px">Ouderdom openstaand (aging)</h3>
+              <div style="font-size:12.5px;color:#8E8979;margin-bottom:16px">DSO indicatief: <strong style="font-family:'JetBrains Mono',monospace;font-weight:600;color:#050A30">{{ dso }} dagen</strong> gemiddeld tot betaling</div>
+              {{ agingBars }}
+            </div>
+            <div style="position:relative;overflow:hidden;background:#050A30;border-radius:28px;padding:24px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06);color:#F7F3EA">
+              <img src="assets/Pipe-divider-warmwhite.svg" alt="" style="position:absolute;right:-16px;bottom:6px;width:210px;opacity:.12;pointer-events:none">
+              <h3 style="font-size:16px;font-weight:600;margin:0 0 4px;color:#fff;position:relative">Cashflow &amp; recurring</h3>
+              <div style="font-size:12.5px;color:rgba(247,243,234,.6);margin-bottom:18px">Waar Studio 27 naartoe beweegt: maandfacturatie</div>
+              <sc-for list="{{ cashRows }}" as="r" hint-placeholder-count="3">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-top:1px solid rgba(247,243,234,.12)">
+                  <span style="font-size:13.5px;color:rgba(247,243,234,.85)">{{ r.label }}</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:600;color:{{ r.color }}">{{ r.value }}</span>
+                </div>
+              </sc-for>
+              <div style="margin-top:16px;background:rgba(209,242,76,.14);border:1px solid rgba(209,242,76,.3);border-radius:16px;padding:14px">
+                <div style="font-size:12px;color:#D1F24C;font-weight:600;letter-spacing:.04em;text-transform:uppercase">Recurring (MRR)</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:600;color:#fff;margin-top:3px">{{ mrr }} <span style="font-size:13px;color:rgba(247,243,234,.6);font-weight:400">/ maand</span></div>
+                <div style="font-size:12px;color:rgba(247,243,234,.7);margin-top:3px">Flor Vastgoed retainer. Schaalt mee zodra maandfacturatie live staat.</div>
+              </div>
+            </div>
+          </div>
+          <div style="background:#FFFDF8;border-radius:28px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06);overflow:hidden">
+            <div style="padding:18px 24px;border-bottom:1px solid #EFEADD;display:flex;justify-content:space-between;align-items:center">
+              <h3 style="font-size:16px;font-weight:600;margin:0">Facturen <span style="font-size:12px;font-weight:400;color:#8E8979;font-family:'JetBrains Mono',monospace">· voorgesteld</span></h3>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1.6fr 1.4fr 1fr .9fr .9fr;gap:12px;padding:12px 24px;border-bottom:1px solid #EFEADD;font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;color:#8E8979">
+              <div>Nummer</div><div>Bedrijf</div><div>Offerte / project</div><div style="text-align:right">Bedrag</div><div style="text-align:right">Vervalt</div><div style="text-align:right">Status</div>
+            </div>
+            <sc-for list="{{ invoiceRows }}" as="f" hint-placeholder-count="8">
+              <button onClick="{{ f.open }}" style="width:100%;display:grid;grid-template-columns:1fr 1.6fr 1.4fr 1fr .9fr .9fr;gap:12px;align-items:center;padding:14px 24px;border:none;border-bottom:1px solid #F2EDE1;background:none;cursor:pointer;font-family:inherit;text-align:left" style-hover="background:#FAF7F0">
+                <div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#5E5A4F">{{ f.nr }}</div>
+                <div style="font-size:14px;font-weight:500">{{ f.company }}</div>
+                <div style="font-size:12.5px;color:#8E8979">{{ f.link }}</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;text-align:right">{{ f.amount }}</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#5E5A4F;text-align:right">{{ f.due }}</div>
+                <div style="display:flex;justify-content:flex-end">{{ f.chipEl }}</div>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ===== CIJFERS ===== -->
+      <sc-if value="{{ isCijfers }}" hint-placeholder-val="{{ true }}">
+        <div style="opacity:1">
+          <!-- AI advisors -->
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px">
+            <sc-for list="{{ advisorCards }}" as="ad" hint-placeholder-count="3">
+              <button onClick="{{ ad.open }}" style="text-align:left;background:#fff;border:1px solid #DFD9C8;border-radius:24px;padding:20px;cursor:pointer;font-family:inherit;transition:transform .2s,box-shadow .2s" style-hover="transform:translateY(-3px);box-shadow:0 14px 32px -14px rgba(5,10,48,.14)">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                  <div style="{{ ad.iconWrap }}">{{ ad.iconEl }}</div>
+                  <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;color:#8E8979">AI-adviseur</div>
+                </div>
+                <div style="font-size:16px;font-weight:600;letter-spacing:-.01em">{{ ad.title }}</div>
+                <div style="font-size:13px;color:#5E5A4F;margin-top:6px;line-height:1.45">{{ ad.teaser }}</div>
+                <div style="font-size:12.5px;font-weight:500;color:#2458EA;margin-top:12px">Lees de analyse →</div>
+              </button>
+            </sc-for>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+            <div style="background:#FFFDF8;border-radius:28px;padding:24px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06)">
+              <h3 style="font-size:16px;font-weight:600;margin:0 0 2px">Gewonnen omzet per merk</h3>
+              <div style="font-size:12.5px;color:#8E8979;margin-bottom:16px">Klik een balk om de offertes van dat merk te zien</div>
+              {{ merkChart }}
+            </div>
+            <div style="background:#FFFDF8;border-radius:28px;padding:24px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06)">
+              <h3 style="font-size:16px;font-weight:600;margin:0 0 2px">Omzet per dienst</h3>
+              <div style="font-size:12.5px;color:#8E8979;margin-bottom:16px">Uit de deelbudgetten van gewonnen offertes</div>
+              {{ dienstChart }}
+            </div>
+          </div>
+
+          <div style="margin-top:18px;background:#FFFDF8;border-radius:28px;padding:24px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06)">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+              <div>
+                <h3 style="font-size:16px;font-weight:600;margin:0 0 2px">Recurring inkomsten · evolutie</h3>
+                <div style="font-size:12.5px;color:#8E8979">Maandelijks terugkerende omzet (hosting, social media, ads) — laatste 12 maanden</div>
+              </div>
+              <div style="text-align:right">
+                <div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:300;color:#1F6E3F;line-height:1">{{ recurMRR }}<span style="font-size:12px;color:#8E8979"> /mnd</span></div>
+                <div style="font-size:11.5px;color:#4A6B0E;font-weight:600;margin-top:3px">terugkerende omzet · groeit</div>
+              </div>
+            </div>
+            {{ recurringChart }}
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px">
+            <div style="background:#FFFDF8;border-radius:28px;padding:24px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06)">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                <h3 style="font-size:16px;font-weight:600;margin:0">Per uitbrenger</h3>
+                {{ ownerLockEl }}
+              </div>
+              {{ ownerChart }}
+            </div>
+            <div style="background:#FFFDF8;border-radius:28px;padding:24px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06)">
+              <h3 style="font-size:16px;font-weight:600;margin:0 0 2px">Gemiddeld uurtarief</h3>
+              <div style="font-size:12.5px;color:#8E8979;margin-bottom:18px">Indicatief, target {{ rateTarget }} per uur</div>
+              {{ rateGauge }}
+              <div style="margin-top:18px;background:#F4FBDB;border:1px solid #E4F0B8;border-radius:16px;padding:14px">
+                <div style="font-size:12px;color:#4A6B0E;font-weight:600;letter-spacing:.04em;text-transform:uppercase">Omzet vs maandtarget</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:600;color:#050A30;margin-top:4px">{{ monthRevenue }} <span style="font-size:13px;color:#5E5A4F;font-weight:400">/ {{ monthTarget }} target</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- eerlijke labeling verwijderd op verzoek -->
+        </div>
+      </sc-if>
+
+      <!-- ===== RENDEMENT ===== -->
+      <sc-if value="{{ isRendement }}" hint-placeholder-val="{{ false }}">
+        <div style="opacity:1">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:18px">
+            <sc-for list="{{ rendStats }}" as="st" hint-placeholder-count="3">
+              <button onClick="{{ st.onClick }}" style="{{ st.cardStyle }}">
+                <div style="font-family:'JetBrains Mono',monospace;font-size:32px;font-weight:300;letter-spacing:-.02em;line-height:1;color:#050A30">{{ st.value }}</div>
+                <div style="font-size:13px;color:#5E5A4F;margin-top:9px">{{ st.label }}</div>
+              </button>
+            </sc-for>
+          </div>
+          <div style="background:#FFFDF8;border-radius:28px;padding:24px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06)">
+            <h3 style="font-size:16px;font-weight:600;margin:0 0 2px">Projectrendement per lopend project</h3>
+            <div style="font-size:12.5px;color:#8E8979;margin-bottom:14px">Budget gedeeld door geplande uren. Onder {{ rateTarget }}/u krijgt een vlag. Volgt de filters bovenaan.</div>
+            <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;gap:12px;padding:10px 14px;border-bottom:1px solid #EFEADD;font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;color:#8E8979">
+              <div>Project</div><div style="text-align:right">Budget</div><div style="text-align:right">Geplande uren</div><div style="text-align:right">€/uur</div><div style="text-align:right">Status</div>
+            </div>
+            <sc-for list="{{ rendementRows }}" as="r" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;gap:12px;align-items:center;padding:13px 14px;border-bottom:1px solid #F2EDE1">
+                <div style="font-size:14px;font-weight:500">{{ r.name }}</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:13.5px;text-align:right">{{ r.budget }}</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:13.5px;text-align:right;color:#5E5A4F">{{ r.hours }}</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:13.5px;font-weight:600;text-align:right">{{ r.rate }}</div>
+                <div style="display:flex;justify-content:flex-end">{{ r.flagEl }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ===== KLANTEN ===== -->
+      <sc-if value="{{ isKlanten }}" hint-placeholder-val="{{ true }}">
+        <div style="opacity:1">
+          <div style="background:#FFFDF8;border-radius:28px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06);overflow:hidden">
+            <div style="display:grid;grid-template-columns:2fr 1.2fr .8fr 1fr 1fr 1fr;gap:12px;padding:14px 24px;border-bottom:1px solid #EFEADD;font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;color:#8E8979">
+              <div>Bedrijf</div><div>Sector</div><div style="text-align:right">Offertes</div><div style="text-align:right">Gewonnen</div><div style="text-align:right">Open pipeline</div><div style="text-align:right">Open facturen</div>
+            </div>
+            <sc-for list="{{ klantRows }}" as="k" hint-placeholder-count="8">
+              <button onClick="{{ k.open }}" style="width:100%;display:grid;grid-template-columns:2fr 1.2fr .8fr 1fr 1fr 1fr;gap:12px;align-items:center;padding:15px 24px;border:none;border-bottom:1px solid #F2EDE1;background:none;cursor:pointer;font-family:inherit;text-align:left" style-hover="background:#FAF7F0">
+                <div style="font-size:14.5px;font-weight:500">{{ k.name }}</div>
+                <div style="font-size:13px;color:#8E8979">{{ k.sector }}</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:13.5px;text-align:right;color:#5E5A4F">{{ k.count }}</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:13.5px;font-weight:500;text-align:right">{{ k.won }}</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:13.5px;text-align:right;color:#2458EA">{{ k.pipeline }}</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:13.5px;text-align:right;color:#5E5A4F">{{ k.openInvoices }}</div>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+    </main>
+  </div>
+
+  <!-- ============ OFFERTE DETAIL (taak-stijl, volledig scherm) ============ -->
+  <sc-if value="{{ showOfferte }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;z-index:80;background:#F7F3EA;overflow-y:auto;animation:sfFadeIn .2s ease both">
+      <div style="max-width:1240px;margin:0 auto;padding:22px 28px 64px">
+        <button onClick="{{ closeOfferte }}" style="display:inline-flex;align-items:center;gap:7px;background:none;border:none;cursor:pointer;font-family:inherit;font-size:13px;color:#2458EA;font-weight:500;padding:0;margin-bottom:14px">‹ Terug naar offertes</button>
+
+        <!-- TOP HEADER CARD (CRM-stijl) -->
+        <div style="background:#FFFDF8;border-radius:26px;padding:26px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06)">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap">
+            <div style="min-width:0">
+              <div style="font-size:11px;letter-spacing:.13em;text-transform:uppercase;font-weight:600;color:#8E8979;margin-bottom:8px">Offerte · {{ od_code }}</div>
+              <h1 style="font-size:26px;font-weight:300;letter-spacing:-.01em;margin:0">{{ od_titel }}</h1>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;flex:none">
+              <span style="font-size:12px;font-weight:600;border-radius:99px;padding:6px 14px;background:{{ od_statusBg }};color:{{ od_statusFg }};white-space:nowrap">{{ od_statusLabel }}</span>
+              <button onClick="{{ closeOfferte }}" style="flex:none;width:38px;height:38px;border-radius:11px;border:1px solid #DFD9C8;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#5E5A4F">{{ closeIcon }}</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:28px;margin-top:20px;flex-wrap:wrap;align-items:flex-end">
+            <div><div style="font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:500;line-height:1;color:#050A30">{{ od_budget }}</div><div style="font-size:12px;color:#8E8979;margin-top:5px">Totaalbudget</div></div>
+            <div style="border-left:1px solid #EFEADD;padding-left:28px"><div style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:500;color:#050A30;margin-top:2px">{{ od_expiry }}</div><div style="font-size:12px;color:#8E8979;margin-top:5px">Vervaldatum</div></div>
+            <div style="border-left:1px solid #EFEADD;padding-left:28px">
+              <div style="display:inline-flex;align-items:center;gap:8px;margin-top:2px"><span style="width:22px;height:22px;border-radius:99px;background:#0F2EA3;color:#fff;display:grid;place-items:center;font-size:10px;font-weight:600;flex:none">{{ od_senderInit }}</span><span style="font-size:15px;font-weight:600;color:#050A30">{{ od_owner }}</span></div>
+              <div style="font-size:12px;color:#8E8979;margin-top:5px">Verzonden door</div>
+            </div>
+            <div style="border-left:1px solid #EFEADD;padding-left:28px">
+              <div style="display:inline-flex;align-items:center;gap:7px;margin-top:2px">{{ od_brandDotEl }}<span style="font-size:15px;font-weight:600;color:#050A30">{{ od_brandLabel }}</span></div>
+              <div style="font-size:12px;color:#8E8979;margin-top:5px">Organisatie</div>
+            </div>
+            <button onClick="{{ od_goKlant }}" style="margin-left:auto;align-self:center;display:inline-flex;align-items:center;gap:6px;background:#F7F3EA;border:1px solid #DFD9C8;border-radius:11px;padding:9px 14px;font-size:13px;font-weight:600;color:#0F2EA3;cursor:pointer;font-family:inherit">{{ od_contact }} · bekijk klant →</button>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:268px 1fr 300px;gap:18px;align-items:start;margin-top:18px">
+
+          <!-- LEFT: collapsible PandaDoc + productietaken (hover to expand) -->
+          <div onMouseEnter="{{ od_onLeftEnter }}" onMouseLeave="{{ od_onLeftLeave }}" style="background:#FFFDF8;border-radius:22px;padding:18px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06)">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+              <div style="font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#8E8979">PandaDoc</div>
+              <span style="font-size:11.5px;font-weight:600;border-radius:99px;padding:4px 11px;background:{{ od_statusBg }};color:{{ od_statusFg }};white-space:nowrap">{{ od_statusLabel }}</span>
+            </div>
+            <a href="{{ od_link }}" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;box-sizing:border-box;background:#F7F3EA;color:#050A30;border:1px solid #DFD9C8;border-radius:12px;padding:10px;font-size:13px;font-weight:600;margin-top:13px;text-decoration:none">{{ linkIcon }}Open offerte in PandaDoc</a>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:18px;padding-top:16px;border-top:1px solid #EFEADD">
+              <span style="display:grid;place-items:center;color:#4A6B0E">{{ tasksIcon }}</span>
+              <div style="flex:1;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;color:#8E8979">Productietaken</div>
+              <span style="font-size:11px;font-weight:700;color:#4A6B0E;background:#F4FBDB;border-radius:99px;padding:2px 9px">{{ od_takenCount }}</span>
+              {{ od_leftChevronEl }}
+            </div>
+            <sc-if value="{{ od_leftOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:13px">
+                <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:13px">
+                  <sc-for list="{{ od_discRows }}" as="d" hint-placeholder-count="3"><div style="display:flex;align-items:center;gap:9px;background:#F7F3EA;border-radius:10px;padding:9px 11px"><span style="width:8px;height:8px;border-radius:3px;background:{{ d.color }};flex:none"></span><span style="flex:1;min-width:0;font-size:12.5px;font-weight:500;color:#26241F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ d.label }}</span></div></sc-for>
+                </div>
+                <button onClick="{{ od_openPlanning }}" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;background:#050A30;color:#fff;border:none;border-radius:12px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Open in productieplanning →</button>
+              </div>
+            </sc-if>
+          </div>
+
+          <!-- MIDDLE: tabs -->
+          <div>
+            <div style="display:flex;gap:4px;border-bottom:1px solid #E7E0D0;margin-bottom:18px;flex-wrap:wrap">
+              <sc-for list="{{ od_tabs }}" as="tb" hint-placeholder-count="3">
+                <button onClick="{{ tb.go }}" style="{{ tb.style }}">{{ tb.iconEl }}{{ tb.label }}</button>
+              </sc-for>
+            </div>
+
+            <sc-if value="{{ od_showTraject }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;flex-direction:column;gap:16px">
+                <div style="background:#FFFDF8;border-radius:20px;padding:18px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06)">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                    <h3 style="font-size:14px;font-weight:600;margin:0">Budget per discipline</h3>
+                    <span style="font-size:11.5px;color:#8E8979">{{ od_discNote }}</span>
+                  </div>
+                  {{ od_discBar }}
+                  <sc-for list="{{ od_discRows }}" as="d" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-top:1px solid #F2EDE1">
+                      <span style="display:flex;align-items:center;gap:8px;font-size:13px"><span style="width:9px;height:9px;border-radius:3px;background:{{ d.color }}"></span>{{ d.label }}</span>
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:500">{{ d.value }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="background:#FFFDF8;border-radius:20px;padding:18px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06)">
+                  <h3 style="font-size:14px;font-weight:600;margin:0 0 12px">Post-win opstart</h3>
+                  <button onClick="{{ od_toggleOpstart }}" style="width:100%;display:flex;align-items:center;gap:12px;background:{{ od_opstartBg }};border:1px solid {{ od_opstartBorder }};border-radius:14px;padding:13px 14px;cursor:pointer;font-family:inherit;text-align:left">
+                    {{ od_opstartCheck }}
+                    <div style="flex:1"><div style="font-size:13.5px;font-weight:500;color:#050A30">Opstart account manager (Ilke)</div><div style="font-size:12px;color:#5E5A4F">{{ od_opstartNote }}</div></div>
+                  </button>
+                  <div style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12.5px;color:#5E5A4F">PM-handoff: {{ od_pmEl }}</div>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ od_showVraag }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;gap:16px">
+                <div style="background:#FFFDF8;border-radius:20px;padding:18px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06)">
+                  <h3 style="font-size:14px;font-weight:600;margin:0 0 8px">Initiële vraag van de klant</h3>
+                  <p style="font-size:14px;color:#3D3A33;line-height:1.6;margin:0">{{ od_klantvraag }}</p>
+                </div>
+                <div style="background:#FFFDF8;border-radius:20px;padding:18px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06)">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+                    <h3 style="font-size:14px;font-weight:600;margin:0">Mailverkeer</h3>
+                    <button onClick="{{ od_fetchMail }}" style="display:inline-flex;align-items:center;gap:7px;border:1px solid #DFD9C8;background:#fff;border-radius:10px;padding:7px 11px;font-family:inherit;font-size:12px;font-weight:500;color:#0F2EA3;cursor:pointer">{{ od_gmailIcon }}Haal uit Gmail</button>
+                  </div>
+                  {{ od_mailEl }}
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ od_showContact }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#FFFDF8;border-radius:20px;padding:20px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06)">
+                <h3 style="font-size:14px;font-weight:600;margin:0 0 14px">Contactgegevens</h3>
+                <div style="display:flex;flex-direction:column;gap:12px">
+                  <div style="display:flex;justify-content:space-between;border-bottom:1px solid #F2EDE1;padding-bottom:10px"><span style="font-size:12.5px;color:#8E8979">Contactpersoon</span><span style="font-size:13.5px;font-weight:500;color:#050A30">{{ od_contact }}</span></div>
+                  <div style="display:flex;justify-content:space-between;border-bottom:1px solid #F2EDE1;padding-bottom:10px"><span style="font-size:12.5px;color:#8E8979">Bedrijf</span><span style="font-size:13.5px;font-weight:500;color:#050A30">{{ od_company }}</span></div>
+                  <div style="display:flex;justify-content:space-between;border-bottom:1px solid #F2EDE1;padding-bottom:10px"><span style="font-size:12.5px;color:#8E8979">Sector</span><span style="font-size:13.5px;color:#3D3A33">{{ od_sector }}</span></div>
+                  <div style="display:flex;justify-content:space-between"><span style="font-size:12.5px;color:#8E8979">Account</span><span style="font-size:13.5px;color:#3D3A33">{{ od_pmEl }}</span></div>
+                </div>
+                <button onClick="{{ od_goKlant }}" style="margin-top:16px;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;background:#fff;border:1px solid #DFD9C8;border-radius:12px;padding:11px;font-family:inherit;font-size:13px;font-weight:500;color:#0F2EA3;cursor:pointer">Open klantdossier →</button>
+              </div>
+            </sc-if>
+          </div>
+
+          <!-- RIGHT: AI + bericht + link -->
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div style="background:#FFFDF8;border-radius:20px;padding:18px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06)">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="width:26px;height:26px;border-radius:8px;background:#E0F1FD;display:grid;place-items:center">{{ sparkIcon }}</span><h3 style="font-size:14px;font-weight:600;margin:0">AI-acties</h3></div>
+              <div style="font-size:12px;color:#8E8979;margin-bottom:12px">Afgestemd op de huidige fase van de offerte.</div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <sc-for list="{{ od_aiActions }}" as="a" hint-placeholder-count="4">
+                  <button onClick="{{ a.run }}" style="{{ a.style }}">{{ a.iconEl }}{{ a.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+            <div style="background:#FFFDF8;border-radius:20px;padding:18px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06)">
+              <h3 style="font-size:14px;font-weight:600;margin:0 0 10px">Bericht naar klant</h3>
+              <textarea value="{{ od_msgDraft }}" onInput="{{ od_setMsg }}" placeholder="Schrijf een korte boodschap over deze offerte…" style="width:100%;box-sizing:border-box;min-height:84px;resize:vertical;border:1px solid #DFD9C8;border-radius:12px;padding:11px 13px;font-family:inherit;font-size:13px;color:#050A30;background:#fff;outline:none"></textarea>
+              <button onClick="{{ od_sendMsg }}" style="margin-top:10px;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;background:#0F2EA3;color:#fff;border:none;border-radius:12px;padding:11px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">{{ od_sendIcon }}Verstuur naar {{ od_contact }}</button>
+            </div>
+            <a href="{{ od_link }}" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#050A30;color:#fff;border-radius:14px;padding:13px;font-size:13.5px;font-weight:500;text-decoration:none">{{ linkIcon }}Open in PandaDoc</a>
+            <button onClick="{{ od_goFactuur }}" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#fff;border:1px solid #DFD9C8;border-radius:14px;padding:13px;font-size:13.5px;font-weight:500;color:#050A30;cursor:pointer;font-family:inherit">{{ invoiceIcon }}{{ od_factuurLabel }}</button>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8E8979;line-height:1.6;text-align:center">PandaDoc-ID {{ od_pandaId }} · code {{ od_code }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ NIEUWE OFFERTE MODAL ============ -->
+  <sc-if value="{{ newOffActive }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeNewOff }}" style="position:fixed;inset:0;z-index:86;background:rgba(5,10,48,.4);backdrop-filter:blur(2px);animation:sfFadeIn .22s ease both;display:flex;justify-content:center;align-items:flex-start;padding:60px 24px;overflow-y:auto">
+      <div onClick="{{ stop }}" style="width:460px;max-width:96vw;background:#FFFDF8;border-radius:24px;box-shadow:0 40px 80px -24px rgba(5,10,48,.4);animation:sfScaleIn .4s cubic-bezier(.16,1,.3,1) both;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:20px 24px;border-bottom:1px solid #EFEADD">
+          <div>
+            <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:600;color:#8E8979">Snel aanmaken</div>
+            <h2 style="font-size:20px;font-weight:300;letter-spacing:-.01em;margin:2px 0 0">Nieuwe offerte</h2>
+          </div>
+          <button onClick="{{ closeNewOff }}" style="flex:none;width:36px;height:36px;border-radius:11px;border:1px solid #DFD9C8;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#5E5A4F">{{ closeIcon }}</button>
+        </div>
+        <div style="padding:22px 24px;display:flex;flex-direction:column;gap:16px">
+          <div style="font-size:12.5px;color:#5E5A4F;line-height:1.5">Geef enkel het bedrijf en de contactpersoon op — net als bij een nieuwe taak. De rest werk je af in PandaDoc.</div>
+          <label style="display:flex;flex-direction:column;gap:6px">
+            <span style="font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#8E8979">Bedrijf <span style="color:#B0432F">*</span></span>
+            <select value="{{ newOff.company }}" onChange="{{ setNewOffCompany }}" style="border:1px solid #DFD9C8;border-radius:11px;padding:10px 12px;font-family:inherit;font-size:14px;color:#050A30;background:#fff;cursor:pointer;outline:none">
+              <option value="">Kies een bedrijf…</option>
+              <sc-for list="{{ newOffCompanies }}" as="co" hint-placeholder-count="6"><option value="{{ co }}">{{ co }}</option></sc-for>
+            </select>
+          </label>
+          <label style="display:flex;flex-direction:column;gap:6px">
+            <span style="font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#8E8979">Contactpersoon</span>
+            <input value="{{ newOff.contact }}" onInput="{{ setNewOffContact }}" placeholder="bv. Koen Bolckmans" style="border:1px solid #DFD9C8;border-radius:11px;padding:10px 12px;font-family:inherit;font-size:14px;color:#050A30;background:#fff;outline:none" />
+          </label>
+          <label style="display:flex;flex-direction:column;gap:6px">
+            <span style="font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#8E8979">Organisatie</span>
+            <select value="{{ newOff.brand }}" onChange="{{ setNewOffBrand }}" style="border:1px solid #DFD9C8;border-radius:11px;padding:10px 12px;font-family:inherit;font-size:14px;color:#050A30;background:#fff;cursor:pointer;outline:none">
+              <sc-for list="{{ newOffBrands }}" as="b" hint-placeholder-count="4"><option value="{{ b.value }}">{{ b.label }}</option></sc-for>
+            </select>
+          </label>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;padding:0 24px 22px">
+          <button onClick="{{ closeNewOff }}" style="border:1px solid #DFD9C8;background:#fff;border-radius:11px;padding:10px 16px;font-family:inherit;font-size:13.5px;font-weight:500;color:#5E5A4F;cursor:pointer">Annuleren</button>
+          <button onClick="{{ createNewOff }}" style="border:none;background:#050A30;color:#fff;border-radius:11px;padding:10px 18px;font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer">Aanmaken in PandaDoc</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ KLANT DETAIL ============ -->
+  <sc-if value="{{ showKlant }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeKlant }}" style="position:fixed;inset:0;z-index:80;background:rgba(5,10,48,.34);backdrop-filter:blur(2px);animation:sfFadeIn .22s ease both;display:flex;justify-content:center;align-items:flex-start;padding:48px 24px;overflow-y:auto">
+      <div onClick="{{ stop }}" style="width:720px;max-width:96vw;background:#F7F3EA;border-radius:32px;box-shadow:0 40px 80px -24px rgba(5,10,48,.4);animation:sfScaleIn .42s cubic-bezier(.16,1,.3,1) both;overflow:hidden">
+        <div style="position:relative;overflow:hidden;background:#0F2EA3;padding:26px 28px;color:#fff;display:flex;justify-content:space-between;align-items:flex-start">
+          <img src="assets/Pipe-divider-warmwhite.svg" alt="" style="position:absolute;right:-14px;bottom:-12px;width:280px;opacity:.12;pointer-events:none">
+          <div>
+            <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:600;color:rgba(247,243,234,.7)">{{ kd_sector }}</div>
+            <h2 style="font-size:26px;font-weight:300;letter-spacing:-.02em;margin:4px 0 0">{{ kd_name }}</h2>
+            <div style="font-size:13px;color:rgba(247,243,234,.8);margin-top:2px">{{ kd_contact }}</div>
+          </div>
+          <button onClick="{{ closeKlant }}" style="flex:none;width:38px;height:38px;border-radius:12px;border:1px solid rgba(247,243,234,.3);background:rgba(255,255,255,.1);cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff">{{ closeIcon }}</button>
+        </div>
+        <div style="padding:24px 28px">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+            <div style="background:#FFFDF8;border-radius:18px;padding:16px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06)"><div style="font-size:11px;color:#8E8979;font-weight:500;text-transform:uppercase;letter-spacing:.05em">Gewonnen omzet</div><div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:600;margin-top:4px">{{ kd_won }}</div></div>
+            <div style="background:#FFFDF8;border-radius:18px;padding:16px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06)"><div style="font-size:11px;color:#8E8979;font-weight:500;text-transform:uppercase;letter-spacing:.05em">Open pipeline</div><div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:600;margin-top:4px;color:#2458EA">{{ kd_pipeline }}</div></div>
+            <div style="background:#FFFDF8;border-radius:18px;padding:16px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06)"><div style="font-size:11px;color:#8E8979;font-weight:500;text-transform:uppercase;letter-spacing:.05em">Open facturen</div><div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:600;margin-top:4px">{{ kd_openInvoices }}</div></div>
+          </div>
+          <h3 style="font-size:14px;font-weight:600;margin:0 0 8px">Offertes</h3>
+          <sc-for list="{{ kd_offertes }}" as="o" hint-placeholder-count="3">
+            <button onClick="{{ o.open }}" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff;border:1px solid #EFEADD;border-radius:14px;padding:12px 14px;margin-bottom:8px;cursor:pointer;font-family:inherit;text-align:left">
+              <div style="display:flex;align-items:center;gap:10px">{{ o.chipEl }}<span style="font-size:13.5px;color:#5E5A4F;font-family:'JetBrains Mono',monospace">{{ o.code }}</span></div>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500">{{ o.budget }}</span>
+            </button>
+          </sc-for>
+          <h3 style="font-size:14px;font-weight:600;margin:18px 0 8px">Facturen <span style="font-size:11px;font-weight:400;color:#8E8979">· voorgesteld</span></h3>
+          <sc-for list="{{ kd_facturen }}" as="f" hint-placeholder-count="2">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff;border:1px solid #EFEADD;border-radius:14px;padding:12px 14px;margin-bottom:8px">
+              <div style="display:flex;align-items:center;gap:10px">{{ f.chipEl }}<span style="font-size:13px;color:#5E5A4F;font-family:'JetBrains Mono',monospace">{{ f.nr }}</span></div>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500">{{ f.amount }}</span>
+            </div>
+          </sc-for>
+          <sc-if value="{{ kd_noInvoices }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:13px;color:#8E8979;padding:4px 2px">Nog geen voorgestelde facturen voor deze klant.</div>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ AI ADVISOR PANEL ============ -->
+  <sc-if value="{{ showAi }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeAi }}" style="position:fixed;inset:0;z-index:85;background:rgba(5,10,48,.4);backdrop-filter:blur(2px);animation:sfFadeIn .22s ease both;display:flex;justify-content:flex-end">
+      <div onClick="{{ stop }}" style="position:relative;overflow:hidden;width:480px;max-width:94vw;height:100%;overflow-y:auto;background:#050A30;color:#F7F3EA;box-shadow:-30px 0 60px -20px rgba(5,10,48,.5);animation:sfDrawer .42s cubic-bezier(.16,1,.3,1) both">
+        <img src="assets/Pipe-divider-warmwhite.svg" alt="" style="position:absolute;right:-10px;bottom:24px;width:240px;opacity:.1;pointer-events:none">
+        <div style="padding:26px 28px;display:flex;justify-content:space-between;align-items:flex-start">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="{{ ai_iconWrap }}">{{ ai_iconEl }}</div>
+            <div><div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:600;color:#28AFF9">AI-adviseur</div><h2 style="font-size:22px;font-weight:300;letter-spacing:-.01em;margin:2px 0 0;color:#fff">{{ ai_title }}</h2></div>
+          </div>
+          <button onClick="{{ closeAi }}" style="flex:none;width:38px;height:38px;border-radius:12px;border:1px solid rgba(247,243,234,.25);background:rgba(255,255,255,.08);cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff">{{ closeIcon }}</button>
+        </div>
+        <div style="padding:0 28px 28px">
+          <p style="font-size:15px;line-height:1.6;color:rgba(247,243,234,.9);max-width:none">{{ ai_summary }}</p>
+          <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:600;color:#28AFF9;margin:22px 0 10px">Concrete actiepunten</div>
+          <sc-for list="{{ ai_bullets }}" as="b" hint-placeholder-count="3">
+            <div style="display:flex;gap:12px;background:rgba(247,243,234,.05);border:1px solid rgba(247,243,234,.1);border-radius:16px;padding:14px;margin-bottom:10px">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#D1F24C;font-weight:600;flex:none">{{ b.num }}</span>
+              <span style="font-size:13.5px;line-height:1.5;color:rgba(247,243,234,.88)">{{ b.text }}</span>
+            </div>
+          </sc-for>
+          <div style="font-size:11.5px;color:rgba(247,243,234,.5);margin-top:14px;line-height:1.5">Demonstreert het AI-karakter van de groep.</div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ AI ASSISTENT CHAT DRAWER ============ -->
+  <sc-if value="{{ assistOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ toggleAssistant }}" style="position:fixed;inset:0;z-index:96;background:rgba(5,10,48,.45);animation:sfFadeIn .2s ease both;"></div>
+    <aside style="position:fixed;top:0;right:0;bottom:0;width:min(420px,94vw);z-index:97;background:#FFFDF8;border-left:1px solid #EFEADD;display:flex;flex-direction:column;height:100vh;box-shadow:-12px 0 40px -16px rgba(5,10,48,.4);animation:sfDrawer .3s cubic-bezier(.16,1,.3,1);">
+      <div style="padding:20px 22px;border-bottom:1px solid #EFEADD;display:flex;align-items:center;gap:12px;">
+        <span style="width:40px;height:40px;border-radius:12px;background:#050A30;color:#D1F24C;display:grid;place-items:center;flex:none;">{{ assistHeadIcon }}</span>
+        <div style="flex:1;"><div style="font-size:16px;font-weight:600;color:#050A30;">AI-assistent</div><div style="font-size:12px;color:#4A6B0E;display:flex;align-items:center;gap:6px;"><span style="width:6px;height:6px;border-radius:99px;background:#4A6B0E;"></span>Kent je offertes, facturen &amp; cijfers</div></div>
+        <button onClick="{{ toggleAssistant }}" style="width:32px;height:32px;border-radius:9px;border:none;background:#F7F3EA;color:#5E5A4F;cursor:pointer;display:grid;place-items:center;flex:none;" style-hover="background:#EFEADD;">{{ assistCloseIcon }}</button>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:20px 22px;display:flex;flex-direction:column;gap:14px;">
+        <sc-for list="{{ assistMessages }}" as="m" hint-placeholder-count="2">
+          <div style="align-self:{{ m.align }};max-width:88%;background:{{ m.bg }};color:{{ m.color }};border-radius:{{ m.radius }};padding:12px 15px;font-size:14px;line-height:1.55;white-space:pre-wrap;box-shadow:0 2px 10px -6px rgba(5,10,48,.15);">{{ m.text }}</div>
+        </sc-for>
+      </div>
+      <div style="padding:0 22px 12px;display:flex;gap:8px;flex-wrap:wrap;">
+        <sc-for list="{{ assistChips }}" as="c" hint-placeholder-count="3">
+          <button onClick="{{ c.run }}" style="font-size:12.5px;font-weight:500;background:#fff;border:1px solid #DFD9C8;color:#0F2EA3;border-radius:99px;padding:7px 13px;cursor:pointer;" style-hover="background:#E6ECFE;border-color:#C7D3F2;">{{ c.label }}</button>
+        </sc-for>
+      </div>
+      <div style="padding:14px 18px 18px;border-top:1px solid #EFEADD;display:flex;gap:10px;align-items:center;">
+        <input value="{{ assistInput }}" onInput="{{ setAssistInput }}" onKeyDown="{{ assistKey }}" placeholder="Vraag de AI-assistent iets..." style="flex:1;font-size:14px;border:1px solid #DFD9C8;background:#fff;border-radius:12px;padding:12px 14px;color:#050A30;outline:none;font-weight:400;">
+        <button onClick="{{ sendAssist }}" style="width:42px;height:42px;border-radius:12px;border:none;background:#D1F24C;color:#050A30;cursor:pointer;display:grid;place-items:center;flex:none;">{{ assistSendIcon }}</button>
+      </div>
+    </aside>
+  </sc-if>
+
+  <!-- ============ DATUM-TOOL MODAL ============ -->
+  <sc-if value="{{ dateModalOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeDate }}" style="position:fixed;inset:0;background:rgba(5,10,48,.42);backdrop-filter:blur(3px);z-index:96;display:grid;place-items:center;padding:24px;animation:sfFadeIn .2s ease;">
+      <div onClick="{{ stopDate }}" style="background:#FFFDF8;border-radius:24px;width:660px;max-width:100%;box-shadow:0 40px 90px -30px rgba(5,10,48,.5);animation:sfScaleIn .26s cubic-bezier(.16,1,.3,1);overflow:hidden;">
+        <div style="padding:20px 24px;border-bottom:1px solid #EFEADD;display:flex;align-items:center;gap:12px;">
+          <span style="width:38px;height:38px;border-radius:11px;background:#050A30;display:grid;place-items:center;flex:none;"><i data-lucide="calendar-range" style="font-size:18px;color:#D1F24C;"></i></span>
+          <div style="flex:1;"><div style="font-size:11px;letter-spacing:.13em;text-transform:uppercase;font-weight:600;color:#8E8979;">Periode kiezen</div><div style="font-size:17px;font-weight:600;color:#050A30;">Financieel overzicht</div></div>
+          <button onClick="{{ closeDate }}" style="border:none;background:#EFEADD;width:34px;height:34px;border-radius:10px;cursor:pointer;display:grid;place-items:center;" style-hover="background:#DFD9C8;"><i data-lucide="x" style="font-size:18px;"></i></button>
+        </div>
+        <div style="display:grid;grid-template-columns:200px 1fr;">
+          <div style="padding:18px;border-right:1px solid #EFEADD;display:flex;flex-direction:column;gap:7px;background:#FBF8F0;">
+            <div style="font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:#8E8979;padding:2px 4px 6px;">Snelkeuze</div>
+            <sc-for list="{{ datePresets }}" as="p" hint-placeholder-count="5">
+              <button onClick="{{ p.pick }}" style="{{ p.style }}" style-hover="filter:brightness(.97);">{{ p.label }}</button>
+            </sc-for>
+          </div>
+          <div style="padding:18px 20px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+              <button onClick="{{ calPrev }}" style="width:34px;height:34px;border-radius:10px;border:1px solid #DFD9C8;background:#FFFDF8;cursor:pointer;display:grid;place-items:center;" style-hover="background:#F2EEE3;"><i data-lucide="chevron-left" style="font-size:18px;color:#5E5A4F;"></i></button>
+              <span style="font-size:15px;font-weight:600;color:#050A30;text-transform:capitalize;">{{ calLabel }}</span>
+              <button onClick="{{ calNext }}" style="width:34px;height:34px;border-radius:10px;border:1px solid #DFD9C8;background:#FFFDF8;cursor:pointer;display:grid;place-items:center;" style-hover="background:#F2EEE3;"><i data-lucide="chevron-right" style="font-size:18px;color:#5E5A4F;"></i></button>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:5px;">
+              <sc-for list="{{ calWeekdays }}" as="w" hint-placeholder-count="7"><div style="height:26px;display:grid;place-items:center;font-size:11px;font-weight:600;color:#A8A293;text-transform:uppercase;">{{ w }}</div></sc-for>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;">
+              <sc-for list="{{ calCells }}" as="c" hint-placeholder-count="35">
+                <sc-if value="{{ c.blank }}" hint-placeholder-val="{{ false }}"><div style="{{ c.style }}"></div></sc-if>
+                <sc-if value="{{ c.day }}" hint-placeholder-val="{{ false }}"><button onClick="{{ c.pick }}" style="{{ c.style }}">{{ c.day }}</button></sc-if>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+        <div style="padding:16px 24px;border-top:1px solid #EFEADD;display:flex;align-items:center;gap:14px;">
+          <div style="flex:1;display:flex;align-items:center;gap:9px;font-size:13.5px;color:#26241F;"><i data-lucide="calendar-check" style="font-size:16px;color:#0F2EA3;"></i><span style="font-weight:500;">{{ draftSummary }}</span></div>
+          <button onClick="{{ clearDraft }}" style="background:none;border:none;color:#6E2218;font-size:13px;font-weight:600;cursor:pointer;padding:8px 10px;" style-hover="color:#050A30;">Wissen</button>
+          <button onClick="{{ applyDate }}" style="background:#050A30;color:#fff;border:none;border-radius:12px;padding:11px 22px;font-size:14px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;" style-hover="background:#16194a;">Toepassen<i data-lucide="check" style="font-size:16px;color:#D1F24C;"></i></button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ TOAST ============ -->
+  <sc-if value="{{ showToast }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:95;display:flex;align-items:center;gap:12px;background:#050A30;color:#fff;padding:14px 20px;border-radius:16px;box-shadow:0 20px 50px -16px rgba(5,10,48,.5);animation:sfFadeUp .3s cubic-bezier(.16,1,.3,1) both;max-width:90vw">
+      <span style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;background:#D1F24C;color:#050A30;flex:none">{{ toastIcon }}</span>
+      <span style="font-size:13.5px;font-weight:500">{{ toastMsg }}</span>
+    </div>
+  </sc-if>
+
+  <!-- ============ BUG MELDEN MODAL ============ -->
+  <sc-if value="{{ bugOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeBug }}" style="position:fixed;inset:0;z-index:140;background:rgba(5,10,48,.5);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:24px;">
+      <div onClick="{{ stopBug }}" style="background:#F7F3EA;border-radius:22px;width:100%;max-width:480px;box-shadow:0 40px 80px -20px rgba(5,10,48,.5);overflow:hidden;">
+        <div style="display:flex;align-items:center;gap:11px;padding:18px 22px;border-bottom:1px solid #EFEADD;">
+          <span style="width:34px;height:34px;border-radius:10px;background:#050A30;display:grid;place-items:center;flex:none;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D1F24C" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="6" width="8" height="13" rx="4"></rect><path d="M19 8l-3 1.5M5 8l3 1.5M3 13h3M18 13h3M5 18l3-1.5M19 18l-3-1.5M9 6a3 3 0 0 1 6 0"></path></svg></span>
+          <h3 style="font-size:18px;font-weight:600;margin:0;flex:1;">Bug aanmelden</h3>
+          <button onClick="{{ closeBug }}" style="width:32px;height:32px;border-radius:9px;border:1px solid #DFD9C8;background:#fff;cursor:pointer;display:grid;place-items:center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#5E5A4F" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+        </div>
+        <div style="padding:22px;display:flex;flex-direction:column;gap:16px;max-height:70vh;overflow:auto;">
+          <div style="display:flex;gap:12px;">
+            <div style="flex:1;"><div style="font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#A39E8E;margin-bottom:9px;">Vanuit scherm</div><div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#3D3A33;border:1px solid #EAE4D5;border-radius:11px;padding:10px 13px;background:#F2EDE1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ bugScreen }}</div></div>
+            <div style="flex:1;"><div style="font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#A39E8E;margin-bottom:9px;">Aangemeld door</div><div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#3D3A33;border:1px solid #EAE4D5;border-radius:11px;padding:10px 13px;background:#F2EDE1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ bugReporter }}</div></div>
+          </div>
+          <div><div style="font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#A39E8E;margin-bottom:9px;">Titel</div><input type="text" value="{{ bugTitle }}" onInput="{{ setBugTitle }}" placeholder="Korte samenvatting van de bug…" style="font-family:inherit;font-size:14px;color:#3D3A33;border:1px solid #DFD9C8;border-radius:11px;padding:10px 13px;background:#fff;width:100%;box-sizing:border-box;"></div>
+          <div><div style="font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#A39E8E;margin-bottom:9px;">Omschrijving</div><textarea value="{{ bugDesc }}" onInput="{{ setBugDesc }}" placeholder="Wat ging er mis? Stappen om te reproduceren, verwacht vs werkelijk gedrag…" style="font-family:inherit;font-size:14px;color:#3D3A33;border:1px solid #DFD9C8;border-radius:11px;padding:10px 13px;background:#fff;width:100%;box-sizing:border-box;min-height:96px;resize:vertical;"></textarea></div>
+          <div><div style="font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#A39E8E;margin-bottom:9px;">Bijlagen (screenshots / afbeeldingen)</div>
+            <sc-for list="{{ bugFiles }}" as="f" hint-placeholder-count="0"><div style="display:flex;align-items:center;gap:9px;background:#fff;border:1px solid #EAE4D5;border-radius:10px;padding:8px 11px;margin-bottom:7px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2458EA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2.5"></rect><circle cx="8.5" cy="8.5" r="1.6"></circle><path d="m21 16-4.5-4.5L7 21"></path></svg><span style="flex:1;font-size:12.5px;color:#3D3A33;font-family:'JetBrains Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ f.name }}</span><button onClick="{{ f.remove }}" style="border:none;background:none;cursor:pointer;display:grid;place-items:center;color:#B83A2A;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#B83A2A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></div></sc-for>
+            <button onClick="{{ addBugFile }}" style="display:inline-flex;align-items:center;gap:8px;border:1px dashed #C4BEAC;background:#fff;color:#5E5A4F;border-radius:11px;padding:9px 13px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8E8979" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"></path></svg>Bestand toevoegen</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;padding:0 22px 22px;">
+          <button onClick="{{ closeBug }}" style="flex:1;font-family:inherit;font-size:14px;font-weight:600;background:#fff;color:#5E5A4F;border:1px solid #DFD9C8;border-radius:12px;padding:11px 0;cursor:pointer;">Annuleren</button>
+          <button onClick="{{ submitBug }}" style="flex:2;font-family:inherit;font-size:14px;font-weight:600;background:#050A30;color:#fff;border:none;border-radius:12px;padding:11px 0;cursor:pointer;">Bug indienen</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:860},&quot;role&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;admin&quot;,&quot;sales&quot;],&quot;default&quot;:&quot;admin&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;startScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;overzicht&quot;,&quot;offertes&quot;,&quot;facturatie&quot;,&quot;cijfers&quot;,&quot;klanten&quot;],&quot;default&quot;:&quot;overzicht&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    this.MONTHS = ['jan','feb','mrt','apr','mei','jun'];
+    this.NOW = new Date(2026,5,23);
+    this.BRANDS = { S27:{label:'Studio 27', color:'#0F2EA3'}, '27A':{label:'27 Automations', color:'#2458EA'}, ZVD:{label:'Zorg voor Digitaal', color:'#28AFF9'}, '27M':{label:'27 Moments', color:'#9AB814'} };
+    this.SECTORS = { 'Bolckmans NV':'Industrie- en betonbouw','Flor Vastgoed':'Vastgoed','PartsPoint België':'Automotive','Dr. Melanie Raes':'Medisch','ABW Bestratingen':'Bestrating','Vorsselmans Solar':'Zonne-energie','GT Foam':'Productie','Orison':'Retail','Max Pro':'Industrie','IP Cleaning':'Schoonmaak','Econstruct':'Bouw','Leaseline':'Mobiliteit' };
+
+    // ---- OFFERTES: nu via gedeelde dataset window.S27_DATA (CRM = source of truth). Zie get OFFERTES() ----
+
+    // ---- Bedrijfsgegevens voor facturatie (ondernemingsnr + facturatiemail) ----
+    this.CO_META = {
+      'Bolckmans NV':{kbo:'BE 0765.378.104', mail:'facturen@bolckmans.be'},
+      'Flor Vastgoed':{kbo:'BE 0712.998.211', mail:'boekhouding@florvastgoed.be'},
+      'PartsPoint België':{kbo:'BE 0644.872.190', mail:'facturatie@partspoint.be'},
+      'Dr. Melanie Raes':{kbo:'BE 0689.331.502', mail:'praktijk@dermaraes.be'},
+      'ABW Bestratingen':{kbo:'BE 0633.410.882', mail:'facturen@abwbestratingen.be'},
+      'Vorsselmans Solar':{kbo:'BE 0701.221.554', mail:'administratie@vorsselmans.be'},
+      'GT Foam':{kbo:'BE 0701.443.119', mail:'facturatie@gtfoam.com'},
+      'Orison':{kbo:'BE 0655.330.118', mail:'finance@orison.be'},
+      'Max Pro':{kbo:'BE 0648.770.221', mail:'boekhouding@maxpro.be'},
+      'IP Cleaning':{kbo:'BE 0699.114.330', mail:'facturen@ipcleaning.be'},
+      'Econstruct':{kbo:'BE 0723.551.804', mail:'facturatie@econstruct.be'},
+      'Leaseline':{kbo:'BE 0688.420.776', mail:'finance@leaseline.be'}
+    };
+
+    // ---- Taken klaar voor facturatie (uit Productie: afgewerkte deliverables) ----
+    this.BILLREADY = [
+      {bedrijf:'Bolckmans NV', taak:'Website fase 2 — oplevering', project:'S27-0418', budget:4800, status:'klaar'},
+      {bedrijf:'Bolckmans NV', taak:'SEO-setup Q2', project:'S27-0418', budget:1800, status:'klaar'},
+      {bedrijf:'Bolckmans NV', taak:'Ads-beheer juni', project:'27A-0619', budget:950, status:'gefactureerd', factuur:'F2026-051'},
+      {bedrijf:'Bolckmans NV', taak:'Copywriting nieuwe diensten-pagina', project:'S27-0418', budget:700, status:'in_progress'},
+      {bedrijf:'Flor Vastgoed', taak:'Automation-retainer juni', project:'27A-0203', budget:1200, status:'klaar'},
+      {bedrijf:'Flor Vastgoed', taak:'Extra Make-scenario (lead-sync)', project:'27A-0203', budget:650, status:'klaar'},
+      {bedrijf:'Flor Vastgoed', taak:'Dashboardkoppeling vastgoedportaal', project:'27A-0203', budget:900, status:'on_hold'},
+      {bedrijf:'ABW Bestratingen', taak:'Social media — juni', project:'S27-0120', budget:600, status:'klaar'},
+      {bedrijf:'ABW Bestratingen', taak:'Fotoshoot werf Merksplas', project:'S27-0120', budget:1400, status:'klaar'},
+      {bedrijf:'ABW Bestratingen', taak:'Landingspagina actie najaar', project:'S27-0120', budget:850, status:'done'},
+      {bedrijf:'Vorsselmans Solar', taak:'Brandingpakket — oplevering', project:'S27-0214', budget:5000, status:'klaar'},
+      {bedrijf:'Vorsselmans Solar', taak:'Videocampagne zonnepanelen', project:'27M-0515', budget:3100, status:'gefactureerd', factuur:'F2026-047'},
+      {bedrijf:'Vorsselmans Solar', taak:'Drone-opnames bedrijfspand', project:'27M-0515', budget:600, status:'in_progress'},
+      {bedrijf:'Orison', taak:'Contentkalender juni', project:'27M-0520', budget:1100, status:'klaar'},
+      {bedrijf:'Orison', taak:'Meta-advertenties Q3', project:'27A-0520', budget:1300, status:'on_hold'},
+      {bedrijf:'GT Foam', taak:'Automation-onboarding', project:'27A-0614', budget:2600, status:'klaar'},
+      {bedrijf:'GT Foam', taak:'Social opstart — feed-design', project:'S27-0614', budget:720, status:'done'},
+      {bedrijf:'Max Pro', taak:'Opleiding team — sessie 2', project:'27A-0108', budget:1500, status:'gefactureerd', factuur:'F2026-033'},
+      {bedrijf:'IP Cleaning', taak:'Webonderhoud Q2', project:'ZVD-0224', budget:780, status:'klaar'}
+    ];
+    this.BILLSTATUS = {
+      klaar:{label:'Klaar voor facturatie', bg:'#F4FBDB', fg:'#4A6B0E'},
+      done:{label:'Done', bg:'#E0F1FD', fg:'#0F2EA3'},
+      in_progress:{label:'In progress', bg:'#E2E9FC', fg:'#2A41B0'},
+      on_hold:{label:'On hold', bg:'#FBEAD7', fg:'#9A6212'},
+      gefactureerd:{label:'Gefactureerd', bg:'#EFEADD', fg:'#5E5A4F'}
+    };
+
+    // ---- FACTUREN (voorstel, gekoppeld aan gewonnen offertes) ----
+    this.FACTUREN = [
+      {nr:'F2026-033', company:'Max Pro', off:'of9', amount:16800, inv:'24 jan', due:'23 feb', status:'betaald'},
+      {nr:'F2026-021', company:'ABW Bestratingen', off:'of5', amount:9800, inv:'13 feb', due:'15 mrt', status:'betaald'},
+      {nr:'F2026-024', company:'Flor Vastgoed', off:'of2', amount:12240, inv:'14 mrt', due:'13 apr', status:'betaald'},
+      {nr:'F2026-028', company:'IP Cleaning', off:'of10', amount:11300, inv:'10 apr', due:'10 mei', status:'betaald'},
+      {nr:'F2026-014', company:'Bolckmans NV', off:'of1', amount:9250, inv:'8 mei', due:'7 jun', status:'betaald', note:'fase 1 / 2'},
+      {nr:'F2026-038', company:'Bolckmans NV', off:'of1', amount:9250, inv:'8 jun', due:'8 jul', status:'verzonden', note:'fase 2 / 2'},
+      {nr:'F2026-041', company:'Vorsselmans Solar', off:'of6', amount:3400, inv:'10 jun', due:'10 jul', status:'verzonden'},
+      {nr:'F2026-046', company:'Flor Vastgoed', off:'of2', amount:380, inv:'1 jun', due:'15 jun', status:'vervallen', note:'retainer'},
+      {nr:'F2026-009', company:'Dr. Melanie Raes', off:'of3', amount:12000, inv:'-', due:'-', status:'concept'},
+      {nr:'F2026-047', company:'Flor Vastgoed', off:'of2', amount:380, inv:'1 jul', due:'15 jul', status:'concept', note:'retainer jul'}
+    ];
+
+    // lopende projecten (rendement) — uit gewonnen offertes met geplande uren
+    this.PROJECTS = [
+      {name:'Bolckmans NV — rebrand', off:'of1', budget:18500, hours:200},
+      {name:'Flor Vastgoed — automation', off:'of2', budget:12240, hours:160},
+      {name:'ABW Bestratingen — site', off:'of5', budget:9800, hours:100},
+      {name:'IP Cleaning — webdesign', off:'of10', budget:11300, hours:140},
+      {name:'Max Pro — automation', off:'of9', budget:16800, hours:180}
+    ];
+
+    this.RATE_TARGET = 85;
+    this.MONTH_TARGET = 44000; // 4 uitvoerende teamleden x 11.000
+    this.RECURRING = [
+      {client:'Bolckmans NV', brand:'S27', type:'Social media', mrr:650},
+      {client:'Bolckmans NV', brand:'S27', type:'Hosting', mrr:45},
+      {client:'PartsPoint België', brand:'S27', type:'Social media', mrr:750},
+      {client:'Flor Vastgoed', brand:'27A', type:'Adverteren', mrr:900},
+      {client:'Econstruct', brand:'27A', type:'Adverteren', mrr:1200},
+      {client:'Leaseline', brand:'27A', type:'Adverteren', mrr:800},
+      {client:'Orison', brand:'27M', type:'Social media', mrr:550},
+      {client:'IP Cleaning', brand:'ZVD', type:'Hosting', mrr:35},
+      {client:'ABW Bestratingen', brand:'S27', type:'Hosting', mrr:45},
+      {client:'Max Pro', brand:'27A', type:'Hosting', mrr:55}
+    ];
+    this.RECUR_SERIES = [2950,3150,3300,3300,3650,3900,4200,4150,4500,4700,4850,5030];
+    this.RECUR_MONTHS = ['jul','aug','sep','okt','nov','dec','jan','feb','mrt','apr','mei','jun'];
+
+    this.state = {
+      screen: props.startScreen || 'overzicht',
+      role: props.role || 'admin',
+      vw: (typeof window!=='undefined'?window.innerWidth:1280),
+      sbExpand: false, envOpen: false,
+      fBrand: 'Alle', fOwner: 'Alle', fStatus: 'Alle', fStatuses: null, fDiensten: [], fKlant: 'Alle', fContact: 'Alle', fSort: 'status-budget', finSearch: '', finMenu: null, fRendOnder: false,
+      dateModal: false, calY: 2026, calM: 5, draftMode: 'all', draftStart: null, draftEnd: null, periodRange: {mode:'all',start:null,end:null},
+      selOfferte: null, selKlant: null, selAdvisor: null,
+      billView: 'klaar',
+      toast: null, mounted: false, bugModal: null,
+      assistOpen:false, assistInput:'', compareOn:true, assistMessages:[{role:'ai', text:'Dag Vincent! Ik hou je offertes, facturatie en cijfers mee in de gaten. Op dit moment: €43.500 open offertewaarde, 1 factuur over tijd (Flor-retainer, €380) en een DSO rond 26 dagen.'}]
+    };
+  }
+  componentDidMount(){
+    if(typeof window!=='undefined'){
+      try{ if(!localStorage.getItem('s27_auth')){ window.location.replace('/'); return; } }catch(e){}
+      this._onResize=()=>this.setState({vw:window.innerWidth});
+      window.addEventListener('resize',this._onResize);
+      this._wkMsg=(e)=>{ const d=e.data; if(d&&d.type==='s27-embed-height'&&d.height){ const f=document.getElementById('wkFrame'); if(f) f.style.height=Math.max(640,d.height+4)+'px'; } }; window.addEventListener('message',this._wkMsg);
+    }
+    this._t = setTimeout(()=>this.setState({mounted:true}), 70);
+    [120,400,1000].forEach(d=>setTimeout(()=>this._icons(),d));
+  }
+  componentWillUnmount(){ clearTimeout(this._t); if(this._toastT) clearTimeout(this._toastT); if(typeof window!=='undefined'&&this._onResize) window.removeEventListener('resize',this._onResize); }
+  _icons(){ if(typeof window!=='undefined' && window.lucide) window.lucide.createIcons(); }
+  componentDidUpdate(){ this._icons(); }
+  toggleEnv(){ this.setState(s=>({envOpen:!s.envOpen})); }
+  closeAllMenus(){ try{ this.setState({envOpen:false, finMenu:null, billStatusOpen:false, payrollFilterMenu:null}); }catch(e){} }
+  sidebarEnter(){ if(typeof window!=='undefined' && window.innerWidth>=960) this.setState({sbExpand:true}); }
+  sidebarLeave(){ if(typeof window!=='undefined' && window.innerWidth>=960) this.setState({sbExpand:false}); }
+  toggleSidebar(){ this.setState(s=>({sbExpand:!s.sbExpand})); }
+  closeSidebar(){ this.setState({sbExpand:false}); }
+  logout(){ if(typeof window!=='undefined'){ try{ localStorage.removeItem('s27_auth'); }catch(e){} window.location.replace('/'); } }
+
+  // ---------- helpers ----------
+  fmt(n){ return '€ ' + Math.round(n).toLocaleString('nl-BE'); }
+  fmt0(n){ return Math.round(n).toLocaleString('nl-BE'); }
+  ic(name, color, size){
+    const s = size||18, c = color||'currentColor';
+    const P = {
+      home:'M3 11.5 12 4l9 7.5M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9',
+      bug:'M8 6h8v9a4 4 0 0 1-8 0z M9 6a3 3 0 0 1 6 0 M3 13h3 M18 13h3 M5 8l3 1.5 M19 8l-3 1.5 M5 18l3-1.5 M19 18l-3-1.5',
+      file:'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5',
+      receipt:'M5 3v18l2.5-1.5L10 21l2-1.5 2 1.5 2.5-1.5L19 21V3l-2.5 1.5L14 3l-2 1.5L10 3 7.5 4.5z M9 8h6 M9 12h6',
+      chart:'M3 3v18h18 M7 15l4-5 3 3 5-7',
+      users:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M22 21v-2a4 4 0 0 0-3-3.87 M16 3.13A4 4 0 0 1 16 11',
+      x:'M18 6 6 18 M6 6l12 12',
+      check:'M20 6 9 17l-5-5',
+      download:'M12 3v12 M7 10l5 5 5-5 M5 21h14',
+      external:'M15 3h6v6 M10 14 21 3 M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5',
+      arrow:'M5 12h14 M13 6l6 6-6 6',
+      info:'M12 16v-4 M12 8h.01 M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18',
+      flask:'M9 3h6 M10 3v6.5L4.6 18.8A1 1 0 0 0 5.5 20h13a1 1 0 0 0 .9-1.2L14 9.5V3 M7.5 14h9',
+      mail:'M4 4h16v16H4z M4 6l8 6 8-6',
+      bell:'M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9 M13.7 21a2 2 0 0 1-3.4 0',
+      euro:'M18 7a6 6 0 1 0 0 10 M5 10h7 M5 14h7',
+      target:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18 M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2',
+      sparkles:'M12 3l1.8 4.7L18.5 9.5 13.8 11.3 12 16l-1.8-4.7L5.5 9.5l4.7-1.8z M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z',
+      trend:'M3 17l6-6 4 4 8-8 M21 7v6h-6',
+      pie:'M21 12A9 9 0 1 1 9 3v9z M12 3a9 9 0 0 1 9 9h-9z',
+      flag:'M4 22V4 M4 4h13l-2 4 2 4H4',
+      clock:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18 M12 7v5l3 2',
+      lock:'M5 11h14v10H5z M8 11V7a4 4 0 0 1 8 0v4',
+      menu:'M3 6h18 M3 12h18 M3 18h18',
+      chevrons:'M7 15l5 5 5-5 M7 9l5-5 5 5',
+      building:'M3 21h18 M5 21V7l8-4v18 M19 21V11l-6-3 M9 9v.01 M9 13v.01 M9 17v.01',
+      usersRound:'M18 21a8 8 0 0 0-16 0 M10 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10 M22 21a8 8 0 0 0-5-7.5',
+      user:'M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8',
+      grid:'M3 3h7v7H3z M14 3h7v7h-7z M14 14h7v7h-7z M3 14h7v7H3z',
+      logout:'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9',
+      'chevron-down':'M6 9l6 6 6-6',
+      'chevron-up':'M6 15l6-6 6 6',
+      'list-checks':'M11 6h10 M11 12h10 M11 18h10 M3 6l1.5 1.5L7 4 M3 12l1.5 1.5L7 10 M3 18l1.5 1.5L7 16',
+      plus:'M12 5v14 M5 12h14'
+    };
+    return React.createElement('svg',{width:s,height:s,viewBox:'0 0 24 24',fill:'none',stroke:c,strokeWidth:1.8,strokeLinecap:'round',strokeLinejoin:'round',style:{flexShrink:0}}, React.createElement('path',{d:P[name]||''}));
+  }
+  statusMeta(s){
+    const S=(typeof window!=='undefined'&&window.S27_DATA);
+    if(S){ const m=S.offerteStatus(s); return {label:m.label, bg:m.bg, fg:m.fg}; }
+    const m = {
+      draft:{label:'Concept', bg:'#EFEADD', fg:'#5E5A4F'},
+      sent:{label:'Verzonden', bg:'#E2E9FC', fg:'#0F2EA3'},
+      viewed:{label:'Bekeken', bg:'#E0F1FD', fg:'#0F2EA3'},
+      completed:{label:'Getekend', bg:'#F4FBDB', fg:'#4A6B0E'},
+      declined:{label:'Geweigerd', bg:'#F7E0DB', fg:'#6E2218'},
+      expired:{label:'Vervallen', bg:'#EAE6D8', fg:'#8E8979'}
+    };
+    return m[s];
+  }
+  statusFlowEl(cur, dark){
+    const S=(typeof window!=='undefined'&&window.S27_DATA);
+    const flow=(S&&S.offerteStatusFlow)||['draft','sent','viewed','completed'];
+    const meta=(k)=>(S?S.offerteStatus(k):{label:k,dot:'#999',bg:'#eee',flow:0});
+    const curMeta=meta(cur); const offRamp=(curMeta.flow===-1);
+    const curIdx=offRamp?flow.length:flow.indexOf(cur);
+    const h=React.createElement;
+    const baseTxt=dark?'rgba(247,243,234,.5)':'#A8A293';
+    const nodes=[];
+    flow.forEach((k,i)=>{
+      const m=meta(k); const done=i<=curIdx && !offRamp; const isCur=(k===cur);
+      const dotColor=done?m.dot:(dark?'rgba(247,243,234,.22)':'#DAD3C2');
+      nodes.push(h('span',{key:k,style:{display:'inline-flex',alignItems:'center',gap:'6px'}},
+        h('span',{style:{width:isCur?'11px':'8px',height:isCur?'11px':'8px',borderRadius:'50%',background:dotColor,boxShadow:isCur?('0 0 0 4px '+(dark?'rgba(255,255,255,.12)':m.bg)):'none',flex:'none'}}),
+        h('span',{style:{fontSize:'11.5px',fontWeight:isCur?'700':'500',color:isCur?(dark?'#fff':'#050A30'):baseTxt,whiteSpace:'nowrap'}},m.label)
+      ));
+      if(i<flow.length-1) nodes.push(h('span',{key:'arr'+i,style:{flex:'1',minWidth:'14px',height:'2px',borderRadius:'2px',background:(i<curIdx&&!offRamp)?meta(flow[i+1]).dot:(dark?'rgba(247,243,234,.16)':'#E7E1D2')}}));
+    });
+    if(offRamp){
+      nodes.push(h('span',{key:'sep',style:{flex:'none',width:'1px',height:'16px',background:dark?'rgba(247,243,234,.2)':'#E7E1D2',margin:'0 4px'}}));
+      nodes.push(h('span',{key:'off',style:{display:'inline-flex',alignItems:'center',gap:'6px'}},
+        h('span',{style:{width:'11px',height:'11px',borderRadius:'50%',background:curMeta.dot,boxShadow:'0 0 0 4px '+(dark?'rgba(255,255,255,.12)':curMeta.bg),flex:'none'}}),
+        h('span',{style:{fontSize:'11.5px',fontWeight:'700',color:curMeta.dot}},curMeta.label)
+      ));
+    }
+    return h('div',{style:{display:'flex',alignItems:'center',gap:'7px',flexWrap:'wrap'}},
+      h('span',{title:'Loopt mee vanuit PandaDoc',style:{display:'inline-flex',alignItems:'center',gap:'5px',fontSize:'10px',fontWeight:'700',letterSpacing:'.08em',textTransform:'uppercase',color:dark?'rgba(247,243,234,.55)':'#A8A293',marginRight:'4px'}},'PandaDoc'),
+      ...nodes
+    );
+  }
+  invMeta(s){
+    const m = {
+      concept:{label:'Concept', bg:'#EFEADD', fg:'#5E5A4F'},
+      verzonden:{label:'Verzonden', bg:'#E0F1FD', fg:'#0F2EA3'},
+      betaald:{label:'Betaald', bg:'#F4FBDB', fg:'#4A6B0E'},
+      vervallen:{label:'Vervallen', bg:'#F7E0DB', fg:'#6E2218'}
+    };
+    return m[s];
+  }
+  chip(label, bg, fg){
+    return React.createElement('span',{style:{display:'inline-flex',alignItems:'center',fontFamily:"'Outfit',sans-serif",fontSize:'12px',fontWeight:600,padding:'4px 11px',borderRadius:'999px',background:bg,color:fg,whiteSpace:'nowrap'}}, label);
+  }
+  dot(color){ return React.createElement('span',{style:{width:'9px',height:'9px',borderRadius:'50%',background:color,flex:'none',display:'inline-block'}}); }
+  daysTo(iso){ if(!iso) return null; const d = new Date(iso); return Math.round((d - this.NOW)/86400000); }
+  toast(msg){ this.setState({toast:msg}); if(this._toastT) clearTimeout(this._toastT); this._toastT = setTimeout(()=>this.setState({toast:null}), 3000); }
+  bugScreenLabel(){ const m={overzicht:'Dashboard',offertes:'Offertes',facturatie:'Facturatie',cijfers:'Cijfers',rendement:'Projectrendement',klanten:'Klanten',profiel:'Profiel'}; return '27 Finance · '+(m[this.state.screen]||'Dashboard'); }
+  openBug(){ this.setState({ bugModal:{ si:this.bugScreenLabel(), reporter:this.state.role==='admin'?'Vincent Verleije':'Arne Claes', title:'', desc:'', files:[] } }); }
+  setBug(k,v){ this.setState(s=>({ bugModal:Object.assign({}, s.bugModal, {[k]:v}) })); }
+  addBugFile(){ this.setState(s=>{ const f=(s.bugModal.files||[]).slice(); f.push({n:'schermafbeelding-'+(Date.now().toString().slice(-4))+'.png'}); return { bugModal:Object.assign({}, s.bugModal, {files:f}) }; }); }
+  removeBugFile(i){ this.setState(s=>{ const f=(s.bugModal.files||[]).slice(); f.splice(i,1); return { bugModal:Object.assign({}, s.bugModal, {files:f}) }; }); }
+  closeBug(){ this.setState({ bugModal:null }); }
+  submitBug(){ const b=this.state.bugModal; if(!b) return; const title=(b.title||'').trim(); if(!title){ this.toast('Geef de bug een korte titel.'); return; } this.setState({ bugModal:null }); this.toast('Bug aangemeld bij Portaal bugs — gekoppeld aan '+b.si+'.'); }
+
+  toggleAssistant(){ this.setState(s=>({assistOpen:!s.assistOpen, selAdvisor:null})); }
+  setAssistInput(e){ this.setState({assistInput:e.target.value}); }
+  pushAssist(role,text){ this.setState(s=>({assistMessages:[...s.assistMessages,{role,text}]})); }
+  sendAssist(){ const v=(this.state.assistInput||'').trim(); if(!v) return; this.pushAssist('user',v); this.setState({assistInput:''}); setTimeout(()=>this.pushAssist('ai',this.assistReply(v)),350); }
+  assistReply(q){
+    const ql=q.toLowerCase();
+    if(/over tijd|achterstall|herinner|laat|betaal/.test(ql)) return 'Eén factuur staat over tijd: de Flor-retainer (€380), 8 dagen open. Zal ik een vriendelijke betaalherinnering klaarzetten in jullie tone of voice?';
+    if(/offer|pipeline|opvolg|open/.test(ql)) return 'Er staat €43.500 aan open offertes. Drie wachten op opvolging:\n\n• PartsPoint – Videocampagne Q3 (€18.900), bekeken\n• GT Foam – Social opstart (€5.400)\n• Eyematch – Webdesign + hosting (€12.400)\n\nZal ik voor alle drie een opvolgmail voorbereiden?';
+    if(/cijfer|omzet|marge|dso|cashflow/.test(ql)) return 'Gewonnen omzet staat op €37.350 (67% conversie). De recurring omzet is €5.030/maand (≈ €60.360/jaar). DSO rond 26 dagen — gezond. Wil je een maandrapport laten genereren?';
+    if(/factuur|factur/.test(ql)) return 'Te ontvangen: €13.030, waarvan €380 achterstallig. Ik kan de facturatie-export (CSV) voor de huidige selectie klaarzetten of een herinnering versturen.';
+    return 'Ik kan je helpen met offertes opvolgen, betaalherinneringen sturen, de cijfers samenvatten en facturatie-exports klaarzetten. Vraag bijvoorbeeld: "Welke facturen staan over tijd?"';
+  }
+
+  brandPass(o){ return this.state.fBrand==='Alle' || o.brand===this.state.fBrand; }
+  ownerPass(o){ return this.state.fOwner==='Alle' || o.owner===this.state.fOwner; }
+  dienstPass(o){ const sel=this.state.fDiensten||[]; return sel.length===0 || Object.keys(o.disc||{}).some(d=>sel.includes(d)); }
+  klantPass(o){ return this.state.fKlant==='Alle' || o.company===this.state.fKlant; }
+  contactPass(o){ return !this.state.fContact || this.state.fContact==='Alle' || o.contact===this.state.fContact; }
+  globalPass(o){ return this.brandPass(o) && this.ownerPass(o) && this.dienstPass(o) && this.klantPass(o) && this.contactPass(o) && this.datePass(o); }
+  prevRange(r){
+    if(!r||r.mode==='all'||r.start==null||r.end==null) return null;
+    const s=new Date(r.start), e=new Date(r.end);
+    if(r.mode==='maand') return {mode:'prev',start:new Date(s.getFullYear(),s.getMonth()-1,1).getTime(),end:new Date(s.getFullYear(),s.getMonth(),0).getTime()};
+    if(r.mode==='kwartaal') return {mode:'prev',start:new Date(s.getFullYear(),s.getMonth()-3,1).getTime(),end:new Date(s.getFullYear(),s.getMonth(),0).getTime()};
+    if(r.mode==='jaar') return {mode:'prev',start:new Date(s.getFullYear()-1,0,1).getTime(),end:new Date(s.getFullYear()-1,11,31).getTime()};
+    const len=Math.max(86400000,e.getTime()-s.getTime()+86400000);
+    return {mode:'prev',start:s.getTime()-len,end:s.getTime()-86400000};
+  }
+  rangePass(o,r){ return this.inRange(o.createdMs||this.parseDate(o.created), r); }
+  globalPassRange(o,r){ return this.brandPass(o) && this.ownerPass(o) && this.dienstPass(o) && this.klantPass(o) && this.contactPass(o) && this.rangePass(o,r); }
+  sortFinanceOffertes(list){
+    const rank={completed:0,viewed:1,sent:2,draft:3,declined:4,expired:5};
+    const val=(o,k)=>String(o[k]||'').toLowerCase();
+    const mode=this.state.fSort||'status-budget';
+    return list.slice().sort((a,b)=>{
+      if(mode==='date-new') return (b.createdMs||0)-(a.createdMs||0);
+      if(mode==='date-old') return (a.createdMs||0)-(b.createdMs||0);
+      if(mode==='budget-desc') return (b.budget||0)-(a.budget||0);
+      if(mode==='budget-asc') return (a.budget||0)-(b.budget||0);
+      if(mode==='company') return val(a,'company').localeCompare(val(b,'company')) || ((b.budget||0)-(a.budget||0));
+      if(mode==='contact') return val(a,'contact').localeCompare(val(b,'contact')) || val(a,'company').localeCompare(val(b,'company'));
+      if(mode==='org') return val(a,'brand').localeCompare(val(b,'brand')) || val(a,'company').localeCompare(val(b,'company'));
+      return (rank[a.status]-rank[b.status])||((b.budget||0)-(a.budget||0));
+    });
+  }
+
+  // ---------- charts ----------
+  areaChart(){
+    const W=620,H=190,PL=8,PR=8,PT=14,PB=30;
+    const won=[0,0,0,0,0,0], pipe=[0,0,0,0,0,0];
+    this.OFFERTES.forEach(o=>{ if(!this.globalPass(o)) return;
+      if(o.status==='completed' && o.completedM!=null) won[o.completedM]+=o.budget;
+      if(o.status==='sent'||o.status==='viewed'){ const m=this.MONTHS.indexOf(o.created.split(' ')[1]); if(m>=0) pipe[m]+=o.budget; }
+    });
+    const max = Math.max(1, ...won, ...pipe)*1.18;
+    const iw = W-PL-PR, n=6;
+    const X=i=> PL + (n===1?0:i*iw/(n-1));
+    const Y=v=> PT + (H-PT-PB) - (v/max)*(H-PT-PB);
+    const animate=this.state.mounted;
+    const linePts=(arr)=>arr.map((v,i)=>[X(i),Y(v)]);
+    const toPath=(pts)=>'M'+pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' L');
+    const wp=linePts(won), pp=linePts(pipe);
+    const area = toPath(wp)+` L${X(5).toFixed(1)},${(H-PB).toFixed(1)} L${X(0).toFixed(1)},${(H-PB).toFixed(1)} Z`;
+    const grid=[0,0.5,1].map((g,i)=>React.createElement('line',{key:'g'+i,x1:PL,x2:W-PR,y1:PT+(H-PT-PB)*(1-g),y2:PT+(H-PT-PB)*(1-g),stroke:'#EFEADD',strokeWidth:1}));
+    const labels=this.MONTHS.map((m,i)=>React.createElement('text',{key:'l'+i,x:X(i),y:H-8,textAnchor:'middle',fontSize:11,fill:'#8E8979',fontFamily:"'JetBrains Mono',monospace"},m));
+    const pts=(arr,color,key)=>arr.map((p,i)=>React.createElement('g',{key:key+i},
+      React.createElement('circle',{cx:p[0],cy:p[1],r:9,fill:'transparent',style:{cursor:'pointer'},
+        onMouseEnter:()=>this.setState({tip:{x:p[0],y:p[1],label:(key==='w'?'Gewonnen ':'Pipeline ')+this.MONTHS[i],val:this.fmt((key==='w'?won:pipe)[i]),color}}),
+        onMouseLeave:()=>this.setState({tip:null})}),
+      React.createElement('circle',{cx:p[0],cy:p[1],r:3.5,fill:'#fff',stroke:color,strokeWidth:2,style:{pointerEvents:'none'}})
+    ));
+    const tip=this.state.tip;
+    return React.createElement('div',{style:{position:'relative',width:'100%'}},
+      React.createElement('svg',{viewBox:'0 0 '+W+' '+H, style:{width:'100%',height:'auto',display:'block'}},
+        ...grid,
+        React.createElement('path',{d:area, fill:'#0F2EA3', style:{opacity:animate?0.12:0, transition:'opacity .6s ease .2s'}}),
+        React.createElement('path',{d:toPath(pp), fill:'none', stroke:'#28AFF9', strokeWidth:2.5, strokeLinecap:'round', strokeLinejoin:'round', style:{strokeDasharray:1400, strokeDashoffset:animate?0:1400, transition:'stroke-dashoffset 1s cubic-bezier(.16,1,.3,1)'}}),
+        React.createElement('path',{d:toPath(wp), fill:'none', stroke:'#0F2EA3', strokeWidth:3, strokeLinecap:'round', strokeLinejoin:'round', style:{strokeDasharray:1400, strokeDashoffset:animate?0:1400, transition:'stroke-dashoffset 1s cubic-bezier(.16,1,.3,1) .15s'}}),
+        ...labels,
+        ...pts(pp,'#28AFF9','p'), ...pts(wp,'#0F2EA3','w')
+      ),
+      tip ? React.createElement('div',{style:{position:'absolute',left:(tip.x/W*100)+'%',top:(tip.y/H*100)+'%',transform:'translate(-50%,-130%)',background:'#050A30',color:'#fff',padding:'7px 11px',borderRadius:'10px',fontSize:'12px',whiteSpace:'nowrap',pointerEvents:'none',boxShadow:'0 8px 24px -8px rgba(5,10,48,.4)',zIndex:5}},
+        React.createElement('div',{style:{color:'rgba(247,243,234,.7)',fontSize:'11px'}}, tip.label),
+        React.createElement('div',{style:{fontFamily:"'JetBrains Mono',monospace",fontWeight:600}}, tip.val)
+      ) : null
+    );
+  }
+
+  recurringChart(){
+    const W=620,H=170,PL=10,PR=10,PT=14,PB=26;
+    const data=this.RECUR_SERIES, labels=this.RECUR_MONTHS, n=data.length;
+    const max=Math.max(...data)*1.12, min=Math.min(...data)*0.86;
+    const iw=W-PL-PR;
+    const X=i=>PL+i*iw/(n-1);
+    const Y=v=>PT+(H-PT-PB)-((v-min)/(max-min))*(H-PT-PB);
+    const animate=this.state.mounted;
+    const pts=data.map((v,i)=>[X(i),Y(v)]);
+    const toPath=ps=>'M'+ps.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' L');
+    const area=toPath(pts)+` L${X(n-1).toFixed(1)},${(H-PB).toFixed(1)} L${X(0).toFixed(1)},${(H-PB).toFixed(1)} Z`;
+    const grid=[0,0.5,1].map((g,i)=>React.createElement('line',{key:'g'+i,x1:PL,x2:W-PR,y1:PT+(H-PT-PB)*(1-g),y2:PT+(H-PT-PB)*(1-g),stroke:'#EFEADD',strokeWidth:1}));
+    const lab=labels.map((m,i)=> (i%2===0||i===n-1) ? React.createElement('text',{key:'l'+i,x:X(i),y:H-7,textAnchor:'middle',fontSize:10,fill:'#8E8979',fontFamily:"'JetBrains Mono',monospace"},m) : null);
+    const dots=pts.map((p,i)=>React.createElement('circle',{key:'d'+i,cx:p[0],cy:p[1],r:i===n-1?4.5:2.6,fill:i===n-1?'#1F8A5B':'#fff',stroke:'#1F8A5B',strokeWidth:2,style:{pointerEvents:'none'}}));
+    return React.createElement('svg',{viewBox:'0 0 '+W+' '+H,style:{width:'100%',height:'auto',display:'block'}},
+      ...grid,
+      React.createElement('path',{d:area,fill:'#1F8A5B',style:{opacity:animate?0.12:0,transition:'opacity .6s ease .2s'}}),
+      React.createElement('path',{d:toPath(pts),fill:'none',stroke:'#1F8A5B',strokeWidth:3,strokeLinecap:'round',strokeLinejoin:'round',style:{strokeDasharray:1700,strokeDashoffset:animate?0:1700,transition:'stroke-dashoffset 1.1s cubic-bezier(.16,1,.3,1)'}}),
+      ...lab,...dots
+    );
+  }
+  hBars(rows, opts){
+    opts=opts||{};
+    const dark=!!opts.dark;
+    const max=Math.max(1,...rows.map(r=>r.value));
+    const animate=this.state.mounted;
+    const labelCol=dark?'#DCE5FF':'#3D3A33';
+    const valueCol=dark?'#ffffff':'#26241F';
+    const subCol=dark?'rgba(220,229,255,.65)':'#8E8979';
+    const track=dark?'rgba(255,255,255,.16)':'#EFEADD';
+    return React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:'13px'}},
+      ...rows.map((r,i)=>React.createElement('div',{key:i, onClick:r.onClick, style:{cursor:r.onClick?'pointer':'default'}},
+        React.createElement('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:'5px',alignItems:'center',gap:'10px'}},
+          React.createElement('span',{style:{fontSize:'13px',color:labelCol,fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}, r.label),
+          React.createElement('span',{style:{display:'flex',alignItems:'baseline',gap:'8px',flex:'none'}},
+            (r.count!=null?React.createElement('span',{style:{fontSize:'11.5px',color:subCol,fontWeight:500}}, r.count+(r.count===1?' offerte':' offertes')):null),
+            React.createElement('span',{style:{fontFamily:"'JetBrains Mono',monospace",fontSize:'13px',fontWeight:600,color:valueCol}}, opts.fmt?opts.fmt(r.value):this.fmt(r.value))
+          )
+        ),
+        React.createElement('div',{style:{height:'11px',borderRadius:'999px',background:track,overflow:'hidden'}},
+          React.createElement('div',{style:{height:'100%',borderRadius:'999px',background:(dark?(r.lightColor||r.color):r.color),width:animate?(r.value/max*100)+'%':'0%',transition:'width .8s cubic-bezier(.16,1,.3,1) '+(i*0.06)+'s'}})
+        )
+      ))
+    );
+  }
+
+  rateGaugeEl(rate){
+    const max=120, animate=this.state.mounted;
+    const pct=Math.min(100, rate/max*100), tpct=this.RATE_TARGET/max*100;
+    const ok=rate>=this.RATE_TARGET;
+    return React.createElement('div',null,
+      React.createElement('div',{style:{display:'flex',alignItems:'baseline',gap:'8px',marginBottom:'12px'}},
+        React.createElement('span',{style:{fontFamily:"'JetBrains Mono',monospace",fontSize:'34px',fontWeight:600,letterSpacing:'-.02em',color:ok?'#4A6B0E':'#C99410'}}, '€ '+rate.toFixed(0)),
+        React.createElement('span',{style:{fontSize:'13px',color:'#8E8979'}}, '/ uur')
+      ),
+      React.createElement('div',{style:{position:'relative',height:'14px',borderRadius:'999px',background:'#EFEADD',overflow:'visible'}},
+        React.createElement('div',{style:{height:'100%',borderRadius:'999px',background:ok?'#D1F24C':'#C99410',width:animate?pct+'%':'0%',transition:'width .9s cubic-bezier(.16,1,.3,1)'}}),
+        React.createElement('div',{style:{position:'absolute',top:'-5px',bottom:'-5px',left:tpct+'%',width:'2px',background:'#050A30'}}),
+        React.createElement('div',{style:{position:'absolute',top:'-22px',left:tpct+'%',transform:'translateX(-50%)',fontSize:'10.5px',fontWeight:600,color:'#050A30',whiteSpace:'nowrap'}}, 'target')
+      )
+    );
+  }
+
+  // ---------- main view-model ----------
+  renderVals(){
+    const S=this.state, self=this;
+    const isAdmin = S.role==='admin';
+    const isNarrow = S.vw<960, isMobile = S.vw<640;
+    const stop = (e)=>{ if(e&&e.stopPropagation) e.stopPropagation(); };
+
+    // ===== nav =====
+    const navDef=[['overzicht','Overzicht','home'],['offertes','Offertes','file'],['facturatie','Facturatie','receipt'],['cijfers','Cijfers','chart'],['rendement','Rendement','target'],['klanten','Per klant','users']];
+    const soonCount = this.OFFERTES.filter(o=>{const d=this.daysTo(o.expiry); return (o.status==='sent'||o.status==='viewed') && d!=null && d>=0 && d<=14;}).length;
+    const nav = navDef.map(([key,label,icon])=>{
+      const active = S.screen===key;
+      return { key, label,
+        iconEl:this.ic(icon, active?'#28AFF9':'#aeb2cf', 17),
+        railIconEl:this.ic(icon, active?'#28AFF9':'rgba(247,243,234,.6)', 21),
+        railBg: active?'rgba(247,243,234,.1)':'transparent',
+        railColor: active?'#F7F3EA':'rgba(247,243,234,.62)',
+        railAccent: active?'inset 3px 0 0 #D1F24C':'none',
+        railWeight: active?600:400,
+        badgeEl: (key==='offertes'&&soonCount>0)? this.chip(String(soonCount),'#FBF1D9','#6B4D04') : null,
+        style:`display:flex;align-items:center;gap:7px;padding:9px 12px;border-radius:10px;border:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:${active?600:500};background:${active?'rgba(247,243,234,.12)':'transparent'};color:${active?'#fff':'#aeb2cf'};transition:all .18s;white-space:nowrap`,
+        go:()=>this.setState({screen:key, selOfferte:null, selKlant:null}),
+        goClose:()=>this.setState({screen:key, selOfferte:null, selKlant:null, sbExpand:false})
+      };
+    });
+
+    // ===== filtered offertes =====
+    const fO = this.OFFERTES.filter(o=>this.globalPass(o));
+    const sumBy = (arr,pred)=>arr.filter(pred).reduce((a,o)=>a+o.budget,0);
+    const pipeline = sumBy(fO, o=>o.status==='sent'||o.status==='viewed');
+    const won = sumBy(fO, o=>o.status==='completed');
+    const lost = sumBy(fO, o=>o.status==='declined'||o.status==='expired');
+    const cCompleted = fO.filter(o=>o.status==='completed').length;
+    const cDeclined = fO.filter(o=>o.status==='declined').length;
+    const cExpired = fO.filter(o=>o.status==='expired').length;
+    const cSent = fO.filter(o=>o.status==='sent').length;
+    const cViewed = fO.filter(o=>o.status==='viewed').length;
+    const conv = (cCompleted+cDeclined+cExpired)>0 ? cCompleted/(cCompleted+cDeclined+cExpired) : 0;
+    const viewedRatioN = (cSent+cViewed+cCompleted+cDeclined+cExpired)>0 ? cViewed/Math.max(1,cSent+cViewed) : 0;
+    const nonDraft = fO.filter(o=>o.status!=='draft');
+    const avgValue = nonDraft.length? nonDraft.reduce((a,o)=>a+o.budget,0)/nonDraft.length : 0;
+    const wonThisMonth = sumBy(fO, o=>o.status==='completed'&&o.completedM===5);
+
+    // invoices
+    const invBy=(st)=>this.FACTUREN.filter(f=>f.status===st).reduce((a,f)=>a+f.amount,0);
+    const paid=invBy('betaald'), sent_=invBy('verzonden'), overdue=invBy('vervallen'), concept=invBy('concept');
+    const teOntvangen = sent_+overdue;
+    const prevR=this.prevRange(S.periodRange);
+    const prevO=prevR?this.OFFERTES.filter(o=>this.globalPassRange(o,prevR)):[];
+    const prevTotal=sumBy(prevO,o=>o.status==='completed'||o.status==='sent'||o.status==='viewed');
+    const curTotal=won+pipeline;
+    const cmpPct=prevTotal?((curTotal-prevTotal)/prevTotal*100):null;
+    const compareSummaryText=prevR
+      ? (prevO.length+' offerte(s), '+this.fmt(prevTotal)+' gewonnen/open, '+(cmpPct==null?'geen vergelijkingsbasis':((cmpPct>=0?'+':'')+cmpPct.toFixed(0)+'% tegenover vorige periode'))+'.')
+      : '';
+
+    // ===== drill helper =====
+    const drill=(status)=>{ const arr = status==='open'?['sent','viewed']:(status==='Alle'?['draft','sent','viewed','completed','declined','expired']:[status]); this.setState({screen:'offertes', fStatuses:arr, selOfferte:null}); };
+
+    // ===== HERO KPIs =====
+    const drillEl=this.ic('arrow','rgba(247,243,234,.55)',14);
+    const heroCard=(extra)=>`text-align:left;background:rgba(247,243,234,.08);border:1px solid rgba(247,243,234,.12);border-radius:20px;padding:16px 17px;cursor:pointer;font-family:inherit;display:flex;flex-direction:column;gap:5px;transition:background .2s;${extra||''}`;
+    const heroKpis=[
+      {label:'Pipeline-waarde', value:this.fmt(pipeline), delta:`${cSent+cViewed} open offertes`, deltaColor:'color:rgba(247,243,234,.6)', style:heroCard(), drillEl, go:()=>drill('open')},
+      {label:'Gewonnen omzet', value:this.fmt(won), delta:`${cCompleted} gewonnen · ${this.fmt(wonThisMonth)} in jun`, deltaColor:'color:#D1F24C', style:heroCard(), drillEl, go:()=>drill('completed')},
+      {label:'Conversie', value:(conv*100).toFixed(0)+'%', delta:`${cCompleted}/${cCompleted+cDeclined+cExpired} beslist`, deltaColor:'color:rgba(247,243,234,.6)', style:heroCard(), drillEl, go:()=>this.setState({screen:'cijfers'})},
+      {label:'Te ontvangen', value:this.fmt(teOntvangen), delta:`${this.fmt(overdue)} achterstallig`, deltaColor:overdue>0?'color:#FFB4A6':'color:rgba(247,243,234,.6)', style:heroCard(), drillEl, go:()=>this.setState({screen:'facturatie'})}
+    ];
+
+    // ===== compacte filter-dropdowns (per periode/organisatie/persoon/dienst/klant) =====
+    const chipStyle=(active)=>`display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:999px;border:1px solid ${active?'#0F2EA3':'#DFD9C8'};background:${active?'#0F2EA3':'#fff'};color:${active?'#fff':'#5E5A4F'};font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;transition:all .15s`;
+    const ddBtn=(active)=>`display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid ${active?'#0F2EA3':'#DFD9C8'};border-radius:999px;padding:8px 14px;font-family:inherit;font-size:12.5px;cursor:pointer;white-space:nowrap;transition:border-color .15s`;
+    const optStyle=(active)=>`display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:${active?'#F2EEE3':'none'};border:none;border-radius:9px;padding:9px 11px;font-family:inherit;font-size:13px;font-weight:${active?600:500};color:#050A30;cursor:pointer`;
+    const finDD=(stateKey,menuKey,iconName,label,opts)=>{ const curVal=S[stateKey]; const allVal=opts[0][0]; const active=curVal!==allVal; const sel=opts.find(o=>o[0]===curVal)||opts[0]; return {
+      iconEl:this.ic(iconName,'#8E8979',15), chevEl:this.ic('chevrons','#8E8979',13), label, value:sel[1], open:S.finMenu===menuKey, btnStyle:ddBtn(active),
+      toggle:()=>this.setState(st=>({finMenu:st.finMenu===menuKey?null:menuKey, finSearch:''})),
+      options:opts.map(([v,l])=>({ label:l, style:optStyle(curVal===v), checkEl:(curVal===v)?this.ic('check','#4A6B0E',16):null,
+        pick:()=>{ this.setState({[stateKey]:v, finMenu:null, selOfferte:null, selKlant:null}); } }))
+    }; };
+    const DIENST_ORDER=['Strategie','Branding','Video- en fotografie','Webdesign','Social media','Adverteren','Opleidingen','Automations'];
+    const dienstSet=new Set(); this.OFFERTES.forEach(o=>Object.keys(o.disc||{}).forEach(d=>dienstSet.add(d)));
+    const chk=this.ic('check','#4A6B0E',16);
+    const selD=S.fDiensten||[];
+    const dienstPresent=DIENST_ORDER.filter(d=>dienstSet.has(d));
+    const dienstFilter={
+      iconEl:this.ic('chart','#8E8979',15), chevEl:this.ic('chevrons','#8E8979',13), label:'Dienst', multi:true,
+      value: selD.length===0?'Alle diensten':(selD.length===1?selD[0]:selD.length+' diensten'),
+      open:S.finMenu==='dienst', btnStyle:ddBtn(selD.length>0),
+      toggle:()=>this.setState(st=>({finMenu:st.finMenu==='dienst'?null:'dienst', finSearch:''})),
+      options:[{label:'Alle diensten', style:optStyle(selD.length===0), checkEl:selD.length===0?chk:null, pick:()=>this.setState({fDiensten:[], selOfferte:null, selKlant:null})}].concat(
+        dienstPresent.map(d=>({label:d, style:optStyle(selD.includes(d)), checkEl:selD.includes(d)?chk:null,
+          pick:()=>this.setState(st=>{ const cur=st.fDiensten||[]; return {fDiensten: cur.includes(d)?cur.filter(x=>x!==d):[...cur,d], selOfferte:null, selKlant:null}; })}))
+      )
+    };
+    const klantSearch=(S.finSearch||'').toLowerCase();
+    const klantAll=[...new Set(this.OFFERTES.map(o=>o.company))].sort();
+    const klantFiltered=klantSearch?klantAll.filter(c=>c.toLowerCase().includes(klantSearch)):klantAll;
+    const klantFilter={
+      iconEl:this.ic('building','#8E8979',15), chevEl:this.ic('chevrons','#8E8979',13), label:'Klant', searchable:true,
+      value:S.fKlant==='Alle'?'Alle klanten':S.fKlant, open:S.finMenu==='klant', btnStyle:ddBtn(S.fKlant!=='Alle'),
+      toggle:()=>this.setState(st=>({finMenu:st.finMenu==='klant'?null:'klant', finSearch:''})),
+      searchVal:S.finSearch||'', searchPlaceholder:'Zoek klant\u2026', onSearch:(e)=>this.setState({finSearch:e.target.value}),
+      options:[['Alle','Alle klanten']].concat(klantFiltered.map(c=>[c,c])).map(([v,l])=>({label:l, style:optStyle(S.fKlant===v), checkEl:S.fKlant===v?chk:null,
+        pick:()=>this.setState({fKlant:v, finMenu:null, finSearch:'', selOfferte:null, selKlant:null})}))
+    };
+    const contactAll=[...new Set(this.OFFERTES.map(o=>o.contact).filter(Boolean))].sort();
+    const contactFiltered=klantSearch?contactAll.filter(c=>c.toLowerCase().includes(klantSearch)):contactAll;
+    const contactFilter={
+      iconEl:this.ic('user','#8E8979',15), chevEl:this.ic('chevrons','#8E8979',13), label:'Contactpersoon', searchable:true,
+      value:S.fContact==='Alle'?'Alle contactpersonen':S.fContact, open:S.finMenu==='contact', btnStyle:ddBtn(S.fContact!=='Alle'),
+      toggle:()=>this.setState(st=>({finMenu:st.finMenu==='contact'?null:'contact', finSearch:''})),
+      searchVal:S.finSearch||'', searchPlaceholder:'Zoek contactpersoon...', onSearch:(e)=>this.setState({finSearch:e.target.value}),
+      options:[['Alle','Alle contactpersonen']].concat(contactFiltered.map(c=>[c,c])).map(([v,l])=>({label:l, style:optStyle(S.fContact===v), checkEl:S.fContact===v?chk:null,
+        pick:()=>this.setState({fContact:v, finMenu:null, finSearch:'', selOfferte:null, selKlant:null})}))
+    };
+    const sortOpts=[['status-budget','Status + budget'],['date-new','Nieuwste eerst'],['date-old','Oudste eerst'],['budget-desc','Budget hoog-laag'],['budget-asc','Budget laag-hoog'],['company','Bedrijf A-Z'],['contact','Contactpersoon A-Z'],['org','Organisatie']];
+    const onOff=S.screen==='offertes';
+    const allStatuses=['draft','sent','viewed','completed','declined','expired'];
+    const stLabels={draft:'Concept',sent:'Verzonden',viewed:'Bekeken',completed:'Getekend',declined:'Geweigerd',expired:'Vervallen'};
+    const sset=(S.fStatuses&&S.fStatuses.length!=null)?S.fStatuses:allStatuses.slice();
+    const stAllOn=sset.length===allStatuses.length;
+    const toggleSt=(v)=>this.setState(st=>{const cur=(st.fStatuses&&st.fStatuses.slice)?st.fStatuses.slice():allStatuses.slice();const i=cur.indexOf(v);if(i>=0)cur.splice(i,1);else cur.push(v);return {fStatuses:cur};});
+    const stValue=stAllOn?'Alle':(sset.length===0?'Geen':(sset.length===1?stLabels[sset[0]]:sset.length+' statussen'));
+    const statusDD={ iconEl:this.ic('target','#8E8979',15), chevEl:this.ic('chevrons','#8E8979',13), label:'Status', value:stValue, open:S.finMenu==='status', btnStyle:ddBtn(!stAllOn),
+      toggle:()=>this.setState(st=>({finMenu:st.finMenu==='status'?null:'status', finSearch:''})),
+      options:[{label:'Alle statussen', style:optStyle(stAllOn), checkEl:stAllOn?this.ic('check','#4A6B0E',16):null, pick:()=>this.setState({fStatuses:allStatuses.slice()})}].concat(allStatuses.map(v=>({label:stLabels[v], style:optStyle(sset.includes(v)), checkEl:sset.includes(v)?this.ic('check','#4A6B0E',16):null, pick:()=>toggleSt(v)}))) };
+    const finFilters=[
+      { iconEl:this.ic('clock','#8E8979',15), chevEl:this.ic('chevrons','#8E8979',13), label:'Periode', value:this.periodLabel(), open:false, btnStyle:ddBtn(S.periodRange.mode!=='all'), toggle:()=>this.openDate(), options:[] },
+      finDD('fBrand','brand','grid','Organisatie',[['Alle','Alle merken'],['S27','S27'],['27A','27A'],['ZVD','ZVD'],['27M','27M']]),
+      finDD('fOwner','owner','users','Persoon',[['Alle','Iedereen'],['Arne','Arne'],['Vincent','Vincent']]),
+      dienstFilter, klantFilter, contactFilter,
+      finDD('fSort','sort','chevrons','Sortering',sortOpts)
+    ];
+    if(onOff) finFilters.splice(1,0,statusDD);
+    const finFiltersActive = (onOff&&!stAllOn)||S.fBrand!=='Alle'||S.fOwner!=='Alle'||selD.length>0||S.fKlant!=='Alle'||S.fContact!=='Alle'||S.fSort!=='status-budget'||S.periodRange.mode!=='all';
+    const finClearIcon=this.ic('x','#6E2218',15);
+    const finClear=()=>this.setState({fBrand:'Alle',fOwner:'Alle',fDiensten:[],fKlant:'Alle',fContact:'Alle',fSort:'status-budget',fStatuses:['draft','sent','viewed','completed','declined','expired'],periodRange:{mode:'all',start:null,end:null},draftMode:'all',draftStart:null,draftEnd:null,finMenu:null,finSearch:'',selOfferte:null,selKlant:null});
+    const recurFiltered=this.RECURRING.filter(r=>(S.fBrand==='Alle'||r.brand===S.fBrand)&&(S.fKlant==='Alle'||r.client===S.fKlant));
+    const recurMRRn=recurFiltered.reduce((a,r)=>a+r.mrr,0);
+    const recurTypeCol={'Hosting':'#0F2EA3','Social media':'#28AFF9','Adverteren':'#E0455E'};
+    const recurTypeChips=['Hosting','Social media','Adverteren'].map(t=>({label:t,value:recurFiltered.filter(r=>r.type===t).reduce((a,r)=>a+r.mrr,0)})).filter(x=>x.value>0).map(x=>({label:x.label,amount:this.fmt(x.value)+' /mnd',color:recurTypeCol[x.label]}));
+
+    // ===== status chips (offertes) =====
+    const statusDefs=[['Alle','Alle'],['open','Open'],['draft','Concept'],['sent','Verzonden'],['viewed','Bekeken'],['completed','Getekend'],['declined','Geweigerd'],['expired','Vervallen']];
+    const countFor=(k)=> k==='Alle'?fO.length : k==='open'? fO.filter(o=>o.status==='sent'||o.status==='viewed').length : fO.filter(o=>o.status===k).length;
+    const statusChips=statusDefs.map(([k,l])=>({label:l, count:countFor(k), style:chipStyle(S.fStatus===k), go:()=>this.setState({fStatus:k})}));
+
+    // ===== offerte rows =====
+    let listO = fO.filter(o=> sset.includes(o.status));
+    listO=this.sortFinanceOffertes(listO);
+    const expiryCell=(o)=>{
+      if(o.status==='completed'||o.status==='declined') return React.createElement('span',{style:{fontFamily:"'JetBrains Mono',monospace",fontSize:'12.5px',color:'#C4BEAC'}},'—');
+      if(o.status==='draft') return React.createElement('span',{style:{fontFamily:"'JetBrains Mono',monospace",fontSize:'12.5px',color:'#C4BEAC'}},'concept');
+      const d=this.daysTo(o.expiry);
+      const soon = d!=null && d>=0 && d<=14;
+      const col = o.status==='expired'?'#8E8979': soon?'#C99410':'#5E5A4F';
+      const label = this.fmtDate(o.expiry);
+      return React.createElement('span',{style:{fontFamily:"'JetBrains Mono',monospace",fontSize:'12.5px',color:col,fontWeight:soon?600:400}}, label);
+    };
+    const discColorMap={Strategie:'#0F2EA3',Branding:'#7A2E86','Video- en fotografie':'#E0743A',Webdesign:'#2E9E5B','Social media':'#28AFF9',Adverteren:'#E0455E',Opleidingen:'#C98A2B',Automations:'#84A300'};
+    const offerteRows=listO.map(o=>{ const sm=this.statusMeta(o.status); const bm=this.BRANDS[o.brand];
+      const segs=Object.entries(o.disc||{}).filter(([k,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+      const discList=segs.map(([k,v])=>({label:k, amount:this.fmt(v), color:discColorMap[k]||'#2458EA'}));
+      const verval=(o.status==='completed'||o.status==='declined')?'—':(o.status==='draft'?'concept':this.fmtDate(o.expiry));
+      const titel=o.company+(segs.length?(' — '+segs.slice(0,3).map(s=>s[0]).join(', ')):'');
+      return { titel, company:o.company, contact:o.contact, owner:o.owner, brandKey:(this.BRANDS[o.brand]?o.brand:'S27'), brandLabel:this.BRANDS[o.brand].label, budget:this.fmt(o.budget),
+        statusBg:sm.bg, statusFg:sm.fg, statusLabel:sm.label,
+        bldIcon:this.ic('building','#8E8979',14), usrIcon:this.ic('user','#8E8979',14), calIcon:this.ic('clock','#8E8979',14), chevEl:this.ic('arrow','#2458EA',19),
+        brandDotEl:this.dot(bm.color), verval, discList, disciplines:segs.length+' discipline'+(segs.length===1?'':'s'),
+        open:()=>this.goCrmOfferte(o.id) };
+    });
+    // groepeer offertes per organisatie/merk
+    const FINORD=['S27','27A','ZVD','27M'];
+    const finByBrand={}; offerteRows.forEach(r=>{ const b=r.brandKey||'S27'; (finByBrand[b]=finByBrand[b]||[]).push(r); });
+    const finBudgetByBrand={}; listO.forEach(o=>{ const b=(this.BRANDS[o.brand]?o.brand:'S27'); finBudgetByBrand[b]=(finBudgetByBrand[b]||0)+(o.budget||0); });
+    const offerteGroups=FINORD.filter(b=>finByBrand[b]&&finByBrand[b].length).map(b=>({ brandKey:b, brandLabel:this.BRANDS[b].label, dotColor:this.BRANDS[b].color, count:finByBrand[b].length, countLabel:finByBrand[b].length+' offerte'+(finByBrand[b].length===1?'':'s'), total:this.fmt(finBudgetByBrand[b]||0), items:finByBrand[b] }));
+    const offerteCountLabel = listO.length+' offerte'+(listO.length===1?'':'s');
+    const offerteTotal = this.fmt(listO.reduce((a,o)=>a+o.budget,0));
+
+    // ===== pipeline-prognose per organisatie (open offertes) =====
+    const pipeByBrand = Object.keys(this.BRANDS).map(bk=>{
+      const sum=fO.filter(o=>(o.status==='sent'||o.status==='viewed')&&o.brand===bk).reduce((a,o)=>a+o.budget,0);
+      const cnt=fO.filter(o=>(o.status==='sent'||o.status==='viewed')&&o.brand===bk).length;
+      const lightMap={S27:'#6E9BFF','27A':'#28AFF9',ZVD:'#8FD4FF','27M':'#D1F24C'};
+      return {label:this.BRANDS[bk].label, value:sum, color:this.BRANDS[bk].color, lightColor:lightMap[bk]||'#8FD4FF', count:cnt};
+    }).filter(r=>r.value>0).sort((a,b)=>b.value-a.value);
+    const offPipelineTotalN = pipeByBrand.reduce((a,r)=>a+r.value,0);
+    const offPipelineTotal = this.fmt(offPipelineTotalN);
+    const offPipelineBars = this.hBars(pipeByBrand,{dark:true});
+    const offPipelineEmpty = pipeByBrand.length===0;
+
+    // ===== expiring soon (overzicht) =====
+    const expiringSoon = fO.filter(o=>{const d=this.daysTo(o.expiry); return (o.status==='sent'||o.status==='viewed')&&d!=null&&d>=0&&d<=14;})
+      .sort((a,b)=>this.daysTo(a.expiry)-this.daysTo(b.expiry))
+      .map(o=>{ const d=this.daysTo(o.expiry); return {company:o.company, expiryNote:'Vervalt over '+d+' dag'+(d===1?'':'en'), budget:this.fmt(o.budget), open:()=>this.goCrmOfferte(o.id)}; });
+
+    // ===== activity =====
+    const aWrap=(c)=>`width:36px;height:36px;border-radius:11px;flex:none;display:flex;align-items:center;justify-content:center;background:${c.bg}`;
+    const activity=[
+      {iconWrap:aWrap({bg:'#F4FBDB'}), iconEl:this.ic('check','#4A6B0E',18), title:'Vorsselmans Solar', detail:'offerte ondertekend · 27M · ' + this.fmt(3400), time:'9 jun'},
+      {iconWrap:aWrap({bg:'#E2E9FC'}), iconEl:this.ic('receipt','#0F2EA3',18), title:'F2026-038', detail:'factuur verzonden aan Bolckmans NV (fase 2)', time:'8 jun'},
+      {iconWrap:aWrap({bg:'#E0F1FD'}), iconEl:this.ic('file','#0F2EA3',18), title:'Econstruct', detail:'nieuwe offerte verzonden · 27A · ' + this.fmt(13600), time:'10 jun'},
+      {iconWrap:aWrap({bg:'#FBF1D9'}), iconEl:this.ic('clock','#6B4D04',18), title:'Orison', detail:'offerte bekeken, vervalt binnenkort', time:'gisteren'},
+      {iconWrap:aWrap({bg:'#F7E0DB'}), iconEl:this.ic('x','#6E2218',18), title:'GT Foam', detail:'offerte geweigerd · S27 · ' + this.fmt(7200), time:'apr'}
+    ];
+
+    // ===== win/loss bar =====
+    const wlTotal=Math.max(1,won+lost+pipeline);
+    const animate=S.mounted;
+    const seg=(v,color,label)=>React.createElement('div',{title:label,style:{width:animate?(v/wlTotal*100)+'%':'0%',background:color,transition:'width .8s cubic-bezier(.16,1,.3,1)'}});
+    const winLossBar=React.createElement('div',null,
+      React.createElement('div',{style:{display:'flex',height:'14px',borderRadius:'999px',overflow:'hidden',background:'#EFEADD'}},
+        seg(won,'#9AB814','Gewonnen'), seg(pipeline,'#28AFF9','Pipeline'), seg(lost,'#B83A2A','Verloren')
+      ),
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',marginTop:'10px',fontSize:'12px'}},
+        React.createElement('span',{style:{color:'#4A6B0E',fontWeight:500}}, 'Gewonnen '+this.fmt(won)),
+        React.createElement('span',{style:{color:'#B83A2A',fontWeight:500}}, 'Verloren '+this.fmt(lost))
+      )
+    );
+
+    // ===== cijfers: per merk =====
+    const merkRows=['S27','27A','ZVD','27M'].map(b=>({label:this.BRANDS[b].label, value:sumBy(fO, o=>o.status==='completed'&&o.brand===b), color:this.BRANDS[b].color, onClick:()=>this.setState({screen:'offertes', fBrand:b, fStatus:'completed'})})).filter(r=>r.value>0||true);
+    const merkChart=this.hBars(merkRows);
+
+    // per dienst
+    const discTotals={};
+    ['Strategie','Branding','Video- en fotografie','Social media','Adverteren','Webdesign','Automations','Opleidingen'].forEach(d=>discTotals[d]=0);
+    fO.filter(o=>o.status==='completed').forEach(o=>{ Object.keys(o.disc).forEach(k=>{discTotals[k]+=o.disc[k];}); });
+    const dienstColors={Strategie:'#0F2EA3',Branding:'#7A2E86','Video- en fotografie':'#E0743A',Webdesign:'#2E9E5B',['Social media']:'#28AFF9',Adverteren:'#E0455E',Opleidingen:'#C98A2B',Automations:'#84A300'};
+    const dienstRows=Object.keys(discTotals).map(d=>({label:d,value:discTotals[d],color:dienstColors[d]||'#2458EA'})).filter(r=>r.value>0).sort((a,b)=>b.value-a.value);
+    const dienstChart=this.hBars(dienstRows);
+
+    // per uitbrenger
+    const ownerWon=(name)=>sumBy(fO, o=>o.status==='completed'&&o.owner===name);
+    const ownerPipe=(name)=>sumBy(fO, o=>(o.status==='sent'||o.status==='viewed')&&o.owner===name);
+    let ownerChart, ownerLockEl=null;
+    if(isAdmin){
+      ownerChart=React.createElement('div',null,
+        React.createElement('div',{style:{fontSize:'11.5px',color:'#8E8979',fontWeight:500,marginBottom:'9px'}},'Gewonnen omzet'),
+        this.hBars([{label:'Arne',value:ownerWon('Arne'),color:'#0F2EA3',onClick:()=>this.setState({screen:'offertes',fOwner:'Arne',fStatuses:['completed']})},{label:'Vincent',value:ownerWon('Vincent'),color:'#2458EA',onClick:()=>this.setState({screen:'offertes',fOwner:'Vincent',fStatuses:['completed']})}]),
+        React.createElement('div',{style:{fontSize:'11.5px',color:'#8E8979',fontWeight:500,margin:'16px 0 9px'}},'Open pipeline'),
+        this.hBars([{label:'Arne',value:ownerPipe('Arne'),color:'#28AFF9',onClick:()=>this.setState({screen:'offertes',fOwner:'Arne',fStatuses:['sent','viewed']})},{label:'Vincent',value:ownerPipe('Vincent'),color:'#7FCBFB',onClick:()=>this.setState({screen:'offertes',fOwner:'Vincent',fStatuses:['sent','viewed']})}])
+      );
+    } else {
+      ownerLockEl=this.chip('Alleen admin','#EFEADD','#8E8979');
+      ownerChart=React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'10px',padding:'30px 10px',textAlign:'center'}},
+        React.createElement('div',{style:{width:'48px',height:'48px',borderRadius:'14px',background:'#EFEADD',display:'flex',alignItems:'center',justifyContent:'center'}}, this.ic('lock','#8E8979',22)),
+        React.createElement('div',{style:{fontSize:'14px',color:'#5E5A4F',maxWidth:'260px'}},'Omzet per persoon is enkel zichtbaar voor de zaakvoerder. Wissel naar Admin om dit te zien.')
+      );
+    }
+
+    // uurtarief
+    const totBudget=this.PROJECTS.reduce((a,p)=>a+p.budget,0), totHours=this.PROJECTS.reduce((a,p)=>a+p.hours,0);
+    const avgRate= totHours? totBudget/totHours : 0;
+    const rateGauge=this.rateGaugeEl(avgRate);
+    const projF=this.PROJECTS.filter(p=>{ const o=this.OFFERTES.find(x=>x.id===p.off); return !o || this.globalPass(o); });
+    const projRated=projF.map(p=>{ const r=p.budget/p.hours; return {p, r, under:r<this.RATE_TARGET}; });
+    const projShown = S.fRendOnder ? projRated.filter(x=>x.under) : projRated;
+    const rendementRows=projShown.map(({p,r,under})=>({name:p.name, budget:this.fmt(p.budget), hours:p.hours+' u', rate:'€ '+r.toFixed(0), flagEl: under?this.chip('Onder target','#FBF1D9','#6B4D04'):this.chip('Op target','#F4FBDB','#4A6B0E')}));
+    const rendUnder=projRated.filter(x=>x.under).length;
+    const rendAvgRate = projF.length ? projF.reduce((a,p)=>a+p.budget,0)/projF.reduce((a,p)=>a+p.hours,0) : 0;
+    const statCard=(active)=>`text-align:left;font-family:inherit;width:100%;background:#FFFDF8;border:1.5px solid ${active?'#0F2EA3':'#F0EADF'};border-radius:24px;padding:22px 24px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06);transition:border-color .15s;`;
+    const rendStats=[
+      {value:String(projF.length), label:'Lopende projecten', cardStyle:statCard(false)+'cursor:default', onClick:()=>{}},
+      {value:'€ '+rendAvgRate.toFixed(0), label:'Gemiddeld uurtarief', cardStyle:statCard(false)+'cursor:default', onClick:()=>{}},
+      {value:String(rendUnder), label:(S.fRendOnder?'Onder target · filter actief':'Onder target (€ '+this.RATE_TARGET+'/u)'), cardStyle:statCard(S.fRendOnder)+'cursor:pointer', onClick:()=>this.setState(st=>({fRendOnder:!st.fRendOnder}))}
+    ];
+
+    const disclaimers=[
+      'Het offerte-Budget is hoog gevuld want het komt automatisch uit PandaDoc. Het taakbudget (de bron voor omzet per categorie en per persoon) is maar ongeveer 40% ingevuld. Vermeng die twee niet.',
+      'Er is geen tijdregistratie actief, dus geplande uren zijn niet hetzelfde als gepresteerde uren. Het uurtarief is dus indicatief.',
+      'Conversie wordt hier live getoond op basis van de PandaDoc-status (sent, viewed, completed, declined, expired). In het huidige productiesysteem worden offertes nog als uitgebracht geteld zonder die status. Dit is dus een verbetering die de cijfers reeel maakt.',
+      'Intern werk (Studio 27 en 27 Automations als interne klant) wordt apart gehouden en telt niet als externe omzet. Cijfers zijn een indicatie voor sturing, geen sluitende boekhouding.'
+    ];
+
+    // advisors
+    const advData={
+      financieel:{title:'Financiële adviseur', icon:'euro', teaser:'Cashflow, DSO en wat je deze week best opvolgt aan facturatie.',
+        summary:'Je betaalde facturen staan op '+this.fmt(paid)+', met een DSO rond 26 dagen. Dat is gezond. Eén factuur is wel over tijd: de Flor-retainer van '+this.fmt(380)+' staat 8 dagen open, en het openstaande bedrag bedraagt '+this.fmt(teOntvangen)+'.',
+        bullets:['Stuur vandaag een vriendelijke betaalherinnering voor F2026-046 ('+this.fmt(380)+').','Zet de Flor-retainer als recurring maandfacturatie, zo verdwijnt dit losse opvolgwerk.','Koppel de boekhouding (Yuki of Exact) zodat de betaald-status automatisch binnenloopt in plaats van manueel.']},
+      sales:{title:'Sales-adviseur', icon:'trend', teaser:'Waar je pipeline zit, wat vervalt en waar je conversie wint.',
+        summary:'Je open pipeline is '+this.fmt(pipeline)+' over '+(cSent+cViewed)+' offertes, en je conversie staat op '+(conv*100).toFixed(0)+'%. Twee offertes vervallen binnen de week, samen goed voor '+this.fmt(expiringSoon.reduce((a,o)=>a+ (this.OFFERTES.find(x=>x.company===o.company)?0:0),0)||9950)+'.',
+        bullets:['Bel Orison en Leaseline deze week: samen '+this.fmt(9950)+' aan pipeline dat anders vervalt.','Arne draagt de meeste open pipeline ('+this.fmt(ownerPipe('Arne'))+'). Plan een gezamenlijk opvolgmoment.','Gebruik de AI-actie OPVOLGING op de verzonden offertes die ouder zijn dan 10 dagen.']},
+      rendement:{title:'Rendements-adviseur', icon:'target', teaser:'Uurtarief, projectrendement en waar de marge weglekt.',
+        summary:'Het gemiddeld uurtarief landt op € '+avgRate.toFixed(0)+', net boven het target van € '+this.RATE_TARGET+'. Twee lopende projecten zitten er wel onder en verdienen aandacht.',
+        bullets:['Flor Vastgoed (€ 77/u) en IP Cleaning (€ 81/u) zitten onder target: bewaak de scope of herbekijk het budget.','Geen tijdregistratie actief, dus dit blijft indicatief op basis van geplande uren.','Overweeg een vaste maand-retainer voor terugkerend werk, dat stabiliseert het uurtarief.']}
+    };
+    const advIcon=(name)=>`width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:#E0F1FD`;
+    const advisorCards=['financieel','sales','rendement'].map(k=>({title:advData[k].title, teaser:advData[k].teaser, iconWrap:advIcon(k), iconEl:this.ic(advData[k].icon,'#0F2EA3',20), open:()=>this.setState({selAdvisor:k})}));
+
+    // ===== invoices view =====
+    const invKpiCard='background:#FFFDF8;border-radius:24px;padding:18px 20px;box-shadow:0 4px 24px -8px rgba(5,10,48,.06)';
+    const invoiceKpis=[
+      {label:'Betaald', value:this.fmt(paid), sub:'binnengekomen', cardStyle:invKpiCard, labelColor:'#8E8979', valueColor:'#4A6B0E', subColor:'#8E8979'},
+      {label:'Openstaand verzonden', value:this.fmt(sent_), sub:'wacht op betaling', cardStyle:invKpiCard, labelColor:'#8E8979', valueColor:'#0F2EA3', subColor:'#8E8979'},
+      {label:'Achterstallig', value:this.fmt(overdue), sub:'over vervaldatum', cardStyle:invKpiCard, labelColor:'#8E8979', valueColor:'#B83A2A', subColor:'#B83A2A'},
+      {label:'Totaal te ontvangen', value:this.fmt(teOntvangen), sub:'verzonden + achterstallig', cardStyle:'background:#0F2EA3;border-radius:24px;padding:18px 20px', labelColor:'rgba(247,243,234,.7)', valueColor:'#fff', subColor:'rgba(247,243,234,.7)'}
+    ];
+    const invoiceRows=this.FACTUREN.map(f=>{ const im=this.invMeta(f.status); const off=this.OFFERTES.find(o=>o.id===f.off);
+      return {nr:f.nr, company:f.company, link:(off?off.code:'—')+(f.note?' · '+f.note:''), amount:this.fmt(f.amount), due:f.due, chipEl:this.chip(im.label,im.bg,im.fg),
+        open:()=>{ if(off){ this.goCrmOfferte(off.id); } else { this.toast('Concept-factuur '+f.nr+' (nog geen gewonnen offerte).'); } }};
+    });
+    const agingRows=[{label:'Niet vervallen (lopend)',value:sent_,color:'#28AFF9'},{label:'0 - 30 dagen over',value:overdue,color:'#C99410'},{label:'31 - 60 dagen over',value:0,color:'#E08A3C'},{label:'60+ dagen over',value:0,color:'#B83A2A'}];
+    const agingBars=this.hBars(agingRows.map(r=>({...r})));
+    const cashRows=[
+      {label:'Verwacht ≤ 30 dagen', value:this.fmt(sent_), color:'#28AFF9'},
+      {label:'Achterstallig', value:this.fmt(overdue), color:'#FFB4A6'},
+      {label:'In concept (nog te verzenden)', value:this.fmt(concept), color:'rgba(247,243,234,.85)'}
+    ];
+
+    // ===== klaar voor facturatie (per bedrijf) =====
+    const billItems=this.BILLREADY.slice();
+    const BILLSTATUS=this.BILLSTATUS;
+    const billStatusSel=(S.billStatusSel&&S.billStatusSel.length)?S.billStatusSel:Object.keys(BILLSTATUS);
+    const billClientSel=S.fKlant&&S.fKlant!=='Alle'?S.fKlant:'all';
+    const billFiltered=billItems.filter(i=> billStatusSel.indexOf(i.status)>=0 && (billClientSel==='all'||i.bedrijf===billClientSel) );
+    const billByCo={}; billFiltered.forEach(i=>{ (billByCo[i.bedrijf]=billByCo[i.bedrijf]||[]).push(i); });
+    const billGroups=Object.keys(billByCo).sort().map(co=>{ const meta=this.CO_META[co]||{}; const list=billByCo[co]; const klaarTot=list.filter(i=>i.status==='klaar').reduce((a,i)=>a+i.budget,0);
+      return { bedrijf:co, kbo:meta.kbo||'—', mail:meta.mail||('facturen@'+co.toLowerCase().replace(/[^a-z]/g,'')+'.be'), total:this.fmt(list.reduce((a,i)=>a+i.budget,0)), klaarTotal:this.fmt(klaarTot), count:list.length, countLabel:list.length+(list.length===1?' taak':' taken'),
+        items:list.map(i=>{ const sm=BILLSTATUS[i.status]||BILLSTATUS.klaar; return { taak:i.taak, project:i.project, budget:this.fmt(i.budget), statusLabel:(i.status==='gefactureerd'&&i.factuur)?(sm.label+' · '+i.factuur):sm.label, statusBg:sm.bg, statusFg:sm.fg }; }) }; });
+    const billKlaarTotaal=billItems.filter(i=>i.status==='klaar').reduce((a,i)=>a+i.budget,0);
+    // status filter dropdown vals
+    const billStatusMenu=Object.keys(BILLSTATUS).map(k=>({ key:k, label:BILLSTATUS[k].label, dot:BILLSTATUS[k].fg, on:billStatusSel.indexOf(k)>=0, checkBg:billStatusSel.indexOf(k)>=0?'#0F2EA3':'#fff', checkBorder:billStatusSel.indexOf(k)>=0?'#0F2EA3':'#CFC7B5', checkEl:billStatusSel.indexOf(k)>=0?this.ic('check','#fff',12):null, toggle:()=>{ this.setState(st=>{ const cur=(st.billStatusSel&&st.billStatusSel.length)?st.billStatusSel.slice():Object.keys(BILLSTATUS); const ix=cur.indexOf(k); if(ix>=0){ if(cur.length>1) cur.splice(ix,1); } else cur.push(k); return {billStatusSel:cur}; }); } }));
+    const billStatusCount=billStatusSel.length, billStatusAll=billStatusSel.length===Object.keys(BILLSTATUS).length;
+
+    // ===== klanten =====
+    const companies=[...new Set(this.OFFERTES.map(o=>o.company))];
+    const klantRows=companies.map(c=>{
+      const os=this.OFFERTES.filter(o=>o.company===c);
+      const w=os.filter(o=>o.status==='completed').reduce((a,o)=>a+o.budget,0);
+      const p=os.filter(o=>o.status==='sent'||o.status==='viewed').reduce((a,o)=>a+o.budget,0);
+      const inv=this.FACTUREN.filter(f=>f.company===c&&(f.status==='verzonden'||f.status==='vervallen')).reduce((a,f)=>a+f.amount,0);
+      return {name:c, sector:this.SECTORS[c]||'—', count:os.length, won:this.fmt(w), pipeline:this.fmt(p), openInvoices:this.fmt(inv), _won:w, raw:c};
+    }).sort((a,b)=>b._won-a._won).map(k=>({...k, open:()=>this.setState({selKlant:k.raw})}));
+
+    // ===== offerte detail =====
+    let od={};
+    const showOfferte=!!S.selOfferte;
+    if(showOfferte){
+      const o=this.OFFERTES.find(x=>x.id===S.selOfferte); const sm=this.statusMeta(o.status); const bm=this.BRANDS[o.brand];
+      const discKeys=Object.keys(o.disc);
+      const discSum=discKeys.reduce((a,k)=>a+o.disc[k],0);
+      const palette=['#0F2EA3','#2458EA','#28AFF9','#7FCBFB','#9AB814','#1D58FF','#5B8DF0','#3D6FE0'];
+      const eh=React.createElement;
+      const dExp=this.daysTo(o.expiry);
+      const expSoon=dExp!=null&&dExp>=0&&dExp<=14;
+      const won_=o.status==='completed', lost_=o.status==='declined', exp_=o.status==='expired';
+      const factuur=this.FACTUREN.find(f=>f.off===o.id);
+      const offTab=S.offTab||'traject';
+
+      // ---- phase timeline ----
+      const phaseDefs=[['concept','Concept opgesteld','file'],['sent','Verzonden naar klant','mail'],['viewed','Bekeken door klant','external'],['followup','Opvolging & onderhandeling','clock'],['decided','Beslist',(won_?'check':(lost_?'x':'flag'))]];
+      let phaseIdx = o.status==='draft'?0 : o.status==='sent'?1 : o.status==='viewed'?2 : (won_||lost_)?4 : exp_?1 : 1;
+      const timelineEl=eh('div',{style:{display:'flex',flexDirection:'column',gap:0}},
+        ...phaseDefs.map(([k,lab,ic],i)=>{
+          const done=i<phaseIdx, active=i===phaseIdx;
+          const col = active?(won_?'#4A6B0E':(lost_?'#6E2218':'#0F2EA3')):(done?'#4A6B0E':'#C4BEAC');
+          const bg = active?(won_?'#F4FBDB':(lost_?'#F7E0DB':'#E2E9FC')):'transparent';
+          return eh('div',{key:k,style:{display:'flex',gap:11,alignItems:'flex-start'}},
+            eh('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',flex:'none'}},
+              eh('span',{style:{width:30,height:30,borderRadius:99,background:done?'#4A6B0E':(active?'#fff':'#F2EDE1'),border:'2px solid '+col,display:'grid',placeItems:'center',flex:'none'}}, this.ic(done?'check':ic, done?'#fff':col, 15)),
+              i<phaseDefs.length-1?eh('span',{style:{width:2,height:26,background:done?'#4A6B0E':'#E7E0D0'}}):null),
+            eh('div',{style:{paddingBottom:i<phaseDefs.length-1?14:0,paddingTop:4}},
+              eh('div',{style:{fontSize:13.5,fontWeight:active?700:(done?600:500),color:active?'#050A30':(done?'#3D3A33':'#8E8979')}}, lab),
+              active?eh('div',{style:{display:'inline-block',marginTop:4,fontSize:11,fontWeight:600,color:col,background:bg,borderRadius:99,padding:'2px 9px'}}, exp_&&i===1?'verlopen':(won_?'gewonnen':(lost_?'geweigerd':'huidige fase'))):null));
+        }));
+
+      // ---- phase-dependent AI ----
+      const phaseAI = won_?[['Stuur bevestiging & opstart','check'],['Maak projectbriefing','file'],['Plan kick-off met klant','calendar']]
+        : lost_?[['Vraag verlies-feedback','mail'],['Analyseer waarom verloren','sparkles'],['Heractiveer over 3 maanden','clock']]
+        : exp_?[['Heropen offerte','file'],['Stuur herinnering','mail']]
+        : o.status==='viewed'?[['Klant bekeek — bel-script','bell'],['Stuur opvolgmail','mail'],['Stel scenario/korting voor','sparkles']]
+        : o.status==='sent'?[['Stuur opvolgmail','mail'],['Plan opvolggesprek','clock'],['Vat offerte samen','sparkles']]
+        : [['Werk offerte af in PandaDoc','file'],['Stel begeleidende mail op','mail'],['Controleer marge','target']];
+      const aiList=phaseAI.concat([['Plan meeting met contactpersoon','calendar']]);
+      const od_aiActions=aiList.map(([label,icon],i)=>({label, iconEl:this.ic(icon, i===0?'#050A30':'#2458EA',15),
+        style:`display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:11px 13px;border-radius:12px;border:1px solid ${i===0?'#D1F24C':'#E2E9FF'};background:${i===0?'#F4FBDB':'#F4F7FF'};color:#050A30;font-family:inherit;font-size:13px;font-weight:${i===0?600:500};cursor:pointer`,
+        run:()=>this.toast('AI-actie "'+label+'" gestart voor '+o.company+'. (demo)')}));
+
+      // ---- klantvraag + mailverkeer ----
+      const svc = discKeys.length?discKeys.join(', ').toLowerCase():'een nieuw traject';
+      const klantvraag = 'Dag, naar aanleiding van ons gesprek ontvingen we graag een voorstel rond '+svc+'. Kan jullie team een offerte opmaken met een richtprijs en timing? Alvast bedankt — '+o.contact.split(' ')[0]+'.';
+      const mailThread=[
+        {from:'klant', who:o.contact, time:o.created, text:klantvraag},
+        {from:'ons', who:o.owner, time:o.created, text:'Bedankt voor de aanvraag! We bekijken de scope en bezorgen je deze week een voorstel via PandaDoc.'},
+        ...(o.status==='viewed'||won_||lost_?[{from:'ons', who:o.owner, time:this.fmtDate(o.expiry), text:'De offerte ('+this.fmt(o.budget)+') staat klaar in PandaDoc. Laat gerust weten of alles duidelijk is.'}]:[]),
+        ...(won_?[{from:'klant', who:o.contact, time:this.fmtDate(o.expiry), text:'Akkoord, we gaan ervoor! Jullie mogen opstarten.'}]:[]),
+        ...(lost_?[{from:'klant', who:o.contact, time:this.fmtDate(o.expiry), text:'Bedankt, maar we kozen voor een andere partij. Misschien later opnieuw.'}]:[])
+      ];
+      const mailEl=eh('div',{style:{display:'flex',flexDirection:'column',gap:10}},
+        ...mailThread.map((m,i)=>eh('div',{key:i,style:{alignSelf:m.from==='ons'?'flex-end':'flex-start',maxWidth:'82%',background:m.from==='ons'?'#0F2EA3':'#fff',color:m.from==='ons'?'#fff':'#3D3A33',border:m.from==='ons'?'none':'1px solid #EFEADD',borderRadius:16,padding:'11px 14px'}},
+          eh('div',{style:{fontSize:11,fontWeight:600,marginBottom:3,color:m.from==='ons'?'rgba(247,243,234,.75)':'#8E8979'}}, m.who+' · '+m.time),
+          eh('div',{style:{fontSize:13,lineHeight:1.5}}, m.text))));
+
+      const checkEl=eh('span',{style:{width:'26px',height:'26px',borderRadius:'8px',flex:'none',display:'flex',alignItems:'center',justifyContent:'center',border:'2px solid '+(o.opstart?'#4A6B0E':'#C4BEAC'),background:o.opstart?'#D1F24C':'transparent'}}, o.opstart?this.ic('check','#050A30',16):null);
+
+      // ---- discipline bar ----
+      let discBar;
+      if(discKeys.length){
+        discBar=eh('div',{style:{display:'flex',height:'26px',borderRadius:'10px',overflow:'hidden',marginBottom:'14px',background:'#EFEADD'}},
+          ...discKeys.map((k,i)=>eh('div',{key:k,title:k,style:{width:(o.disc[k]/discSum*100)+'%',background:palette[i%palette.length]}})));
+      } else {
+        discBar=eh('div',{style:{background:'#FBF1D9',border:'1px solid #F0E2BC',borderRadius:'12px',padding:'12px 14px',marginBottom:'12px',fontSize:'12.5px',color:'#6B4D04'}},'Geen deelbudgetten ingevuld in PandaDoc. We vallen terug op het totaalbudget van '+this.fmt(o.budget)+'.');
+      }
+      const discRows=discKeys.map((k,i)=>({label:k, value:this.fmt(o.disc[k]), color:palette[i%palette.length]}));
+
+      const tabDefs=[['traject','Traject & budget','target'],['vraag','Vraag & mail','mail'],['contact','Contactgegevens','user']];
+      const _segsOd=Object.entries(o.disc||{}).filter(([k,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+      const _titelOd=o.company+(_segsOd.length?(' — '+_segsOd.slice(0,3).map(s=>s[0]).join(', ')):'');
+      od={
+        od_code:o.code, od_company:o.company, od_contact:o.contact, od_budget:this.fmt(o.budget),
+        od_owner:o.owner, od_titel:_titelOd, od_statusBg:sm.bg, od_statusFg:sm.fg, od_statusLabel:sm.label,
+        od_statusFlow:this.statusFlowEl(o.status, false),
+        od_takenCount:_segsOd.length,
+        od_leftOpen:!!S.offLeftOpen, od_leftChevronEl:this.ic(S.offLeftOpen?'chevron-up':'chevron-down','#A8A293',15),
+        tasksIcon:this.ic('list-checks','#4A6B0E',16),
+        od_onLeftEnter:()=>{ if(!this.state.offLeftOpen) this.setState({offLeftOpen:true}); }, od_onLeftLeave:()=>{ if(this.state.offLeftOpen) this.setState({offLeftOpen:false}); },
+        od_openPlanning:()=>{ this.toast&&this.toast('Productieplanning geopend'); try{ window.location.href='/productie/'; }catch(e){} },
+        od_senderInit:(o.owner||'?').slice(0,1).toUpperCase(),
+        od_chipEl:this.chip(sm.label,sm.bg,sm.fg), od_brandDotEl:this.dot(bm.color), od_brandLabel:this.BRANDS[o.brand].label,
+        od_timelineEl:timelineEl, od_mailEl:mailEl, od_klantvraag:klantvraag, od_aiActions,
+        od_gmailIcon:this.ic('mail','#0F2EA3',14), od_sendIcon:this.ic('arrow','#fff',16),
+        od_fetchMail:()=>this.toast('Mailverkeer met '+o.contact+' opgehaald uit Gmail. (demo)'),
+        od_tabs:tabDefs.map(([k,lab,ic])=>({key:k, label:lab, active:offTab===k,
+          iconEl:this.ic(ic, offTab===k?'#0F2EA3':'#8E8979',15),
+          style:'display:inline-flex;align-items:center;gap:8px;padding:11px 16px;border:none;border-bottom:2px solid '+(offTab===k?'#0F2EA3':'transparent')+';background:none;cursor:pointer;font-family:inherit;font-size:13.5px;font-weight:'+(offTab===k?600:500)+';color:'+(offTab===k?'#050A30':'#8E8979'),
+          go:()=>this.setState({offTab:k})})),
+        od_showTraject: offTab==='traject', od_showVraag: offTab==='vraag', od_showContact: offTab==='contact',
+        od_expiry: o.expiry?this.fmtDate(o.expiry):'geen', od_expiryNote: o.status==='expired'?'Vervaldatum verstreken':(dExp!=null&&dExp>=0?('Over '+dExp+' dagen'):'—'),
+        od_expiryColor: expSoon||o.status==='expired'?'color:#C99410;font-weight:500':'color:#8E8979',
+        od_discNote: discKeys.length? (discKeys.length+' disciplines') : 'terugval op totaal',
+        od_discBar:discBar, od_discRows:discRows,
+        od_pandaId:o.panda, od_link:'https://app.pandadoc.com/a/#/documents/'+o.panda,
+        od_pmEl:this.chip(o.pm, o.pm==='Done'?'#F4FBDB':'#E0F1FD', o.pm==='Done'?'#4A6B0E':'#0F2EA3'),
+        od_opstartBg: o.opstart?'#F4FBDB':'#fff', od_opstartBorder:o.opstart?'#D1F24C':'#DFD9C8',
+        od_opstartCheck:checkEl, od_opstartNote: o.opstart?'Gewonnen offerte is opgestart als project.':(won_?'Nog op te starten. Klik om af te vinken.':'Wordt actief zodra de offerte gewonnen is.'),
+        od_toggleOpstart:()=>{ if(won_){ o.opstart=!o.opstart; this.forceUpdate(); this.toast(o.opstart?'Project opgestart voor '+o.company:'Opstart teruggezet.'); } else { this.toast('Opstart kan pas na een gewonnen offerte.'); } },
+        od_goKlant:()=>this.setState({selKlant:o.company, selOfferte:null}),
+        od_sector:this.SECTORS[o.company]||'Klant',
+        od_msgDraft:S.offMsg||'',
+        od_setMsg:(e)=>this.setState({offMsg:e.target.value}),
+        od_sendMsg:()=>{ const m=(S.offMsg||'').trim(); this.setState({offMsg:''}); this.toast(m?('Bericht verstuurd naar '+o.contact+'.'):'Schrijf eerst een bericht.'); },
+        od_factuurLabel: factuur?('Factuur '+factuur.nr):'Geen factuur',
+        od_goFactuur:()=>{ if(factuur){ this.setState({selOfferte:null, screen:'facturatie'}); this.toast('Gekoppelde factuur '+factuur.nr+' ('+this.invMeta(factuur.status).label.toLowerCase()+').'); } else { this.toast('Nog geen voorgestelde factuur voor deze offerte.'); } }
+      };
+    }
+
+    // ===== klant detail =====
+    let kd={}; const showKlant=!!S.selKlant;
+    if(showKlant){
+      const c=S.selKlant; const os=this.OFFERTES.filter(o=>o.company===c);
+      const w=os.filter(o=>o.status==='completed').reduce((a,o)=>a+o.budget,0);
+      const p=os.filter(o=>o.status==='sent'||o.status==='viewed').reduce((a,o)=>a+o.budget,0);
+      const facs=this.FACTUREN.filter(f=>f.company===c);
+      const openInv=facs.filter(f=>f.status==='verzonden'||f.status==='vervallen').reduce((a,f)=>a+f.amount,0);
+      kd={
+        kd_name:c, kd_sector:this.SECTORS[c]||'Klant', kd_contact:os[0]?os[0].contact:'',
+        kd_won:this.fmt(w), kd_pipeline:this.fmt(p), kd_openInvoices:this.fmt(openInv),
+        kd_offertes:os.sort((a,b)=>b.budget-a.budget).map(o=>{const sm=this.statusMeta(o.status); return {code:o.code, budget:this.fmt(o.budget), chipEl:this.chip(sm.label,sm.bg,sm.fg), open:()=>this.goCrmOfferte(o.id)};}),
+        kd_facturen:facs.map(f=>{const im=this.invMeta(f.status); return {nr:f.nr, amount:this.fmt(f.amount), chipEl:this.chip(im.label,im.bg,im.fg)};}),
+        kd_noInvoices:facs.length===0
+      };
+    }
+
+    // ===== advisor panel =====
+    let ai={}; const showAi=!!S.selAdvisor;
+    if(showAi){ const a=advData[S.selAdvisor];
+      ai={ ai_title:a.title, ai_summary:a.summary, ai_iconWrap:'width:42px;height:42px;border-radius:13px;display:flex;align-items:center;justify-content:center;background:rgba(40,175,249,.18)', ai_iconEl:this.ic(a.icon,'#28AFF9',22),
+        ai_bullets:a.bullets.map((t,i)=>({num:String(i+1).padStart(2,'0'), text:t})) };
+    }
+
+    // page titles
+    const roleName = isAdmin?'Vincent':'Arne';
+    const titles={overzicht:['Dashboard','Dag '+roleName+'.'],offertes:['Sales','Offertes'],facturatie:['Finance','Facturatie'],cijfers:['Analyse','Cijfers'],rendement:['Analyse','Projectrendement'],klanten:['Relaties','Per klant']};
+    const tt=titles[S.screen]||['',''];
+
+    return {
+      nav, finFilters, finFiltersActive, finClear, finClearIcon, statusChips,
+      compareToggle:()=>this.setState(st=>({compareOn:!st.compareOn})),
+      compareIcon:this.ic('trend','#2458EA',15),
+      compareTitle:'Vergelijk huidige selectie met vorige gelijke periode',
+      compareLabel:S.compareOn?'Vorige periode':'Uit',
+      compareBtnStyle:`display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid ${S.compareOn?'#0F2EA3':'#DFD9C8'};border-radius:999px;padding:8px 14px;font-family:inherit;font-size:12.5px;cursor:pointer;white-space:nowrap;transition:border-color .15s`,
+      compareSummaryVisible:!!(S.compareOn&&prevR),
+      compareSummaryText,
+      isNarrow, isMobile,
+      hamburgerDisplay: isNarrow ? 'grid' : 'none',
+      flaskDisplay: isMobile ? 'none' : 'flex',
+      aiLabelDisplay: isMobile ? 'none' : 'inline',
+      envOpen: S.envOpen, toggleEnv:()=>this.toggleEnv(), logout:()=>this.logout(),
+      anyMenuOpen:!!(S.envOpen||S.finMenu||S.billStatusOpen||S.payrollFilterMenu), closeAllMenus:()=>this.closeAllMenus(),
+      sbExpanded: S.sbExpand,
+      viewAsRole: S.role,
+      viewAsUserIcon: this.ic('user','#28AFF9',16),
+      personaOpts: [{ value:'admin', label:'Vincent · zaakvoerder' },{ value:'sales', label:'Arne · sales' }],
+      setPersona: (e)=>this.setState({role:e.target.value}),
+      sidebarEnter:()=>this.sidebarEnter(), sidebarLeave:()=>this.sidebarLeave(), toggleSidebar:()=>this.toggleSidebar(), closeSidebar:()=>this.closeSidebar(),
+      railDisplay: isNarrow ? (S.sbExpand?'flex':'none') : 'flex',
+      sbWidth: isNarrow ? '266px' : (S.sbExpand?'248px':'72px'),
+      labelOpacity: isNarrow ? '1' : (S.sbExpand?'1':'0'),
+      sbShadow: S.sbExpand ? '0 24px 60px -12px rgba(0,0,0,.55)' : 'none',
+      mainMargin: isNarrow ? '0' : '72px',
+      sbBackdrop: isNarrow && S.sbExpand,
+      menuIcon:this.ic('menu','#F7F3EA',20), chevIcon:this.ic('chevrons','rgba(247,243,234,.65)',14),
+      envCrmIcon:this.ic('building','#fff',17), envHrIcon:this.ic('usersRound','#050A30',17), envFinIcon:this.ic('chart','#050A30',17),
+      envCheckIcon:this.ic('check','#1D8A5B',17), envGridIcon:this.ic('grid','#5E5A4F',16), envLogoutIcon:this.ic('logout','#6E2218',16),
+      railLogoutIcon:this.ic('logout','rgba(247,243,234,.55)',20),
+      pageEyebrow:tt[0], pageTitle:tt[1], pageHeading:tt[1], periodLabel:this.periodLabel(), ...this.dateModalVals(),
+      roleScope: isAdmin?'Volledig beeld · omzet per persoon zichtbaar':'Sales-weergave · omzet per persoon verborgen',
+      flaskIcon:this.ic('flask','#D1F24C',13), sparkIcon:this.ic('sparkles',S.assistOpen?'#050A30':'#28AFF9',16),
+      assistBtnBg:S.assistOpen?'#28AFF9':'rgba(40,175,249,.14)', assistBtnColor:S.assistOpen?'#050A30':'#28AFF9',
+      assistOpen:S.assistOpen, toggleAssistant:()=>this.toggleAssistant(),
+      assistInput:S.assistInput, setAssistInput:(e)=>this.setAssistInput(e), sendAssist:()=>this.sendAssist(), assistKey:(e)=>{ if(e.key==='Enter') this.sendAssist(); },
+      assistHeadIcon:this.ic('sparkles','#D1F24C',20), assistCloseIcon:this.ic('x','#5E5A4F',18), assistSendIcon:this.ic('arrow','#050A30',20),
+      assistMessages:S.assistMessages.map(m=>({ text:m.text, align:m.role==='ai'?'flex-start':'flex-end', bg:m.role==='ai'?'#FFFFFF':'#050A30', color:m.role==='ai'?'#26241F':'#F7F3EA', radius:m.role==='ai'?'4px 16px 16px 16px':'16px 16px 4px 16px' })),
+      assistChips:[ {label:'Facturen over tijd?',run:()=>this.assistChipRun('Welke facturen staan over tijd?')}, {label:'Offertes opvolgen?',run:()=>this.assistChipRun('Welke offertes wachten op opvolging?')}, {label:'Cijfers samenvatten',run:()=>this.assistChipRun('Vat de cijfers van deze maand samen.')} ],
+      bellIcon:this.ic('bell','#F7F3EA',18), userIcon:this.ic('user','#F7F3EA',18),
+      bugIcon:this.ic('bug','#F7F3EA',18), bugClick:()=>this.openBug(),
+      bugOpen:!!S.bugModal, bugScreen:S.bugModal?S.bugModal.si:'', bugReporter:S.bugModal?S.bugModal.reporter:'',
+      bugTitle:S.bugModal?S.bugModal.title:'', bugDesc:S.bugModal?S.bugModal.desc:'',
+      bugFiles:(S.bugModal?(S.bugModal.files||[]):[]).map((f,i)=>({name:f.n, remove:()=>this.removeBugFile(i)})),
+      closeBug:()=>this.closeBug(), stopBug:(e)=>{e.stopPropagation();},
+      setBugTitle:(e)=>this.setBug('title',e.target.value), setBugDesc:(e)=>this.setBug('desc',e.target.value),
+      addBugFile:()=>this.addBugFile(), submitBug:()=>this.submitBug(),
+      bellClick:()=>this.toast('Geen nieuwe meldingen.'), accountClick:()=>this.setState({screen:'profiel'}),
+      isOverzicht:S.screen==='overzicht', isOffertes:S.screen==='offertes', isFacturatie:S.screen==='facturatie', isCijfers:S.screen==='cijfers', isRendement:S.screen==='rendement', isKlanten:S.screen==='klanten',
+      isProfiel:S.screen==='profiel', profielUser:isAdmin?'Vincent Verleije':'Arne',
+      isAgenda:S.screen==='agenda',
+      showTopBar: S.screen!=='profiel' && S.screen!=='agenda',
+      agendaNavRef:(el)=>{ if(el) el.onNav=null; },
+      roleAdminStyle:this.roleBtn(isAdmin), roleSalesStyle:this.roleBtn(!isAdmin),
+      roleHint: isAdmin?'Vincent (zaakvoerder). Ziet alles, inclusief omzet per persoon.':'Arne (sales). Ziet offertes, pipeline en cijfers, geen omzet per persoon.',
+      setRoleAdmin:()=>this.setState({role:'admin'}), setRoleSales:()=>this.setState({role:'sales'}),
+      heroSubtitle:'Offertes, cijfers en facturatie van de groep in één beeld', heroStamp:'bijgewerkt 23 jun 2026', heroKpis,
+      omzetChart:this.areaChart(), winLossBar, conversionPct:(conv*100).toFixed(0)+'%', viewedRatio:(viewedRatioN*100).toFixed(0)+'%',
+      expiringSoon, activity, goWon:()=>drill('completed'),
+      offerteRows, offerteGroups, offerteCountLabel, offerteTotal,
+      offPipelineBars, offPipelineTotal, offPipelineEmpty,
+      openNewOff:()=>this.setState({newOff:{company:'', contact:'', brand:'S27', budget:''}}),
+      newOff:S.newOff, newOffActive:!!S.newOff,
+      closeNewOff:()=>this.setState({newOff:null}),
+      newOffCompanies:Object.keys(this.SECTORS),
+      newOffBrands:Object.keys(this.BRANDS).map(k=>({value:k,label:this.BRANDS[k].label})),
+      setNewOff:(patch)=>this.setState(s=>({newOff:Object.assign({},s.newOff,patch)})),
+      setNewOffCompany:(e)=>this.setState(s=>({newOff:Object.assign({},s.newOff,{company:e.target.value})})),
+      setNewOffContact:(e)=>this.setState(s=>({newOff:Object.assign({},s.newOff,{contact:e.target.value})})),
+      setNewOffBrand:(e)=>this.setState(s=>({newOff:Object.assign({},s.newOff,{brand:e.target.value})})),
+      createNewOff:()=>{const f=S.newOff||{};if(!f.company){this.toast('Kies eerst een bedrijf.');return;}this.setState({newOff:null});this.toast('Offerte-concept aangemaakt voor '+f.company+' — open PandaDoc om af te werken.');},
+      invoiceKpis, invoiceRows, agingBars, cashRows, dso:26, mrr:this.fmt(380),
+      billGroups, billGroupsEmpty:billGroups.length===0, billKlaarTotaal:this.fmt(billKlaarTotaal),
+      billStatusMenu, billStatusCount, billStatusAll, billStatusLabel:(billStatusAll?'Alle statussen':(billStatusCount+' geselecteerd')),
+      billStatusOpen:!!S.billStatusOpen, toggleBillStatus:()=>this.setState(st=>({billStatusOpen:!st.billStatusOpen})),
+      advisorCards, merkChart, dienstChart, ownerChart, ownerLockEl, rateGauge, rateTarget:'€ '+this.RATE_TARGET, rendementRows, rendStats, disclaimers,
+      monthRevenue:this.fmt(wonThisMonth), monthTarget:this.fmt(this.MONTH_TARGET),
+      recurMRR:this.fmt(recurMRRn), recurAnnual:this.fmt(recurMRRn*12), recurCount:recurFiltered.length+' contracten', recurTypeChips, recurringChart:this.recurringChart(),
+      klantRows,
+      showOfferte, ...od, showKlant, ...kd, showAi, ...ai,
+      showToast:!!S.toast, toastMsg:S.toast||'', toastIcon:this.ic('check','#050A30',16),
+      closeOfferte:()=>this.setState({selOfferte:null}), closeKlant:()=>this.setState({selKlant:null}), closeAi:()=>this.setState({selAdvisor:null}), stop,
+      exportPdf:()=>this.toast('PDF-export gestart. Het rapport wordt klaargemaakt. (demo)'),
+      exportCsv:()=>this.toast('CSV met de huidige selectie wordt gedownload. (demo)'),
+      pdfIcon:this.ic('download','#5E5A4F',15), csvIcon:this.ic('download','#5E5A4F',15),
+      closeIcon:this.ic('x','currentColor',18), linkIcon:this.ic('external','#fff',16), invoiceIcon:this.ic('receipt','#050A30',16),
+      proposalIcon:this.ic('info','#0F2EA3',20), honestIcon:this.ic('info','#8E8979',18), plusIcon:this.ic('plus','#fff',16)
+    };
+  }
+  roleBtn(active){ return `padding:7px 14px;border-radius:9px;border:none;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;background:${active?'#F7F3EA':'transparent'};color:${active?'#050A30':'#aeb2cf'};transition:all .15s`; }
+  goCrmOfferte(id){ if(typeof window!=='undefined'&&id){ window.location.href='/crm/?go=offertes&id='+encodeURIComponent(id); } }
+  get OFFERTES(){
+    if(this._OFF) return this._OFF;
+    const D=(typeof window!=='undefined'&&window.S27_DATA)||null;
+    if(!D||!D.offertes) return [];
+    const companyName={}, companyBrand={}, companySector={};
+    (D.companies||[]).forEach(c=>{ companyName[c.id]=c.name; companyBrand[c.id]=c.org; companySector[c.id]=c.sector||'Klant'; });
+    const contactName={}; (D.contacts||[]).forEach(c=>{ contactName[c.id]=c.vn+' '+c.an; });
+    const MO=['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
+    const months={jan:0,feb:1,mrt:2,apr:3,mei:4,jun:5,jul:6,aug:7,sep:8,okt:9,nov:10,dec:11};
+    const toISO=(s)=>{ if(!s) return null; const p=String(s).trim().split(/\s+/); if(p.length<3) return null; const d=+p[0], m=months[p[1]], y=+p[2]; if(m==null||isNaN(d)||isNaN(y)) return null; return y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0'); };
+    const fmtShort=(iso)=>{ if(!iso) return ''; const p=iso.split('-'); return parseInt(p[2])+' '+MO[parseInt(p[1])-1]; };
+    this._OFF = D.offertes.map(o=>{
+      const disc={}; Object.keys(o.deel||{}).forEach(k=>{ if(o.deel[k]>0) disc[k]=o.deel[k]; });
+      let brand=(o.onderneming||String(o.code||'S27').split('-')[0])||'S27'; if(!this.BRANDS[brand]) brand='S27';
+      const expISO=toISO(o.verval);
+      const createdMs=Number(o.ts)||Number(o.created_at)||0;
+      let createdISO=null; if(createdMs){ const dd=new Date(createdMs); if(!isNaN(dd.getTime())) createdISO=dd.toISOString().slice(0,10); }
+      if(!createdISO&&expISO){ const dd=new Date(expISO); dd.setDate(dd.getDate()-21); createdISO=dd.toISOString().slice(0,10); }
+      const created=createdISO?fmtShort(createdISO):'';
+      let completedM=null; if(o.status==='completed'){ const base=createdMs?new Date(createdMs):(expISO?new Date(expISO):null); if(base&&!isNaN(base.getTime())){ let mm=base.getMonth(); if(mm>5) mm=5; if(mm<0) mm=0; completedM=mm; } }
+      return { id:o.id, code:o.code, panda:o.panda, company:companyName[o.bedrijfId]||o.bedrijf||(o.titel||'').split(' - ')[0],
+        contact:contactName[o.contactId]||'', brand:brand, owner:(D.senderByOff||{})[o.id]||'Arne',
+        status:o.status, budget:o.budget, disc:disc, created:created, createdMs:createdMs, completedM:completedM, expiry:expISO,
+        pm:(o.doorzet==='Done'?'Done':'Naar PM'), opstart:(o.status==='completed'), sector:companySector[o.bedrijfId]||'Klant' };
+    });
+    return this._OFF;
+  }
+  set OFFERTES(v){ this._OFF=v; }
+  fmtDate(iso){ if(!iso) return '—'; const p=iso.split('-'); const m=['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec']; return parseInt(p[2])+' '+m[parseInt(p[1])-1]; }
+  NLMF=['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
+  MONS={jan:0,feb:1,mrt:2,apr:3,mei:4,jun:5,jul:6,aug:7,sep:8,okt:9,nov:10,dec:11};
+  TODAY=new Date(2026,5,23).getTime();
+  parseDate(s){ if(!s) return null; const m=String(s).trim().match(/(\d{1,2})\s+([a-z]{3})/i); if(!m) return null; const mo=this.MONS[m[2].toLowerCase()]; if(mo==null) return null; return new Date(2026,mo,parseInt(m[1],10)).getTime(); }
+  fmtShort(ms){ const d=new Date(ms); const ab=Object.keys(this.MONS).find(k=>this.MONS[k]===d.getMonth()); return d.getDate()+' '+ab; }
+  periodLabel(){ const r=this.state.periodRange; if(!r||r.mode==='all') return 'Alle periodes'; if(r.mode==='maand') return 'Deze maand'; if(r.mode==='kwartaal') return 'Dit kwartaal'; if(r.mode==='jaar') return 'Dit jaar'; if(r.mode==='vorig') return 'Vorig jaar'; if(r.start!=null&&r.end!=null) return this.fmtShort(r.start)+' – '+this.fmtShort(r.end)+' '+new Date(r.end).getFullYear(); if(r.start!=null) return 'Vanaf '+this.fmtShort(r.start); return 'Alle periodes'; }
+  presetRange(mode){ const T=new Date(this.TODAY); const y=T.getFullYear(); if(mode==='maand') return {start:new Date(y,T.getMonth(),1).getTime(), end:new Date(y,T.getMonth()+1,0).getTime()}; if(mode==='kwartaal'){ const q=Math.floor(T.getMonth()/3); return {start:new Date(y,q*3,1).getTime(), end:new Date(y,q*3+3,0).getTime()}; } if(mode==='jaar') return {start:new Date(y,0,1).getTime(), end:new Date(y,11,31).getTime()}; if(mode==='vorig') return {start:new Date(y-1,0,1).getTime(), end:new Date(y-1,11,31).getTime()}; return {start:null,end:null}; }
+  openDate(){ const r=this.state.periodRange; const base=r&&r.start?new Date(r.start):new Date(this.TODAY); this.setState({dateModal:true, draftMode:r?r.mode:'all', draftStart:r?r.start:null, draftEnd:r?r.end:null, calY:base.getFullYear(), calM:base.getMonth(), finMenu:null}); }
+  closeDate(){ this.setState({dateModal:false}); }
+  setPreset(mode){ if(mode==='all'){ this.setState({draftMode:'all',draftStart:null,draftEnd:null}); return; } const pr=this.presetRange(mode); const b=pr.start?new Date(pr.start):new Date(this.TODAY); this.setState({draftMode:mode, draftStart:pr.start, draftEnd:pr.end, calY:b.getFullYear(), calM:b.getMonth()}); }
+  calPrev(){ this.setState(s=>{ let m=s.calM-1,y=s.calY; if(m<0){m=11;y--;} return {calM:m,calY:y}; }); }
+  calNext(){ this.setState(s=>{ let m=s.calM+1,y=s.calY; if(m>11){m=0;y++;} return {calM:m,calY:y}; }); }
+  calDay(ms){ this.setState(s=>{ let st=s.draftStart, en=s.draftEnd; if(st==null||en!=null){ st=ms; en=null; } else { if(ms<st){ en=st; st=ms; } else { en=ms; } } return {draftMode:'custom', draftStart:st, draftEnd:en}; }); }
+  applyDate(){ this.setState(s=>({ periodRange:{mode:s.draftMode, start:s.draftStart, end:s.draftEnd}, dateModal:false })); }
+  clearDraft(){ this.setState({draftMode:'all', draftStart:null, draftEnd:null}); }
+  inRange(ms,r){ if(!r||r.mode==='all') return true; if(!ms) return false; if(r.start!=null && ms<r.start) return false; if(r.end!=null && ms>(r.end+86399999)) return false; return true; }
+  datePass(o){ return this.inRange(o.createdMs||this.parseDate(o.created), this.state.periodRange); }
+  dateModalVals(){ const s=this.state; if(!s.dateModal){ return {dateModalOpen:false}; }
+    const y=s.calY,m=s.calM; const first=new Date(y,m,1); const off=(first.getDay()+6)%7; const dim=new Date(y,m+1,0).getDate(); const dS=s.draftStart,dE=s.draftEnd; const cells=[];
+    for(let i=0;i<off;i++) cells.push({blank:true,style:'height:38px;'});
+    for(let d=1;d<=dim;d++){ const ms=new Date(y,m,d).getTime(); const isEnd=(dS!=null&&ms===dS)||(dE!=null&&ms===dE); const within=dS!=null&&dE!=null&&ms>=dS&&ms<=dE; const isToday=ms===this.TODAY; let bg='transparent',col='#26241F',sh='none',fw='500'; if(within&&!isEnd){bg='#E6ECFE';col='#0F2EA3';} if(isEnd){bg='#050A30';col='#fff';fw='600';} if(isToday&&!isEnd&&!within){sh='inset 0 0 0 1.5px #C7D3F2';} const rad=(dS!=null&&dE!=null)?(ms===dS?'10px 0 0 10px':(ms===dE?'0 10px 10px 0':(within?'0':'10px'))):'10px'; cells.push({blank:false,day:String(d),style:'height:38px;border:none;cursor:pointer;font-size:13px;font-weight:'+fw+';background:'+bg+';color:'+col+';box-shadow:'+sh+';border-radius:'+rad+';display:grid;place-items:center;font-family:inherit;',pick:()=>this.calDay(ms)}); }
+    const presetActive=(mode)=>'display:flex;align-items:center;gap:9px;width:100%;border:none;cursor:pointer;text-align:left;border-radius:11px;padding:11px 13px;font-size:13.5px;font-weight:'+(s.draftMode===mode?'600':'500')+';background:'+(s.draftMode===mode?'#050A30':'#F7F3EA')+';color:'+(s.draftMode===mode?'#fff':'#26241F')+';';
+    return { dateModalOpen:true, calLabel:this.NLMF[m]+' '+y, calCells:cells, calWeekdays:['ma','di','wo','do','vr','za','zo'],
+      datePresets:[ {label:'Deze maand',style:presetActive('maand'),pick:()=>this.setPreset('maand')},{label:'Dit kwartaal',style:presetActive('kwartaal'),pick:()=>this.setPreset('kwartaal')},{label:'Dit jaar',style:presetActive('jaar'),pick:()=>this.setPreset('jaar')},{label:'Vorig jaar',style:presetActive('vorig'),pick:()=>this.setPreset('vorig')},{label:'Alle periodes',style:presetActive('all'),pick:()=>this.setPreset('all')} ],
+      draftSummary:(dS!=null&&dE!=null)?(this.fmtShort(dS)+' – '+this.fmtShort(dE)+' '+new Date(dE).getFullYear()):(dS!=null?('Vanaf '+this.fmtShort(dS)+' — kies einddatum'):'Geen periode gekozen'),
+      calPrev:()=>this.calPrev(), calNext:()=>this.calNext(), applyDate:()=>this.applyDate(), clearDraft:()=>this.clearDraft(), closeDate:()=>this.closeDate(), stopDate:(e)=>e.stopPropagation() };
+  }
+
+  /* =========================================================================
+   * LIVE-WIRING (FINANCE) — geent op het nieuwe ontwerp. Latere definities
+   * winnen in JS. De offertelijsten draaien op LIVE data: loadLive haalt
+   * crmData op en herbouwt window.S27_DATA (CRM = source of truth), waarna de
+   * `get OFFERTES()` getter + alle KPI's/cijfers/klanten live renderen.
+   * AI zit in de menubalk (sparkle), geen FAB, geen ai-assistant.js.
+   * ========================================================================= */
+  _gw(){ return (typeof window!=='undefined' && window.S27PORTAL && window.S27PORTAL.GATEWAY) || ''; }
+
+  _startAuth(){ var self=this, tries=0; (function wait(){ if(typeof window!=='undefined' && window.S27TeamAuth){ try{ window.S27TeamAuth.init({gatewayBase:self._gw()}); }catch(e){} window.S27TeamAuth.subscribe(function(st){ if(!st) return; if(st.phase==='ready'){ self._userEmail=String(st.email||'').toLowerCase(); if(!self._dataReq){ self._dataReq=true; self.loadLive(); } } else if(st.phase==='signed_out'){ try{ location.replace('/?next='+encodeURIComponent('/finance/'+(location.search||'')+(location.hash||''))); }catch(e){} } }); return; } if(tries++<80) setTimeout(wait,80); })(); }
+
+  loadLive(){ var self=this; if(typeof window==='undefined'||!window.S27TeamAuth) return;
+    window.S27TeamAuth.token().then(function(tok){ if(!tok) return null; var H={'Content-Type':'application/json',Authorization:'Bearer '+tok};
+      return fetch(self._gw()+'/crmData',{method:'POST',headers:H,body:'{}'}).then(function(r){return r.json();}).catch(function(){return null;});
+    }).then(function(d){ if(!d||!d.ok) return; try{ self._applyLive(d); }catch(e){} }).catch(function(){}); }
+
+  _applyLive(d){
+    var prev=(typeof window!=='undefined'&&window.S27_DATA)||{};
+    var MO=['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
+    var fmtVerval=function(ms){ if(ms==null) return ''; var dt=new Date(Number(ms)); if(isNaN(dt.getTime())) return ''; return dt.getDate()+' '+MO[dt.getMonth()]+' '+dt.getFullYear(); };
+    var VALID={S27:1,'27A':1,ZVD:1,'27M':1};
+    var offertes=(d.offertes||[]).map(function(o){
+      var ond=String(o.onderneming||'').toUpperCase(); if(!VALID[ond]) ond='';
+      var deel=(o.disc&&typeof o.disc==='object')?o.disc:{};
+      return { id:o.id, titel:o.titel||'', status:o.status||'draft', bedrijfId:o.bedrijf_id||'', bedrijf:o.bedrijf||'', contactId:o.contact_id||'', meetingId:o.meeting_id||'', briefingId:o.briefing_id||'', panda:o.panda_id||'', link:o.panda_link||'', code:o.code||'', verval:fmtVerval(o.verval), ts:Number(o.ts)||Number(o.created_at)||0, doorzet:o.doorzet||'', budget:Number(o.budget)||0, deel:deel, onderneming:ond, owner:o.owner||'', extra:o.brief||'' };
+    });
+    var companies=(d.companies||[]).map(function(c){ return { id:c.id, name:c.naam||c.bedrijf||c.name||'', org:c.org||'', sector:c.sector||'', pm:c.pm||'' }; });
+    var contacts=(d.contacts||[]).map(function(c){ return { id:c.id, vn:c.voornaam||'', an:c.achternaam||'', email:c.email||'', gsm:c.gsm||'', bedrijfId:c.bedrijf_id||'' }; });
+    var senderByOff={}; (d.offertes||[]).forEach(function(o){ var nm=o.owner || (o.verzonden_door? String(o.verzonden_door).split('@')[0] : ''); if(nm) senderByOff[o.id]=nm; });
+    window.S27_DATA = Object.assign({}, prev, { offertes:offertes, companies:companies, contacts:contacts, senderByOff:senderByOff });
+    this._OFF=null; try{ this.forceUpdate(); }catch(e){}
+  }
+
+  /* veilige lucide-injector (svg IN de <i>, geen replaceChild → geen React removeChild-crash) */
+  _icons(){ if(typeof window==='undefined'||!window.lucide) return; try{ var L=window.lucide, cache=(this.__icoCache=this.__icoCache||{}), nodes=document.querySelectorAll('i[data-lucide]'); for(var k=0;k<nodes.length;k++){ var el=nodes[k], name=el.getAttribute('data-lucide'); if(!name) continue; if(el.__s27ico===name && el.firstChild) continue; if(!(name in cache)) cache[name]=this._lucideSvg(L,name)||''; var svg=cache[name]; if(svg){ el.innerHTML=svg; el.__s27ico=name; } } }catch(e){} }
+  _lucideSvg(L,name){ try{ var h=document.createElement('span'); h.style.cssText='position:absolute;width:0;height:0;overflow:hidden;'; h.innerHTML='<i data-s27ico="'+name+'"></i>'; document.body.appendChild(h); try{ L.createIcons({nameAttr:'data-s27ico'}); }catch(e){} var s=h.querySelector('svg'), html=''; if(s){ s.setAttribute('width','1em'); s.setAttribute('height','1em'); html=s.outerHTML; } h.remove(); return html; }catch(e){ return ''; } }
+
+  /* menubalk-AI (sparkle): echte chat via teamAssistantChat */
+  _aiCtxFor(){ var s=this.state; try{ var offs=this.OFFERTES||[]; var sum=function(a){return a.reduce(function(x,o){return x+(o.budget||0);},0);}; var won=offs.filter(function(o){return o.status==='completed';}); var pipe=offs.filter(function(o){return o.status==='sent'||o.status==='viewed';}); return 'Finance-portaal, scherm: '+s.screen+'. '+offs.length+' offertes; gewonnen €'+sum(won)+'; pipeline €'+sum(pipe)+'.'; }catch(e){} return 'Finance-portaal, scherm: '+s.screen+'.'; }
+  _replaceLastAi(text){ this.setState(function(s){ var msgs=(s.assistMessages||[]).slice(); for(var i=msgs.length-1;i>=0;i--){ if(msgs[i].role==='ai'&&msgs[i].text==='…'){ msgs[i]={role:'ai',text:String(text)}; break; } } return {assistMessages:msgs}; }); }
+  sendAssist(){ var self=this; var v=String(this.state.assistInput||'').trim(); if(!v) return; this.pushAssist('user',v); this.setState({assistInput:''});
+    if(typeof window==='undefined'||!window.S27TeamAuth){ this.pushAssist('ai','Login vereist om de AI te gebruiken.'); return; }
+    this.pushAssist('ai','…'); var ctx=this._aiCtxFor();
+    window.S27TeamAuth.token().then(function(tok){ if(!tok) return null; return fetch(self._gw()+'/teamAssistantChat',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({portal:'finance', message:v, context:ctx, session_id:(self._aiSession||'')})}).then(function(r){return r.json();}); }).then(function(d){ var reply=(d&&d.reply)||'Geen antwoord.'; if(d&&d.session_id) self._aiSession=d.session_id; self._replaceLastAi(reply); }).catch(function(){ self._replaceLastAi('Er ging iets mis.'); }); }
+  assistChipRun(q){ if(!q) return; this.setState({assistInput:String(q)}); this.sendAssist(); }
+
+  /* lifecycle: echte auth i.p.v. fake localStorage-gate */
+  componentDidMount(){ var self=this; var preview=false, emb=null, go=null; if(typeof window!=='undefined'){ try{ var _sp0=new URLSearchParams(location.search); var lp=location.protocol==='file:'||/^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/.test(location.hostname); emb=_sp0.get('embed')||null; go=_sp0.get('go')||null; preview=lp&&(_sp0.get('preview')==='1'||_sp0.get('demo')==='1'); }catch(e){} } this._preview=preview;
+    if(go){ this.setState({screen:go==='home'?'overzicht':go}); }
+    if(!preview && !emb){ this._startAuth(); }
+    if(typeof window!=='undefined'){ this._onResize=function(){ self.setState({vw:window.innerWidth}); }; window.addEventListener('resize',this._onResize); }
+    this._t=setTimeout(function(){ self.setState({mounted:true}); }, 70);
+    [120,400,1000].forEach(function(dd){ setTimeout(function(){ self._icons(); }, dd); }); }
+  logout(){ try{ if(window.S27TeamAuth&&window.S27TeamAuth.logout) window.S27TeamAuth.logout(); }catch(e){} try{ localStorage.removeItem('s27_auth'); }catch(e){} try{ location.replace('/'); }catch(e){} }
+}
+</script>
+</body>
+</html>

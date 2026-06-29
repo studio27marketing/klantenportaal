@@ -12,7 +12,7 @@ PANDADOC_CREATE_ENABLED = "true"
 # SEC-5: enkel productie-origins. De publieke CDN-origins (raw.githack.com /
 # raw.githubusercontent.com) zijn VERWIJDERD - elke pagina op die CDN's was anders een
 # toegestane CORS-origin voor de API. Previews draaien op de workers.dev-URL zelf.
-ALLOWED_ORIGINS = "https://www.studio27.be,https://studio27.be,https://portaal.studio27.be,https://s27-portal-gateway-v2.studio27marketing.workers.dev,https://s27-teamportaal.studio27marketing.workers.dev,https://team.studio27.be"
+ALLOWED_ORIGINS = "https://www.studio27.be,https://studio27.be,https://portaal.studio27.be,https://s27-portal-gateway-v2.studio27marketing.workers.dev,https://s27-teamportaal.studio27marketing.workers.dev,https://team.studio27.be,https://s27-hr.pages.dev,https://hr.studio27.be,https://s27-monitor.pages.dev,https://monitor.studio27.be,https://s27-werkplek.pages.dev,https://main.s27-werkplek.pages.dev"
 
 # KV-namespace voor rate-limiting + read-cache (TTL 60s).
 # De namespace maak ik bij deploy aan met:
@@ -28,11 +28,26 @@ id = "dcbe89a0ed8a4256a6ab1db50ac47940"
 binding = "R2"
 bucket_name = "s27-portal-files"
 
+# D1: HR-datastore (kandidaten + onboarding). Vervangt ClickUp als bron-van-waarheid voor HR,
+# edge-lokaal (WEUR) → snelle queries i.p.v. ClickUp-API-round-trips.
+# Aangemaakt 2026-06-23 met: wrangler d1 create s27-hr-db
+[[d1_databases]]
+binding = "HRDB"
+database_name = "s27-hr-db"
+database_id = "1bb54907-5a68-4979-85d7-130f22ae4aaa"
+
+# D1: CRM + Finance datastore (bedrijven/contacten/offertes/meetings/facturen/recurring).
+# Gedeelde ruggengraat voor 27CRM en 27Finance. Aangemaakt 2026-06-24 met: wrangler d1 create s27-crm-db
+[[d1_databases]]
+binding = "CRMDB"
+database_name = "s27-crm-db"
+database_id = "0c50db87-9a69-4cdc-9f43-4c1dc92dd801"
+
 # CRON (#22): maandelijkse ads-snapshot. Draait om 03:00 UTC op de 1e van elke maand
 # en roept de scheduled()-handler in worker.js aan -> adsSnapshotWrite() per bedrijf,
 # zodat de Meta/Google maandtotalen in KV bewaard blijven (overleven het API-retentievenster).
 [triggers]
-crons = ["0 3 1 * *", "0 7 * * *"]   # maandelijkse ads-snapshot + dagelijkse reminder-engine (07:00 UTC ≈ 09:00 Brussel)
+crons = ["0 3 1 * *", "0 7 * * *", "0 3 * * *", "0 10 * * *", "0 * * * *"]   # maandelijkse ads-snapshot + ochtend (07:00 UTC ≈ 09:00 Brussel: reminders+capaciteit+ads-prewarm) + AI-dagplan (03:00 UTC ≈ 05:00 Brussel) + middag ads-prewarm (10:00 UTC ≈ 12:00 Brussel) + HR-sync ClickUp→D1 (elk uur, interim)
 
 # Statische portaal-frontend (de v2-bestanden) rechtstreeks vanaf de worker serveren.
 # GET-bestandsverzoeken (/, /index.html, /api.js, ...) -> assets; al het andere (POST API) -> de worker.

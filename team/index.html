@@ -2,27 +2,30 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Studio 27 · Teamportaal</title>
-<link rel="manifest" href="manifest.webmanifest?v=5">
-<meta name="theme-color" content="#3083DC">
+<link rel="manifest" href="manifest.webmanifest?v=114">
+<meta name="theme-color" content="#FBF8F3">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="S27 Team">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=114">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://s27-portal-gateway-v2.studio27marketing.workers.dev">
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
-<link rel="modulepreload" href="auth.js?v=5">
+<link rel="modulepreload" href="auth.js?v=114">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=5">
-<link rel="stylesheet" href="glass.css?v=5">
-<link rel="stylesheet" href="team.css?v=5">
+<link rel="stylesheet" href="styles.css?v=138">
+<link rel="stylesheet" href="glass.css?v=138">
+<link rel="stylesheet" href="team.css?v=145">
+<link rel="stylesheet" href="ads-rich.css?v=138">
 </head>
 <body>
 
-<!-- BOOT -->
-<div id="boot" class="boot"><div class="spin"></div><span id="boot-msg">Teamportaal laden…</span></div>
+<!-- BOOT: video-loader (de "27"-morph), identiek aan het klantenportaal -->
+<div id="boot" class="boot"><video id="bootvid" src="boot.mp4?v=114" muted autoplay loop playsinline preload="auto" disablepictureinpicture></video><span id="boot-msg" hidden></span></div>
 
 <!-- LOGIN -->
 <div id="login" style="display:none">
@@ -36,6 +39,7 @@
     </button>
     <p class="login-err" id="login-err"></p>
     <p class="micro">Alleen voor @studio27.be-medewerkers.</p>
+    <button id="btn-enroll" type="button" style="margin-top:6px;background:none;border:none;color:#6B2BA8;font-family:Montserrat,sans-serif;font-weight:700;font-size:12.5px;cursor:pointer;text-decoration:underline;padding:6px">Eerste keer? Stel 2-staps verificatie in →</button>
   </div>
 </div>
 
@@ -50,7 +54,14 @@
   <header class="topbar">
     <button class="hamb" id="hamb" aria-label="Menu"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
     <div class="crumb"><span class="crumb-home">Teamportaal</span><svg class="crumb-sep" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg><span class="crumb-section" id="crumb">Home</span></div>
+    <div class="topsearch">
+      <svg class="topsearch-ic" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input id="taskSearch" type="text" placeholder="Zoek een taak of project…" autocomplete="off" spellcheck="false">
+      <span class="topsearch-kbd">⌘K</span>
+      <div class="search-results" id="searchResults" hidden></div>
+    </div>
     <div class="top-right">
+      <div id="impCtl"></div>
       <button class="icon-btn" id="featBtn" aria-label="Idee melden" title="Idee / feature voorstellen"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2V17h6v-.3c0-.8.4-1.5 1-2A7 7 0 0 0 12 2z"/></svg></button>
       <div class="live-tag"><span class="live-dot"></span><span id="live-name">Live</span></div>
     </div>
@@ -58,13 +69,17 @@
   <div class="sb-scrim" id="sbScrim"></div>
 
   <main class="page" id="page"></main>
+
+  <!-- MOBIELE ONDERBALK (pariteit klantenportaal): kernnavigatie + 'Meer' opent de lade -->
+  <nav class="bottom-nav" id="bottomNav"></nav>
 </div>
 
 <!-- PROJECT DETAIL MODAL -->
 <div class="scrim" id="scrim"><div class="modal" id="modal"></div></div>
 <div class="toast" id="toast"></div>
 
-<script type="module" src="auth.js?v=5"></script>
-<script src="app.js?v=5"></script>
+<script type="module" src="auth.js?v=114"></script>
+<script src="app.js?v=145"></script>
+<script src="ads-rich.js?v=138"></script>
 </body>
 </html>

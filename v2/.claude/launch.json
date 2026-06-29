@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "s27portal",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["/tmp/s27static.mjs"],
+      "port": 8791
+    },
+    {
+      "name": "hr",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "4178", "--directory", "/Users/vincentverleije/Documents/Claude/Projects/Mede zaakvoerder/klantendashboard/hr"],
+      "port": 4178
+    }
+  ]
+}

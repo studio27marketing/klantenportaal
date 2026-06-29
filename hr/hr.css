@@ -1,0 +1,57 @@
+/* ============================================================
+   HR Orchestratie Platform — 27 Automations huisstijl
+   Tokens + reset + utilities. De views zelf stylen inline
+   (1-op-1 uit de Claude-design), dit blad is de basis.
+   ============================================================ */
+:root{
+  --paper:#F7F3EA; --paper-2:#FFFDF8; --ink:#050A30; --navy:#0F2EA3;
+  --blue:#2458EA; --bright:#1D58FF; --cyan:#28AFF9; --lime:#D1F24C;
+  --n100:#EFEADD; --n200:#DFD9C8; --n300:#C4BEAC; --n400:#8E8979; --n500:#5E5A4F; --n600:#3D3A33;
+  --ok-bg:#F4FBDB; --ok-fg:#4A6B0E; --info-bg:#E0F1FD; --info-fg:#0F2EA3;
+  --warn-bg:#FBF1D9; --warn-fg:#6B4D04; --danger:#B83A2A; --danger-bg:#F7E0DB; --danger-fg:#6E2218;
+  --r-sm:10px; --r-md:14px; --r-lg:20px; --r-xl:24px; --r-2xl:28px; --r-3xl:40px; --r-pill:999px;
+  --shadow-card:0 4px 24px -8px rgba(5,10,48,.06);
+  --font:'Outfit',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{font-family:var(--font);background:var(--paper);color:var(--ink);font-weight:300;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
+button,input,select,textarea{font-family:inherit;}
+::selection{background:var(--lime);color:var(--ink);}
+::-webkit-scrollbar{width:10px;height:10px;}
+::-webkit-scrollbar-thumb{background:var(--n200);border-radius:99px;border:3px solid var(--paper);}
+[data-lucide]{width:1em;height:1em;vertical-align:-.125em;}
+a{color:var(--blue);text-decoration:none;}
+
+@keyframes hrFadeUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+@keyframes hrSlideIn{from{transform:translateX(100%);}to{transform:translateX(0);}}
+@keyframes hrPulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+@keyframes hrSpin{to{transform:rotate(360deg);}}
+@keyframes hrToastIn{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
+.scr{animation:hrFadeUp .32s cubic-bezier(.16,1,.3,1) both;}
+
+/* hover-utilities (vervangen de design style-hover) */
+.hov-card{transition:transform .15s,box-shadow .15s;}
+.hov-card:hover{transform:translateY(-2px);box-shadow:0 8px 20px -8px rgba(5,10,48,.14);}
+.hov-row{transition:border-color .15s;}
+.hov-row:hover{border-color:var(--n300);}
+.hov-lift{transition:transform .15s;}
+.hov-lift:hover{transform:translateY(-1px);}
+.hov-op{transition:opacity .15s,background .15s;}
+.hov-op:hover{opacity:.86;}
+.hov-nav:hover{background:rgba(247,243,234,.10)!important;}
+.hov-soft:hover{background:var(--paper);}
+
+/* boot + toast */
+.hr-boot{min-height:100vh;display:grid;place-items:center;background:var(--ink);}
+.hr-boot-dot{width:14px;height:14px;border-radius:50%;background:var(--lime);animation:hrPulse 1s ease-in-out infinite;}
+.hr-toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(16px);z-index:200;background:var(--ink);color:var(--paper);font-size:14px;font-weight:500;padding:12px 20px;border-radius:14px;box-shadow:0 18px 40px -14px rgba(5,10,48,.5);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;max-width:90vw;}
+.hr-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* loader spinner */
+.hr-spin{width:34px;height:34px;border-radius:50%;border:3px solid var(--n200);border-top-color:var(--blue);animation:hrSpin .8s linear infinite;}
+.hr-empty{text-align:center;color:var(--n500);font-size:14px;padding:40px 20px;}
+
+/* drawer/aside scroll */
+.hr-scroll{overflow-y:auto;-webkit-overflow-scrolling:touch;}
