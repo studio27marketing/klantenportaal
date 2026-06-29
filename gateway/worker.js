@@ -227,6 +227,96 @@ async function handleAdminLink(request, env, cors) {
   return json({ ok: true, uid: user.localId, email: email, bedrijf_id: bedrijfId }, 200, cors);
 }
 
+/* ---- PROVISIONING (D1) — koppel een ingelogd account aan een bedrijf --------
+   Vervangt de oude Make/ClickUp-provisioning. Resolutie VOLLEDIG uit D1:
+   contacts.email == login-email  ->  contacts.bedrijf_id  ->  companies (in D1).
+   Alleen bedrijven die in s27-crm-db staan kunnen automatisch een account krijgen.
+   De Firebase custom-claim bedrijf_id wordt gezet via de service-account (zoals admin/link).
+   Body (form-urlencoded of JSON): idToken, selected_bedrijf_id (optioneel).
+   Respons: {ok, bedrijf_id, email, companies:"id::Naam|id::Naam", claim_changed}.       */
+async function setBedrijfClaim(env, email, bedrijfId) {
+  const accessToken = await getGoogleAccessToken(env);
+  const lookupRes = await fetch('https://identitytoolkit.googleapis.com/v1/projects/' + env.PROJECT_ID + '/accounts:lookup', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: [email] }),
+  });
+  if (!lookupRes.ok) throw new Error('lookup_failed');
+  const lookup = await lookupRes.json();
+  const user = lookup && lookup.users && lookup.users[0];
+  if (!user) throw new Error('user_not_found');
+  const updRes = await fetch('https://identitytoolkit.googleapis.com/v1/projects/' + env.PROJECT_ID + '/accounts:update', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ localId: user.localId, customAttributes: JSON.stringify({ bedrijf_id: bedrijfId }) }),
+  });
+  if (!updRes.ok) throw new Error('update_failed');
+  return true;
+}
+
+async function handleProvision(request, env, cors) {
+  const fail = (extra) => json(Object.assign({ ok: false, bedrijf_id: '', email: '', companies: '' }, extra || {}), 200, cors);
+
+  // Body: form-urlencoded (frontend-default, CORS-simpel zonder preflight) of JSON.
+  const ct = request.headers.get('Content-Type') || '';
+  let idToken = '', selectedBid = '';
+  try {
+    if (ct.includes('application/json')) {
+      const b = await request.json();
+      idToken = b.idToken || ''; selectedBid = b.selected_bedrijf_id || '';
+    } else {
+      const f = new URLSearchParams(await request.text());
+      idToken = f.get('idToken') || ''; selectedBid = f.get('selected_bedrijf_id') || '';
+    }
+  } catch (e) { /* lege body -> fail() hieronder */ }
+
+  if (!idToken) return fail();
+  if (!env.PROJECT_ID) return fail({ error: 'gateway_misconfigured' });
+  if (!env.CRMDB) return fail({ error: 'no_d1' });
+
+  let claims;
+  try { claims = await verifyFirebaseToken(idToken, env.PROJECT_ID); }
+  catch (e) { return fail({ error: 'invalid_token' }); }
+  const email = String(claims.email || '').trim().toLowerCase();
+  if (!email) return fail({ error: 'no_email' });
+
+  // D1-resolutie: contactpersoon met dit e-mailadres -> gekoppelde bedrijven die in D1 bestaan.
+  let rows = [];
+  try {
+    const res = await env.CRMDB.prepare(
+      "SELECT DISTINCT c.id AS id, c.naam AS naam " +
+      "FROM contacts ct JOIN companies c ON c.id = ct.bedrijf_id " +
+      "WHERE lower(ct.email) = ? AND ct.bedrijf_id != '' " +
+      "ORDER BY c.naam"
+    ).bind(email).all();
+    rows = (res && res.results) || [];
+  } catch (e) { return fail({ email, error: 'lookup_failed' }); }
+
+  const seen = {}, ids = [], list = [];
+  for (const r of rows) {
+    const id = String(r.id || '');
+    if (!id || seen[id]) continue;
+    seen[id] = 1;
+    ids.push(id);
+    // '|' en '::' zijn delimiters in het wire-formaat -> saneren in de naam.
+    const naam = (String(r.naam || 'Bedrijf').replace(/\|/g, ' ').replace(/::/g, ':').trim()) || 'Bedrijf';
+    list.push(id + '::' + naam);
+  }
+  const companies = list.join('|');
+  let bid = '';
+  if (ids.length) bid = (selectedBid && ids.indexOf(String(selectedBid)) >= 0) ? String(selectedBid) : ids[0];
+
+  // Claim zetten enkel als er een bedrijf is EN de claim verandert. NOOIT leegmaken:
+  // een tijdelijk onvolledige contacts-tabel mag een bestaande koppeling niet wissen.
+  const claimChanged = String(claims.bedrijf_id || '') !== String(bid || '');
+  if (claimChanged && bid) {
+    try { await setBedrijfClaim(env, email, bid); }
+    catch (e) { /* claim-set faalde -> geef de bedrijvenlijst toch terug; frontend herprobeert */ }
+  }
+
+  return json({ ok: !!bid, bedrijf_id: bid, email: email, companies: companies, claim_changed: claimChanged }, 200, cors);
+}
+
 /* ---- PERFORMANCE-RAPPORT: gescopet ophalen uit de ads-cache (key = bedrijf_id) ----
    De ads-company-master cachet het rapport onder key = bedrijf_id (datastore ADS_RAPPORTEN,
    serve-hook). Hier halen we het op met de bedrijf_id uit het GEVERIFIEERDE token, zodat een
@@ -1056,6 +1146,7 @@ export default {
 
     const path = new URL(request.url).pathname.replace(/^\/+|\/+$/g, '');
     if (path === 'admin/link') return handleAdminLink(request, env, ch);
+    if (path === 'provision') return handleProvision(request, env, ch);
     const target = MAKE_ENDPOINTS[path];
     if (!target) return json({ ok: false, error: 'unknown_endpoint' }, 404, ch);
 

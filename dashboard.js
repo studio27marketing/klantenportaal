@@ -60,7 +60,7 @@ const AUTH_V2 = !/[?&]auth=v1(?:&|$)/.test(location.search);
 const GATEWAY_BASE = 'https://s27-portal-gateway.studio27marketing.workers.dev';
 // JIT-provisioning (Deel B): eerste login zonder bedrijf-koppeling → Make zoekt het bedrijf
 // op via het ClickUp-veld "Portaal-toegang" en zet de koppeling. Zie MODULES_EN_TOEGANG_PLAN.md.
-const PROVISION_URL = 'https://hook.eu1.make.com/hjmc9k1w9ry027kom3rfiwci9pejub78';
+const PROVISION_URL = GATEWAY_BASE + '/provision';   // D1-provisioning (contactpersoon-gebaseerd), niet meer via ClickUp/Make
 const ENDPOINT_KEYS = Object.keys(ENDPOINTS).reduce(function(m, k){ m[ENDPOINTS[k]] = k; return m; }, {});
 const AUTH_JS_URL = (function(){
   try {

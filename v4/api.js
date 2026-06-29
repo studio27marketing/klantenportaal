@@ -72,7 +72,7 @@ const ENDPOINTS = {
 /* AUTH v2 (Firebase + Cloudflare-gateway) is de DEFAULT. ?auth=v1 = legacy-vangnet. */
 const AUTH_V2 = !/[?&]auth=v1(?:&|$)/.test(location.search);
 const GATEWAY_BASE = 'https://s27-portal-gateway.studio27marketing.workers.dev';
-const PROVISION_URL = 'https://hook.eu1.make.com/hjmc9k1w9ry027kom3rfiwci9pejub78';
+const PROVISION_URL = GATEWAY_BASE + '/provision';   // D1-provisioning (contactpersoon-gebaseerd), niet meer via ClickUp/Make
 /* Metricool-posts: GEÏSOLEERD Make-scenario (los van de gateway/bedrijf-beheer).
    Direct aangeroepen met form-encoded body (CORS-safe, geen preflight); leest de
    Metricool-ID server-side uit de bedrijf-taak. Lage gevoeligheid (geplande posts). */
