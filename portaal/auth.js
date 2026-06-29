@@ -26,6 +26,7 @@ let gatewayBase = '';
 let subscriber = () => {};
 let lastState = null;
 let authWatchdog = null;
+let mfaActive = false;   // true terwijl de gebruiker zijn tweede-factor-code (authenticator) intikt
 let loadPromise = null;
 let authListenerStarted = false;
 
@@ -41,8 +42,11 @@ function emit(phase, extra) {
 function armAuthWatchdog() {
   if (authWatchdog) clearTimeout(authWatchdog);
   authWatchdog = setTimeout(() => {
+    // Tweede-factor bezig? NIET uitloggen: de gebruiker is gewoon zijn 6-cijferige
+    // authenticator-code aan het intikken (duurt makkelijk meer dan een paar seconden).
+    if (mfaActive) return;
     if (lastState && lastState.phase === 'loading') emit('signed_out');
-  }, 6500);
+  }, 15000);
 }
 function dg(m) { try { if (window.S27diag) window.S27diag(m); } catch (e) { /* */ } }
 function friendly(e) {
@@ -111,6 +115,12 @@ function promptTotpEnroll(secretKey, otpauthUrl) {
 
 // Voltooi de tweede-factor-stap als Firebase die vraagt (auth/multi-factor-auth-required).
 async function resolveMfa(error) {
+  // Tweede-factor-stap start: zet de watchdog stil en markeer dat we wachten op de
+  // authenticator-code. Anders gooit de 'loading'-watchdog je eruit terwijl je tikt
+  // ("ik geraak niet voorbij het authenticator-veld"). Vlag wordt in finally gewist.
+  mfaActive = true;
+  if (authWatchdog) { clearTimeout(authWatchdog); authWatchdog = null; }
+  try {
   const resolver = fb.getMultiFactorResolver(auth, error);
   const hints = resolver.hints || [];
   const totpId = fb.TotpMultiFactorGenerator && fb.TotpMultiFactorGenerator.FACTOR_ID;
@@ -140,6 +150,7 @@ async function resolveMfa(error) {
     return;
   }
   throw error;
+  } finally { mfaActive = false; }
 }
 
 async function load() {
@@ -180,7 +191,7 @@ const S27TeamAuth = {
     }
     fb.onAuthStateChanged(auth, (user) => {
       dg('onAuthStateChanged: ' + (user ? (user.email || 'user zonder email') : 'GEEN user'));
-      if (!user) { emit('signed_out'); return; }
+      if (!user) { if (mfaActive) return; emit('signed_out'); return; }
       const email = String((user && user.email) || '').trim().toLowerCase();
       const isStaff = /@studio27\.be$/.test(email);
       if (isStaff) { emit('ready', { user, email }); return; }

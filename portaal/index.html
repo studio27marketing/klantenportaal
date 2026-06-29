@@ -14,7 +14,7 @@
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script src="./team-chat.js"></script>
 <script src="./config.js?v=2"></script>
-<script type="module" src="./auth.js?v=2"></script>
+<script type="module" src="./auth.js?v=3"></script>
 <script src="./shared/portal-shell.js?v=3"></script>
 <style>
   *{box-sizing:border-box;}
@@ -146,6 +146,14 @@ class Component extends DCLogic {
     this._icons();
     var self=this, tries=0;
     try{ var sp=new URLSearchParams(location.search); this._next=sp.get('next')||''; }catch(e){ this._next=''; }
+    // Lokale preview/feedback-modus: sla Firebase-login over op localhost met ?preview=1 (of ?demo=1),
+    // net zoals de subportalen. Geen effect op productie (de vlag werkt enkel op localhost) = veilig live.
+    try{
+      var _local = location.protocol==='file:' || /^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/.test(location.hostname);
+      var _sp = new URLSearchParams(location.search);
+      this._preview = _local && (_sp.get('preview')==='1' || _sp.get('demo')==='1');
+    }catch(e){ this._preview=false; }
+    if(this._preview){ this.setState({ authed:true, ready:true, error:'', userName:'Vincent', userInitial:'V' }); this._icons(); return; }
     (function wait(){
       if(typeof window!=='undefined' && window.S27TeamAuth){
         window.S27TeamAuth.subscribe(function(st){
@@ -180,6 +188,8 @@ class Component extends DCLogic {
   renderVals(){
     const s=this.state;
     const vw = (typeof window!=='undefined'?window.innerWidth:1280);
+    const _pvqp = this._preview ? '?preview=1' : '';
+    const _pv = (h,t)=> (_pvqp && t==='_self' && h && h.charAt(0)==='/') ? (h+_pvqp) : h;
     return {
       authed: s.authed, notAuthed: (s.ready && !s.authed),
       submit: ()=>this.submit(),
@@ -196,7 +206,7 @@ class Component extends DCLogic {
       cardCols: vw<760 ? '1fr' : 'repeat(2,1fr)',
       envs: [
         {
-          title:'27CRM', tag:'Sales · Klanten · Projecten', href:'/crm/', target:'_self', icon:'building-2',
+          title:'27CRM', tag:'Sales · Klanten · Projecten', href:_pv('/crm/','_self'), target:'_self', icon:'building-2',
           bg:'#F7F3EA', border:'rgba(247,243,234,.0)', orb:'radial-gradient(circle,rgba(40,175,249,.14),transparent 70%)',
           iconBg:'#0F2EA3', iconFg:'#fff', titleColor:'#050A30', subColor:'#5E5A4F', bodyColor:'#5E5A4F', checkColor:'#1D8A5B',
           ctaBg:'#050A30', ctaFg:'#fff',
@@ -204,7 +214,7 @@ class Component extends DCLogic {
           points:['Offertes opvolgen met sales-stappen','Meeting-transcripties & recap-mails','Bruidsparen van 27M apart beheerd']
         },
         {
-          title:'27HR', tag:'Recruitment · Onboarding', href:'/hr/', target:'_self', icon:'users-round',
+          title:'27HR', tag:'Recruitment · Onboarding', href:_pv('/hr/','_self'), target:'_self', icon:'users-round',
           bg:'linear-gradient(155deg,#0B1550,#0F2EA3)', border:'rgba(40,175,249,.28)', orb:'radial-gradient(circle,rgba(209,242,76,.16),transparent 70%)',
           iconBg:'#D1F24C', iconFg:'#050A30', titleColor:'#F7F3EA', subColor:'rgba(247,243,234,.6)', bodyColor:'rgba(247,243,234,.74)', checkColor:'#D1F24C',
           ctaBg:'#D1F24C', ctaFg:'#050A30',
@@ -212,7 +222,7 @@ class Component extends DCLogic {
           points:['Vacatures op meerdere kanalen','Kandidaten-pijplijn met AI-match','Agenda & onboardingstrajecten']
         },
         {
-          title:'27Finance', tag:'Offertes · Cijfers · Facturatie', href:'/finance/', target:'_self', icon:'line-chart',
+          title:'27Finance', tag:'Offertes · Cijfers · Facturatie', href:_pv('/finance/','_self'), target:'_self', icon:'line-chart',
           bg:'#F7F3EA', border:'rgba(247,243,234,.0)', orb:'radial-gradient(circle,rgba(40,175,249,.18),transparent 70%)',
           iconBg:'#28AFF9', iconFg:'#050A30', titleColor:'#050A30', subColor:'#5E5A4F', bodyColor:'#5E5A4F', checkColor:'#1D8A5B',
           ctaBg:'#050A30', ctaFg:'#fff',
@@ -220,7 +230,7 @@ class Component extends DCLogic {
           points:['Pipeline & conversie live','Facturatie en cashflow-voorstel','AI-adviseurs voor finance & sales']
         },
         {
-          title:'27Productie', tag:'Taken · Planning · Capaciteit', href:'/productie/', target:'_self', icon:'square-kanban',
+          title:'27Productie', tag:'Taken · Planning · Capaciteit', href:_pv('/productie/','_self'), target:'_self', icon:'square-kanban',
           bg:'linear-gradient(155deg,#0B1550,#0F2EA3)', border:'rgba(40,175,249,.28)', orb:'radial-gradient(circle,rgba(209,242,76,.16),transparent 70%)',
           iconBg:'#D1F24C', iconFg:'#050A30', titleColor:'#F7F3EA', subColor:'rgba(247,243,234,.6)', bodyColor:'rgba(247,243,234,.74)', checkColor:'#D1F24C',
           ctaBg:'#D1F24C', ctaFg:'#050A30',
