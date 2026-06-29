@@ -20,14 +20,22 @@ De dispatch zit **na** de geverifieerde claim en **vóór** de Make-forward, in 
 of `null` (bedrijf niet in D1) **valt de gateway terug op Make/ClickUp** — D1 kan de live-portal niet breken.
 `D1_ENDPOINTS = "[]"` = 100% Make, geen gedragsverandering.
 
-## ⚠️ Go-live vereist Cloudflare-toegang (kan NIET vanuit de agent-sandbox)
-Er is hier geen `wrangler`, geen Cloudflare API-token en geen CI-pipeline; de Cloudflare-MCP kan workers
-enkel lézen. De deploy + env-var moet dus **jij** doen (of lever een scoped API-token aan), via één van:
-- **A — Cloudflare-dashboard**: Worker `s27-portal-gateway` → *Edit code* → plak `gateway/worker.js` → *Deploy*.
-  Settings → **Bindings** → D1 toevoegen, variabele `CRMDB` → database `s27-crm-db`. Settings → **Variables** →
-  `D1_ENDPOINTS` zetten op de live-set hieronder (en optioneel `MEETINGS_BOOKING_URL`).
-- **B — Wrangler CLI**: `cd gateway && npx wrangler deploy` (de `CRMDB`-binding + `D1_ENDPOINTS` staan al in
-  `wrangler.toml`). `GATEWAY_SECRET` blijft een secret (`npx wrangler secret put GATEWAY_SECRET`).
+## ⚠️ Go-live = via GitHub Actions (de agent kan zelf niet deployen)
+In de sandbox is geen `wrangler`/token; deployen gebeurt via de CI-workflow
+[`.github/workflows/deploy-gateway.yml`](../.github/workflows/deploy-gateway.yml). Eenmalig instellen:
+1. Maak een Cloudflare API-token: **Account → Workers Scripts: Edit** + **Account → D1: Edit**
+   (+ **Workers KV Storage: Edit** als je KV-rate-limiting houdt). Noteer ook je **account-id**.
+2. Repo → Settings → Secrets and variables → Actions → voeg toe:
+   `CLOUDFLARE_API_TOKEN` en `CLOUDFLARE_ACCOUNT_ID`.
+3. **Pre-flight**: open de live worker `s27-portal-gateway` → Settings → Bindings. Staat er een
+   KV-binding `KV`? Uncomment dan het `[[kv_namespaces]]`-blok in `wrangler.toml` met de namespace-id,
+   anders is rate-limiting na deploy uit (de code valt netjes terug — niet gebroken). Worker-secrets
+   (`GATEWAY_SECRET`, `ADMIN_SECRET`, `SA_*`) blijven behouden bij een deploy.
+4. Tab **Actions** → "Deploy gateway" → **Run workflow** (branch `claude/hub-portaal-integration-sirpwu`),
+   of push een wijziging onder `gateway/`.
+
+Handmatige alternatieven: Cloudflare-dashboard (plak `worker.js`, zet binding `CRMDB` + var `D1_ENDPOINTS`),
+of lokaal `cd gateway && npx wrangler deploy`.
 
 **Huidige `wrangler.toml`-default live-set** (= "zet live", reads + tekstchat):
 `["meetingsList","bedrijfBeheer:get_team","bedrijfBeheer:get_offertes","bedrijfContent","chatList","chatPost"]`
