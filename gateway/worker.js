@@ -388,6 +388,10 @@ const D1_HANDLERS = {
   'dashboard':                 h_dashboard,
   'chatList':                  h_chatList,
   'chatPost':                  h_chatPost,
+  // Writes (P4) — schrijven naar D1 + stempelen portal_overrides (audit R1).
+  'facturatieSave':              h_facturatieSave,
+  'bedrijfBeheer:update_bedrijf':  h_bedrijfBeheer_update_bedrijf,
+  'bedrijfBeheer:update_contact':  h_bedrijfBeheer_update_contact,
 };
 
 async function d1Dispatch(dispatchKey, c) {
@@ -932,6 +936,97 @@ async function h_chatPost(c) {
 
   // Response: v2-shape. Live frontend negeert de body (fire-and-forget).
   return { ok: true, comment_id: id, posted_at: util.msStr(now) };
+}
+
+/* =============================================================================
+ * ===========================  D1 WRITE-HANDLERS (P4)  =======================
+ *  Schrijven naar D1 én stempelen portal_overrides zodat de ClickUp->D1-sync
+ *  (cdbUpsertGuarded) de portaal-edit NIET overschrijft (audit R1). Mirrort het
+ *  bewezen hub-patroon crmEntityUpdate. Blijven achter de flag; zet ze pas in
+ *  D1_ENDPOINTS na een smoke-test op de live gateway.
+ * ========================================================================== */
+
+/* ---- d1PortalWrite: gedeelde write + override-stamp + IDOR-scope ---------- */
+// table/whereCol/scopeCol zijn ALTIJD code-constanten (nooit body) -> geen injectie.
+async function d1PortalWrite(db, table, patch, whereCol, whereVal, scopeCol, scopeVal) {
+  let sel = 'SELECT id, portal_overrides FROM ' + table + ' WHERE ' + whereCol + ' = ?';
+  const selBinds = [whereVal];
+  if (scopeCol) { sel += ' AND ' + scopeCol + ' = ?'; selBinds.push(scopeVal); }
+  const cur = await db.prepare(sel).bind(...selBinds).first();
+  if (!cur) return false; // niet gevonden / niet van deze klant -> caller valt door naar Make
+
+  let ovr = {};
+  try { ovr = JSON.parse(cur.portal_overrides || '{}') || {}; } catch (e) { ovr = {}; }
+
+  const setCols = [];
+  const binds = [];
+  for (const col in patch) {
+    if (!Object.prototype.hasOwnProperty.call(patch, col)) continue;
+    setCols.push(col + ' = ?');
+    binds.push(patch[col]);
+    ovr[col] = Date.now();           // stempel: deze kolom is portaal-owned -> sync laat 'm staan
+  }
+  if (!setCols.length) return true;  // niets te schrijven
+
+  setCols.push('portal_overrides = ?'); binds.push(JSON.stringify(ovr));
+  setCols.push('updated_at = ?');       binds.push(Date.now());
+
+  let upd = 'UPDATE ' + table + ' SET ' + setCols.join(', ') + ' WHERE ' + whereCol + ' = ?';
+  binds.push(whereVal);
+  if (scopeCol) { upd += ' AND ' + scopeCol + ' = ?'; binds.push(scopeVal); }
+  await db.prepare(upd).bind(...binds).run();
+  return true;
+}
+
+// ===== facturatieSave (WRITE — companies kbo/fact_email/fact_opm) ==========
+async function h_facturatieSave(c) {
+  const { db, bedrijfId, body } = c;
+  const patch = {};
+  if (body && body.ondernemingsnummer !== undefined)     patch.kbo = String(body.ondernemingsnummer || '');
+  if (body && body.facturatie_email !== undefined)       patch.fact_email = String(body.facturatie_email || '');
+  if (body && body.facturatie_opmerkingen !== undefined) patch.fact_opm = String(body.facturatie_opmerkingen || '');
+  // Scope = de claim-id zelf (companies.id == claim). Bedrijf niet in D1 -> val door naar Make.
+  const ok = await d1PortalWrite(db, 'companies', patch, 'id', bedrijfId);
+  if (!ok) return null;
+  return { ok: true, message: 'Opgeslagen' };
+}
+
+// ===== bedrijfBeheer:update_bedrijf (WRITE — companies kbo/mw/website) =====
+async function h_bedrijfBeheer_update_bedrijf(c) {
+  const { db, bedrijfId, body } = c;
+  const patch = {};
+  if (body && body.ondernemingsnummer !== undefined) patch.kbo = String(body.ondernemingsnummer || '');
+  if (body && body.website !== undefined)            patch.website = String(body.website || '');
+  if (body && body.aantal_medewerkers !== undefined) {
+    const raw = String(body.aantal_medewerkers).replace(/[^0-9]/g, '');
+    const n = raw === '' ? null : parseInt(raw, 10);   // mw is INTEGER; leeg -> null
+    patch.mw = (n == null || isNaN(n)) ? null : n;
+  }
+  const ok = await d1PortalWrite(db, 'companies', patch, 'id', bedrijfId);
+  if (!ok) return null;
+  return { ok: true };
+}
+
+// ===== bedrijfBeheer:update_contact (WRITE — contacts, IDOR-scoped) ========
+// Alleen BESTAANDE contacten (body.contact_id). Het create-pad (save_contact) blijft
+// bewust op ClickUp: een D1-native id zou de sync-identiteit + portaaltoegang breken (audit R12).
+async function h_bedrijfBeheer_update_contact(c) {
+  const { db, bedrijfId, body } = c;
+  const contactId = String((body && body.contact_id) || '');
+  if (!contactId) return null; // geen id (= create) -> val door naar Make (ClickUp)
+
+  const patch = {};
+  if (body && body.voornaam !== undefined)   patch.voornaam = String(body.voornaam || '');
+  if (body && body.achternaam !== undefined) patch.achternaam = String(body.achternaam || '');
+  if (body && body.email !== undefined)      patch.email = String(body.email || '');
+  if (body && body.gsm !== undefined)        patch.gsm = String(body.gsm || '');
+  if (body && body.voorkeur !== undefined)   patch.notif = String(body.voorkeur || ''); // voorkeur -> notif
+
+  // IDOR-guard: het contact MOET aan DEZE klant hangen (bedrijf_id == geverifieerde claim).
+  // Zo niet (of onbekend) -> false -> val door naar Make i.p.v. een vreemd contact te raken.
+  const ok = await d1PortalWrite(db, 'contacts', patch, 'id', contactId, 'bedrijf_id', bedrijfId);
+  if (!ok) return null;
+  return { ok: true, updated: true, contact_id: contactId };
 }
 
 /* =============================================================================

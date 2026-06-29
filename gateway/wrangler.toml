@@ -11,8 +11,14 @@ ALLOWED_ORIGINS = "https://www.studio27.be,https://studio27.be"
 # LEEG ("[]") = ALLES blijft via Make/ClickUp lopen, ZERO gedragsverandering.
 # Zet keys pas aan NA een pariteitstest (Make vs D1), bv.:
 #   D1_ENDPOINTS = '["meetingsList","bedrijfBeheer:get_team","bedrijfBeheer:get_offertes","bedrijfContent"]'
-# Houd dashboard / chatList / chatPost voorlopig UIT (data nog niet gesynct — zie audit P-tasks/P2).
-D1_ENDPOINTS = "[]"
+# LIVE-SET (gebruiker: "zet live"): de gevalideerde reads + eigen chat (greenfield).
+# Na deploy: smoke-test elke key op ORISON (86c8cz2qb) — de gateway valt bij elke D1-fout/leegte
+# automatisch terug op Make, en rollback = key uit deze lijst halen.
+#   - dashboard  : NOG NIET aanzetten (tasks nog niet gesynct — zie task-backfill).
+#   - writes     : facturatieSave / bedrijfBeheer:update_bedrijf|update_contact staan klaar;
+#                  zet ze erbij NA een schrijf-smoke-test (ze muteren live data + portal_overrides).
+#   - chat-bijlagen: chatAttachment blijft nog op Make (R2-mediaroute volgt) — tekstchat werkt wel.
+D1_ENDPOINTS = '["meetingsList","bedrijfBeheer:get_team","bedrijfBeheer:get_offertes","bedrijfContent","chatList","chatPost"]'
 # Optioneel: echte Studio 27 booking-deeplink voor meetingsList. Zonder deze var
 # laat meetingsList booking_url weg en valt de frontend terug op de DM/booking-modal.
 # MEETINGS_BOOKING_URL = "https://..."

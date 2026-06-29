@@ -1,48 +1,58 @@
-# Gateway D1-migratie — runbook (pass 1)
+# Gateway D1-migratie — runbook
 
 Begeleidt `gateway/worker.js`. Volledige analyse: [`../AUDIT_HUB_MIGRATION.md`](../AUDIT_HUB_MIGRATION.md).
 Architectuur = **Optie A**: de in-repo gateway `s27-portal-gateway` krijgt D1-handlers achter een
-feature-flag. De frontend (`dashboard.js`) blijft ongewijzigd: zelfde `GATEWAY_BASE`, zelfde endpoint-keys.
+feature-flag (`D1_ENDPOINTS`). De frontend (`dashboard.js`) blijft ongewijzigd: zelfde `GATEWAY_BASE`,
+zelfde endpoint-keys. Bron = D1 `s27-crm-db` (`0c50db87-9a69-4cdc-9f43-4c1dc92dd801`), binding `CRMDB`.
 
-## Wat in deze commit zit
-- **D1-leeshandlers** (klaar, achter de flag): `bedrijfContent`, `bedrijfBeheer:get_team`,
-  `bedrijfBeheer:get_offertes`, `meetingsList`, `dashboard`.
-- **Eigen-chat-handlers** (greenfield, D1-native): `chatList` (read), `chatPost` (write).
-- **Scaffolding**: `maps.statusD1ToPortal`/`branchToDisc` (audit G2/G3), `util.msStr`/`util.iso`
-  (datumformaten, G11), `getTeamMemberIds` (is_klant-cache), `d1Scoped` (scope-vangrail R3),
-  en de dispatch in de hoofd-`fetch` — **NA** de geverifieerde claim, **VÓÓR** de Make-forward.
-- Elke query scope't strikt op de Firebase-claim-id (`companies.id == clickup_id == claim`, 491/491).
-  Body `bedrijf_id`/`task_id`/`room_id` worden nooit vertrouwd.
+## Wat in de repo zit (klaar)
+**Reads** (gevalideerd tegen ORISON `86c8cz2qb` + Vorsselmans `86c8cz2y6`):
+`bedrijfContent` · `bedrijfBeheer:get_team` · `bedrijfBeheer:get_offertes` · `meetingsList` · `dashboard`.
+**Eigen chat** (greenfield, D1-native): `chatList` (read) · `chatPost` (write).
+**Writes** (P4, schrijven + stempelen `portal_overrides` zodat de sync ze niet overschrijft):
+`facturatieSave` · `bedrijfBeheer:update_bedrijf` · `bedrijfBeheer:update_contact` (IDOR-scoped op `bedrijf_id`).
+**Scaffolding**: status/discipline-maps (G2/G3), datum-coercie (G11), `d1PortalWrite` (write+override-stamp,
+mirror van de hub's `crmEntityUpdate`), scope-vangrail, is_klant-cache. Elke query scope't strikt op de
+Firebase-claim-id (`companies.id == clickup_id == claim`, 491/491). Body-ids worden nooit vertrouwd.
 
-## Veiligheidsgarantie (waarom dit niets breekt)
-`D1_ENDPOINTS = "[]"` (default) ⇒ de dispatch doet **niets**; elke request gaat 100% naar Make/ClickUp,
-exact zoals vroeger. Een handler die `null` teruggeeft (bedrijf niet in D1) of een D1-fout gooit, **valt
-terug op Make** (try/catch in de fetch). D1 kan de live-portal dus nooit breken.
+## Veiligheidsgarantie
+De dispatch zit **na** de geverifieerde claim en **vóór** de Make-forward, in `try/catch`. Bij élke D1-fout
+of `null` (bedrijf niet in D1) **valt de gateway terug op Make/ClickUp** — D1 kan de live-portal niet breken.
+`D1_ENDPOINTS = "[]"` = 100% Make, geen gedragsverandering.
 
-## Deploy & flippen (acties voor jou — niets hiervan is gebeurd)
-1. **Binding zetten**: `CRMDB → s27-crm-db (0c50db87-…)` staat al in `wrangler.toml`. Bij dashboard-deploy
-   van deze worker wordt de binding meegenomen. (Met de lege flag is dat gedragsneutraal.)
-2. **Deploy** de worker (gedragsneutraal zolang de flag leeg is).
-3. **Pariteitstest** per endpoint vóór het flippen: zelfde request naar Make én naar D1, vergelijk de
-   `data`-JSON op de testklant **ORISON `86c8cz2qb`** (en **Vorsselmans `86c8cz2y6`**). De frontend leest
-   velden op exacte sleutel — elke drift blankt een tab stil.
-4. **Veilige eerste flips** (data is gevuld, read-only):
-   `D1_ENDPOINTS = '["meetingsList","bedrijfBeheer:get_team","bedrijfBeheer:get_offertes","bedrijfContent"]'`
-   Per endpoint flippen, niet alles tegelijk. Rollback = key uit de lijst halen.
-5. **Nog NIET flippen** (wachten op data/fase):
-   - `dashboard` → tasks zijn nog offerte-stubs; wacht tot de 8 ClickUp-discipline-lijsten in `tasks`
-     gesynct zijn (audit G4/P-tasks). `modules` staat bewust op `null` = alle tabs zichtbaar (geen regressie).
-   - `chatList`/`chatPost` → `chat_messages` is leeg; flippen zou threads blanken (R10). Eerst beslissen:
-     vers starten vs ClickUp-historie backfillen (audit P2).
-   - `get_offertes` is **v4-only** (niet aangeroepen door de live `dashboard.js`) — flippen heeft pas
-     effect zodra v4 live is.
+## ⚠️ Go-live vereist Cloudflare-toegang (kan NIET vanuit de agent-sandbox)
+Er is hier geen `wrangler`, geen Cloudflare API-token en geen CI-pipeline; de Cloudflare-MCP kan workers
+enkel lézen. De deploy + env-var moet dus **jij** doen (of lever een scoped API-token aan), via één van:
+- **A — Cloudflare-dashboard**: Worker `s27-portal-gateway` → *Edit code* → plak `gateway/worker.js` → *Deploy*.
+  Settings → **Bindings** → D1 toevoegen, variabele `CRMDB` → database `s27-crm-db`. Settings → **Variables** →
+  `D1_ENDPOINTS` zetten op de live-set hieronder (en optioneel `MEETINGS_BOOKING_URL`).
+- **B — Wrangler CLI**: `cd gateway && npx wrangler deploy` (de `CRMDB`-binding + `D1_ENDPOINTS` staan al in
+  `wrangler.toml`). `GATEWAY_SECRET` blijft een secret (`npx wrangler secret put GATEWAY_SECRET`).
+
+**Huidige `wrangler.toml`-default live-set** (= "zet live", reads + tekstchat):
+`["meetingsList","bedrijfBeheer:get_team","bedrijfBeheer:get_offertes","bedrijfContent","chatList","chatPost"]`
+
+## Smoke-test direct na deploy (essentieel — frontend leest op exacte sleutel)
+Log in als een klant die in D1 staat (bv. ORISON) en check per tab: meetings, offertes, bedrijfsgegevens/
+contacten, en stuur een chatbericht (verschijnt het terug?). Bij twijfel: vergelijk de gateway-respons met
+de oude Make-respons. **Rollback = key uit `D1_ENDPOINTS` halen** (geen redeploy van code nodig).
+
+## Gefaseerd aanzetten (na de eerste live-set)
+1. **Writes** → na een schrijf-smoke-test: voeg `facturatieSave`, `bedrijfBeheer:update_bedrijf`,
+   `bedrijfBeheer:update_contact` toe. Ze muteren live data en stempelen `portal_overrides`
+   (test: schrijf een veld → draai `crm/sync` → waarde moet overleven).
+2. **dashboard** → pas aanzetten nadat taken in D1 staan (de 8 ClickUp-discipline-lijsten zijn nog niet
+   gesynct; `tasks` zijn nu offerte-stubs). Zie de task-backfill (volgende stap).
+3. **chat-bijlagen** (`chatAttachment`) → vereist een R2-mediaroute (bucket `s27-portal-files`). Tot dan
+   blijft `chatAttachment` op Make; tekstchat werkt al via D1.
+4. **bedrijfVoorkeuren** (vrije-tekst huisstijlvoorkeuren) → vereist een nieuwe kolom `companies.voorkeuren`
+   (er is geen bestaande kolom). Nog niet verlegd.
 
 ## Bekende aandachtspunten
-- `meetingsList`: geen Meet-URL-kolom in D1 (alleen `ff_url` Fireflies, intern) → `link:''`. `booking_url`
-  alleen als je `MEETINGS_BOOKING_URL` zet.
-- `bedrijfContent`/`get_team`: `mw` (medewerkers) is NULL voor alle bedrijven, `notif` (voorkeur) leeg →
-  emit `''` (frontend tolereert). `rol`/`ondernemingsleider` hebben geen kolom.
-- `get_offertes`: ~half van de offertes mist `bedrijf_id`; de fallback matcht op `bedrijf_naam`. `draft`
-  wordt gedropt; status is de ruwe PandaDoc-lifecycle (plain string, geen Make-encoding).
-- Schrijfacties (facturatie, bedrijfsgegevens, voorkeuren) zijn **nog niet** verlegd — die komen in P4 via
-  `portal_overrides` (audit R1), zodat een ClickUp→D1-sync ze niet overschrijft.
+- `meetingsList`: geen Meet-URL in D1 (enkel `ff_url` Fireflies, intern) → `link:''`; `booking_url` alleen
+  als je `MEETINGS_BOOKING_URL` zet.
+- `bedrijfContent`/`get_team`: `mw` is NULL en `notif`/voorkeur leeg voor alle bedrijven → `''` (frontend
+  tolereert). `rol`/`ondernemingsleider` hebben geen kolom.
+- `get_offertes`: ~helft van de offertes mist `bedrijf_id`; fallback matcht op `bedrijf_naam`. `draft` gedropt.
+- `update_contact`: enkel BESTAANDE contacten; nieuwe contacten + portaaltoegang blijven op ClickUp (een
+  D1-native id zou de sync-identiteit breken, audit R12).
