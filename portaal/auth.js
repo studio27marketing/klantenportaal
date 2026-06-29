@@ -48,7 +48,16 @@ function armAuthWatchdog() {
     if (lastState && lastState.phase === 'loading') emit('signed_out');
   }, 15000);
 }
-function dg(m) { try { if (window.S27diag) window.S27diag(m); } catch (e) { /* */ } }
+// Na een geslaagde tweede factor expliciet doorgaan naar 'ready' i.p.v. enkel op
+// onAuthStateChanged te wachten — die vuurt in de popup/redirect-MFA-flow niet altijd
+// betrouwbaar, waardoor je "de code invult maar niet wordt doorverwezen".
+function finishSignedIn() {
+  const u = auth && auth.currentUser;
+  const em = String((u && u.email) || '').trim().toLowerCase();
+  if (u && /@studio27\.be$/.test(em)) emit('ready', { user: u, email: em });
+  else if (u) emit('no_access', { email: em });
+}
+function dg(m) { try { console.log('[S27Auth] ' + m); } catch (e) { /* */ } try { if (window.S27diag) window.S27diag(m); } catch (e) { /* */ } }
 function friendly(e) {
   const c = (e && e.code) || '';
   const map = {
@@ -135,6 +144,7 @@ async function resolveMfa(error) {
     const assertion = fb.TotpMultiFactorGenerator.assertionForSignIn(hint.uid, code);
     await resolver.resolveSignIn(assertion);
     dg('tweede factor OK ✓');
+    finishSignedIn();
     return;
   }
   if (phoneId && hint.factorId === phoneId) {
@@ -147,6 +157,7 @@ async function resolveMfa(error) {
     const cred = fb.PhoneAuthProvider.credential(verificationId, code);
     const assertion = fb.PhoneMultiFactorGenerator.assertion(cred);
     await resolver.resolveSignIn(assertion);
+    finishSignedIn();
     return;
   }
   throw error;
