@@ -1,7 +1,7 @@
 /* =============================================================================
    Studio 27 Klantenportaal v4, API / AUTH-laag
    -----------------------------------------------------------------------------
-   1:1 geport uit dashboard.js (ONGEWIJZIGDE backend: Make/ClickUp/gateway).
+   1:1 geport uit dashboard.js (ONGEWIJZIGDE backend: gateway).
    Framework-agnostisch: GEEN UI hierin. portal.js zet de hooks:
      S27.onSessionExpired(msg), toon melding + terug naar login
      S27.reloadDashboard(), herlaad de dashboarddata (na bedrijf-switch)
@@ -141,7 +141,7 @@ const ENDPOINTS = {
   contactVraag:      GATEWAY_BASE + '/contactVraag',  // algemene vraag -> mail/taak naar Ilke
   portalVersionPush: GATEWAY_BASE + '/portalVersionPush', // team: versie hard doorduwen naar alle clients
   bugReport:         GATEWAY_BASE + '/bugReport',         // team: portaal-bug/feedback -> bugs-lijst
-  teamLeden:         GATEWAY_BASE + '/teamLeden',         // team: assignee-bare ClickUp-leden (melder-dropdown)
+  teamLeden:         GATEWAY_BASE + '/teamLeden',         // team: teamleden voor de melder-dropdown
   facturatieNotitie: GATEWAY_BASE + '/facturatieNotitie', // team: interne notitie voor Celien (bedrijf-taak)
   // Meeting-tunnel: taskloze Google-Calendar-boeking + invite (Algemene meeting/Projectmeeting/Nieuw project).
   // { host_email, host_naam, start, eind, start_ms, online, titel, beschrijving, locatie, client_email, client_naam, project_task_id?, project_naam?, intake?, when_label? }
@@ -284,7 +284,7 @@ function zipCompanies(combined){
   return out;
 }
 // Provisioning: probeer EERST de worker (off-Make, met volledige Firebase-tokenvalidatie + exacte
-// ClickUp-lookup). Val enkel bij een technische fout terug op de oude Make-hook, zodat de login
+// contact-lookup). Val enkel bij een technische fout terug op de oude Make-hook, zodat de login
 // nooit kan breken tijdens de overgang. Na bevestiging halen we de Make-fallback weg.
 async function _provisionTry(url, token, selectedBid){
   try {
@@ -300,7 +300,7 @@ async function _provisionTry(url, token, selectedBid){
 }
 async function provisionFetch(token, selectedBid){
   // 100% off-Make: provisioning loopt nu volledig via de worker (volledige Firebase-tokenvalidatie
-  // + exacte ClickUp-lookup over beide relatie-kanten). Geen Make-fallback meer.
+  // + exacte contact-lookup over beide relatie-kanten). Geen Make-fallback meer.
   var d = await _provisionTry(GATEWAY_BASE + '/provision', token, selectedBid);
   d = d || {};
   if(d && d.ok){

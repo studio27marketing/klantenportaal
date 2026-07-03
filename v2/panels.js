@@ -94,7 +94,7 @@ const PROJECTS = [
 const STATUS_LABEL = {todo:['Nog in te plannen','pill-todo'],prog:['In productie','pill-prog'],wait:['Klaar voor feedback','pill-wait'],sent:['Klaar voor feedback','pill-wait'],done:['Goedgekeurd','pill-done']};
 // Uniforme subtaak-sublabels (item 17): te starten (to do/startklaar) / wordt aan gewerkt (in progress) /
 // vraagt verduidelijking (on hold) / klaar voor feedback (feedback klant) / afgewerkt (done+facturatie+gefactureerd).
-// Leest bij voorkeur de RUWE ClickUp-status (s.statusRaw); valt terug op de platgeslagen key.
+// Leest bij voorkeur de RUWE backend-status (s.statusRaw); valt terug op de platgeslagen key.
 function ondSublabel(s){
   var raw=String((s&&s.statusRaw)||'').toLowerCase().replace(/\s+/g,'_');
   if(/on_?hold|verduidelijk/.test(raw)) return ['Vraagt verduidelijking','ond-chip-hold'];
@@ -2502,7 +2502,7 @@ function googleRichNotLinked(){
   var r=g.reason||'', title, body;
   if(r==='bad_id'){
     title='Google Ads ID lijkt niet te kloppen';
-    body='Het veld &ldquo;Google Ads ID&rdquo; op de bedrijf-taak bevat '+(g.account?('&ldquo;<b>'+esc(g.account)+'</b>&rdquo;'):'een waarde')+', maar een Google Ads klant-id bestaat uit <b>10 cijfers</b> (formaat 123-456-7890). Corrigeer het in ClickUp.';
+    body='Het veld &ldquo;Google Ads ID&rdquo; van dit bedrijf bevat '+(g.account?('&ldquo;<b>'+esc(g.account)+'</b>&rdquo;'):'een waarde')+', maar een Google Ads klant-id bestaat uit <b>10 cijfers</b> (formaat 123-456-7890). Corrigeer het bij de bedrijfsgegevens.';
   } else if(r==='account_error'){
     title='Google Ads-account niet bereikbaar';
     body='Het klant-id is ingevuld, maar Google geeft geen data terug. Controleer of het id klopt en of dit account onder het beheeraccount (MCC) van Studio&nbsp;27 hangt.'+(g.detail?'<br><span style="font-size:12px;color:var(--ink-4)">'+esc(g.detail)+'</span>':'');
@@ -2511,7 +2511,7 @@ function googleRichNotLinked(){
     body='De Google Ads API-koppeling (developer- of refresh-token) is niet ingesteld op de server.';
   } else {
     title='Nog geen Google Ads-account gekoppeld';
-    body='Koppel het Google Ads-klant-id van deze klant (veld &ldquo;Google Ads ID&rdquo; op de bedrijf-taak) om hier de uitgebreide rapportage te zien.';
+    body='Koppel het Google Ads-klant-id van deze klant (veld &ldquo;Google Ads ID&rdquo; bij de bedrijfsgegevens) om hier de uitgebreide rapportage te zien.';
   }
   return '<div class="card" style="padding:30px 26px;text-align:center"><div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">'+title+'</div><div style="color:var(--ink-3);max-width:480px;margin:0 auto;line-height:1.55">'+body+'</div></div>';
 }
@@ -4243,7 +4243,7 @@ async function owSubmit(btn){
     if(r&&r.ok&&d&&d.ok!==false&&(d.offerte_task_url||d.offerte_task_id||d.pandadoc_id)){
       state._offerteCart={}; state._offerteOpm=''; state.data.offertes=null;
       s.submitting=false;
-      // terugbelverzoek: gerichte ping bij Arne (ClickUp + WhatsApp indien geconfigureerd), fire-and-forget
+      // terugbelverzoek: gerichte ping bij Arne (interne melding + WhatsApp indien geconfigureerd), fire-and-forget
       if(actie==='bellen'){
         try{ api(ENDPOINTS.directMessage, { ontvanger:'arne', type:'terugbel', onderwerp:'Offerte-aanvraag via het portaal', bericht:'De klant vraagt om even op te bellen over de zonet samengestelde offerte ('+items.length+' producten).' }); }catch(_e){}
       }
@@ -4364,7 +4364,7 @@ function panelInstellingen(){
         <div class="field" style="grid-column:1/-1"><label>Notificatie-kanalen</label>${kanaalPicker('npKanalen', (Array.isArray(prof.kanalen)&&prof.kanalen.length)?prof.kanalen:legacyVoorkeurNaarKanalen(vk), prof.id?'saveProfile':null)}${prof.id?'':'<div class="fs" style="color:var(--ink-4);margin-top:6px">Koppel eerst je e-mail om kanalen te bewaren.</div>'}</div>
       </div>
       ${demo?'':`<div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--paper-3,#F1EBE2)"><button class="btn btn-outline btn-sm" onclick="enablePushHere(this)">${ic('phone',15)} Pushmeldingen op dit toestel aanzetten</button><span id="pushHereMsg" class="fs" style="margin-left:10px;color:var(--ink-4)"></span><div class="fs" style="color:var(--ink-4);margin-top:6px">Krijg meldingen rechtstreeks op dit toestel, ook als de app dicht staat. Werkt op je telefoon zodra je het portaal aan je beginscherm toevoegt.</div></div>`}
-      <div id="npSaved" class="fs" style="color:var(--s27-green-ink,#2e7d32);margin-top:8px;display:none">✓ Opgeslagen, gesynchroniseerd met ClickUp</div>
+      <div id="npSaved" class="fs" style="color:var(--s27-green-ink,#2e7d32);margin-top:8px;display:none">✓ Opgeslagen, je gegevens zijn bijgewerkt</div>
       ${(!demo&&!prof.id)?'<p class="fs" style="color:var(--ink-4);margin-top:8px">Je e-mail is nog niet aan een contactpersoon gekoppeld, voeg jezelf hieronder toe om je voorkeuren te bewaren.</p>':''}
     </div>
     <div class="setsec">
@@ -4675,7 +4675,7 @@ function _ondEditRij(s, br){
     +'<span class="ond-naam">'+esc(s.naam)+'</span>'+inner+'</div>'+lijst+dls+fotoBtns+'</div>';
 }
 // Stabiele TYPE JOB-sleutel van een subtaak: gebruik de door de worker meegestuurde
-// type_job_key (immuun voor herordenen van de ClickUp-dropdown). Valt terug op de TAAKNAAM
+// type_job_key (immuun voor herordenen van de opties). Valt terug op de TAAKNAAM
 // zolang de worker de sleutel nog niet meestuurt (transitie) of als ze ontbreekt, NOOIT meer
 // op de orderindex (die verschuift bij het toevoegen/verwijderen van een dropdown-optie).
 function _tjKey(s){
@@ -4723,7 +4723,7 @@ function onderdelenBlok(det, p){
 // Naam van een feedbackronde opschonen: 'FB - Montage' -> 'Montage'. Nooit verzinnen, enkel prefix strippen.
 function _fbRondeNaam(n){ return String(n||'').replace(/^\s*fb\s*[-–]\s*/i,'').trim()||'Feedback'; }
 // WhatsApp-stijl feedbackronde-blok: in/uitklapbaar, chronologisch genummerd (Ronde 1 = oudste),
-// zodat de klant ziet om de hoeveelste ronde het gaat én alles kan terugkijken. Data 1:1 uit ClickUp.
+// zodat de klant ziet om de hoeveelste ronde het gaat én alles kan terugkijken. Data 1:1 uit de gateway.
 function _fbRondesBlock(fb, br){
   var sorted=fb.slice().sort(function(a,b){ return (_ondMs(a.dateCreated)||_ondMs(a.startDate)||0)-(_ondMs(b.dateCreated)||_ondMs(b.startDate)||0); });
   var rows=sorted.map(function(s,i){
@@ -4870,7 +4870,7 @@ function buildModal(id, from){
     :(backTo==='webprestaties')?'Website':'overzicht';
   // KRITIEK (Vincent/PFL): in LIVE NOOIT verzonnen onderdelen/taken. Deze mock-arrays zijn
   // UITSLUITEND de showcase voor het demo-portaal (?demo=1). In live starten ze leeg en worden
-  // ze enkel gevuld met echte ClickUp-data (det.deliverables/det.subtasks) hieronder.
+  // ze enkel gevuld met echte backend-data (det.deliverables/det.subtasks) hieronder.
   let SUBTASKS = !state.demoMode ? [] : isVideo ? [
     {t:'Montage',st:'wait',files:[['Montage v1, volledige film','MP4 · 02:14','video'],['Korte teaser (15s)','MP4 · 00:15','video']]},
     {t:'Fotografie',st:'wait',files:[['Still, openingsshot','JPG · hoge resolutie','img'],['Still, teamportret','JPG · hoge resolutie','img']]},

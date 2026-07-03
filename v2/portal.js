@@ -1012,7 +1012,7 @@ async function sendChat(input){
     }
   }
   catch(e){}
-  // cache verversen + chat herrenderen zodat de ECHTE ClickUp-berichten in de cache zitten
+  // cache verversen + chat herrenderen zodat de ECHTE berichten uit de backend in de cache zitten
   // (geen duplicaat met de optimistische bubble bij terug-schakelen tussen chats)
   await refreshChatCache(tid);
 }
@@ -1099,7 +1099,7 @@ async function chatUpload(input, taskId){
   const rd=new FileReader();
   rd.onload=async function(){ const b64=String(rd.result).split(',')[1]||'';
     try{ if(state._commsMode){ await api(ENDPOINTS.commsChatAttachment, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), filename:f.name, file_data:b64 }); } else { await api(ENDPOINTS.chatAttachment, { task_id:tid, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), filename:f.name, file_data:b64 }); } done(' ✓');
-      await refreshChatCache(tid);   // echte attachment-comment uit ClickUp in de cache (geen duplicaat met de optimistische bubble)
+      await refreshChatCache(tid);   // echte attachment-comment uit de backend in de cache (geen duplicaat met de optimistische bubble)
     }
     catch(e){ done(' <span style="color:var(--s27-orange-ink)">- mislukt</span>'); }
   };
@@ -1164,7 +1164,7 @@ async function sendDringend(btn, id){
 /* =============================================================================
    STUDIO 27-ASSISTENT (klantenportaal) — DETERMINISTISCH + VEILIG.
    Beantwoordt ENKEL praktische vragen over de eigen projecten, planning, feedback
-   en resultaten, uit de data die al in het portaal staat (afkomstig uit ClickUp).
+   en resultaten, uit de data die al in het portaal staat (afkomstig uit de gateway).
    GEEN off-topic antwoorden, GEEN doorverwijzing/belofte richting een collega,
    GEEN interne of gevoelige data, altijd professioneel en in de Studio 27-tone.
    Geen externe AI-call meer: alles wordt lokaal en voorspelbaar bepaald.
@@ -1173,7 +1173,7 @@ function _botProjects(){ try{ return (window.S27DATA&&S27DATA.projects&&S27DATA.
 function _botActief(){ return _botProjects().filter(function(p){ return String(p.status||'').toLowerCase().indexOf('done')<0 && String(p.status||'').toLowerCase().indexOf('afgerond')<0; }); }
 function _botMeetings(){ try{ var mt=(window.S27DATA&&S27DATA.meetings&&S27DATA.meetings())||null; return (((mt&&mt.list)||[]).filter(function(m){return m.dt&&m.dt.getTime()>=Date.now();}).sort(function(a,b){return a.dt-b.dt;})); }catch(e){ return []; } }
 function _botActiepunten(){ try{ return (typeof _notifItems==='function'?_notifItems():[])||[]; }catch(e){ return []; } }
-// huisstijl: geen em/en-dashes in tekst die we tonen, en veilig tegen HTML in ClickUp-namen
+// huisstijl: geen em/en-dashes in tekst die we tonen, en veilig tegen HTML in taaknamen
 function _botSafe(s){ return escapeHtml(String(s||'').replace(/\s*[—–]\s*/g,', ').replace(/\s{2,}/g,' ').trim()); }
 function _botStatusLabel(p){
   var s=String(p.status||'').toLowerCase();
@@ -1275,7 +1275,7 @@ function _botIntent(q){
   return 'overig';
 }
 /* ---- Dynamische assistent-chips: voorgestelde praktische vragen op basis van context.
-   De chiptekst IS de vraag, dus em/en-dashes uit ClickUp-namen worden weggehaald (huisstijl). ---- */
+   De chiptekst IS de vraag, dus em/en-dashes uit taaknamen worden weggehaald (huisstijl). ---- */
 function botDynChips(){
   var chips=[];
   try{
@@ -1578,7 +1578,7 @@ async function procesFeedback(taskId){
   try { await api(ENDPOINTS.feedbackV2, { task_id:taskId, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[{label:'Oplevering',choice:'feedback',opmerking:msg,kanaal:'portaal',kanaal_label:'via het portaal'}], algemene_opmerking:'' }); } catch(e){}
 }
 // facturatiegegevens opslaan, ALLE velden via facturatieSave (schrijft naar exact de
-// ClickUp-velden die content-get terugleest → volledige round-trip-sync, geen lege overschrijf)
+// backend-velden die content-get terugleest → volledige round-trip-sync, geen lege overschrijf)
 async function saveBedrijfGegevens(btn){
   if(state.demoMode){ if(btn) btn.innerHTML='Opgeslagen ✓'; return; }
   if(btn){ btn.disabled=true; btn.textContent='Opslaan…'; }
@@ -1600,7 +1600,7 @@ async function saveBedrijfGegevens(btn){
     if(btn){ btn.disabled=false; btn.innerHTML='Opgeslagen ✓'; }
   } catch(e){ if(btn){ btn.disabled=false; btn.textContent='Opnieuw proberen'; } }
 }
-// Eigen profiel + notificatievoorkeur realtime opslaan -> update_contact -> ClickUp-contactfiche.
+// Eigen profiel + notificatievoorkeur realtime opslaan -> update_contact -> contactfiche bij Studio 27.
 // Schrijft UITSLUITEND naar de eigen (ingelogde) contactfiche, npProfileId is per definitie
 // de "me"-contactpersoon (zie panelInstellingen). De e-mail van het eigen account sturen we
 // hier mee als contact-email; dit raakt nooit een ander contact (dat loopt via saveContact).
@@ -2310,7 +2310,8 @@ async function offerteSubmit(btn){
     const d=(res&&res.data)||{};
     if(res&&res.ok&&d&&d.ok!==false&&(d.offerte_task_url||d.offerte_task_id||d.pandadoc_id)){
       const url=d.offerte_task_url||'';
-      const link=url?(' <a href="'+escapeHtml(url)+'" target="_blank" rel="noopener">Bekijk je offerte '+ic('arrow',13)+'</a>'):'';
+      const ext=/^https?:/i.test(url);   // portaal-links (#/...) openen in het portaal zelf, geen nieuw tabblad
+      const link=url?(' <a href="'+escapeHtml(url)+'"'+(ext?' target="_blank" rel="noopener"':'')+'>Bekijk je offerte in het portaal '+ic('arrow',13)+'</a>'):'';
       const msg=d.message?escapeHtml(d.message):'Je offerte is aangemaakt en staat klaar.';
       const okHtml=ic('check',16)+' <b>Gelukt!</b> '+msg+link+'<div style="margin-top:6px;font-size:12px;color:var(--ink-4)">We kijken alles nog persoonlijk na voor je definitieve offerte.</div>';
       // winkelmand legen na succes; offertes-cache stale maken zodat de lijst hierboven later bijwerkt
@@ -2621,8 +2622,8 @@ async function pushPortalVersion(btn){
 }
 
 /* ---- 🐞 Portaal-feedback (WS-3b, team-only): schermvullende pagina ---- */
-// Melder-dropdown = LIVE ClickUp-workspace-leden via het teamLeden-endpoint (Vincent 12-06:
-// exact wie in ClickUp assignee kan zijn; wie er niet in zit, zoals Celien nu, staat er
+// Melder-dropdown = LIVE teamleden via het teamLeden-endpoint (Vincent 12-06:
+// exact wie als assignee gekozen kan worden; wie er niet in zit, zoals Celien nu, staat er
 // dus ook niet tussen). Fallback-snapshot wordt enkel gebruikt tot/tenzij de fetch er (niet) is.
 var BUG_TEAM_FALLBACK=['Anouk de Hoon','Arne Goetschalckx','Bjorn Borgers','Danique Bosch','Eline Meyvis','Eva Goetschalckx','Griet Beyens','Guus Van den Heuvel','Ilke Meeusen','Ines Permentiers','Johanna Augustyns','Klaas Vanhove','Lara Hooyberghs','Viktor Hendrickx','Vincent Verleije','Ward Frijters','Wout Goos'];
 function _bugTeamNamen(){ return (state._bugTeam&&state._bugTeam.length)?state._bugTeam.map(function(l){return String(l.naam||'');}):BUG_TEAM_FALLBACK.slice(); }
@@ -2630,7 +2631,7 @@ function _bugWieDefault(){
   var em=String((state.session&&state.session.email)||'').toLowerCase();
   var leden=state._bugTeam||[];
   for(var i=0;i<leden.length;i++){ if(leden[i].email&&leden[i].email===em) return String(leden[i].naam||''); }
-  // fallback: voornaam uit het e-mailadres (ClickUp-mail kan afwijken van de portaal-login)
+  // fallback: voornaam uit het e-mailadres (teamlid-mail kan afwijken van de portaal-login)
   var vn=em.split('@')[0].split('.')[0];
   if(vn){ var namen=_bugTeamNamen(); for(var j=0;j<namen.length;j++){ if(namen[j].toLowerCase().indexOf(vn)===0) return namen[j]; } }
   return '';
@@ -2659,7 +2660,7 @@ function openBugReport(){
   var team = (typeof isRichView==='function' && isRichView());   // teamweergave (staff, niet de clientview)
   var wieBlok;
   if(team){
-    // team: melder kiezen uit de live ClickUp-ledenlijst (dropdown)
+    // team: melder kiezen uit de live teamledenlijst (dropdown)
     state._bugWie=_bugWieDefault(); loadBugTeam();
     wieBlok='<label class="ms-label">Wie meldt dit?</label>'
       +'<select id="bugWie" class="bug-wie-select" onchange="bugPickWie(this.value)">'+_bugWieOptions()+'</select>';

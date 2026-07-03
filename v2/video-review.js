@@ -6,7 +6,7 @@
    review-overlay i.p.v. een nieuw tabblad. Klant ziet de video in een compact
    venster (fullscreen optioneel), klikt op het beeld → pauze + genummerde pin
    + comment (+ bijlagen), en verzendt alles in één keer → worker bewaart de
-   bundel en post een leesbare ClickUp-comment op dezelfde taak.
+   bundel en post een leesbaar feedback-verslag als comment op dezelfde taak.
 
    Gateway-endpoints: videoReviewContext / videoReviewUpload / videoReviewSubmit
    (Firebase-authed; bedrijf-scope server-side). Streams via signed GET-routes.

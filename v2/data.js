@@ -13,7 +13,7 @@
   var DATA = window.S27DATA = {};
   state.data = state.data || { dashboard:null, details:{}, chats:{}, meetings:null, bedrijf:null, team:null, huisstijl:null };
 
-  /* ---- discipline-brug: ClickUp-id → {br-kleur, label, stamp, categorie} (de bijbel) ---- */
+  /* ---- discipline-brug: discipline-id → {br-kleur, label, stamp, categorie} (de bijbel) ---- */
   var DISC_BRIDGE = {
     strategie:       { br:'blue',   label:'Strategie',            stamp:'icon-strategie.svg',        cat:'deliverable' },
     branding:        { br:'pink',   label:'Branding',             stamp:'icon-branding-heart.svg',   cat:'deliverable' },
@@ -28,7 +28,7 @@
   };
   DATA.disc = function(id){ return DISC_BRIDGE[id] || { br:'blue', label:id||'Project', icon:'doc', cat:'deliverable' }; };
 
-  /* ---- status-brug: genormaliseerde ClickUp-status → {key (mock-pill), label} ---- */
+  /* ---- status-brug: genormaliseerde backend-status → {key (mock-pill), label} ---- */
   function norm(s){ return String(s||'').toLowerCase().replace(/\s+/g,'_'); }
   var STATUS_MAP = {
     // NIEUWE statusset (2026-06-14): op te starten / startklaar / in progress / on hold /
@@ -103,7 +103,7 @@
   };
 
   /* ---- taaknaam-normalisatie (WS-6): interne ruis weg uit klant-zichtbare namen.
-     CONSERVATIEF: enkel duidelijke interne markeringen; ClickUp-namen blijven onaangetast. ---- */
+     CONSERVATIEF: enkel duidelijke interne markeringen; taaknamen blijven onaangetast. ---- */
   function cleanTaakNaam(raw){
     var s=String(raw||'');
     s=s.replace(/^\s*INTERN:\s*/i,'');                          // 'INTERN: ...'-prefix
@@ -184,7 +184,7 @@
     if(d && d.ok !== false){ state.data.details[taskId] = d; }
     return state.data.details[taskId] || null;
   };
-  // ruwe ClickUp-comment {auteur,tekst,datum,is_klant,attachments} -> display-shape voor chatHTML
+  // ruwe chat-comment {auteur,tekst,datum,is_klant,attachments} -> display-shape voor chatHTML
   function mapChatComment(c){
     var t = String(c.tekst||c.text||c.comment_text||'');
     t = t.replace(/^\s*💬?\s*\[[^\]]*\]\s*/,'');   // "💬 [Klant: ...]"-prefix weg
@@ -372,7 +372,7 @@
   };
 
   // per-taak bestanden normaliseren: expliciet veld of geparset uit een ruwe URL-tekst.
-  // GEEN fallback op t.link/t.url: dat is de ClickUp-taaklink zelf, geen deliverable -
+  // GEEN fallback op t.link/t.url: dat is de interne taaklink zelf, geen deliverable -
   // die liet lege taken (bv. een lege pre-productietaak) onterecht 'met bestanden' lijken.
   function taakBestanden(t){
     if(t.bestanden && t.bestanden.length) return t.bestanden.map(function(f){ return { label:f.label||urlLabel(f.url||''), url:f.url||'', type:f.type||urlType(f.url||'') }; });
@@ -406,7 +406,7 @@
 
   // Chat → bubble-vorm voor chatHTML.
   // loadChat() slaat al display-klare objecten op via mapChatComment ({av,who,color,tx,tm,me,attachments}).
-  // DATA.chat() is daarom een PASSTHROUGH: niet opnieuw mappen (de rauwe ClickUp-velden bestaan hier
+  // DATA.chat() is daarom een PASSTHROUGH: niet opnieuw mappen (de rauwe backend-velden bestaan hier
   // niet meer). [INTERN]-comments worden server-side al weggefilterd (handlers.mjs chatList); als zacht
   // vangnet houden we hier nog een filter op de display-tekst.
   DATA.chat = function(taskId){
