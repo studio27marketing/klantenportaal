@@ -2683,7 +2683,7 @@ function openBugReport(){
       +'<input type="text" id="bugTitel" class="shoot-zoek" style="margin:4px 0 14px" maxlength="140" placeholder="Korte omschrijving van wat je zag">'
       +'<label class="ms-label">Wat zie je / wat verwacht je?</label>'
       +'<textarea id="bugBody" class="mp-note" rows="12" placeholder="Op welk scherm, wat ging er mis, wat had je verwacht\u2026"></textarea>'
-      +'<div style="margin-top:12px"><label class="btn btn-outline btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">'+ic('upload',14)+' Schermafbeelding(en) toevoegen<input type="file" accept="image/*" multiple style="display:none" onchange="bugPickFiles(this)"></label><span class="fs" style="margin-left:10px;color:var(--ink-3)">Je kan er meerdere toevoegen (max 6)</span><div id="bugFileChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div></div>'
+      +'<div style="margin-top:12px"><label class="btn btn-outline btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">'+ic('upload',14)+' Bestand(en) toevoegen<input type="file" accept="image/*,.pdf,.csv,.xls,.xlsx,.doc,.docx" multiple style="display:none" onchange="bugPickFiles(this)"></label><span class="fs" style="margin-left:10px;color:var(--ink-3)">Schermafbeeldingen, PDF, Excel of CSV · max 6</span><div id="bugFileChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div></div>'
       +'<div class="shoot-msg" id="bugMsg"></div>'
       +'<div style="margin-top:18px"><button class="btn btn-primary" onclick="bugVerstuur(this)">'+ic('send',15)+' Versturen</button></div>'
     +'</div>'
@@ -2698,10 +2698,19 @@ function _bugRenderChips(){
   var fs=state._bugFiles||[];
   c.innerHTML=fs.map(function(f,i){ return '<span style="display:inline-flex;align-items:center;gap:6px;background:var(--paper-3,#F1EBE2);border-radius:999px;padding:5px 10px;font-size:12.5px">'+ic('img',13)+'<span style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(f.name||'afbeelding')+'</span><button type="button" onclick="bugRemoveFile('+i+')" aria-label="Verwijderen" style="border:0;background:none;cursor:pointer;color:var(--ink-3);font-size:14px;line-height:1;padding:0">\u2715</button></span>'; }).join('');
 }
+// Punt Arne (taak 86cahn2jk): naast schermafbeeldingen ook bestanden zoals PDF, CSV en Excel
+// toelaten (de gateway slaat elk type op in R2; enkel de grootte is begrensd).
+function _bugFileOk(f){
+  if(!f) return false;
+  if(/^image\//.test(f.type||'')) return true;
+  if(/^(application\/pdf|text\/csv)$/.test(f.type||'')) return true;
+  if(/(spreadsheet|ms-?excel|wordprocessing|ms-?word)/i.test(f.type||'')) return true;
+  return /\.(pdf|csv|xlsx?|docx?)$/i.test(f.name||'');   // vangnet: sommige browsers geven geen mimetype
+}
 function bugPickFiles(inp){
   state._bugFiles=state._bugFiles||[];
   var files=(inp&&inp.files)?[].slice.call(inp.files):[];
-  files.forEach(function(f){ if(state._bugFiles.length<6 && f && f.size<=8*1024*1024 && /^image\//.test(f.type||'')) state._bugFiles.push(f); });
+  files.forEach(function(f){ if(state._bugFiles.length<6 && f && f.size<=8*1024*1024 && _bugFileOk(f)) state._bugFiles.push(f); });
   if(inp) inp.value='';   // reset zodat dezelfde naam opnieuw kan + de knop herbruikbaar blijft
   _bugRenderChips();
 }

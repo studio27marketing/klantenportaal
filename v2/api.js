@@ -117,6 +117,10 @@ const ENDPOINTS = {
   // { ok, linked, currency, campaigns:[{id,name}], months:[{month:'YYYY-MM',spend,clicks,conversions,
   // convValue,campaigns:[{id,name,spend,clicks,conversions,convValue}]}] }. Acting-as scope.
   googleMonthly:     GATEWAY_BASE + '/googleMonthly',
+  // ADMIN-only (staff): Evolutie-tab Google Ads — 24 maanden spend + leads per conversietype per
+  // maand. { campaign_id? } -> { ok, linked, currency, months:[{ym,spend,conversions,cpl,
+  // types:[{name,count,cpl}]}], campaigns:[{id,name}] }. Acting-as scope.
+  googleAdsEvolutie: GATEWAY_BASE + '/googleAdsEvolutie',
   // ADMIN-only (staff): per-bedrijf KV-meeting-werkblad (notities + recs + uploads).
   adsWorkspace:      GATEWAY_BASE + '/adsWorkspace',
   adsWorkspaceSave:  GATEWAY_BASE + '/adsWorkspaceSave',

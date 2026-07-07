@@ -707,6 +707,23 @@
   };
   DATA.googleAdsRich = function(){ return state.data.googleAdsRich; };
 
+  // ADMIN (staff): Evolutie-tab Google Ads — 24 maanden spend + leads per type per maand,
+  // optioneel per campagne. Gecachet per campagne-filter ('' = alle campagnes).
+  DATA.loadGoogleAdsEvolutie = async function(opts){
+    var o = opts || {};
+    var key = String(o.campaign_id||'');
+    if(!live() || !state.activeBedrijf) return false;
+    state.data.googleAdsEvolutie = state.data.googleAdsEvolutie || {};
+    try{
+      var res = await api(ENDPOINTS.googleAdsEvolutie, base(key?{ campaign_id:key }:{}));
+      var j = (res && res.ok && res.data) ? res.data : null;
+      if(!j || !j.ok){ state.data.googleAdsEvolutie[key]=null; return false; }
+      state.data.googleAdsEvolutie[key] = j;   // { linked, currency, months, campaigns }
+      return true;
+    }catch(e){ state.data.googleAdsEvolutie[key]=null; return false; }
+  };
+  DATA.googleAdsEvolutie = function(campaignId){ var m=state.data.googleAdsEvolutie||{}; return m[String(campaignId||'')]; };
+
   // Campagne-creatives ON-DEMAND (rijke media via page-tokens), gecachet per campagne-id.
   DATA.loadCampaignAds = async function(campaignId){
     var id = String(campaignId||'');
