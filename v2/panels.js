@@ -2830,6 +2830,14 @@ function googleRichEvolutie(){
   gEvoStyles();
   var camp=_gEvoCampF();
   var d=(window.S27DATA&&S27DATA.googleAdsEvolutie)?S27DATA.googleAdsEvolutie(camp):null;
+  // Stale campagnefilter self-healen (mirror van de conversies-/zoektermen-tab): de campagnelijst in de
+  // respons is ALTIJD volledig (backend geeft ze los van de filter). Staat de gekozen campagne er niet
+  // in (ander bedrijf na een act-as-wissel, of een verdwenen campagne), val dan terug op 'Alle campagnes'
+  // i.p.v. vast te zitten op een lege selectie zonder dropdown.
+  if(camp && d && d.linked && Array.isArray(d.campaigns) && !d.campaigns.some(function(c){return String(c.id)===String(camp);})){
+    state._gEvoCamp=''; camp=''; state._gEvoAt=0;
+    d=(window.S27DATA&&S27DATA.googleAdsEvolutie)?S27DATA.googleAdsEvolutie(''):null;
+  }
   if(d===undefined||d===null){
     if(!state.demoMode && window.S27DATA && S27DATA.loadGoogleAdsEvolutie){
       var _now=Date.now();
