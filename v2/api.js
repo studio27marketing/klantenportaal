@@ -38,49 +38,31 @@ const GATEWAY_BASE = (function(){
   return 'https://s27-portal-gateway-v2.studio27marketing.workers.dev';
 })();
 
-/* ---- Endpoints (EXACT uit dashboard.js, backend ongewijzigd) ---- */
+/* ---- Endpoints (ALLES via de Cloudflare-gateway; golf 1 (11-07) verwijderde de
+   laatste directe Make-hook-URL's en het ?auth=v1-legacy-pad volledig) ---- */
 const ENDPOINTS = {
-  // v1, folder 12 KLANTPORTAAL (legacy)
-  login:           'https://hook.eu1.make.com/gk7fxusnnrwkyfhcpyup8w39ygoz5m5u',
-  dashboard:       'https://hook.eu1.make.com/q1hklcvhum7m14ie57p6t6ci7l6un48e',
-  projectDetail:   'https://hook.eu1.make.com/1mmhcsa0sie22po3kbwcx423dakidc44',
-  calendar:        'https://hook.eu1.make.com/5e1chj9seh9jlw7nejhytwjg66i7vzyd',
-  uploadProject:   'https://hook.eu1.make.com/rk5ui1ueb4j42hiqye8dfzfmka0gf318',
-  uploadAlg:       'https://hook.eu1.make.com/hyf7ejtbskq743d56nveucv9xto5yo8c',
-  // v2, folder 13 KLANTPORTAAL v2 (robuust, native modules, session-validatie)
-  bedrijfContent:    'https://hook.eu1.make.com/o1gvlndn934h2u77vug6k59xgt2qgz6g',
-  bedrijfVoorkeuren: 'https://hook.eu1.make.com/fhenjvxv47ldoea5k8h646ovn5gzvgnv',
-  bedrijfUpload:     'https://hook.eu1.make.com/vdi231a5w9c8wronm71panyc2okq716y',
-  meetingsList:      'https://hook.eu1.make.com/5vkfigdkwwowpmhbmicsyddkjt5k18f5',
-  projectDetailV2:   'https://hook.eu1.make.com/tp6jpd91vyecsz693pj2hmdd1bs8pd5e',
-  chatPost:          'https://hook.eu1.make.com/vi12objw9nkrjg1i8ve13jwj354pvg9n',
-  chatList:          'https://hook.eu1.make.com/a43sc5vjuic6lpjdehq8pvhn8sjftbn3',
-  feedbackV2:        'https://hook.eu1.make.com/vpd7to9pn8ritsih38s4apika49lg31o',
-  newProjectIntake:  'https://hook.eu1.make.com/kbomkcljmi9b2oyphmk938wb1qgwll1j',
-  directMessage:     'https://hook.eu1.make.com/s7g32st1esmxxarw0k35ej3j8hthdr2b',
-  chatAttachment:    'https://hook.eu1.make.com/fxaqt9waonf63moiloj1bnm28w1kduj6',
-  bedrijfContact:    'https://hook.eu1.make.com/459dayjdq34xgkt9bcbv8g1nxd9r9ubs',
-  meetingAvailability:'https://hook.eu1.make.com/s4tuw763p9x4dc7o8n1h9sm48vhs77rb',
-  // v3, AI Status Bot
-  aiStatusBot:       'https://hook.eu1.make.com/3uor4cy6vmhe77sh2uvujg9iufoewj3u',
-  pandadocPricelist: 'https://hook.eu1.make.com/uw2974b7b2yurygsgcn2i97x4lh9h86e',
-  shootAvailability: 'https://hook.eu1.make.com/c1aekp5r567tqvgvp4e2a4juu3npanap',
-  // v3.1-6, Huisstijl-bibliotheek (Google Drive)
-  huisstijlList:     'https://hook.eu1.make.com/v3z3t67otw7d96s37qciedt3uykimiru',
-  huisstijlUpload:   'https://hook.eu1.make.com/3eqyxbkejfhyz8w2kl62lp1lsxwfr2d0',
-  huisstijlDelete:   'https://hook.eu1.make.com/irpo6iemme6qpfe75rr83brkj7ybftsd',
-  driveEnsure:       'https://hook.eu1.make.com/cy5n1y0377ovy2yso5f4dev1n792u71k',
-  // v3.1-7, Facturatie
-  facturatieSave:        'https://hook.eu1.make.com/41635fjyidjts4hlixkgxcsmo6apoe02',
-  projectFacturatieSave: 'https://hook.eu1.make.com/cmqf97ej6aewxokt9g23tbff6gxg7frm',
-  // v3, Performance Dashboard (mode=list | mode=data&task_id=…)
-  performance:       'https://hook.eu1.make.com/chmsfitxr12m8cpjp4x3fb8ru1nqr7gg',
-  // v3, Bedrijf-beheer (get_team | update_bedrijf | save_contact | update_contact)
-  bedrijfBeheer:     'https://hook.eu1.make.com/bf5xp3rkbh7dik9rp6jvue4w9p2moctn',
+  dashboard:         GATEWAY_BASE + '/dashboard',
+  bedrijfContent:    GATEWAY_BASE + '/bedrijfContent',
+  meetingsList:      GATEWAY_BASE + '/meetingsList',
+  projectDetailV2:   GATEWAY_BASE + '/projectDetailV2',
+  chatPost:          GATEWAY_BASE + '/chatPost',
+  chatList:          GATEWAY_BASE + '/chatList',
+  feedbackV2:        GATEWAY_BASE + '/feedbackV2',
+  directMessage:     GATEWAY_BASE + '/directMessage',
+  chatAttachment:    GATEWAY_BASE + '/chatAttachment',
+  meetingAvailability: GATEWAY_BASE + '/meetingAvailability',
+  // Huisstijl-bibliotheek (Google Drive, directe API via de gateway)
+  huisstijlList:     GATEWAY_BASE + '/huisstijlList',
+  huisstijlUpload:   GATEWAY_BASE + '/huisstijlUpload',
+  driveEnsure:       GATEWAY_BASE + '/driveEnsure',
+  // Facturatie
+  facturatieSave:    GATEWAY_BASE + '/facturatieSave',
+  // Bedrijf-beheer (get_team | get_offertes | update_bedrijf | save_contact | update_contact)
+  bedrijfBeheer:     GATEWAY_BASE + '/bedrijfBeheer',
   // Agenda (beschikbaarheid + inplannen), scope-guard server-side actief
-  beschikbaarheid:   'https://hook.eu1.make.com/jn1ael12s6b4xp6fsdqd49x9p27v8cht',
-  inplannen:         'https://hook.eu1.make.com/4r3y6ba68spfgcgng7v0lvso11il6p6u',
-  // Offerte-samensteller: klant stelt zelf een offerte samen (catalogus -> PandaDoc via Make).
+  beschikbaarheid:   GATEWAY_BASE + '/beschikbaarheid',
+  inplannen:         GATEWAY_BASE + '/inplannen',
+  // Offerte-samensteller: klant stelt zelf een offerte samen (catalogus -> PandaDoc via de gateway).
   // BE-contract: { items:[{sku,naam,prijs,aantal}], opmerking } -> { ok, offerte_task_id, offerte_task_url, pandadoc_id, message }.
   offerteGenereren:  GATEWAY_BASE + '/offerteGenereren',
   // Klantvriendelijke offerte-AANVRAAG (clientview): vrije tekst + diensten i.p.v. budgetten.
@@ -103,8 +85,6 @@ const ENDPOINTS = {
   // ADMIN-only (staff): uitgebreide social-rapportage (team-weergave) in één call, account-KPI's +
   // per-netwerk breakdown met dag-series + vergelijking + post-insights. Acting-as scope.
   metricoolStatsRich:GATEWAY_BASE + '/metricoolStatsRich',
-  // SEC-6: ads-insights via de gateway (bedrijf_id server-side uit het token), niet meer direct.
-  ads:               GATEWAY_BASE + '/ads',
   // Meta Ads real-time (direct via Graph API, geen Make): { period? } -> { ok, linked, account,
   // currency, period, kpis, campaigns:[], ads:[] }. bedrijf_id + account server-side bepaald.
   metaAds:           GATEWAY_BASE + '/metaAds',
@@ -175,17 +155,8 @@ const ENDPOINTS = {
   metricoolCreate:   GATEWAY_BASE + '/metricoolCreate'
 };
 
-/* AUTH v2 (Firebase + Cloudflare-gateway) is de DEFAULT. ?auth=v1 = legacy-vangnet. */
-const AUTH_V2 = !/[?&]auth=v1(?:&|$)/.test(location.search);
-/* GATEWAY_BASE staat hierboven gedeclareerd (vóór ENDPOINTS). */
-const PROVISION_URL = 'https://hook.eu1.make.com/hjmc9k1w9ry027kom3rfiwci9pejub78';
-/* Metricool-posts: LEGACY directe Make-hook. De frontend gebruikt nu ENDPOINTS.metricool
-   (via de gateway) i.p.v. deze hook; bewaard als vangnet/referentie, niet meer aangeroepen. */
-const METRICOOL_DIRECT = 'https://hook.eu1.make.com/a5ndvvcb5ipoivw86byv0a3mfvsfd24v';
-/* Advertentie-campagnes (Meta-insights, later Google): GEÏSOLEERD Make-scenario,
-   directe form-encoded call (CORS-safe). Leest de Meta Ads ID + Business ID server-side
-   uit de bedrijf-taak en haalt campagne-insights (90d) op via de facebook-connectie. */
-const ADS_DIRECT = 'https://hook.eu1.make.com/wvb3qfpqpm28kq6ksrduqywwrymokdjv';
+/* AUTH v2 (Firebase + Cloudflare-gateway) is het ENIGE auth-pad. Het ?auth=v1-legacy-
+   vangnet (code-login + directe Make-hooks) is in golf 1 (11-07) volledig verwijderd. */
 const ENDPOINT_KEYS = Object.keys(ENDPOINTS).reduce(function(m, k){ m[ENDPOINTS[k]] = k; return m; }, {});
 // auth.js wordt relatief naast api.js geladen (CDN of lokaal); fallback = v2-branch.
 const AUTH_JS_URL = (function(){
@@ -200,20 +171,7 @@ const AUTH_JS_URL = (function(){
    api() / apiV2(), elke call gaat in live via de gateway (bedrijf_id server-side)
    ============================================================================= */
 async function api(url, payload, opts){
-  if (AUTH_V2) return apiV2(url, payload, opts);
-  try {
-    const r = await fetch(url, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify(payload || {})
-    });
-    const t = await r.text();
-    let parsed;
-    try { parsed = { ok:r.ok, status:r.status, data:JSON.parse(t) }; }
-    catch { parsed = { ok:r.ok, status:r.status, data:{ _raw:t } }; }
-    if(parsed.status === 401 && state && state.session){ handleSessionExpired(parsed.data && parsed.data.message); }
-    return parsed;
-  } catch(e){ return { ok:false, status:0, error:e.message }; }
+  return apiV2(url, payload, opts);
 }
 
 // Standaard v2-headers + (enkel voor staff/admin) de acting-as-header X-Act-As-Bedrijf.

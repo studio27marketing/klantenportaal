@@ -254,13 +254,6 @@
     if(res && res.ok && res.data && res.data.files){ state.data.huisstijl = res.data.files; return true; }
     return false;
   };
-  DATA.performanceUrl = async function(){
-    if(!live()) return null;
-    var token = window.S27Auth ? await window.S27Auth.token() : null;
-    if(!token) return null;
-    return GATEWAY_BASE + '/perfreport?token=' + encodeURIComponent(token);
-  };
-
   /* =========================================================================
      GETTERS, live-gemapte data of null (→ panels.js valt terug op mock)
      ========================================================================= */
@@ -572,32 +565,6 @@
     var mc = state.data.metricool; if(!mc || !mc.posts) return;
     mc.posts.forEach(function(p){ if(String(p.id)===String(postId)) p.approved=true; });
   };
-
-  /* ---- Advertenties (Meta-insights, later Google), geïsoleerd Make-scenario, directe call ---- */
-  DATA.loadAds = async function(){
-    if(!live()){ state.data.ads={linked:false,campaigns:[]}; return false; }
-    var bid = state.activeBedrijf || '';
-    if(!bid){ state.data.ads={linked:false,campaigns:[]}; return false; }
-    try{
-      // SEC-6: via de gateway (token-geverifieerd, bedrijf_id server-side) i.p.v. de directe hook.
-      var res = await api(ENDPOINTS.ads, base({ bedrijf_id:bid }));
-      var j = (res && res.ok && res.data) ? res.data : null;
-      if(!j || !j.ok){ state.data.ads={linked:false,campaigns:[]}; return false; }
-      if(!j.linked){ state.data.ads={linked:false,campaigns:[]}; return true; }
-      var camps=(j.campaigns||[]).filter(function(c){return c&&c.naam!=='';}).map(function(c){
-        var nm=''; try{ nm=decodeURIComponent(c.naam||''); }catch(e){ nm=c.naam||''; }
-        return { naam:nm, platform:String(c.platform||'meta').toLowerCase(),
-          impressies:parseInt(c.impressies,10)||0, klikken:parseInt(c.klikken,10)||0,
-          budget:parseFloat(String(c.budget).replace(',','.'))||0,
-          ctr:parseFloat(String(c.ctr).replace(',','.'))||0,
-          bereik:parseInt(c.bereik,10)||0, objective:c.objective||'' };
-      });
-      camps.sort(function(a,b){ return b.budget-a.budget; });
-      state.data.ads={ linked:true, campaigns:camps };
-      return true;
-    }catch(e){ state.data.ads={linked:false,campaigns:[]}; return false; }
-  };
-  DATA.ads = function(){ return state.data.ads; };
 
   /* ---- Meta Ads real-time (direct via Graph API, geen Make): KPI's + actieve campagnes
      + advertenties met creatives. Account + bedrijf_id server-side; periode = allowlist. ---- */

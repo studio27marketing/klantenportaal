@@ -13,7 +13,7 @@ var SHELL = [
   '/', '/index.html', '/manifest.json',
   '/styles.css?v=' + V, '/glass.css?v=' + V, '/tweaks.css?v=' + V, '/video-review.css?v=' + V, '/feedback-core.css?v=' + V,
   '/api.js?v=' + V, '/data.js?v=' + V, '/assets-data.js?v=' + V, '/catalog-data.js?v=' + V,
-  '/panels.js?v=' + V, '/portal.js?v=' + V, '/tweaks.js?v=' + V, '/video-review.js?v=' + V, '/feedback-core.js?v=' + V, '/auth.js',
+  '/panels.js?v=' + V, '/portal.js?v=' + V, '/tweaks.js?v=' + V, '/push.js?v=' + V, '/video-review.js?v=' + V, '/feedback-core.js?v=' + V, '/auth.js',
   '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png'
 ];
 

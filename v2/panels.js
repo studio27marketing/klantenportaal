@@ -3625,47 +3625,10 @@ function _meetingsTodo(){
 }
 function meetRoute(){ window.open('https://www.google.com/maps/search/?api=1&query=Studio+27+Merksplassesteenweg+97+2310+Rijkevorsel','_blank','noopener'); }
 
-const NP_OPTIONS = {
-  'Strategie':[['Merkstrategie','€ 1.800 - € 3.500'],['Communicatiestrategie','€ 1.200 - € 2.800'],['Employer branding','€ 2.000 - € 4.000']],
-  'Video- en fotografie':[['Bedrijfsfilm (1-2 min)','€ 2.450 - € 3.200'],["Socialvideo's (pakket van 4)",'€ 1.200 - € 1.800'],['Fotoreportage','€ 750 - € 1.400']],
-  'Website & SEO':[['Onepager','€ 1.500 - € 2.500'],['Bedrijfswebsite','€ 3.500 - € 7.000'],['Webshop','€ 6.000 - € 12.000'],['SEO-traject','€ 600 - € 1.200 / maand']],
-  'Online adverteren':[['Google Ads-beheer','€ 500 - € 1.500 / maand'],['Meta Ads-beheer','€ 500 - € 1.500 / maand'],['Volledig advertentiebeheer','€ 1.200 - € 2.500 / maand']],
-  'Social media':[['Contentbeheer (4 posts/week)','€ 800 - € 1.400 / maand'],['Volledig beheer + ads','€ 1.500 - € 2.800 / maand']],
-};
-function npDienst(){
-  const d=document.getElementById('npDienst').value;
-  const f2=document.getElementById('npField2'),typeSel=document.getElementById('npType');
-  ['npField3','npPrice','npActions'].forEach(id=>document.getElementById(id).classList.add('np-hidden'));
-  if(!d){f2.classList.add('np-hidden');npSetStep(1);return;}
-  typeSel.innerHTML='<option value="">Kies…</option>'+(NP_OPTIONS[d]||[]).map(o=>`<option data-price="${o[1]}">${o[0]}</option>`).join('');
-  f2.classList.remove('np-hidden');npSetStep(2);
-}
-function npType(){
-  const sel=document.getElementById('npType');if(!sel.value){return;}
-  document.getElementById('npPriceVal').textContent=sel.options[sel.selectedIndex].getAttribute('data-price')||'op maat';
-  ['npField3','npPrice','npActions'].forEach(id=>document.getElementById(id).classList.remove('np-hidden'));
-  npSetStep(3);
-}
-function npSetStep(n){document.querySelectorAll('#npSteps .np-step').forEach((s,i)=>s.classList.toggle('on',i<n));}
-function offerteRequestForm(){
-  const diensten=Object.keys(NP_OPTIONS);
-  return `<div class="card npform">
-    <div class="np-steps" id="npSteps"><span class="np-step on">1</span><span class="np-bar"></span><span class="np-step">2</span><span class="np-bar"></span><span class="np-step">3</span></div>
-    <div class="field"><label>Welke dienst heb je in gedachten?</label>
-      <select id="npDienst" onchange="npDienst()"><option value="">Kies een dienst…</option>${diensten.map(d=>`<option>${d}</option>`).join('')}</select></div>
-    <div class="field np-hidden" id="npField2"><label>Wat heb je ongeveer nodig?</label>
-      <select id="npType" onchange="npType()"><option value="">Kies…</option></select></div>
-    <div class="field np-hidden" id="npField3"><label>Wanneer wil je graag starten?</label>
-      <select id="npWhen"><option>Zo snel mogelijk</option><option>Binnen 1-3 maanden</option><option>Ik ben nog aan het oriënteren</option></select></div>
-    <div class="richtprijs br-blue np-hidden" id="npPrice">
-      <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap"><span class="rp-lab">Richtprijs</span><span class="big" id="npPriceVal" style="color:var(--s27-blue-ink)">-</span></div>
-      <div class="disclaimer">${ic('info',16)} Dit is een richtprijs, wij kijken ze persoonlijk na.</div>
-    </div>
-    <div class="np-actions np-hidden" id="npActions"><button class="btn btn-primary" onclick="submitNieuwProject(this)">Vraag offerte aan ${ic('arrow',16)}</button><button class="btn btn-outline" onclick="goTab('meetings')">Plan eerst een koffietje</button></div>
-  </div>`;
-}
-// De losse 'Nieuw project'-aanvraagmodule is verwijderd en vervangen door de volledige
-// Offertes-pagina (panelOffertes). Zijbalk en topbar wijzen nu naar 'offertes'.
+// De losse 'Nieuw project'-aanvraagmodule (offerteRequestForm/submitNieuwProject, het
+// laatste pad naar de Make-hook newProjectIntake) is in golf 1 (11-07) verwijderd en
+// vervangen door de volledige Offertes-pagina (panelOffertes). Zijbalk en topbar
+// wijzen naar 'offertes'.
 
 function huisstijlSecties(){
   const sw=[['Blauw','#3083DC'],['Roze','#F697CE'],['Paars','#9441DB'],['Groen','#12AC4E'],['Oranje','#F66131']];

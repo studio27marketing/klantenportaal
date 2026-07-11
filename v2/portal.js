@@ -316,7 +316,6 @@ function init(){
   S27.stashData = function(prevId){ if(prevId && state.data && state.data.dashboard){ state._dataByBedrijf = state._dataByBedrijf||{}; state._dataByBedrijf[prevId] = state.data; } };
   const q = qsp();
   if(q.get('demo')==='1'){ state.demoMode = true; renderLogin('demo'); }
-  else if(!AUTH_V2){ renderLogin('v1'); }
   else { initRealAuth(); }
 }
 
@@ -341,18 +340,18 @@ const ARROW_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 
 function renderLogin(mode){
   captureWordmark();
-  if(mode==='demo' || mode==='v1'){
+  if(mode==='demo'){
     loginCard(
       '<div class="llab" hidden></div>'+
       '<button class="oauth-btn" id="lgGoogle">'+GOOGLE_SVG+' Inloggen met Google</button>'+
       '<div class="divider-or">of met je toegangscode</div>'+
-      '<div class="field"><label>Bedrijfsnaam</label><input id="lgNaam" type="text" value="'+(mode==='demo'?'TEST CLIENT BV':'')+'" autocomplete="organization"></div>'+
-      '<div class="field"><label>Toegangscode</label><input id="lgCode" type="password" value="'+(mode==='demo'?'27270000':'')+'" autocomplete="off"></div>'+
+      '<div class="field"><label>Bedrijfsnaam</label><input id="lgNaam" type="text" value="TEST CLIENT BV" autocomplete="organization"></div>'+
+      '<div class="field"><label>Toegangscode</label><input id="lgCode" type="password" value="27270000" autocomplete="off"></div>'+
       '<button class="btn btn-primary btn-block" style="min-height:50px;font-size:15px;margin-top:4px" id="lgSubmit">Inloggen '+ARROW_SVG+'</button>'+
       '<div class="login-foot"><label class="remember"><input type="checkbox" id="lgRemember" checked> Onthoud dit toestel</label><a href="#">Code kwijt?</a></div>'
     );
-    $id('lgGoogle').onclick = function(){ if(mode==='demo'){ enterDemo(); } else { initRealAuth(); } };
-    $id('lgSubmit').onclick = function(){ mode==='demo' ? enterDemo() : doLoginCode(); };
+    $id('lgGoogle').onclick = function(){ enterDemo(); };
+    $id('lgSubmit').onclick = function(){ enterDemo(); };
     return;
   }
   // v2 signed_out (Firebase): e-maillink (standaard, werkt met ELK mailadres incl. Outlook) + Google als alternatief
@@ -405,18 +404,6 @@ async function initRealAuth(){
 }
 function loadScriptOnce(src,id){ return new Promise((res,rej)=>{ if($id(id)) return res(); const s=document.createElement('script'); s.id=id; s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
 
-// v1 legacy code-login (alleen ?auth=v1)
-async function doLoginCode(){
-  const naam=($id('lgNaam').value||'').trim(), code=($id('lgCode').value||'').trim();
-  if(!naam||!code){ loginErr('Vul bedrijfsnaam en toegangscode in.'); return; }
-  loginErr('');
-  const res = await api(ENDPOINTS.login, { bedrijf_naam:naam, token:code });
-  if(res && res.ok && res.data && res.data.ok){
-    state.session = { bedrijf_id:res.data.bedrijf_id, bedrijfsnaam:res.data.bedrijfsnaam, session_token:res.data.session_token };
-    state.demoMode=false; await loadAndEnter();
-  } else { loginErr((res&&res.data&&res.data.message)||'Inloggen mislukt, controleer je gegevens.'); }
-}
-
 function enterDemo(){
   state.demoMode = true;
   state.session = { bedrijf_id:'demo', bedrijfsnaam:'TEST CLIENT BV', session_token:'demo' };
@@ -434,7 +421,7 @@ async function loadAndEnter(skipLink){
   // een switch al het NIEUWE bedrijf (switchCompany zette het via provisionFetch).
   var cached = (skipLink && state.activeBedrijf && state._dataByBedrijf) ? state._dataByBedrijf[state.activeBedrijf] : null;
   if(cached && cached.dashboard){
-    state.data = cached; state.perfUrl = null; state._webTakTab = null;
+    state.data = cached; state._webTakTab = null;
     try { await applyRoute(); afterEnter(); renderCompanySwitcher(); updateNavBadges(); } catch(e){}
     hideLoader();
     try {
@@ -448,7 +435,6 @@ async function loadAndEnter(skipLink){
   // CRUCIAAL bij bedrijf-switch: wis alle gecachete data van het vorige bedrijf, anders blijven team/meetings/huisstijl/offertes/metricool/ads/facturatie hangen
   state.data = { dashboard:null, details:{}, chats:{}, meetings:null, bedrijf:null, team:null, huisstijl:null, offertes:null, metricool:null, metricoolStats:null, metricoolPostStats:null, ads:null };
   state._webTakTab = null;   // Website-sub-tab niet laten overhangen naar een ander bedrijf (review v86)
-  state.perfUrl = null;
   try {
     loaderStep(14,'Inloggen gecontroleerd…');
     // skipLink (bedrijf-switch): switchCompany koppelde + ververste de claim al -> niet opnieuw provisionen.
@@ -694,12 +680,12 @@ function onSessionExpired(msg){
   const b=document.createElement('div');
   b.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#fef2f2;color:#991b1b;border:1px solid #fecaca;padding:14px 22px;border-radius:12px;font:700 14px/1.4 var(--font-display);z-index:99999;box-shadow:var(--sh-md)';
   b.textContent=msg||'Je sessie is verlopen, log opnieuw in.'; document.body.appendChild(b);
-  setTimeout(()=>{ try{b.remove();}catch(e){} state.session=null; state.viewMode='login'; showLogin(); if(AUTH_V2) initRealAuth(); }, 1700);
+  setTimeout(()=>{ try{b.remove();}catch(e){} state.session=null; state.viewMode='login'; showLogin(); initRealAuth(); }, 1700);
 }
 function logout(){ stopChatPoll(); try{ if(window.S27Auth) window.S27Auth.logout(); }catch(e){} state.session=null; state.data={dashboard:null,details:{},chats:{},meetings:null,bedrijf:null,team:null,huisstijl:null};
   // ADMIN-staat volledig opruimen zodat een volgende (klant-)login niet in adminMode blijft hangen.
   state.adminMode=false; state._adminClientView=false; state.activeBedrijf=''; state.adminCompanies=null; state._adminActiveName=''; state._commsMode=false; try{ if(typeof closeClientChat==='function') closeClientChat(); }catch(e){} hideAdminPicker(); document.body.classList.remove('admin-mode'); document.body.classList.remove('client-preview');
-  showLogin(); if(AUTH_V2 && !state.demoMode) initRealAuth(); else renderLogin(state.demoMode?'demo':'v1'); }
+  showLogin(); if(!state.demoMode) initRealAuth(); else renderLogin('demo'); }
 
 /* =============================================================================
    ROUTING, lazy-load per tab, dan renderen
@@ -1851,7 +1837,6 @@ function openMeetingPlannerForTak(takKey){
   }catch(e){}
 }
 function openMeetingPlannerForProject(id){ openMeetingPlanner('project'); try{ if(typeof mpPickProject==='function') mpPickProject(id); }catch(e){} }
-const MEET_HOSTS={ 'Arne':{email:'arne@studio27.be'}, 'Ilke':{email:'ilke@studio27.be'} };
 /* ---- Offerte: vraag stellen -> komt als comment op de offerte-taak (naar de assignee) ---- */
 function offerteVraag(id, btn){
   const row=btn&&btn.closest('.filecard'); if(!row||row.querySelector('.off-q'))return;
@@ -1866,31 +1851,9 @@ async function sendOfferteVraag(btn, id){
   if(state.demoMode) return;
   try{ await api(ENDPOINTS.chatPost, { task_id:id, bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), comment_text:'[VRAAG OVER OFFERTE · via portaal] '+tx }); }catch(e){}
 }
-function pickMtype(el,who,color,type){
-  el.parentElement.querySelectorAll('.mtype').forEach(b=>b.classList.remove('sel')); el.classList.add('sel');
-  const ag=$id('meetAgenda'); if(ag)ag.classList.remove('np-hidden');
-  const w=$id('meetWho'); if(w)w.innerHTML='<span class="mw-av" style="background:var(--s27-'+color+')">'+who[0]+'</span><span class="mw-tx">'+type+'<b>met '+who+'</b></span>';
-  loadMeetSlots(who,color,type);
-}
-// Dynamische beschikbaarheid van Arne/Ilke (live Google Calendar free/busy via meeting-availability-gcal)
-async function loadMeetSlots(who,color,type){
-  const box=$id('meetSlots'); if(box)box.innerHTML='<p class="fs" style="color:var(--ink-4);padding:8px 0">Beschikbare momenten ophalen…</p>';
-  const email=(MEET_HOSTS[who]||{}).email||'';
-  let busy=[];
-  if(!state.demoMode){
-    try{ const res=await api(ENDPOINTS.meetingAvailability,{ session_token:state.session.session_token, bedrijf_id:state.session.bedrijf_id });
-      // bij ok:false klopt de free/busy niet -> geen vals-volledig slotrooster tonen
-      if(!(res&&res.data&&res.data.ok)){ if(box)box.innerHTML='<p class="fs" style="color:var(--ink-3);padding:6px 0">De agenda van '+escapeHtml(who)+' kon even niet geladen worden. Stuur ons gerust een berichtje, dan prikken we samen een moment.</p>'; return; }
-      const cals=(res.data.calendars)||{}; const cal=cals[email]||{};
-      busy=(cal.busy||[]).map(b=>({start:new Date(b.start).getTime(), end:new Date(b.end).getTime()})).filter(b=>b.end>b.start);
-    }catch(e){ if(box)box.innerHTML='<p class="fs" style="color:var(--ink-3);padding:6px 0">De agenda kon even niet geladen worden. Stuur ons gerust een berichtje, dan prikken we samen een moment.</p>'; return; }
-  } else {
-    busy=[{start:Date.now()+3*86400000+3*3600000, end:Date.now()+3*86400000+5*3600000},{start:Date.now()+4*86400000+6*3600000, end:Date.now()+4*86400000+8*3600000}];
-  }
-  const durMs=60*60000; const slots=computeFreeFromBusy(busy,durMs);
-  state.meetCtx={who:who,color:color||'blue',type:type,email:email,online:true,sel:null,dur:durMs,byDay:{}};
-  if(box)box.innerHTML=renderMeetPicker(slots);
-}
+/* Golf 1 (11-07): de oude smalle meeting-slotpicker (pickMtype/loadMeetSlots/
+   confirmMeeting met hardcoded MEET_HOSTS) is verwijderd; de schermvullende
+   meeting-planner (openMeetingPlanner + ENDPOINTS.meetingBook) verving hem. */
 function computeFreeFromBusy(busy,durMs){
   const out=[]; const lead=Date.now()+48*3600000;
   for(let d=0; d<31 && out.length<300; d++){
@@ -1919,41 +1882,6 @@ function weekStrip(ctx, dayPickFn){
   }
   ctx.selDay=selDay;
   return '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><button class="icon-btn" style="width:34px;height:34px;font-size:22px;font-weight:700;line-height:1" '+(canPrev?'':'disabled')+' onclick="'+ctx.navFn+'(-1)">‹</button><b style="font-family:var(--font-display);font-size:13.5px">'+lab+'</b><button class="icon-btn" style="width:34px;height:34px;font-size:22px;font-weight:700;line-height:1" '+(canNext?'':'disabled')+' onclick="'+ctx.navFn+'(1)">›</button></div><div class="calstrip">'+strip+'</div>';
-}
-function renderMeetPicker(slots){
-  if(!slots.length) return '<p class="fs" style="color:var(--ink-3);padding:6px 0">Geen vrije momenten in de komende maand, stuur ons gerust een berichtje, dan zoeken we samen iets.</p>';
-  const byDay={}; slots.forEach(st=>{ (byDay[_dayKey(st)]=byDay[_dayKey(st)]||[]).push(st); });
-  state.meetCtx.byDay=byDay; state.meetCtx.slots=slots; state.meetCtx.weekStart=_monday(slots[0]); state.meetCtx.selDay=null; state.meetCtx.navFn='meetWeekNav';
-  return '<p class="fs" style="margin:0 0 10px;color:var(--ink-3)">Live uit de agenda van <b>'+escapeHtml(state.meetCtx.who)+'</b> · ± 1 uur. Blader per week tot een maand vooruit:</p>'
-    +'<div id="meetWeek">'+meetWeekHTML()+'</div>'
-    +'<button class="btn btn-branch br-'+state.meetCtx.color+' btn-block" id="meetConfirm" style="margin-top:16px" onclick="confirmMeeting(this)" disabled>Bevestig afspraak met '+escapeHtml(state.meetCtx.who)+'</button>';
-}
-function meetWeekHTML(){
-  const c=state.meetCtx;
-  return weekStrip(c,'meetDayPick')+'<label class="ms-label">Tijdslot <span style="font-weight:600;color:var(--ink-4)">(8-17u)</span></label><div class="slotgrid" id="meetSlotGrid">'+(c.selDay?meetSlotButtons(c.byDay[c.selDay]):'<span class="fs" style="color:var(--ink-4)">Geen vrije momenten deze week, blader verder ›</span>')+'</div>';
-}
-function meetWeekNav(dir){ const c=state.meetCtx; if(!c)return; c.weekStart+=dir*7*864e5; c.selDay=null; c.sel=null; const box=$id('meetWeek'); if(box)box.innerHTML=meetWeekHTML(); const cf=$id('meetConfirm'); if(cf)cf.disabled=true; }
-function meetDayPick(el){ const c=state.meetCtx, k=el.dataset.k; c.selDay=k; el.parentElement.querySelectorAll('.calday').forEach(d=>d.classList.remove('sel')); el.classList.add('sel'); const g=$id('meetSlotGrid'); if(g)g.innerHTML=meetSlotButtons(c.byDay[k]); c.sel=null; const cf=$id('meetConfirm'); if(cf)cf.disabled=true; }
-function meetSlotButtons(arr){ return (arr||[]).map(st=>{ const d=new Date(st); const t=('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); return '<button class="slot" data-meetslot="'+st+'" onclick="selMeetSlot(this)">'+t+'</button>'; }).join(''); }
-function selMeetSlot(el){ const box=$id('meetSlots'); if(box)box.querySelectorAll('.slot').forEach(s=>s.classList.remove('sel')); el.classList.add('sel'); if(state.meetCtx)state.meetCtx.sel=Number(el.dataset.meetslot); const c=$id('meetConfirm'); if(c)c.disabled=false; }
-async function confirmMeeting(btn){
-  const ctx=state.meetCtx||{}; const who=ctx.who||'Studio 27';
-  if(!ctx.sel){ return; }
-  const dt=new Date(ctx.sel); const wanneer=dt.toLocaleString('nl-BE',{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'});
-  if(state.demoMode){ if(btn) btn.innerHTML='Aanvraag verstuurd ✓'; return; }
-  if(btn){ btn.disabled=true; btn.textContent='Versturen…'; }
-  try { await api(ENDPOINTS.directMessage, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), onderwerp:(ctx.type||'Meeting')+'-aanvraag via portaal', bericht:'Graag een '+(ctx.type||'meeting')+' met '+who+' op '+wanneer+', gekozen uit de live beschikbaarheid in het portaal.' });
-    if(btn){ btn.disabled=false; btn.innerHTML='Aanvraag verstuurd ✓, we bevestigen snel'; }
-  } catch(e){ if(btn){ btn.disabled=false; btn.textContent='Opnieuw proberen'; } }
-}
-async function submitNieuwProject(btn){
-  const dienst=(($id('npDienst')||{}).value)||''; const typeSel=$id('npType'); const typeTxt=(typeSel&&typeSel.value)?typeSel.options[typeSel.selectedIndex].text:''; const when=(($id('npWhen')||{}).value)||'';
-  if(!dienst) return;
-  if(state.demoMode){ if(btn) btn.innerHTML='Aanvraag verstuurd ✓'; return; }
-  if(btn){ btn.disabled=true; btn.textContent='Versturen…'; }
-  try { await api(ENDPOINTS.newProjectIntake, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), project_type:dienst+(typeTxt?(', '+typeTxt):''), gewenste_opleverdatum:when, omschrijving:'Aanvraag via portaal: '+dienst+(typeTxt?(' / '+typeTxt):'')+' / start: '+when, intentie:'offerte_meeting' });
-    if(btn){ btn.disabled=false; btn.innerHTML='Aanvraag verstuurd ✓'; }
-  } catch(e){ if(btn){ btn.disabled=false; btn.textContent='Opnieuw proberen'; } }
 }
 /* =============================================================================
    MEETING-PLANNER, schermvullende plan-tunnel (Algemene meeting / Projectmeeting /
