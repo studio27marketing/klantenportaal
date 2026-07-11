@@ -1837,7 +1837,8 @@ function openMeetingPlannerForTak(takKey){
   }catch(e){}
 }
 function openMeetingPlannerForProject(id){ openMeetingPlanner('project'); try{ if(typeof mpPickProject==='function') mpPickProject(id); }catch(e){} }
-/* ---- Offerte: vraag stellen -> komt als comment op de offerte-taak (naar de assignee) ---- */
+/* ---- Offerte: vraag stellen -> gateway /offerteVraag (comment op de gekoppelde
+   taak of D1-ticket + salesmelding). Succes wordt pas getoond NA ok:true. ---- */
 function offerteVraag(id, btn){
   const row=btn&&btn.closest('.filecard'); if(!row||row.querySelector('.off-q'))return;
   const q=document.createElement('div'); q.className='off-q'; q.style.cssText='flex-basis:100%;width:100%;margin-top:10px;display:flex;flex-direction:column;gap:8px';
@@ -1847,9 +1848,20 @@ function offerteVraag(id, btn){
 async function sendOfferteVraag(btn, id){
   const q=btn&&btn.closest('.off-q'); if(!q)return; const tx=((q.querySelector('.off-qtx')||{}).value||'').trim();
   if(!tx){ var e=q.querySelector('textarea'); if(e){ e.style.borderColor='var(--s27-orange)'; e.focus(); } return; }
-  q.innerHTML='<div class="fs" style="color:var(--s27-green-ink,#147A50);padding:4px 0">✓ Je vraag is verstuurd naar je Studio 27-contact, je hoort snel iets.</div>';
-  if(state.demoMode) return;
-  try{ await api(ENDPOINTS.chatPost, { task_id:id, bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), comment_text:'[VRAAG OVER OFFERTE · via portaal] '+tx }); }catch(e){}
+  const okHtml='<div class="fs" style="color:var(--s27-green-ink,#147A50);padding:4px 0">✓ Je vraag is verstuurd naar je Studio 27-contact, je hoort snel iets.</div>';
+  if(state.demoMode){ q.innerHTML=okHtml; return; }
+  // succes pas NA een ok:true-respons van de gateway; anders een echte foutmelding
+  btn.disabled=true; btn.innerHTML='Versturen…';
+  let ok=false;
+  try{
+    const res=await api(ENDPOINTS.offerteVraag, { offerte_id:id, bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), vraag:tx });
+    ok=!!(res&&res.ok&&res.data&&res.data.ok);
+  }catch(e){ ok=false; }
+  if(ok){ q.innerHTML=okHtml; return; }
+  btn.disabled=false; btn.innerHTML='Versturen '+ic('send',14);
+  let err=q.querySelector('.off-qerr');
+  if(!err){ err=document.createElement('div'); err.className='off-qerr fs'; err.style.cssText='color:var(--s27-orange);padding:2px 0'; q.appendChild(err); }
+  err.textContent='Je vraag kon niet verstuurd worden. Probeer het zo opnieuw, of stuur ons een bericht via de chat.';
 }
 /* Golf 1 (11-07): de oude smalle meeting-slotpicker (pickMtype/loadMeetSlots/
    confirmMeeting met hardcoded MEET_HOSTS) is verwijderd; de schermvullende
@@ -2209,9 +2221,10 @@ function mpDone(start,meetLink,viaRequest){
   mpRender();
 }
 
-/* ---- Offerte-samensteller: winkelmand -> gateway (PandaDoc via Make) ----
+/* ---- Offerte-samensteller: winkelmand -> gateway (eigen offertesysteem, D1) ----
    Contract: api(ENDPOINTS.offerteGenereren, { items:[{sku,naam,prijs,aantal}], opmerking })
-   -> { ok, offerte_task_id, offerte_task_url, pandadoc_id, message }. */
+   -> { ok, offerte_task_id, offerte_task_url, offerte_link, message }; de gateway
+   herrekent prijzen server-side tegen de D1-prijslijst (offer_catalog). */
 function offerteResultBox(){ return $id('offResult'); }
 function showOfferteResult(html, isErr){
   const box=offerteResultBox(); if(!box) return;
