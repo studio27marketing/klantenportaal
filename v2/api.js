@@ -80,12 +80,16 @@ const ENDPOINTS = {
   // Agenda (beschikbaarheid + inplannen), scope-guard server-side actief
   beschikbaarheid:   'https://hook.eu1.make.com/jn1ael12s6b4xp6fsdqd49x9p27v8cht',
   inplannen:         'https://hook.eu1.make.com/4r3y6ba68spfgcgng7v0lvso11il6p6u',
-  // Offerte-samensteller: klant stelt zelf een offerte samen (catalogus -> PandaDoc via Make).
-  // BE-contract: { items:[{sku,naam,prijs,aantal}], opmerking } -> { ok, offerte_task_id, offerte_task_url, pandadoc_id, message }.
+  // Offerte-samensteller: klant stelt zelf een offerte samen (catalogus -> eigen offertesysteem, D1).
+  // BE-contract: { items:[{sku,naam,prijs,aantal}], opmerking, actie } -> { ok, offerte_task_id,
+  // offerte_task_url, offerte_link (hub.studio27.be/offerte/<token> bij 'verzenden'), message }.
   offerteGenereren:  GATEWAY_BASE + '/offerteGenereren',
   // Klantvriendelijke offerte-AANVRAAG (clientview): vrije tekst + diensten i.p.v. budgetten.
-  // BE-contract: { korte, bericht, diensten:[key,...] } -> { ok, offerte_task_id, pandadoc_id, message }.
+  // BE-contract: { korte, bericht, diensten:[key,...] } -> { ok, offerte_task_id, message }.
   offerteAanvraag:   GATEWAY_BASE + '/offerteAanvraag',
+  // Vraag stellen bij een offerte: { offerte_id, vraag, klant_naam } -> { ok, message }.
+  // Landt als comment op de gekoppelde taak of als D1-ticket + salesmelding.
+  offerteVraag:      GATEWAY_BASE + '/offerteVraag',
   // Metricool (geplande social posts) via de gateway i.p.v. de directe Make-hook.
   // BE-contract: { ok, linked, posts:[{id,datum,tekst,media,netwerken:[{netwerk,status}]}] }.
   metricool:         GATEWAY_BASE + '/metricool',

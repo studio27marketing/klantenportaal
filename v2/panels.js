@@ -3716,11 +3716,12 @@ const OFFERTE_MOCK=[
   {id:'om2',naam:'Merkstrategie 2026',status:'Bekeken',link:'#',budget:'3400',vervaldatum:''},
   {id:'om3',naam:'Website & SEO-traject',status:'Goedgekeurd',link:'#',budget:'6800',vervaldatum:''}
 ];
-function offerteAfgerond(st){ return /goedgekeur|approv|completed|done|afgerond|declin|geweiger|verlopen|expired|gefactureerd|gewonnen|verloren/i.test(String(st||'')); }
+function offerteAfgerond(st){ return /goedgekeur|approv|completed|done|afgerond|declin|geweiger|afgewezen|verlopen|expired|gefactureerd|gewonnen|verloren/i.test(String(st||'')); }
 // Alleen tonen vanaf 'verzonden' (sent); concept/to do/draft EN archived blijven verborgen
 function offerteVisible(st){ return !/draft|concept|to ?do|todo|backlog|aangevraagd|in afwachting|archived|gearchiveerd/i.test(String(st||'').trim()); }
-// Volledige label-map (alle lijststatussen); fallback = lege/neutrale tekst i.p.v. de rauwe Engelse status.
-function offerteStatusLabel(st){ var s=String(st||'').toLowerCase().trim(); var m={sent:'Verzonden',viewed:'Bekeken',completed:'Goedgekeurd',approved:'Goedgekeurd',declined:'Geweigerd',expired:'Verlopen',draft:'Concept',archived:'Gearchiveerd',waiting_approval:'In afwachting',paid:'Betaald'}; return m[s]||''; }
+// Volledige label-map: de gateway stuurt rauwe status-keys (sent/viewed/completed/declined);
+// de NL-vormen blijven erin als vangnet voor oudere responses. Fallback = lege badge.
+function offerteStatusLabel(st){ var s=String(st||'').toLowerCase().trim(); var m={sent:'Verzonden',viewed:'Bekeken',completed:'Goedgekeurd',approved:'Goedgekeurd',declined:'Geweigerd',expired:'Verlopen',draft:'Concept',archived:'Gearchiveerd',waiting_approval:'In afwachting',paid:'Betaald',verzonden:'Verzonden',bekeken:'Bekeken',goedgekeurd:'Goedgekeurd',afgewezen:'Geweigerd',geweigerd:'Geweigerd',verlopen:'Verlopen',concept:'Concept'}; return m[s]||''; }
 function offerteRow(o){
   var budget=o.budget?('€ '+(Number(String(o.budget).replace(',','.'))||0).toLocaleString('nl-BE')):'';
   var verval=''; if(o.vervaldatum){ var d=new Date(parseInt(o.vervaldatum,10)||o.vervaldatum); if(!isNaN(d.getTime()))verval='vervalt '+d.toLocaleDateString('nl-BE',{day:'numeric',month:'short',year:'numeric'}); }
@@ -3980,7 +3981,8 @@ function goOffertes(){ state._offTab='overzicht'; if(typeof goTab==='function') 
    OFFERTE-WIZARD (Cluster H): schermvullende 4-staps overlay (mp-overlay-patroon).
    Stap 1 tak -> stap 2 producten (catalogus) -> stap 3 context -> stap 4 bevestigen.
    Hergebruikt offCart/offBySku/offEur + de off-prow-stijlen; output = ENDPOINTS.offerteGenereren
-   (PandaDoc blijft server-side uit zolang PANDADOC_CREATE_ENABLED != 'true').
+   (eigen ondertekensysteem: de gateway herrekent prijzen server-side tegen de
+   D1-prijslijst en geeft bij 'verzenden' een hub.studio27.be/offerte/<token>-link terug).
    ============================================================================= */
 // Volgorde + aanbod 1:1 met het gecureerde catalog-data.js (Strategie → Branding → Video & fotografie
 // → SEO & GEO → Social media → Adverteren). Elke tak = exact één catalogus-groep.
@@ -4382,7 +4384,7 @@ function offerteOverzichtHTML(){
   var offs = live ? raw.filter(function(o){return offerteVisible(o.status);}) : raw;  // verberg concept/draft
   if(!offs.length) return '<div class="empty" style="padding:44px 20px;text-align:center"><div class="em-ic">'+ic('doc',52)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog geen offertes</b><p style="margin:6px 0 16px;color:var(--ink-3)">Hier verschijnen je offertes zodra we er één klaarzetten.</p><button class="btn btn-primary btn-sm" onclick="openOfferteWizard()">Nieuwe offerte aanvragen</button></div>';
   var lopend=offs.filter(function(o){return !offerteAfgerond(o.status);}), afge=offs.filter(function(o){return offerteAfgerond(o.status);});
-  return '<p class="sdesc" style="margin:-2px 0 16px;max-width:60ch">Klik een offerte open om ze te bekijken of goed te keuren (PandaDoc). Een vraag? Stel ze per offerte, ze komt rechtstreeks bij je Studio 27-contact terecht.</p>'
+  return '<p class="sdesc" style="margin:-2px 0 16px;max-width:60ch">Klik een offerte open om ze te bekijken of te ondertekenen. Een vraag? Stel ze per offerte, ze komt rechtstreeks bij je Studio 27-contact terecht.</p>'
     +(lopend.length?'<div class="section-head" style="margin-top:4px"><h2>Lopend</h2><span class="count">'+lopend.length+'</span></div><div style="display:flex;flex-direction:column;gap:10px">'+lopend.map(offerteRow).join('')+'</div>':'')
     +(afge.length?'<div class="section-head" style="margin-top:30px"><h2>Goedgekeurd &amp; eerdere</h2><span class="count">'+afge.length+'</span></div><div style="display:flex;flex-direction:column;gap:10px">'+afge.map(offerteRow).join('')+'</div>':'')
     +((lopend.length||afge.length)?'<div style="margin-top:24px;text-align:center"><button class="btn btn-outline btn-sm" onclick="openOfferteWizard()">'+ic('doc',15)+' Nieuwe offerte aanvragen</button></div>':'');
