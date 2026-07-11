@@ -619,7 +619,10 @@
   DATA.metaAds = function(){ return state.data.metaAds; };
 
   /* ---- Webprestaties (GA4 + Search Console, direct via de Google-API's, geen Make).
-     Team-only (staff acting-as); zelfde periode-contract als de ads-tabs. ---- */
+     GOLF 6: OPEN voor klanten (server-side READ_HANDLERS, bedrijf-gescoped via het
+     token); staff act-as blijft werken. Zelfde periode-contract als de ads-tabs.
+     Een TRANSIENTE fout (403/429/netwerk) wordt als {linked:false,error:true}
+     gemarkeerd zodat de UI geen misleidende 'Nog geen connectie' toont. ---- */
   DATA.loadWebTraffic = async function(opts){
     var o=(typeof opts==='string')?{period:opts}:(opts||{});
     if(!live()){ state.data.webTraffic={linked:false}; return false; }
@@ -628,9 +631,9 @@
       var payload=(o.from&&o.to)?base({from:o.from,to:o.to,compare:o.compare||'none'}):base({period:(o.period||state._webPeriod||'last_30d')});
       var res=await api(ENDPOINTS.webTraffic, payload);
       var j=(res&&res.ok&&res.data)?res.data:null;
-      if(!j||!j.ok){ state.data.webTraffic={linked:false}; return false; }
-      state.data.webTraffic=j; return true;
-    }catch(e){ state.data.webTraffic={linked:false}; return false; }
+      if(!j||!j.ok){ state.data.webTraffic={linked:false,error:true}; return false; }
+      state.data.webTraffic=j; return true;   // j.linked=false = echt geen GA4-config in D1
+    }catch(e){ state.data.webTraffic={linked:false,error:true}; return false; }
   };
   DATA.webTraffic = function(){ return state.data.webTraffic; };
   DATA.loadWebSearch = async function(opts){
@@ -641,9 +644,9 @@
       var payload=(o.from&&o.to)?base({from:o.from,to:o.to}):base({period:(o.period||state._webPeriod||'last_30d')});
       var res=await api(ENDPOINTS.webSearch, payload);
       var j=(res&&res.ok&&res.data)?res.data:null;
-      if(!j||!j.ok){ state.data.webSearch={linked:false}; return false; }
-      state.data.webSearch=j; return true;
-    }catch(e){ state.data.webSearch={linked:false}; return false; }
+      if(!j||!j.ok){ state.data.webSearch={linked:false,error:true}; return false; }
+      state.data.webSearch=j; return true;   // j.linked=false = echt geen GSC-config in D1
+    }catch(e){ state.data.webSearch={linked:false,error:true}; return false; }
   };
   DATA.webSearch = function(){ return state.data.webSearch; };
 
