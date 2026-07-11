@@ -52,7 +52,7 @@
     afgehandeld:          {key:'done', label:'Afgerond'}
   };
   DATA.status = function(raw){ return STATUS_MAP[norm(raw)] || {key:'prog', label:raw||'Loopt'}; };
-  var AFGEROND = ['goedgekeurd','done','klaar_voor_facturatie','gefactureerd'];
+  var AFGEROND = ['goedgekeurd','done','klaar_voor_facturatie','gefactureerd','afgehandeld']; // restpuntenronde 11-07: zelfde terminale set als d1IsAfgerond server-side
   // projectchat sluit zodra het team de taak niet meer opvolgt: klaar-voor-review (feedback klant /
   // doorgestuurd) of een afgeronde status. (feedback_klant = nieuwe naam voor doorgestuurd)
   DATA.isChatClosed = function(raw){ var n=norm(raw); return n==='feedback_klant' || n==='doorgestuurd' || AFGEROND.indexOf(n)>=0; };
@@ -521,6 +521,7 @@
           providers:(p.providers||[]), hashtags:(p.hashtags||[]),
           draft:(p.draft===true||String(p.draft).toLowerCase()==='true'),
           approved:(p.approved===true||String(p.approved).toLowerCase()==='true'),
+          type:String(p.type||'').toUpperCase(), // restpuntenronde 11-07: POST/STORY/REEL uit de worker (stories/reels herkenbaar in kalender en mockup)
           netwerken: _mcNetwerken(p) };
       });
       posts.sort(function(a,b){ return (a.dt?a.dt.getTime():9e15)-(b.dt?b.dt.getTime():9e15); });
@@ -600,6 +601,8 @@
       var res = await api(ENDPOINTS.metaAds, payload);
       var j = (res && res.ok && res.data) ? res.data : null;
       if(!j || !j.ok){ state.data.metaAds={linked:false}; return false; }
+      // Restpuntenronde 11-07: een KPI-fout (error gezet, kpis null) is transient -> retry, geen nullenrij.
+      if(j.error && !j.kpis){ state.data.metaAds=null; return false; }
       state.data.metaAds = j;   // { linked, account, currency, period, kpis, campaigns, ads, error }
       return true;
     }catch(e){ state.data.metaAds={linked:false}; return false; }
@@ -650,7 +653,7 @@
       var j = (res && res.ok && res.data) ? res.data : null;
       // TRANSIENTE fout (geen geldige response / !ok) -> NIET als sticky {linked:false} cachen, maar null zodat de trigger
       // bij switch/navigatie opnieuw probeert. Enkel een ECHTE worker-respons (ook {ok:true,linked:false}) wordt bewaard.
-      if(!j || !j.ok || (j.error && !(j.campaigns&&j.campaigns.length))){ state.data.googleAds=null; return false; }   // ook een lege error-respons = transient -> retry
+      if(!j || !j.ok || (j.error && (!j.kpis || !(j.campaigns&&j.campaigns.length)))){ state.data.googleAds=null; return false; }   // restpuntenronde 11-07: ook een KPI-fout naast geslaagde campagnes = transient -> retry (geen nullenrij)
       state.data.googleAds = j;   // { linked, account, currency, period, kpis, prevKpis, campaigns, trend, error }
       return true;
     }catch(e){ state.data.googleAds=null; return false; }              // netwerk/parse-fout = transient -> retry toelaten
@@ -691,7 +694,7 @@
       var res = await api(ENDPOINTS.googleAdsRich, payload);
       var j = (res && res.ok && res.data) ? res.data : null;
       // TRANSIENTE fout -> null (geen sticky 'niet gekoppeld'); enkel een echte respons (ook {ok:true,linked:false}) bewaren
-      if(!j || !j.ok || (j.error && !(j.campaigns&&j.campaigns.length))){ state.data.googleAdsRich=null; return false; }   // lege error-respons = transient -> retry
+      if(!j || !j.ok || (j.error && (!j.kpis || !(j.campaigns&&j.campaigns.length)))){ state.data.googleAdsRich=null; return false; }   // restpuntenronde 11-07: idem, KPI-fout = transient
       state.data.googleAdsRich = j;   // { linked, account, currency, kpis, prevKpis, campaigns, keywords, error }
       return true;
     }catch(e){ state.data.googleAdsRich=null; return false; }              // netwerk/parse-fout = transient -> retry toelaten

@@ -868,7 +868,8 @@
         } catch (e) { }
       } else {
         ab.disabled = false; ab.textContent = '✓ Video goedkeuren';
-        toast('Goedkeuren lukte net niet, probeer zo opnieuw.', 3600);
+        // Restpuntenronde 11-07: toon de echte servermelding (zelfde patroon als linkApprove in feedback-core).
+        toast((res && res.data && res.data.message) || 'Goedkeuren lukte net niet, probeer zo opnieuw.', 3600);
       }
     });
     $('vrSend').addEventListener('click', function () {

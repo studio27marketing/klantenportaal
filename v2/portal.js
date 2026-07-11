@@ -188,8 +188,9 @@ function buildHash(r){
   return '#/' + segs.map(encodeURIComponent).join('/') + (q.length?('?'+q.join('&')):'');
 }
 
-// alleen boot-vlaggen (?demo / ?auth) in de query houden; al de rest leeft in de hash
-function _keepQuery(){ var keep=[]; var q=qsp(); ['demo','auth'].forEach(function(k){ var v=q.get(k); if(v!=null) keep.push(k+'='+encodeURIComponent(v)); }); return keep.length?('?'+keep.join('&')):''; }
+// alleen de demo-bootvlag in de query houden; al de rest leeft in de hash.
+// Restpuntenronde 11-07: 'auth' uit de keep-lijst (dode ?auth=v1-bootvlag, niets leest hem nog).
+function _keepQuery(){ var keep=[]; var q=qsp(); ['demo'].forEach(function(k){ var v=q.get(k); if(v!=null) keep.push(k+'='+encodeURIComponent(v)); }); return keep.length?('?'+keep.join('&')):''; }
 
 // URL bijwerken bij navigatie (deelbare links), zonder reload. push=true duwt een echte
 // history-entry zodat de browser-terugknop binnen de SPA terugkeert i.p.v. het portaal te verlaten.
@@ -984,20 +985,35 @@ async function sendChat(input){
   }
   const tid=state.activeProject;
   const S=state.session||{};
+  // Restpuntenronde 11-07: verstuur- en uploadfouten worden niet langer stil
+  // ingeslikt. api() gooit nooit maar geeft {ok:false} terug; bij een fout
+  // markeert de optimistische bubble zich als niet-verzonden met de tekst
+  // terug in de composer, i.p.v. geruisloos te verdwijnen bij de refresh.
+  let verzendFout='';
   try {
     // 1) tekst eerst (zodat het bericht leesbaar boven de bijlagen staat)
     if(tx){
-      if(state._commsMode){ await api(ENDPOINTS.commsChatPost, { bedrijf_id:S.bedrijf_id, session_token:S.session_token, klant_naam:S27DATA.bedrijfsnaam(), comment_text:tx }); }
-      else { await api(ENDPOINTS.chatPost, { task_id:tid, bedrijf_id:S.bedrijf_id, session_token:S.session_token, klant_naam:S27DATA.bedrijfsnaam(), comment_text:tx }); }
+      let r;
+      if(state._commsMode){ r=await api(ENDPOINTS.commsChatPost, { bedrijf_id:S.bedrijf_id, session_token:S.session_token, klant_naam:S27DATA.bedrijfsnaam(), comment_text:tx }); }
+      else { r=await api(ENDPOINTS.chatPost, { task_id:tid, bedrijf_id:S.bedrijf_id, session_token:S.session_token, klant_naam:S27DATA.bedrijfsnaam(), comment_text:tx }); }
+      if(!(r&&r.ok&&r.data&&r.data.ok!==false)) verzendFout=(r&&r.data&&r.data.message)||'Bericht kon niet verzonden worden.';
     }
     // 2) daarna elk gestaged bestand
-    for(let i=0;i<staged.length;i++){
+    for(let i=0;i<staged.length && !verzendFout;i++){
       const f=staged[i]; const b64=String(f.dataUrl||'').split(',')[1]||''; if(!b64) continue;
-      if(state._commsMode){ await api(ENDPOINTS.commsChatAttachment, { bedrijf_id:S.bedrijf_id, session_token:S.session_token, klant_naam:S27DATA.bedrijfsnaam(), filename:f.name, file_data:b64 }); }
-      else { await api(ENDPOINTS.chatAttachment, { task_id:tid, bedrijf_id:S.bedrijf_id, session_token:S.session_token, klant_naam:S27DATA.bedrijfsnaam(), filename:f.name, file_data:b64 }); }
+      let r;
+      if(state._commsMode){ r=await api(ENDPOINTS.commsChatAttachment, { bedrijf_id:S.bedrijf_id, session_token:S.session_token, klant_naam:S27DATA.bedrijfsnaam(), filename:f.name, file_data:b64 }); }
+      else { r=await api(ENDPOINTS.chatAttachment, { task_id:tid, bedrijf_id:S.bedrijf_id, session_token:S.session_token, klant_naam:S27DATA.bedrijfsnaam(), filename:f.name, file_data:b64 }); }
+      if(!(r&&r.ok&&r.data&&r.data.ok!==false)) verzendFout=(r&&r.data&&r.data.message)||('Bijlage "'+f.name+'" kon niet verzonden worden.');
     }
   }
-  catch(e){}
+  catch(e){ verzendFout=verzendFout||'Verzenden lukte niet. Controleer je verbinding en probeer opnieuw.'; }
+  if(verzendFout){
+    if(me){ var _tx=me.querySelector('.tx'); if(_tx) _tx.innerHTML+=' <span style="color:var(--s27-orange-ink);font-weight:700">- niet verzonden</span>'; me.style.opacity='.6'; }
+    if(input && tx && !input.value) input.value=tx;   // tekst terug in de composer voor een nieuwe poging
+    if(typeof toast==='function') toast(verzendFout+' Probeer het opnieuw.', 4200);
+    return;
+  }
   // cache verversen + chat herrenderen zodat de ECHTE berichten uit de backend in de cache zitten
   // (geen duplicaat met de optimistische bubble bij terug-schakelen tussen chats)
   await refreshChatCache(tid);
@@ -1084,7 +1100,10 @@ async function chatUpload(input, taskId){
   if(state.demoMode){ done(' ✓'); return; }
   const rd=new FileReader();
   rd.onload=async function(){ const b64=String(rd.result).split(',')[1]||'';
-    try{ if(state._commsMode){ await api(ENDPOINTS.commsChatAttachment, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), filename:f.name, file_data:b64 }); } else { await api(ENDPOINTS.chatAttachment, { task_id:tid, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), filename:f.name, file_data:b64 }); } done(' ✓');
+    try{ let r; if(state._commsMode){ r=await api(ENDPOINTS.commsChatAttachment, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), filename:f.name, file_data:b64 }); } else { r=await api(ENDPOINTS.chatAttachment, { task_id:tid, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), filename:f.name, file_data:b64 }); }
+      // Restpuntenronde 11-07: api() gooit nooit; check de respons echt.
+      if(!(r&&r.ok&&r.data&&r.data.ok!==false)){ done(' <span style="color:var(--s27-orange-ink)">- mislukt, probeer opnieuw</span>'); return; }
+      done(' ✓');
       await refreshChatCache(tid);   // echte attachment-comment uit de backend in de cache (geen duplicaat met de optimistische bubble)
     }
     catch(e){ done(' <span style="color:var(--s27-orange-ink)">- mislukt</span>'); }
@@ -1679,6 +1698,12 @@ async function retryMeetings(btn){
   try{ state.data.meetings=null; await S27DATA.loadMeetings({retry:true}); }catch(e){}
   renderPanel('meetings');
 }
+/* Restpuntenronde 11-07: zelfde eerlijke retry voor de huisstijl-bestanden. */
+async function retryHuisstijl(btn){
+  if(btn){ btn.disabled=true; btn.textContent='Bezig…'; }
+  try{ state.data.huisstijl=null; await S27DATA.loadHuisstijl(); }catch(e){}
+  renderPanel('huisstijl');
+}
 /* ---- Contactpersonen-beheer (iedere contactpersoon mag toevoegen/wijzigen/verwijderen) ---- */
 function _contactById(id){ const t=window.S27DATA&&S27DATA.team(); const a=(t&&t.contactpersonen)||[]; for(var i=0;i<a.length;i++){ if(String(a[i].id)===String(id)) return a[i]; } return null; }
 function addContact(){ const host=$id('contactFormHost'); if(!host)return; host.innerHTML=contactFormHTML(null); const f=host.querySelector('input'); if(f)f.focus(); host.scrollIntoView&&host.scrollIntoView({behavior:'smooth',block:'nearest'}); }
@@ -1709,7 +1734,14 @@ async function saveContact(id, btn){
 }
 async function removeContact(id, btn){
   const c=_contactById(id); const nm=c?(((c.voornaam||'')+' '+(c.achternaam||'')).trim()||'deze persoon'):'deze persoon';
-  if(typeof confirm==='function' && !confirm('Wil je '+nm+' verwijderen uit het bedrijfsdashboard? Deze persoon verliest dan toegang tot het portaal.')) return;
+  // Restpuntenronde 11-07: twee-staps-knop i.p.v. native confirm() (portaalstandaard
+  // confirm=0; confirm() bevriest bovendien de Chrome-connector bij e2e-tests).
+  if(btn && !btn._arm){
+    btn._arm=1; btn.dataset._label=btn.textContent; btn.textContent='Zeker? '+nm+' verliest toegang';
+    btn.style.color='var(--s27-orange)'; btn.title='Klik nogmaals om definitief te verwijderen';
+    setTimeout(function(){ if(btn){ btn._arm=0; if(btn.dataset._label) btn.textContent=btn.dataset._label; btn.style.color=''; btn.title=''; } }, 4000);
+    return;
+  }
   const row=btn&&btn.closest&&btn.closest('.contact-row'); if(row){ row.style.opacity='.5'; row.style.pointerEvents='none'; }
   if(state.demoMode){ if(row)row.remove(); return; }
   try { await api(ENDPOINTS.bedrijfBeheer, { action:'delete_contact', contact_id:id, email:(c&&c.email)||'', bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token }); state.data.team=null; try{ await S27DATA.loadTeam(); }catch(e){} renderPanel('instellingen'); } catch(e){ if(row){ row.style.opacity=''; row.style.pointerEvents=''; } }

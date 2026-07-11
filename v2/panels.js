@@ -435,8 +435,13 @@ function _takHoofdcontact(actief){
 }
 function takContactCard(key, T, actief){
   var hc=_takHoofdcontact(actief);
-  var naam=voornaam(hc?hc.naam:'Ilke')||'Ilke';
-  var ini=hc?(hc.initialen||'?'):'IM';
+  // Restpuntenronde 11-07: de accountmanager komt uit de dashboard-payload
+  // (contact.am_naam, golf 6 uit D1) i.p.v. een hardcoded naam; de literal is
+  // alleen nog het aller-laatste vangnet voor een oude payload.
+  var dsh=(state.data&&state.data.dashboard)||{};
+  var amNaam=(dsh.contact&&dsh.contact.am_naam)||(dsh.klant&&dsh.klant.account_manager)||'Ilke';
+  var naam=voornaam(hc?hc.naam:amNaam)||voornaam(amNaam)||amNaam;
+  var ini=hc?(hc.initialen||'?'):String(amNaam).split(/\s+/).map(function(w){return w.charAt(0);}).join('').slice(0,2).toUpperCase();
   var rol=hc?'Werkt aan jouw '+T.label.toLowerCase()+'-projecten':'Jouw accountmanager';
   return '<div class="takcontact card br-'+T.br+'"><span class="dc-av" style="background:var(--s27-'+T.br+')">'+esc(ini)+'</span>'
     +'<div class="takcontact-tx"><b>'+esc(naam)+'</b><span>'+esc(rol)+'</span></div>'
@@ -1111,6 +1116,10 @@ function socialMockMetaRatio(el){
 }
 function socialInferFormat(p,net,isVid,nMedia,captionOverride){
   net=String(net||'').toLowerCase();
+  // Restpuntenronde 11-07: eerst het echte type-veld van de worker (STORY/REEL),
+  // de caption-heuristiek is alleen nog het vangnet voor oudere posts.
+  var pType=String((p&&p.type)||'').toUpperCase();
+  if(pType==='STORY'||pType==='REEL') return 'reel';
   if(net==='tiktok'||net==='youtube') return 'reel';
   if(isVid) return 'reel';
   var cap=String(captionOverride!=null?captionOverride:((p&&p.tekst)||'')).toLowerCase();
@@ -3663,8 +3672,13 @@ function huisstijlSecties(){
   const fmtBytes=(n)=>{ n=parseInt(n,10)||0; if(!n)return ''; if(n<1024)return n+' B'; if(n<1048576)return Math.round(n/1024)+' KB'; return (n/1048576).toFixed(1)+' MB'; };
   const mimeIc=(m)=>{ m=String(m||''); if(m.indexOf('image')===0)return 'img'; if(m.indexOf('video')===0)return 'video'; return 'doc'; };
   const fileMeta=(f)=>{ const p=[]; const b=fmtBytes(f.size); if(b)p.push(b); if(f.modified){ const d=new Date(f.modified); if(!isNaN(d.getTime()))p.push(d.toLocaleDateString('nl-BE',{day:'numeric',month:'short',year:'numeric'})); } return p.join(' · '); };
+  /* Restpuntenronde 11-07: de mock-bestandskaarten zijn ALLEEN nog voor de
+     demo-omgeving; live toont een mislukte load een eerlijke foutstaat met
+     retry (zelfde patroon als dashboard/meetings) i.p.v. verzonnen bestanden. */
+  const mockCards = `<div class="filecard" style="min-width:240px"><div class="ft">${ic('img',20)}</div><div style="flex:1"><div class="fn">logo-tc-fullcolor.svg</div><div class="fs">Vector · 24 KB</div></div><button class="icon-btn" style="width:34px;height:34px">${ic('download',16)}</button></div><div class="filecard" style="min-width:240px"><div class="ft">${ic('img',20)}</div><div style="flex:1"><div class="fn">logo-tc-wit.png</div><div class="fs">PNG · 180 KB</div></div><button class="icon-btn" style="width:34px;height:34px">${ic('download',16)}</button></div>`;
   const fileCards = files ? (files.length ? files.map(f=>`<div class="filecard" style="min-width:240px"><div class="ft">${ic(mimeIc(f.mime),20)}</div><div style="flex:1;min-width:0"><div class="fn" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</div><div class="fs">${esc(fileMeta(f))}</div></div><a class="icon-btn" style="width:34px;height:34px" href="${esc(f.url||'#')}" target="_blank" rel="noopener" title="Downloaden">${ic('download',16)}</a><button class="icon-btn" style="width:34px;height:34px" title="Verwijderen" aria-label="Verwijderen" onclick="deleteHuisstijl('${esc(f.id||'')}',this)">${ic('trash',15)}</button></div>`).join('') : '<div class="fs" style="color:var(--ink-4)">Nog geen bestanden in je Huisstijl-map. Sleep hieronder een bestand om te beginnen.</div>')
-    : `<div class="filecard" style="min-width:240px"><div class="ft">${ic('img',20)}</div><div style="flex:1"><div class="fn">logo-tc-fullcolor.svg</div><div class="fs">Vector · 24 KB</div></div><button class="icon-btn" style="width:34px;height:34px">${ic('download',16)}</button></div><div class="filecard" style="min-width:240px"><div class="ft">${ic('img',20)}</div><div style="flex:1"><div class="fn">logo-tc-wit.png</div><div class="fs">PNG · 180 KB</div></div><button class="icon-btn" style="width:34px;height:34px">${ic('download',16)}</button></div>`;
+    : (state.demoMode ? mockCards
+      : `<div class="fs" style="color:var(--ink-4)">Je huisstijl-bestanden konden even niet geladen worden.&nbsp;<button class="btn btn-outline btn-sm" onclick="retryHuisstijl(this)">Opnieuw proberen</button></div>`);
   return `<div class="setsec">
     <h3>Huisstijl-bestanden</h3><p class="sdesc">Alle bestanden uit je gedeelde Huisstijl-map op Google Drive, logo's, fonts, templates. Altijd up-to-date.</p>
     <div style="display:flex;gap:14px;flex-wrap:wrap">${fileCards}</div>
@@ -5298,14 +5312,31 @@ function panelWebprestaties(){
 }
 function webBody(t,s){
   t=t||{}; s=s||{};
+  // Restpuntenronde 11-07: een Google-API-fout op een WEL gekoppeld bedrijf is
+  // geen dashboard vol nullen meer. Zijn de totalen leeg EN meldt een bron een
+  // error, toon dan dezelfde eerlijke probeer-opnieuw-kaart als de fouttak
+  // hierboven; bij partiele data komt er een waarschuwingsbanner boven de cijfers.
+  var _tErr=!!(t&&t.error), _sErr=!!(s&&s.error);
+  var _tLeeg=!t.totals||!((t.totals.sessions||0)>0||((t.split&&((t.split.paid||0)+(t.split.organic||0)+(t.split.direct||0)+(t.split.overig||0)))||0)>0);
+  var _sLeeg=!s.totals||!((s.totals.clicks||0)>0||(s.totals.impressions||0)>0);
+  if((_tErr||_sErr) && _tLeeg && _sLeeg){
+    return '<div class="card" style="padding:30px 26px;text-align:center">'
+      +'<div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Je statistieken konden even niet geladen worden</div>'
+      +'<div style="color:var(--ink-3);max-width:460px;margin:0 auto 14px;line-height:1.55">Dit ligt aan ons, niet aan jou. Probeer het zo opnieuw.</div>'
+      +'<button class="btn btn-outline btn-sm" onclick="state.data.webTraffic=null;state.data.webSearch=null;goTab(\'webprestaties\')">Opnieuw proberen</button></div>';
+  }
+  var _warnBanner=(_tErr||_sErr)?'<div class="card" style="padding:12px 16px;margin-bottom:12px;border-left:3px solid var(--s27-orange);color:var(--ink-2);font-size:13px">Een deel van je statistieken kon net niet opgehaald worden ('+(_tErr?'websiteverkeer':'zoekresultaten')+'). De cijfers hieronder kunnen onvolledig zijn.</div>':'';
   var tot=t.totals||{}, split=t.split||{};
   var totalSes=((split.paid||0)+(split.organic||0)+(split.direct||0)+(split.overig||0))||tot.sessions||0;
   var paidPct=totalSes>0?Math.round((split.paid||0)/totalSes*100):0;
   var st=s.totals||{}; var topQ=(s.queries&&s.queries[0])?s.queries[0].query:'-';
-  var kpis='<div class="wp-grid wp-kpis" style="margin-bottom:14px">'
+  // Restpuntenronde 11-07: Search Console loopt 3 dagen achter; toon de echte
+  // GSC-periode in de kaart zodat 'Vandaag' geen vandaag-cijfer suggereert.
+  var _sPer=(s.period&&s.period.from)?(s.period.from===s.period.to?('Google-data van '+s.period.from):('Google-data '+s.period.from+' t/m '+s.period.to)):'';
+  var kpis=_warnBanner+'<div class="wp-grid wp-kpis" style="margin-bottom:14px">'
     +'<div class="wp-kpi"><div class="l">Sessies</div><div class="v">'+_wpNum(tot.sessions||totalSes)+'</div><div class="s">'+_wpNum(tot.users||0)+' gebruikers</div></div>'
     +'<div class="wp-kpi"><div class="l">Betaald verkeer</div><div class="v">'+paidPct+'%</div><div class="s">'+_wpNum(split.paid||0)+' sessies via ads</div></div>'
-    +'<div class="wp-kpi"><div class="l">Organische clicks</div><div class="v">'+_wpNum(st.clicks||0)+'</div><div class="s">'+_wpNum(st.impressions||0)+' vertoningen in Google</div></div>'
+    +'<div class="wp-kpi"><div class="l">Organische clicks</div><div class="v">'+_wpNum(st.clicks||0)+'</div><div class="s">'+_wpNum(st.impressions||0)+' vertoningen in Google'+(_sPer?(' · '+esc(_sPer)):'')+'</div></div>'
     +'<div class="wp-kpi"><div class="l">Top zoekterm</div><div class="v" style="font-size:17px">'+esc(topQ)+'</div><div class="s">gem. positie '+((st.position||0).toFixed(1))+'</div></div>'
     +'</div>';
   // 'Verkeer per bron'-kaart ENKEL tonen als er effectief verkeersbron-data is (anders een lege/rare doughnut bij bv. ABW)
