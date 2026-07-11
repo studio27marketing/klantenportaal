@@ -2810,6 +2810,7 @@ function goContact(){
     +'<p class="sdesc" style="margin:4px 0 22px">Kies hieronder, dan komt je vraag meteen bij de juiste persoon terecht.</p>'
     +'<div class="contact-grid">'
       +'<button class="contact-card br-blue" onclick="openOfferteWizard()"><span class="cc-ic">'+ic('plus',24)+'</span><b>Nieuw project</b><span>Stel zelf je project samen, wij werken de offerte persoonlijk uit.</span><span class="cc-go">Start een aanvraag '+ic('arrow',14)+'</span></button>'
+      +'<button class="contact-card br-purple" onclick="openClientChat()"><span class="cc-ic">'+ic('msg',24)+'</span><b>Chat met je team</b><span>Stel je vraag rechtstreeks in de chat, het hele team leest mee en antwoordt snel.</span><span class="cc-go">Open de chat '+ic('arrow',14)+'</span></button>'
       +'<button class="contact-card br-pink" onclick="contactVraagForm()"><span class="cc-ic">'+ic('msg',24)+'</span><b>Algemene vraag</b><span>Vragen over je samenwerking, facturatie of iets anders? Ilke helpt je verder.</span><span class="cc-go">Stel je vraag '+ic('arrow',14)+'</span></button>'
       +'<button class="contact-card br-green" onclick="openWebTicket()"><span class="cc-ic">'+ic('doc',24)+'</span><b>Website support</b><span>Een bug, aanpassing of vraag over je site? Maak een ticket met bijlagen.</span><span class="cc-go">Ticket aanmaken '+ic('arrow',14)+'</span></button>'
     +'</div>'
