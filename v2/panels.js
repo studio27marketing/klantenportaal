@@ -3637,29 +3637,22 @@ function meetRoute(){ window.open('https://www.google.com/maps/search/?api=1&que
 // wijzen naar 'offertes'.
 
 function huisstijlSecties(){
-  const sw=[['Blauw','#3083DC'],['Roze','#F697CE'],['Paars','#9441DB'],['Groen','#12AC4E'],['Oranje','#F66131']];
+  /* GOLF 6: de hardcoded Studio 27-kleuren en -fonts zijn verwijderd. Er bestaat
+     (nog) geen D1/bedrijfContent-bron voor merkkleuren of fonts per klant, dus we
+     tonen ALLEEN echte data: de bestanden uit de gedeelde Huisstijl-map op Drive.
+     Komt er ooit brandingdata in D1, dan kan hier een echte merksectie bij. */
   const files=(window.S27DATA && S27DATA.huisstijl());
   const fmtBytes=(n)=>{ n=parseInt(n,10)||0; if(!n)return ''; if(n<1024)return n+' B'; if(n<1048576)return Math.round(n/1024)+' KB'; return (n/1048576).toFixed(1)+' MB'; };
   const mimeIc=(m)=>{ m=String(m||''); if(m.indexOf('image')===0)return 'img'; if(m.indexOf('video')===0)return 'video'; return 'doc'; };
   const fileMeta=(f)=>{ const p=[]; const b=fmtBytes(f.size); if(b)p.push(b); if(f.modified){ const d=new Date(f.modified); if(!isNaN(d.getTime()))p.push(d.toLocaleDateString('nl-BE',{day:'numeric',month:'short',year:'numeric'})); } return p.join(' · '); };
-  const fileCards = files ? (files.length ? files.map(f=>`<div class="filecard" style="min-width:240px"><div class="ft">${ic(mimeIc(f.mime),20)}</div><div style="flex:1;min-width:0"><div class="fn" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</div><div class="fs">${esc(fileMeta(f))}</div></div><a class="icon-btn" style="width:34px;height:34px" href="${esc(f.url||'#')}" target="_blank" rel="noopener">${ic('download',16)}</a></div>`).join('') : '<div class="fs" style="color:var(--ink-4)">Nog geen bestanden in je Huisstijl-map. Sleep hieronder een bestand om te beginnen.</div>')
+  const fileCards = files ? (files.length ? files.map(f=>`<div class="filecard" style="min-width:240px"><div class="ft">${ic(mimeIc(f.mime),20)}</div><div style="flex:1;min-width:0"><div class="fn" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</div><div class="fs">${esc(fileMeta(f))}</div></div><a class="icon-btn" style="width:34px;height:34px" href="${esc(f.url||'#')}" target="_blank" rel="noopener" title="Downloaden">${ic('download',16)}</a><button class="icon-btn" style="width:34px;height:34px" title="Verwijderen" aria-label="Verwijderen" onclick="deleteHuisstijl('${esc(f.id||'')}',this)">${ic('trash',15)}</button></div>`).join('') : '<div class="fs" style="color:var(--ink-4)">Nog geen bestanden in je Huisstijl-map. Sleep hieronder een bestand om te beginnen.</div>')
     : `<div class="filecard" style="min-width:240px"><div class="ft">${ic('img',20)}</div><div style="flex:1"><div class="fn">logo-tc-fullcolor.svg</div><div class="fs">Vector · 24 KB</div></div><button class="icon-btn" style="width:34px;height:34px">${ic('download',16)}</button></div><div class="filecard" style="min-width:240px"><div class="ft">${ic('img',20)}</div><div style="flex:1"><div class="fn">logo-tc-wit.png</div><div class="fs">PNG · 180 KB</div></div><button class="icon-btn" style="width:34px;height:34px">${ic('download',16)}</button></div>`;
   return `<div class="setsec">
     <h3>Huisstijl-bestanden</h3><p class="sdesc">Alle bestanden uit je gedeelde Huisstijl-map op Google Drive, logo's, fonts, templates. Altijd up-to-date.</p>
     <div style="display:flex;gap:14px;flex-wrap:wrap">${fileCards}</div>
     <div class="dropzone" style="margin-top:14px" onclick="document.getElementById('hsFile').click()">${ic('upload',30)}<b>Sleep je bestand hierheen</b><div style="font-size:12.5px;margin-top:4px">of klik om te bladeren · SVG, PNG, AI, PDF</div></div>
+    <div id="hsMsg" class="fs" style="margin-top:10px;min-height:18px"></div>
     <input type="file" id="hsFile" style="display:none" onchange="uploadHuisstijl(this)">
-  </div>
-  <div class="setsec">
-    <h3>Kleuren</h3><p class="sdesc">Je merkkleuren. Pas een hex aan als er iets wijzigt.</p>
-    <div class="swatches">${sw.map(s=>`<div class="swatch-card"><div class="sw" style="background:${s[1]}"></div><div style="font-family:var(--font-display);font-weight:700;font-size:12px">${s[0]}</div><div class="hex">${s[1]}</div></div>`).join('')}</div>
-  </div>
-  <div class="setsec">
-    <h3>Fonts</h3><p class="sdesc">De lettertypes die we voor je gebruiken.</p>
-    <div style="display:flex;gap:14px;flex-wrap:wrap">
-      <div class="filecard" style="min-width:220px"><div class="ft" style="font-family:var(--font-display);font-weight:900;color:var(--ink)">Aa</div><div><div class="fn">Montserrat</div><div class="fs">Display · 700-900</div></div></div>
-      <div class="filecard" style="min-width:220px"><div class="ft" style="font-family:var(--font-body);font-weight:800;color:var(--ink)">Aa</div><div><div class="fn">Nunito</div><div class="fs">Body · 400-700</div></div></div>
-    </div>
   </div>`;
 }
 function panelHuisstijl(){
@@ -4463,6 +4456,10 @@ function panelInstellingen(){
       <button class="btn btn-outline btn-sm" style="margin-top:12px" onclick="addContact()">${ic('upload',15)} Persoon toevoegen</button>
       <div id="contactFormHost"></div>
     </div>
+    <div class="setsec" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+      <div><b style="font-family:var(--font-display);font-size:15px">Huisstijl-bestanden</b><div style="font-size:13px;color:var(--ink-3)">Logo's, fonts en templates uit je gedeelde Huisstijl-map, bekijken, uploaden en verwijderen.</div></div>
+      <button class="btn btn-outline" onclick="goTab('huisstijl')">${ic('img',16)} Open Huisstijl</button>
+    </div>
   <div class="setsec" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:18px">
     <div><b style="font-family:var(--font-display);font-size:15px">Uitloggen</b><div style="font-size:13px;color:var(--ink-3)">Log veilig uit op dit toestel.</div></div>
     <button class="btn btn-outline" onclick="logout()">${ic('logout',16)} Uitloggen</button>
@@ -5258,7 +5255,20 @@ function panelWebprestaties(){
     if(state.demoMode) return head+statNotLinked('web')+webSupportCard();
     return head+'<div class="empty" style="padding:70px 20px"><div class="brand-spinner" style="margin:0 auto 14px"></div><div style="font-family:var(--font-display);font-weight:700;color:#9E919E">Webdata laden…</div></div>';
   }
-  if(!(t&&t.linked) && !(s&&s.linked)){ return head+statNotLinked('web')+webSupportCard(); }
+  if(!(t&&t.linked) && !(s&&s.linked)){
+    // GOLF 6: alleen 'Nog geen connectie' als er ECHT geen GA4/GSC-config in D1 staat
+    // (server antwoordde ok maar linked:false). Een transiente fout (error:true uit
+    // data.js) krijgt een eerlijke probeer-opnieuw-melding i.p.v. de koppel-belofte.
+    var isErr=(t&&t.error)||(s&&s.error);
+    if(isErr){
+      return head+'<div class="card" style="padding:30px 26px;text-align:center">'
+        +'<div style="font-family:var(--font-display);font-weight:800;font-size:17px;margin-bottom:6px">Je statistieken konden even niet geladen worden</div>'
+        +'<div style="color:var(--ink-3);max-width:460px;margin:0 auto 14px;line-height:1.55">Dit ligt aan ons, niet aan jou. Probeer het zo opnieuw.</div>'
+        +'<button class="btn btn-outline btn-sm" onclick="state.data.webTraffic=null;state.data.webSearch=null;goTab(\'webprestaties\')">Opnieuw proberen</button></div>'
+        +webSupportCard();
+    }
+    return head+statNotLinked('web')+webSupportCard();
+  }
   return head+'<div id="wpBody">'+webBody(t,s)+'</div>';
 }
 function webBody(t,s){

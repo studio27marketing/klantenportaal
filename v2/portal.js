@@ -9,7 +9,7 @@
 "use strict";
 
 let currentTab = 'start';
-const SECTION_LABEL = { start:'Jouw taken', berichten:'Berichten', strategie:'Strategie', branding:'Branding', video:'Video- en fotografie', socials:'Socials', advertenties:'Adverteren', webprestaties:'Website', 'alle-projecten':'Alle projecten', meetings:'Meetings', nieuwproject:'Nieuw project', offertes:'Offertes', facturatie:'Facturatie', instellingen:'Instellingen', aivragen:'AI-vragen' };
+const SECTION_LABEL = { start:'Jouw taken', berichten:'Berichten', strategie:'Strategie', branding:'Branding', video:'Video- en fotografie', socials:'Socials', advertenties:'Adverteren', webprestaties:'Website', 'alle-projecten':'Alle projecten', meetings:'Meetings', nieuwproject:'Nieuw project', offertes:'Offertes', facturatie:'Facturatie', instellingen:'Instellingen', huisstijl:'Huisstijl', aivragen:'AI-vragen' };
 
 function qsp(){ return new URLSearchParams(location.search); }
 function $id(x){ return document.getElementById(x); }
@@ -1945,6 +1945,9 @@ function weekStrip(ctx, dayPickFn){
    ENDPOINTS.meetingBook (Google-agenda + invite). Valt vóór de worker-deploy terug op
    directMessage; demoMode toont een mock-bevestiging.
    ============================================================================= */
+/* GOLF 6: de echte hostconfig komt uit de meetingAvailability-respons (D1,
+   settings_global 'meeting_hosts'); mpLoadAvail overschrijft s.host daarmee.
+   MP_HOSTS is enkel nog de startweergave/het vangnet voor een oude worker. */
 const MP_HOSTS = {
   ilke: { email:'ilke@studio27.be', naam:'Ilke', rol:'Accountmanager', color:'blue' },
   arne: { email:'arne@studio27.be', naam:'Arne', rol:'Zaakvoerder',    color:'orange' },
@@ -2095,6 +2098,15 @@ async function mpLoadAvail(){
       else {
         var r2=await api(ENDPOINTS.meetingAvailability,{});
         if(!(r2&&r2.data&&r2.data.ok)){ s._err='load'; mpRender(); return; }
+        // GOLF 6: de host komt uit de meetingAvailability-respons (D1-config,
+        // settings_global 'meeting_hosts') i.p.v. de hardcoded MP_HOSTS-lijst.
+        // type 'algemeen'/'nieuwproject' kiest de juiste persoon; oude workers
+        // zonder type vallen terug op de key en anders op de MP_HOSTS-default.
+        var hostsD1=Array.isArray(r2.data.hosts)?r2.data.hosts:[];
+        var wantType=(s.mode==='nieuw')?'nieuwproject':'algemeen';
+        var hd=hostsD1.find(function(h){return String((h&&h.type)||'').toLowerCase()===wantType;})
+             ||hostsD1.find(function(h){return String((h&&h.key)||'').toLowerCase()===(s.mode==='nieuw'?'arne':'ilke');});
+        if(hd&&hd.email){ s.host={ email:String(hd.email), naam:String(hd.naam||hd.email), rol:String(hd.rol||''), color:String(hd.color||(s.host&&s.host.color)||'blue') }; if(s.step==='cal') mpRender(); }
         var cal=((r2.data.calendars)||{})[s.host.email]||{};
         var busy=(cal.busy||[]).map(function(b){return {start:new Date(b.start).getTime(),end:new Date(b.end).getTime()};})
                                .filter(function(b){return b.end>b.start;});
@@ -2445,14 +2457,58 @@ async function socialSavePost(id, btn){
     }
   }catch(e){ if(msg) msg.innerHTML='<div class="soc-saveerr">Opslaan lukte niet. Probeer het later opnieuw.</div>'; resetBtn(); }
 }
+/* GOLF 6: upload blijft op de Huisstijl-pagina (geen sprong meer naar Instellingen,
+   waar geen bestanden staan) en toont een echte succes/foutmelding bij de dropzone
+   i.p.v. stil te falen. */
+function hsMsgShow(tekst, isErr){
+  var m=$id('hsMsg'); if(!m) return;
+  m.style.color=isErr?'var(--s27-orange)':'var(--s27-green-ink,#147A50)';
+  m.innerHTML=tekst;
+}
 async function uploadHuisstijl(input){
   const f=input.files&&input.files[0]; if(!f) return;
   if(state.demoMode){ return; }
+  hsMsgShow('Bezig met uploaden van '+escapeHtml(f.name)+'…', false);
   const rd=new FileReader();
   rd.onload=async function(){ const b64=String(rd.result).split(',')[1]||'';
-    try{ await api(ENDPOINTS.huisstijlUpload, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, filename:f.name, file_data:b64 }); state.data.huisstijl=null; goTab('instellingen'); }catch(e){}
+    try{
+      const res=await api(ENDPOINTS.huisstijlUpload, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, filename:f.name, file_data:b64 });
+      const d=res&&res.data;
+      if(res&&res.ok&&d&&d.ok){
+        state.data.huisstijl=null;
+        try{ await S27DATA.loadHuisstijl(); }catch(e){}
+        if(currentTab==='huisstijl') renderPanel('huisstijl');
+        hsMsgShow('✓ '+escapeHtml(f.name)+' staat in je Huisstijl-map.', false);
+      } else {
+        hsMsgShow('Uploaden lukte niet'+((d&&d.error)?(' ('+escapeHtml(String(d.error))+')'):'')+'. Probeer het opnieuw of stuur ons een berichtje.', true);
+      }
+    }catch(e){ hsMsgShow('Uploaden lukte niet. Probeer het opnieuw of stuur ons een berichtje.', true); }
   };
   rd.readAsDataURL(f);
+}
+/* GOLF 6: verwijderknop op de huisstijl-bestandskaarten (huisstijlDelete bestond al
+   server-side). Geen native confirm() (bevriest de Chrome-connector): twee-staps-knop. */
+async function deleteHuisstijl(fileId, btn){
+  if(state.demoMode||!fileId) return;
+  if(btn && !btn._arm){
+    btn._arm=1; btn.title='Klik nogmaals om definitief te verwijderen'; btn.style.color='var(--s27-orange)';
+    setTimeout(function(){ if(btn){ btn._arm=0; btn.title='Verwijderen'; btn.style.color=''; } }, 4000);
+    return;
+  }
+  if(btn){ btn.disabled=true; }
+  try{
+    const res=await api(ENDPOINTS.huisstijlDelete, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, file_id:fileId });
+    const d=res&&res.data;
+    if(res&&res.ok&&d&&d.ok){
+      state.data.huisstijl=null;
+      try{ await S27DATA.loadHuisstijl(); }catch(e){}
+      if(currentTab==='huisstijl') renderPanel('huisstijl');
+      hsMsgShow('✓ Bestand verwijderd.', false);
+    } else {
+      if(btn){ btn.disabled=false; btn._arm=0; btn.style.color=''; }
+      hsMsgShow('Verwijderen lukte niet. Probeer het opnieuw of stuur ons een berichtje.', true);
+    }
+  }catch(e){ if(btn){ btn.disabled=false; btn._arm=0; btn.style.color=''; } hsMsgShow('Verwijderen lukte niet. Probeer het opnieuw of stuur ons een berichtje.', true); }
 }
 /* ===== Agenda-slotpicker, echte beschikbaarheid + inplannen (scope-guarded) ===== */
 const PLAN_DUR_MS=90*60000, PLAN_DUR_MAX=6*3600000;
