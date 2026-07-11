@@ -54,6 +54,9 @@ const ENDPOINTS = {
   // Huisstijl-bibliotheek (Google Drive, directe API via de gateway)
   huisstijlList:     GATEWAY_BASE + '/huisstijlList',
   huisstijlUpload:   GATEWAY_BASE + '/huisstijlUpload',
+  // Regressie-audit 11-07: ontbrak, terwijl portal.js de verwijderknop erop wees
+  // (golf 8 registreerde de handler wel opnieuw in de worker, maar deze map niet).
+  huisstijlDelete:   GATEWAY_BASE + '/huisstijlDelete',
   driveEnsure:       GATEWAY_BASE + '/driveEnsure',
   // Facturatie
   facturatieSave:    GATEWAY_BASE + '/facturatieSave',
