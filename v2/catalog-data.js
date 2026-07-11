@@ -10,8 +10,10 @@
    uit diezelfde tak kiest, en zijn niet handmatig te verwijderen
    (preproductie bij video, opstart-fee bij social & adverteren).
    "· per maand" in de naam = maandelijks, geen jaarcontract.
-   Nieuwe SKU's (s27-*) bestaan nog niet in PandaDoc; de wizard stuurt naam+prijs
-   mee en de worker rekent met die payload (geen server-side prijslookup).
+   De worker (offerteGenereren) herrekent prijzen sinds golf 3 ALTIJD server-side
+   tegen de D1-prijslijst (offer_catalog): match eerst op sku (offer_catalog.sku,
+   restpunt 27), daarna op genormaliseerde naam. Klant-prijzen uit deze payload
+   worden nooit vertrouwd; items zonder catalogusrij gaan op het op-maat-pad.
    Geladen in index.html VOOR panels.js, zet window.S27_CATALOG.
    ============================================================================= */
 window.S27_CATALOG = [
