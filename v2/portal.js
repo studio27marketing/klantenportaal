@@ -2439,7 +2439,9 @@ async function bookPlanSlot(taskId){
    Stap 1: shootkalender (BE-feestdagen, werkdagen, host-beschikbaarheid: paars=vrij, geel=plek, oranje=volzet)
    + tijdslots (effectieve duur = ceil((timeHours/creators)*2)/2, 08-18u). Stap 2: detailform met optionele
    Google-Places-autocomplete. Submit -> ENDPOINTS.shootSubmit (description + custom fields op de taak). */
-const SHOOT_HOSTS=[{id:36583476,name:'Bjorn'},{id:36583478,name:'Guus'},{id:82624365,name:'Viktor'},{id:54339680,name:'Ines'}];
+/* Golf 2 (WB-B): geen hardcoded SHOOT_HOSTS-duplicaat meer; de camerapool komt
+   uit de shootContext-respons (availability.hosts, bron = D1 team_members). */
+function shootHostsOf(ctx){var av=(ctx&&ctx.availability)||{};return Array.isArray(av.hosts)?av.hosts:[];}
 const SHOOT_DOW=['Ma','Di','Wo','Do','Vr','Za','Zo'];
 const SHOOT_MONTHS=['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
 const SHOOT_MIN_WORKDAYS=3, SHOOT_WINDOW_DAYS=365;
@@ -2466,7 +2468,7 @@ function shootBusyHostIds(ctx,ds){const busy=new Set(),av=ctx.availability||{};
   (av.shoots_27m||[]).forEach(s=>{if(s.dateStart===ds)(s.assignees||[]).forEach(a=>busy.add(Number(a)));});
   (av.vakantie||[]).forEach(v=>{if(v.dateStart&&ds>=v.dateStart&&ds<=(v.dateEnd||v.dateStart))(v.assignees||[]).forEach(a=>busy.add(Number(a)));});
   return busy;}
-function shootFreeHosts(ctx,ds){const b=shootBusyHostIds(ctx,ds);return SHOOT_HOSTS.filter(h=>!b.has(Number(h.id)));}
+function shootFreeHosts(ctx,ds){const b=shootBusyHostIds(ctx,ds);return shootHostsOf(ctx).filter(h=>!b.has(Number(h.id)));}
 function shootDayState(ctx,date){
   const today=new Date();today.setHours(0,0,0,0);
   const minD=shootMinDate(); const maxD=new Date(today);maxD.setDate(today.getDate()+SHOOT_WINDOW_DAYS);
@@ -2478,10 +2480,13 @@ function shootDayState(ctx,date){
   // goedgekeurde payroll + Google-agenda, na pool-claims). Oude shape blijft als
   // fallback voor de cache-overgang (oude worker-respons of gecachte data).
   const av=ctx.availability||{};
+  const total=shootHostsOf(ctx).length;
   let free;
-  if(av.dagvrij&&typeof av.dagvrij==='object'){ const v=av.dagvrij[ds]; free=(v==null?SHOOT_HOSTS.length:Number(v)); }
+  // Golf 2 (WB-B): een dag die de server niet kent is FAIL-CLOSED bezet (0)
+  // i.p.v. volledig vrij; de server valideert de keuze sowieso nog eens.
+  if(av.dagvrij&&typeof av.dagvrij==='object'){ const v=av.dagvrij[ds]; free=(v==null?0:Number(v)); }
   else free=shootFreeHosts(ctx,ds).length;
-  if(free>=ctx.aantalCreators)return free===SHOOT_HOSTS.length?'free':'partial';
+  if(total&&free>=ctx.aantalCreators)return free===total?'free':'partial';
   return 'full';
 }
 function shootSlotList(ctx){const dur=shootEffDur(ctx),out=[];for(let h=8;h+dur<=18;h+=0.5){const hh=Math.floor(h),mm=(h%1)*60;out.push(String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0'));}return out;}
@@ -2897,15 +2902,20 @@ async function openShootWizard(tid){
   if(!d){ box.innerHTML='<p class="fs" style="color:var(--ink-3)">We krijgen geen verbinding met onze planning. Probeer het zo eens opnieuw of mail <a href="mailto:content@studio27.be">content@studio27.be</a>.</p>'; return; }
   if(d.status==='already_scheduled'){ box.innerHTML=shootScheduledHTML(d); return; }
   if(d.status!=='ok'){ box.innerHTML=shootInvalidHTML(d.status); return; }
+  // Golf 2 (WB-B): zonder beschikbaarheidsdata (of zonder hosts) NIET doorgaan
+  // met een lege (= volledig vrije) kalender; toon de tijdelijk-niet-
+  // beschikbaar-staat (fail-closed, zelfde als status 'unavailable').
+  if(!d.availability||!Array.isArray(d.availability.hosts)||!d.availability.hosts.length){ box.innerHTML=shootInvalidHTML('unavailable'); return; }
   const cc=(state.data.bedrijf&&state.data.bedrijf.contact)||{};
   const now=new Date();
   state.shoot=state.shoot||{};
-  state.shoot[tid]={taskId:tid,timeHours:Number(d.timeHours)||0,aantalCreators:Number(d.aantalCreators)||1,availability:d.availability||{shoots:[],shoots_27m:[],vakantie:[],hosts:SHOOT_HOSTS},viewMonth:now.getMonth(),viewYear:now.getFullYear(),selectedDate:null,selectedTime:null,coords:null,formatted:'',locatieVast:String(d.locatie_vast||''),prefill:{voornaam:cc.voornaam||'',email:cc.email||(state.session&&state.session.email)||''}};
+  state.shoot[tid]={taskId:tid,timeHours:Number(d.timeHours)||0,aantalCreators:Number(d.aantalCreators)||1,availability:d.availability,viewMonth:now.getMonth(),viewYear:now.getFullYear(),selectedDate:null,selectedTime:null,coords:null,formatted:'',locatieVast:String(d.locatie_vast||''),prefill:{voornaam:cc.voornaam||'',email:cc.email||(state.session&&state.session.email)||''}};
   shootDrawCal(tid);
 }
 function shootInvalidHTML(reason){
   let msg;
-  if(reason==='wrong_type')msg='Deze taak is geen shoot, die kan dus niet via dit formulier worden ingepland.';
+  if(reason==='unavailable')msg='De beschikbaarheid van ons camerateam is tijdelijk niet op te halen. Probeer het over een paar minuten opnieuw.';
+  else if(reason==='wrong_type')msg='Deze taak is geen shoot, die kan dus niet via dit formulier worden ingepland.';
   else if(reason==='incomplete_metadata')msg='De shoot-info is bij ons nog niet volledig ingevuld. We bezorgen je zo snel mogelijk een correcte planning.';
   else if(reason==='forbidden')msg='Je hebt geen toegang tot deze taak.';
   else msg='Deze shoot kan momenteel niet ingepland worden. Neem even contact op met Studio 27.';
@@ -3044,7 +3054,7 @@ async function shootSubmitBooking(tid){
   let res; try{ res=await api(ENDPOINTS.shootSubmit,payload); }catch(e){ res=null; }
   const data=res&&res.ok&&res.data?res.data:null;
   if(data&&(data.ok||data.already_booked)){ const box=$id('s27-plan-'+tid); if(box)box.innerHTML=shootSuccessHTML(!!data.already_booked); }
-  else { ctx._booking=false; if(btn){btn.disabled=false;btn.textContent='Shoot inplannen';} shootToast(tid,'Er ging iets mis bij het inplannen. Probeer opnieuw of mail content@studio27.be.'); }
+  else { ctx._booking=false; if(btn){btn.disabled=false;btn.textContent='Shoot inplannen';} var srvMsg=(res&&res.data&&res.data.message)?String(res.data.message):''; shootToast(tid,srvMsg||'Er ging iets mis bij het inplannen. Probeer opnieuw of mail content@studio27.be.'); if(res&&res.data&&res.data.error==='dag_bezet'){ ctx.selectedDate=null; ctx.selectedTime=null; } }
 }
 function shootSuccessHTML(already){
   const t=already?'Deze shoot was net al ingepland':'Jullie shoot staat in de planning!';
