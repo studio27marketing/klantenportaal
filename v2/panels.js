@@ -333,12 +333,18 @@ function _inboxRow(p){
     +'<svg class="ios-chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>';
 }
 function panelBerichten(){
+  // GOLF 4 (11-07): vaste, vindbare ingang voor de bedrijfsbrede teamchat
+  // (openClientChat) bovenaan de Berichten-tab - los van een project.
+  var teamChatCard='<div class="card" style="display:flex;align-items:center;gap:14px;justify-content:space-between;flex-wrap:wrap;padding:14px 16px;margin-bottom:12px">'
+    +'<div style="min-width:0"><b style="font-family:var(--font-display);font-size:15px">Chat met je team</b>'
+    +'<div style="font-size:12.5px;color:var(--ink-3);margin-top:2px">Algemene vraag, los van een project? Het hele Studio 27-team leest mee.</div></div>'
+    +'<button class="btn btn-primary btn-sm" onclick="openClientChat()" style="flex:none">'+ic('msg',15)+' Open de chat</button></div>';
   // alle projecten (ook social/ads/support), elke projectchat blijft hier bereikbaar
   var projs=_projects().slice();
   projs.forEach(function(p){ if(!p.lastChat && state.demoMode && BERICHT_MOCK_LAST[p.id]){ var m=BERICHT_MOCK_LAST[p.id]; p._sortTs=Date.now()-m.uren*3600000; } else { p._sortTs=(p.lastChat&&p.lastChat.ts)||0; } });
   projs.sort(function(a,b){ return (b._sortTs-a._sortTs)||String(a.name).localeCompare(String(b.name)); });
-  if(!projs.length) return '<div class="empty" style="padding:50px 20px"><div class="em-ic">'+ic('msg',64)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog geen gesprekken</b><p style="margin:6px 0 0">Zodra er een project loopt, chat je hier rechtstreeks met het team.</p></div>';
-  return '<div class="card ios-inbox">'+projs.map(_inboxRow).join('')+'</div>';
+  if(!projs.length) return teamChatCard+'<div class="empty" style="padding:50px 20px"><div class="em-ic">'+ic('msg',64)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Nog geen projectgesprekken</b><p style="margin:6px 0 0">Zodra er een project loopt, chat je hier rechtstreeks met het team. Algemene vragen kunnen altijd via de teamchat hierboven.</p></div>';
+  return teamChatCard+'<div class="card ios-inbox">'+projs.map(_inboxRow).join('')+'</div>';
 }
 
 // Discipline-chips: kleine label(s) die aangeven waar een hoofdtaak over gaat. Eén hoofdtaak

@@ -1,14 +1,11 @@
 /* =============================================================================
  * Studio 27 Klantenportaal - Web Push (frontend, v2)
  * -----------------------------------------------------------------------------
- * PILOT (juni 2026): toont een discrete "meldingen"-control ENKEL voor
- * vincent@studio27.be, op toestellen die web-push ondersteunen (geinstalleerde
- * PWA / Android-Chrome / desktop). De worker dwingt de pilot nogmaals af.
- *
- * Flow: wacht op een Firebase-token (zonder S27Auth.subscribe te kapen) -> lees
- * de e-mail uit het token -> als Vincent + push ondersteund: render de control.
- * Aanzetten = Notification-permissie vragen + pushManager.subscribe +
- * POST /push/subscribe. Testen = POST /push/test. Uitzetten = unsubscribe.
+ * GOLF 4 (11-07): push staat OPEN voor alle klantaccounts (de pilot-gate op
+ * vincent@studio27.be is weg; de worker aanvaardt elk geverifieerd
+ * portaalaccount met een bedrijf-claim). Aanzetten gebeurt via de knop in
+ * Instellingen -> Meldingen (S27Push.enable); dit script vernieuwt op de
+ * achtergrond enkel de KV-TTL van bestaande inschrijvingen.
  *
  * Geen afhankelijkheid van panels.js/portal.js/styles.css (alles inline) zodat
  * dit parallel naast andere chats kan leven.
@@ -18,7 +15,6 @@
 
   // Publieke VAPID-sleutel (NIET geheim; matcht de private JWK in de worker-secret).
   var VAPID_PUBLIC_KEY = 'BFEuNof6_jFVqWlo-I_p6YMvDd4R__4l4iADckDfVju9ozzaQZZt4f9j_jWJnTNnTFKtjQxy-zPDufwzMIcYSBM';
-  var PILOT_EMAIL = 'vincent@studio27.be';
 
   var GATEWAY_BASE = (function () {
     try { var h = location.hostname || ''; if (/\.workers\.dev$/.test(h)) return location.origin; } catch (e) {}
@@ -177,9 +173,9 @@
   /* ---- init (Vincent 2026-06-13: GEEN zwevende melding meer) ----
    * De "Pushmeldingen"-box is verwijderd. Push blijft stil werken: als er al een
    * inschrijving is, verversen we enkel de KV-TTL op de achtergrond (geen UI). Voor
-   * (her)inschrijven op een nieuw toestel is er nu een knop in Instellingen → Meldingen
-   * (S27Push.enable, gate't zelf op de pilot). Geen automatische prompt of banner. */
-  async function initForVincent() {
+   * (her)inschrijven op een nieuw toestel is er een knop in Instellingen → Meldingen
+   * (S27Push.enable, open voor alle klantaccounts). Geen automatische prompt of banner. */
+  async function initBackgroundRenew() {
     if (started) return; started = true;
     if (!supported()) return;
     try {
@@ -204,9 +200,9 @@
       try { token = await window.S27Auth.token(); } catch (e) { token = null; }
       if (!token) return;
       clearInterval(timer);
-      var email = emailFromToken(token);
-      if (email === PILOT_EMAIL) initForVincent();
-      // (andere gebruikers: niets tonen tijdens de pilot)
+      // GOLF 4: TTL-verversing voor ELK ingelogd account met een bestaande
+      // inschrijving (geen prompt of UI; aanzetten blijft via Instellingen).
+      initBackgroundRenew();
     }, 1500);
   }
 
