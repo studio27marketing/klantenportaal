@@ -45,7 +45,11 @@
     done:                 {key:'done', label:'Afgerond'},
     klaar_voor_facturatie:{key:'done', label:'Afgerond'},
     gefactureerd:         {key:'done', label:'Afgerond'},
-    on_hold:              {key:'prog', label:'On hold'}
+    on_hold:              {key:'prog', label:'On hold'},
+    // GOLF 8: 9e hub-status review + terminale status afgehandeld, zodat het
+    // rauwe interne label nooit als pill-tekst bij de klant verschijnt.
+    review:               {key:'prog', label:'In productie'},
+    afgehandeld:          {key:'done', label:'Afgerond'}
   };
   DATA.status = function(raw){ return STATUS_MAP[norm(raw)] || {key:'prog', label:raw||'Loopt'}; };
   var AFGEROND = ['goedgekeurd','done','klaar_voor_facturatie','gefactureerd'];
@@ -170,10 +174,15 @@
     return p;
   };
   DATA.resetInflight = function(){ _inflight = {}; };
-  DATA.loadDashboard = async function(){
+  DATA.loadDashboard = async function(opts){
     if(!live()) return false;
-    var res = await api(ENDPOINTS.dashboard, base());
-    if(res && res.ok && res.data && !res.data.error){ state.data.dashboard = res.data; return true; }
+    // GOLF 8: eerlijke foutstaat. Bij een D1-storing geeft de gateway 503 +
+    // degraded (geen valse lege shell meer); we markeren dat zodat panelStart
+    // een probeer-zo-opnieuw-staat met retry toont i.p.v. "Alles is bij!" of
+    // een eeuwige spinner. Retry stuurt X-No-Cache mee (verse poging).
+    var res = await api(ENDPOINTS.dashboard, base(), (opts&&opts.retry)?{noCache:true}:undefined);
+    if(res && res.ok && res.data && !res.data.error && !res.data.degraded){ state.data.dashboard = res.data; state.data.dashboardError = false; return true; }
+    state.data.dashboardError = true;
     return false;
   };
   DATA.loadDetail = async function(taskId){
@@ -195,7 +204,12 @@
     if(ms){ var d=new Date(ms); if(!isNaN(d.getTime())) tm=('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
     var ini=(String(naam).split(/\s+/).map(function(x){return x?x[0]:'';}).join('').slice(0,2)||'S2').toUpperCase();
     var vn = me ? 'Jij' : (String(naam||'').trim().split(/\s+/)[0] || naam);
-    return { av:ini, who:vn, color:'blue', tx:esc(t).replace(/\n/g,'<br>'), tm:tm, me:me, attachments:c.attachments||[] };
+    // GOLF 8: bestandcomments krijgen van de gateway een echt attachments-array
+    // ({naam,url}); de rauwe magic-link-tekst halen we uit de bubble zodat er
+    // een klikbare chip staat i.p.v. een onklikbare tekst-URL.
+    var atts = c.attachments||[];
+    if(atts.length){ atts.forEach(function(a2){ if(a2&&a2.url) t=t.split(a2.url).join('').replace(/\s+$/,''); }); }
+    return { av:ini, who:vn, color:'blue', tx:esc(t).replace(/\n/g,'<br>'), tm:tm, me:me, attachments:atts };
   }
   DATA.loadChat = async function(taskId){
     if(!live()) return [];
@@ -229,10 +243,14 @@
   };
   DATA.commsTaskId = function(){ return state.data.commsTaskId || null; };
   DATA.commsTeam   = function(){ return state.data.commsTeam || []; };
-  DATA.loadMeetings = async function(){
+  DATA.loadMeetings = async function(opts){
     if(!live()) return false;
-    var res = await api(ENDPOINTS.meetingsList, base({ bedrijfsnaam:DATA.bedrijfsnaam() }));
-    if(res && res.ok && res.data){ state.data.meetings = res.data; return true; }
+    var res = await api(ENDPOINTS.meetingsList, base({ bedrijfsnaam:DATA.bedrijfsnaam() }), (opts&&opts.retry)?{noCache:true}:undefined);
+    if(res && res.ok && res.data && res.data.ok !== false){ state.data.meetings = res.data; return true; }
+    // GOLF 8: eerlijke foutstaat — de gateway geeft bij een D1-fout nu 500
+    // {ok:false} i.p.v. een lege lijst; de Meetings-tab toont dan een
+    // probeer-zo-opnieuw-staat met retry i.p.v. "Geen meetings gepland".
+    state.data.meetings = { ok:false, error:true, meetings:[] };
     return false;
   };
   DATA.loadBedrijf = async function(){
@@ -339,7 +357,8 @@
       return { br:br.br, disc:br.label, labels:mapLabels(p), name:p.naam, status:st.key, label:st.label, pct:Number(p.voortgang_pct)||0, id:p.task_id, sae:mapSae(p.sae) };
     });
   };
-  // Recent afgerond, uitsluitend dashboard.afgerond_60d (laatste 60 dagen, juiste statussen).
+  // Recent afgerond, uitsluitend dashboard.afgerond_30d (laatste 30 dagen, juiste statussen;
+  // GOLF 8: veld hernoemd, het heette afgerond_60d maar dekte altijd al 30 dagen).
   // Geen mock-fallback: leeg of afwezig => null/[] zodat het blok zich verbergt.
   function _whenLabel(ms){
     var n = /^\d+$/.test(String(ms)) ? parseInt(ms,10) : Date.parse(ms);
@@ -348,7 +367,7 @@
   }
   DATA.done = function(){
     var d=state.data.dashboard; if(!d) return null;
-    var raw = d.afgerond_60d; if(!raw) return null;
+    var raw = d.afgerond_30d || d.afgerond_60d; if(!raw) return null;   // fallback voor gecachete oude payloads
     return raw.map(function(p){
       var br=DATA.disc(p.discipline);
       return { id:p.task_id, br:br.br, name:p.naam, disc:br.label, labels:mapLabels(p), when:_whenLabel(p.opleverdatum), heeftBestanden:(p.heeft_bestanden===true||p.heeft_bestanden==='true') };
@@ -418,7 +437,9 @@
                type:/kickoff/i.test(x.titel||'')?'Kickoff':'Meeting' };
     }).filter(function(x){ return x.dt && !isNaN(x.dt.getTime()); });
     list.sort(function(a,b){ return a.dt.getTime()-b.dt.getTime(); });
-    return { list:list, bookingUrl:m.booking_url||'' };
+    // GOLF 8: bookingUrl (hardcoded, nooit gerenderd) uit het contract; error
+    // signaleert de laadfout-staat van de Meetings-tab.
+    return { list:list, error:!!m.error };
   };
 
   DATA.bedrijf = function(){ return state.data.bedrijf; };

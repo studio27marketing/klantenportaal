@@ -30,7 +30,7 @@ function $id(x){ return document.getElementById(x); }
      #/b/<bedrijf>/projecten | /meetings | /offertes | /facturatie | /instellingen | /huisstijl | /contact
      #/b/<bedrijf>/project/<taakId>[/chat | /onderdeel/<subId> | /review/<key>?ronde=N | /galerij[/<idx>] | /inplannen/<subId>]
      #/b/<bedrijf>/offerte-aanvraag/<tak> | /offertes/wizard/<tak>?stap=N
-     #/b/<bedrijf>/meeting/plannen?mode=&project=&host=
+     #/b/<bedrijf>/meeting/plannen?mode=&project=
 
    Een route is één plat object {bedrijf, as, view, tab, project, sub, ...}. parseRoute()
    leest 'm uit de URL (nieuw schema + alle oude links), currentRoute() bouwt 'm uit de
@@ -111,7 +111,7 @@ function _parseHash(hash){
     r.ads.per=hq.get('periode')||''; r.ads.vgl=hq.get('vgl')||'';
     return r; }
   if(head==='website'){ r.view='tab'; r.tab='webprestaties'; r.web={ tab:seg[1]||'', per:hq.get('periode')||'' }; return r; }
-  if(head==='meeting' && seg[1]==='plannen'){ r.view='meetingplan'; r.meeting={ mode:hq.get('mode')||'algemeen', project:hq.get('project')||'', host:hq.get('host')||'' }; return r; }
+  if(head==='meeting' && seg[1]==='plannen'){ r.view='meetingplan'; r.meeting={ mode:hq.get('mode')||'algemeen', project:hq.get('project')||'' }; return r; }   // GOLF 8: dode host-param verwijderd (werd geparset maar nooit toegepast)
   if(head==='offerte-aanvraag'){ r.view='offerte-aanvraag'; r.offerteTak=seg[1]||'website'; return r; }
   if(head==='offertes' && seg[1]==='wizard'){ r.view='offerte-wizard'; r.offerteTak=seg[2]||'strategie'; r.offerteStap=hq.get('stap')||''; return r; }
   if(head==='contact'){ r.view='contact'; return r; }
@@ -171,7 +171,7 @@ function buildHash(r){
     else if(r.sub==='galerij'){ segs.push('galerij'); if(r.galIdx) segs.push(String(r.galIdx)); }
     else if(r.sub==='inplannen'){ segs.push('inplannen'); if(r.shoot) segs.push(r.shoot); }
   } else if(r.view==='contact'){ segs.push('contact');
-  } else if(r.view==='meetingplan'){ segs.push('meeting','plannen'); var m=r.meeting||{}; if(m.mode&&m.mode!=='algemeen') addq('mode',m.mode); addq('project',m.project); addq('host',m.host);
+  } else if(r.view==='meetingplan'){ segs.push('meeting','plannen'); var m=r.meeting||{}; if(m.mode&&m.mode!=='algemeen') addq('mode',m.mode); addq('project',m.project);
   } else if(r.view==='offerte-aanvraag'){ segs.push('offerte-aanvraag', r.offerteTak||'website');
   } else if(r.view==='offerte-wizard'){ segs.push('offertes','wizard', r.offerteTak||'strategie'); addq('stap', r.offerteStap);
   } else { // tab
@@ -701,7 +701,9 @@ async function ensureTabData(name){
     var _fi=[];
     if(!state.data.bedrijf) _fi.push(S27DATA.loadBedrijf());
     if(!state.data.team) _fi.push(S27DATA.once('team', function(){ return S27DATA.loadTeam(); }));
-    if(name==='instellingen' && !state.data.huisstijl) _fi.push(S27DATA.loadHuisstijl());
+    // GOLF 8: geen huisstijl-preload meer op Instellingen. panelInstellingen
+    // rendert geen huisstijl-bestanden en loadHuisstijl deed via driveEnsure
+    // zelfs een Drive-map-AANMAAK als schrijf-bijwerking van een tab-open.
     if(_fi.length){ try{ await Promise.all(_fi); }catch(e){} }
   }
   // (Resultaten-tab verwijderd, advertentiedata staat real-time op de Advertenties-tab)
@@ -778,7 +780,7 @@ function needsLoad(name){
   if(name==='meetings' && state.data.meetings) return false;
   if(name==='huisstijl' && state.data.huisstijl) return false;
   if(name==='facturatie' && state.data.bedrijf && state.data.team) return false;
-  if(name==='instellingen' && state.data.bedrijf && state.data.team && state.data.huisstijl) return false;
+  if(name==='instellingen' && state.data.bedrijf && state.data.team) return false;
   if(name==='offertes' && state.data.offertes && state.data.bedrijf) return false;
   if(name==='nieuwproject') return false;
   return true;
@@ -865,10 +867,8 @@ function applyTakVisibility(){
   // hij ook in demo/pre-load verborgen blijft (de querySelector werkt los van dashboard-data).
   const off=document.querySelector('.sb-item[data-tab="offertes"]');
   if(off) off.style.display = (typeof isRichView==='function' && isRichView()) ? '' : 'none';
-  if(state.demoMode || !state.data.dashboard) return;
-  const d=state.data.dashboard;
-  const pf=document.querySelector('.sb-item[data-tab="performance"]');
-  if(pf) pf.style.display = (d && d.modules && d.modules.performance===false) ? 'none' : '';
+  // GOLF 8: de performance-toggle is verwijderd — de tab bestaat sinds de
+  // v2-rework niet meer in index.html (de querySelector was een no-op).
   // (Vincent 2026-06-13, herzien): Socials/Adverteren/Website-tabs blijven ALTIJD zichtbaar.
   // Zonder gekoppelde data tonen de panels zelf een nette "geen connectie"-melding (zie statNotLinked).
 }
@@ -1631,17 +1631,53 @@ async function saveBedrijfGegevens(btn){
 // Schrijft UITSLUITEND naar de eigen (ingelogde) contactfiche, npProfileId is per definitie
 // de "me"-contactpersoon (zie panelInstellingen). De e-mail van het eigen account sturen we
 // hier mee als contact-email; dit raakt nooit een ander contact (dat loopt via saveContact).
-async function saveProfile(){
+/* GOLF 8: contacts.email is het login-anker (companiesForEmail). Een e-mail-
+   wijziging krijgt daarom (1) een formaatcheck, (2) een expliciete inline
+   bevestiging met uitleg (geen native confirm: bevriest de Chrome-connector),
+   en (3) een echte responscontrole i.p.v. stil falen. Andere velden (gsm,
+   kanalen) blijven gewoon opslaan zolang de e-mail nog niet bevestigd is. */
+async function saveProfile(emailConfirmed){
   if(state.demoMode) return;
   const id=(($id('npProfileId')||{}).value||'').trim(); if(!id) return;
   const base=_contactById(id)||{};
   const g=(x)=>(($id(x)||{}).value||'').trim();
+  const box=$id('npEmailConfirm');
+  const oldEmail=String(base.email||'').trim().toLowerCase();
+  const newEmail=g('npEmail').toLowerCase();
+  const emailChanged=!!(newEmail && oldEmail && newEmail!==oldEmail);
+  if(emailChanged && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)){
+    if(box){ box.style.display=''; box.style.color='var(--s27-orange,#F66131)'; box.textContent='Dit lijkt geen geldig e-mailadres. Let op: dit is ook je inlogadres voor het portaal.'; }
+    return;
+  }
+  let sendEmail=(newEmail||base.email||'');
+  if(emailChanged && emailConfirmed!==true){
+    sendEmail=oldEmail;   // e-mail pas na bevestiging; andere velden slaan wel op
+    if(box){ box.style.display=''; box.style.color='var(--ink-2)'; box.innerHTML='<b>Let op:</b> je e-mailadres is ook je inlogadres. Na deze wijziging log je voortaan in met <b>'+escapeHtml(newEmail)+'</b>. <button type="button" class="btn btn-outline btn-sm" style="margin-top:6px" onclick="saveProfile(true)">Ja, wijzig mijn inlogadres</button>'; }
+  } else if(box && emailChanged){ box.style.display='none'; }
   try {
-    await api(ENDPOINTS.bedrijfBeheer, { action:'update_contact', contact_id:id, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token,
-      voornaam:base.voornaam||'', achternaam:base.achternaam||'', email:(g('npEmail')||base.email||''), gsm:(g('npGsm')||base.gsm||''), kanalen:readKanalen('npKanalen') });
+    const res=await api(ENDPOINTS.bedrijfBeheer, { action:'update_contact', contact_id:id, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token,
+      voornaam:base.voornaam||'', achternaam:base.achternaam||'', email:sendEmail, gsm:(g('npGsm')||base.gsm||''), kanalen:readKanalen('npKanalen') });
+    const d=res&&res.data;
+    if(!(res&&res.ok&&d&&d.ok)){
+      if(box){ box.style.display=''; box.style.color='var(--s27-orange,#F66131)'; box.textContent=(d&&d.message)||'Opslaan lukte niet. Probeer het zo opnieuw.'; }
+      return;
+    }
+    if(box && emailConfirmed===true) box.style.display='none';
     const s=$id('npSaved'); if(s){ s.style.display=''; setTimeout(function(){ var x=$id('npSaved'); if(x)x.style.display='none'; }, 2200); }
     state.data.team=null; try{ await S27DATA.loadTeam(); }catch(e){}
+    if(emailConfirmed===true && currentTab==='instellingen') renderPanel('instellingen');
   } catch(e){}
+}
+/* GOLF 8: retry-knoppen bij de eerlijke foutstaten (dashboard + meetings). */
+async function retryDashboard(btn){
+  if(btn){ btn.disabled=true; btn.textContent='Bezig…'; }
+  try{ state.data.dashboardError=false; await S27DATA.loadDashboard({retry:true}); }catch(e){}
+  renderPanel(currentTab||'start');
+}
+async function retryMeetings(btn){
+  if(btn){ btn.disabled=true; btn.textContent='Bezig…'; }
+  try{ state.data.meetings=null; await S27DATA.loadMeetings({retry:true}); }catch(e){}
+  renderPanel('meetings');
 }
 /* ---- Contactpersonen-beheer (iedere contactpersoon mag toevoegen/wijzigen/verwijderen) ---- */
 function _contactById(id){ const t=window.S27DATA&&S27DATA.team(); const a=(t&&t.contactpersonen)||[]; for(var i=0;i<a.length;i++){ if(String(a[i].id)===String(id)) return a[i]; } return null; }

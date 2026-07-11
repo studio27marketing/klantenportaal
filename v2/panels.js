@@ -281,6 +281,10 @@ function panelStart(){
       : `<div class="empty" style="margin-top:24px"><div class="em-ic">${ic('st_approved',64)}</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Alles is bij!</b><p style="margin:6px 0 0">Er staat momenteel niets op jou te wachten, wij werken ondertussen verder.</p></div>`;
   } else if(state.demoMode){
     cockHtml = `<div class="section-head"><h2>Voor jou te doen</h2><span class="count">${_COCKPIT_MOCK.length} items</span></div><div class="cockpit-row">${_COCKPIT_MOCK.map(_cockpitCard).join('')}</div>`;
+  } else if(state.data && state.data.dashboardError){
+    // GOLF 8: D1-storing of netwerkfout -> eerlijke probeer-zo-opnieuw-staat
+    // met retry i.p.v. de lege "Alles is bij!"-staat of een eeuwige spinner.
+    cockHtml = `<div class="section-head"><h2>Voor jou te doen</h2></div><div class="empty" style="margin-top:24px"><div class="em-ic">${ic('clock',64)}</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Even niet beschikbaar</b><p style="margin:6px 0 0">We konden je overzicht nu niet ophalen. Probeer het zo opnieuw.</p><button class="btn btn-outline btn-sm" style="margin-top:12px" onclick="retryDashboard(this)">Opnieuw proberen</button></div>`;
   } else {
     // LIVE zonder geladen cockpit -> laad-indicator, NOOIT de voorbeeld-actiekaarten.
     cockHtml = `<div class="section-head"><h2>Voor jou te doen</h2></div><div class="empty" style="padding:40px 18px"><div class="brand-spinner" style="margin:0 auto"></div><p style="text-align:center;margin-top:10px">Je overzicht wordt geladen…</p></div>`;
@@ -1551,7 +1555,7 @@ function metaCampaignCard(c,cur){
   var ms=[['Besteed',metaEur(c.spend,cur),'spend'],['Vertoningen',adsNum(c.impressions),'impressions'],['Klikken',adsNum(c.linkClicks||c.clicks),'linkClicks'],['CPC',metaEur(c.cpc,cur),'cpc'],['CTR',(Number(c.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%','ctr'],['Resultaten',adsNum(c.results),'results']];
   var chev='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="color:var(--ink-4);flex:none"><path d="M9 6l6 6-6 6"/></svg>';
   // item 9: klik klapt de advertenties/visuals INLINE open onder de kaart (geen aparte pagina meer).
-  return '<div class="card meta-camp-card" onclick="toggleMetaCampaign(\''+esc(c.id)+'\')" style="padding:14px 16px;margin-bottom:10px;cursor:pointer"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:11px"><span class="pill pill-prog"><span class="pdot"></span>Live</span><b style="font-family:var(--font-display);font-size:15px;flex:1;min-width:130px">'+esc(c.name||'Campagne')+'</b>'+(obj?'<span class="fs" style="color:var(--ink-4)">'+esc(obj)+'</span>':'')+chev+'</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:10px">'+ms.map(function(m){var d=arRowDelta(c,m[2],cur);return '<div><div style="color:var(--ink-4);font-size:11px;font-weight:600">'+m[0]+'</div><div style="font-family:var(--font-display);font-weight:800;font-size:16px;color:var(--ink)">'+m[1]+'</div>'+(d?'<div class="ar-ckd">'+d+'</div>':'')+'</div>';}).join('')+'</div></div><div class="meta-camp-exp" id="metaCampExp_'+esc(c.id)+'" style="display:none"></div>';
+  return '<div class="card meta-camp-card" onclick="toggleMetaCampaign(\''+esc(c.id)+'\')" style="padding:14px 16px;margin-bottom:10px;cursor:pointer"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:11px">'+adsClientStatusPill(c.status)+'<b style="font-family:var(--font-display);font-size:15px;flex:1;min-width:130px">'+esc(c.name||'Campagne')+'</b>'+(obj?'<span class="fs" style="color:var(--ink-4)">'+esc(obj)+'</span>':'')+chev+'</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:10px">'+ms.map(function(m){var d=arRowDelta(c,m[2],cur);return '<div><div style="color:var(--ink-4);font-size:11px;font-weight:600">'+m[0]+'</div><div style="font-family:var(--font-display);font-weight:800;font-size:16px;color:var(--ink)">'+m[1]+'</div>'+(d?'<div class="ar-ckd">'+d+'</div>':'')+'</div>';}).join('')+'</div></div><div class="meta-camp-exp" id="metaCampExp_'+esc(c.id)+'" style="display:none"></div>';
 }
 // item 9: inline campagne-expand (vervangt de paginavervanging van openMetaCampaign).
 function toggleMetaCampaign(id){
@@ -2499,7 +2503,17 @@ function googleOverviewInner(){
 function googleCampaignCard(c,cur){
   var ms=[['Besteed',metaEur(c.spend,cur),'spend'],['Vertoningen',adsNum(c.impressions),'impressions'],['Klikken',adsNum(c.clicks),'clicks'],['CPC',metaEur(c.cpc,cur),'cpc'],['CTR',(Number(c.ctr)||0).toLocaleString('nl-BE',{maximumFractionDigits:2})+'%','ctr'],['Leads',adsNum(c.results),'results']];
   var chan=c.objective?'<span class="fs" style="color:var(--ink-4)">'+esc(c.objective)+'</span>':'';
-  return '<div class="card" style="padding:14px 16px;margin-bottom:10px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:11px"><span class="pill pill-prog"><span class="pdot"></span>Live</span><b style="font-family:var(--font-display);font-size:15px;flex:1;min-width:130px">'+esc(c.name||'Campagne')+'</b>'+chan+'</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:10px">'+ms.map(function(m){var d=arRowDelta(c,m[2],cur);return '<div><div style="color:var(--ink-4);font-size:11px;font-weight:600">'+m[0]+'</div><div style="font-family:var(--font-display);font-weight:800;font-size:16px;color:var(--ink)">'+m[1]+'</div>'+(d?'<div class="ar-ckd">'+d+'</div>':'')+'</div>';}).join('')+'</div></div>';
+  return '<div class="card" style="padding:14px 16px;margin-bottom:10px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:11px">'+adsClientStatusPill(c.status)+'<b style="font-family:var(--font-display);font-size:15px;flex:1;min-width:130px">'+esc(c.name||'Campagne')+'</b>'+chan+'</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:10px">'+ms.map(function(m){var d=arRowDelta(c,m[2],cur);return '<div><div style="color:var(--ink-4);font-size:11px;font-weight:600">'+m[0]+'</div><div style="font-family:var(--font-display);font-weight:800;font-size:16px;color:var(--ink)">'+m[1]+'</div>'+(d?'<div class="ar-ckd">'+d+'</div>':'')+'</div>';}).join('')+'</div></div>';
+}
+/* GOLF 8: klant-campagnekaarten toonden een hardcoded "Live"-pill terwijl bij
+   historische periodes ook (inmiddels) gepauzeerde campagnes met besteding in
+   de lijst staan. Nu een eerlijke status-pill op c.status (Meta effective_status
+   of Google campaign.status). */
+function adsClientStatusPill(st){
+  var u=String(st||'').toUpperCase();
+  var live=(u===''||u==='ACTIVE'||u==='ENABLED');
+  return live?'<span class="pill pill-prog"><span class="pdot"></span>Live</span>'
+             :'<span class="pill pill-todo"><span class="pdot"></span>Gepauzeerd</span>';
 }
 function gadsTrendOn(){ if(!state._gadsTrendOn) state._gadsTrendOn={spend:true,clicks:true,impressions:false}; return state._gadsTrendOn; }
 function gadsToggleTrend(metric){ var on=gadsTrendOn(); on[metric]=!on[metric]; var box=document.getElementById('gadsTrendBox'); if(box) box.outerHTML=googleTrendBlock(); }
@@ -3580,7 +3594,11 @@ function panelMeetings(){
     </div>`;
   };
   let upCount=0, listHtml='';
-  if(mt){
+  if(mt && mt.error){
+    // GOLF 8: laadfout (gateway 500 d1_error of netwerkfout) is geen lege
+    // agenda; toon een eerlijke probeer-zo-opnieuw-staat met retry.
+    listHtml = `<div class="mcard-empty"><div class="mcard-empty-ic">${ic('cal',32)}</div><b>Even niet beschikbaar</b><p>We konden je meetings nu niet ophalen. Probeer het zo opnieuw.</p><button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="retryMeetings(this)">Opnieuw proberen</button></div>`;
+  } else if(mt){
     // 'up' = enkel toekomstige meetings met geldige datum, chronologisch (consistent met de zijbalk-badge).
     const up=mt.list.filter(m=>m.dt && !isNaN(m.dt.getTime()) && m.dt.getTime()>=Date.now()-86400000)
                     .sort((a,b)=>a.dt.getTime()-b.dt.getTime());
@@ -4442,7 +4460,7 @@ function panelInstellingen(){
       <h3>Mijn profiel &amp; notificaties</h3><p class="sdesc">Je eigen gegevens, wijzigingen synchroniseren meteen met je contactfiche bij Studio&nbsp;27.</p>
       <input type="hidden" id="npProfileId" value="${esc(prof.id||'')}">
       <div class="set-grid">
-        <div class="field"><label>E-mail</label><input id="npEmail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" value="${esc(prof.email||'')}" placeholder="naam@bedrijf.be" onchange="saveProfile()" ${prof.id?'':'disabled'}></div>
+        <div class="field"><label>E-mail</label><input id="npEmail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" value="${esc(prof.email||'')}" placeholder="naam@bedrijf.be" onchange="saveProfile()" ${prof.id?'':'disabled'}><div class="fs" style="color:var(--ink-4);margin-top:4px">Dit is ook je inlogadres voor het portaal.</div><div id="npEmailConfirm" class="fs" style="display:none;margin-top:6px"></div></div>
         <div class="field"><label>GSM / WhatsApp-nummer</label><input id="npGsm" type="tel" inputmode="tel" autocomplete="tel" value="${esc(prof.gsm||(demo?'+32 478 12 34 56':''))}" placeholder="+32 4xx xx xx xx" onchange="saveProfile()" ${prof.id?'':'disabled'}></div>
         <div class="field" style="grid-column:1/-1"><label>Notificatie-kanalen</label>${kanaalPicker('npKanalen', (Array.isArray(prof.kanalen)&&prof.kanalen.length)?prof.kanalen:legacyVoorkeurNaarKanalen(vk), prof.id?'saveProfile':null)}${prof.id?'':'<div class="fs" style="color:var(--ink-4);margin-top:6px">Koppel eerst je e-mail om kanalen te bewaren.</div>'}</div>
       </div>
@@ -4467,9 +4485,16 @@ function panelInstellingen(){
 }
 
 /* ---- shared chat markup ---- */
+/* GOLF 8: gedeelde bestanden in de chat als klikbare chip (magic link) i.p.v.
+   een onklikbare tekst-URL. Alleen /f/-links die de gateway als attachments
+   meegeeft (d1ClientCommentShape); esc() op naam en URL. */
+function _chatAttChips(atts){
+  if(!atts || !atts.length) return '';
+  return atts.map(a=>a&&a.url?`<a class="btn btn-outline btn-sm" style="display:inline-flex;align-items:center;gap:6px;margin-top:6px;max-width:100%" href="${esc(a.url)}" target="_blank" rel="noopener">${ic('doc',14)} <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.naam||'Bijlage')}</span></a>`:'').join('');
+}
 function chatHTML(taskId, readOnly){
   const live = (taskId && window.S27DATA) ? S27DATA.chat(taskId) : null;
-  const msgs = (live && live.length!==undefined) ? live.map(m=>[m.av,m.who,m.color||'blue',m.tx,m.tm,m.me]) : [
+  const msgs = (live && live.length!==undefined) ? live.map(m=>[m.av,m.who,m.color||'blue',m.tx,m.tm,m.me,m.attachments||[]]) : [
     ['IM','Ilke Meeusen','blue','Hey Sarah! De eerste montage van de bedrijfsfilm staat klaar. Benieuwd wat je ervan vindt.','09:12',false],
     ['','Jij','blue','Wauw, ziet er strak uit! Kan de intro net iets korter?','09:41',true],
     ['IM','Ilke Meeusen','blue','Zeker, dat passen we gratis aan. Tegen morgen heb je een nieuwe versie.','09:43',false],
@@ -4493,7 +4518,7 @@ function chatHTML(taskId, readOnly){
   const listHTML = `<div class="chat-list" id="chatList">
     ${msgs.length?msgs.map(m=>`<div class="msg ${m[5]?'me':''}">
       ${m[5]?'':`<span class="av" style="background:var(--s27-${m[2]})">${m[0]}</span>`}
-      <div class="bubble"><div class="who">${m[1]==='Jij'?'Jij':esc(voornaam(m[1]))}</div><div class="tx">${m[3]}</div><div class="tm">${m[4]}</div></div>
+      <div class="bubble"><div class="who">${m[1]==='Jij'?'Jij':esc(voornaam(m[1]))}</div><div class="tx">${m[3]}</div>${_chatAttChips(m[6])}<div class="tm">${m[4]}</div></div>
     </div>`).join(''):`<div class="empty" style="padding:30px 10px"><p>${readOnly?'Geen chatgeschiedenis voor dit project.':'Nog geen berichten, stuur ons gerust iets!'}</p></div>`}
     ${receiptHTML}
   </div>`;
