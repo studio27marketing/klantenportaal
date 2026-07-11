@@ -1519,25 +1519,54 @@ async function submitFileReview(btn,choice){
   const sel=panel.querySelector('.rv-chan'); const kanaal=sel?sel.value:'portaal';
   const txEl=panel.querySelector('.rv-tx'); const tx=txEl?txEl.value:'';
   const chan=REVIEW_CHANNELS.find(function(c){return c[0]===kanaal;}); const chanLabel=chan?chan[1]:'';
-  const act=row.querySelector('.df-act'); panel.remove();
-  if(act){ act.style.display=''; act.innerHTML='<span class="pill pill-'+(choice==='goedgekeurd'?'done':'wait')+'"><span class="pdot"></span>'+(choice==='goedgekeurd'?'Goedgekeurd':'Feedback verstuurd')+'</span><span class="rv-via" style="font-size:12px;color:var(--ink-4);margin-left:8px">'+escapeHtml(chanLabel)+'</span>'; }
-  if(state.demoMode || !state.activeProject) return;
-  try { await api(ENDPOINTS.feedbackV2, { task_id:reviewTask, bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[{label:label,choice:choice,opmerking:tx,kanaal:kanaal,kanaal_label:chanLabel}], algemene_opmerking:'' }); } catch(e){}
+  const act=row.querySelector('.df-act'); const prevAct=act?act.innerHTML:''; panel.remove();
+  const okHtml='<span class="pill pill-'+(choice==='goedgekeurd'?'done':'wait')+'"><span class="pdot"></span>'+(choice==='goedgekeurd'?'Goedgekeurd':'Feedback verstuurd')+'</span><span class="rv-via" style="font-size:12px;color:var(--ink-4);margin-left:8px">'+escapeHtml(chanLabel)+'</span>';
+  // Golf 5: geen fire-and-forget meer — eerst de server, dan pas de succes-pill.
+  if(state.demoMode || !state.activeProject){ if(act){ act.style.display=''; act.innerHTML=okHtml; } return; }
+  if(act){ act.style.display=''; act.innerHTML='<span class="pill pill-wait"><span class="pdot"></span>Versturen…</span>'; }
+  var res=null;
+  try { res=await api(ENDPOINTS.feedbackV2, { task_id:reviewTask, bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[{label:label,choice:choice,opmerking:tx,kanaal:kanaal,kanaal_label:chanLabel}], algemene_opmerking:'' }); } catch(e){ res=null; }
+  var d=(res&&res.data)||{};
+  if(res&&res.ok&&d.ok!==false){ if(act) act.innerHTML=okHtml; }
+  else if(act){ act.innerHTML=prevAct; act.insertAdjacentHTML('beforeend','<span class="rv-via" style="font-size:12px;color:#B0432F;margin-left:8px">'+escapeHtml((d&&d.message)||'Versturen lukte net niet, probeer zo opnieuw.')+'</span>'); }
 }
-function approveAll(btn){ const banner=document.querySelector('.fb-banner'); if(banner){ banner.style.animation='none'; banner.innerHTML='<div class="fb-ic" style="background:var(--s27-green)">'+ic('check',20)+'</div><div class="fb-tx"><b>Bedankt, goedgekeurd!</b><p>We zetten meteen de volgende stap.</p></div>'; banner.style.background='var(--s27-green-soft)'; } submitFeedbackReal('goedgekeurd'); }
+function approveAll(btn){
+  const banner=document.querySelector('.fb-banner');
+  if(banner){ banner.style.animation='none'; banner.innerHTML='<div class="fb-ic" style="background:var(--s27-green)">'+ic('check',20)+'</div><div class="fb-tx"><b>Goedkeuren…</b><p>Even geduld, we geven het door.</p></div>'; }
+  submitFeedbackReal('goedgekeurd').then(function(ok){
+    if(!banner) return;
+    if(ok){ banner.innerHTML='<div class="fb-ic" style="background:var(--s27-green)">'+ic('check',20)+'</div><div class="fb-tx"><b>Bedankt, goedgekeurd!</b><p>We zetten meteen de volgende stap.</p></div>'; banner.style.background='var(--s27-green-soft)'; }
+    else { banner.innerHTML='<div class="fb-ic" style="background:var(--s27-orange)">'+ic('msg',20)+'</div><div class="fb-tx"><b>Goedkeuren lukte net niet</b><p>Probeer zo opnieuw, of laat het ons weten via de chat.</p></div>'; }
+  });
+}
+// Golf 5: geeft true/false terug zodat de aanroeper echte fouten kan tonen
+// (voorheen fire-and-forget met lege catch).
 async function submitFeedbackReal(choice){
-  if(state.demoMode || !state.activeProject) return;
-  try { await api(ENDPOINTS.feedbackV2, { task_id:state.activeProject, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[{label:'Project',choice:choice,kanaal:'portaal'}], algemene_opmerking:'' }); } catch(e){}
+  if(state.demoMode || !state.activeProject) return true;
+  var res=null;
+  try { res=await api(ENDPOINTS.feedbackV2, { task_id:state.activeProject, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[{label:'Project',choice:choice,kanaal:'portaal'}], algemene_opmerking:'' }); } catch(e){ res=null; }
+  var d=(res&&res.data)||{};
+  return !!(res&&res.ok&&d.ok!==false);
 }
 async function submitGeneralFeedback(btn){
   const tx=document.getElementById('genFbTx'), sel=document.getElementById('genFbChan');
   const msg=tx?tx.value.trim():''; const kanaal=sel?sel.value:'portaal';
   if(!msg){ if(tx){ tx.style.borderColor='var(--s27-orange)'; tx.focus(); } return; }
   const chan=(REVIEW_CHANNELS.find(function(c){return c[0]===kanaal;})||[])[1]||'';
-  const wrap=btn.closest('.mpane');
-  if(wrap) wrap.innerHTML='<div class="empty" style="padding:32px"><div class="em-ic">'+ic('st_approved',56)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Bedankt voor je feedback!</b><p style="margin:6px 0 0">We gaan er meteen mee aan de slag.</p></div>';
-  if(state.demoMode || !state.activeProject) return;
-  try { await api(ENDPOINTS.feedbackV2, { task_id:state.activeProject, bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[], algemene_opmerking:msg, kanaal:kanaal, kanaal_label:chan }); } catch(e){}
+  const wrap=btn.closest('.mpane'); const prevWrap=wrap?wrap.innerHTML:'';
+  const okWrap='<div class="empty" style="padding:32px"><div class="em-ic">'+ic('st_approved',56)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Bedankt voor je feedback!</b><p style="margin:6px 0 0">We gaan er meteen mee aan de slag.</p></div>';
+  // Golf 5: succes pas na een geslaagde server-write (geen optimisme meer).
+  if(state.demoMode || !state.activeProject){ if(wrap) wrap.innerHTML=okWrap; return; }
+  if(btn){ btn.disabled=true; btn.textContent='Versturen…'; }
+  var res=null;
+  try { res=await api(ENDPOINTS.feedbackV2, { task_id:state.activeProject, bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[], algemene_opmerking:msg, kanaal:kanaal, kanaal_label:chan }); } catch(e){ res=null; }
+  var d=(res&&res.data)||{};
+  if(res&&res.ok&&d.ok!==false){ if(wrap) wrap.innerHTML=okWrap; }
+  else {
+    if(wrap) wrap.innerHTML=prevWrap;
+    var tx2=document.getElementById('genFbTx'); if(tx2){ tx2.value=msg; tx2.style.borderColor='var(--s27-orange)'; }
+    var wr2=wrap?wrap.querySelector('#genFbTx'):null; if(wr2&&wr2.parentElement&&!wrap.querySelector('.genfb-err')) wr2.insertAdjacentHTML('afterend','<div class="genfb-err" style="font-size:12.5px;color:#B0432F;margin-top:6px">'+escapeHtml((d&&d.message)||'Versturen lukte net niet, probeer zo opnieuw.')+'</div>');
+  }
 }
 /* --- In-portal feedback per SUBTAAK (vanuit het proces-overzicht), via feedbackV2 ---
    task_id = de subtaak zelf (niet de hoofdtaak), zodat goedkeuren/feedback op de juiste
@@ -1549,19 +1578,31 @@ function procesFeedbackToggle(taskId){
 }
 async function procesApprove(taskId){
   var act=document.getElementById('fbcact-'+taskId), fb=document.getElementById('fbcfb-'+taskId);
+  var prevAct=act?act.innerHTML:'';
   if(fb) fb.style.display='none';
-  if(act) act.innerHTML='<span class="pill pill-done"><span class="pdot"></span>Goedgekeurd, bedankt!</span>';
-  if(state.demoMode || !state.session) return;
-  try { await api(ENDPOINTS.feedbackV2, { task_id:taskId, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[{label:'Oplevering',choice:'goedgekeurd',kanaal:'portaal',kanaal_label:'via het portaal'}], algemene_opmerking:'' }); } catch(e){}
+  // Golf 5: succes pas na een geslaagde server-write (patroon galApprove).
+  if(state.demoMode || !state.session){ if(act) act.innerHTML='<span class="pill pill-done"><span class="pdot"></span>Goedgekeurd, bedankt!</span>'; return; }
+  if(act) act.innerHTML='<span class="pill pill-wait"><span class="pdot"></span>Goedkeuren…</span>';
+  var res=null;
+  try { res=await api(ENDPOINTS.feedbackV2, { task_id:taskId, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[{label:'Oplevering',choice:'goedgekeurd',kanaal:'portaal',kanaal_label:'via het portaal'}], algemene_opmerking:'' }); } catch(e){ res=null; }
+  var d=(res&&res.data)||{};
+  if(res&&res.ok&&d.ok!==false){ if(act) act.innerHTML='<span class="pill pill-done"><span class="pdot"></span>Goedgekeurd, bedankt!</span>'; }
+  else if(act){ act.innerHTML=prevAct; act.insertAdjacentHTML('beforeend','<span style="font-size:12px;color:#B0432F;margin-left:8px">'+escapeHtml((d&&d.message)||'Goedkeuren lukte net niet, probeer zo opnieuw.')+'</span>'); }
 }
 async function procesFeedback(taskId){
   var t=document.getElementById('fbctx-'+taskId); var msg=t?String(t.value||'').trim():'';
   if(!msg){ if(t){ t.style.borderColor='var(--s27-orange)'; t.focus(); } return; }
   var act=document.getElementById('fbcact-'+taskId), fb=document.getElementById('fbcfb-'+taskId);
-  if(fb) fb.style.display='none';
-  if(act) act.innerHTML='<span class="pill pill-wait"><span class="pdot"></span>Feedback verstuurd, bedankt!</span>';
-  if(state.demoMode || !state.session) return;
-  try { await api(ENDPOINTS.feedbackV2, { task_id:taskId, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[{label:'Oplevering',choice:'feedback',opmerking:msg,kanaal:'portaal',kanaal_label:'via het portaal'}], algemene_opmerking:'' }); } catch(e){}
+  var prevAct=act?act.innerHTML:'';
+  // Golf 5: succes pas na een geslaagde server-write; bij een fout blijft de
+  // getypte feedback staan zodat de klant meteen opnieuw kan proberen.
+  if(state.demoMode || !state.session){ if(fb) fb.style.display='none'; if(act) act.innerHTML='<span class="pill pill-wait"><span class="pdot"></span>Feedback verstuurd, bedankt!</span>'; return; }
+  if(act) act.innerHTML='<span class="pill pill-wait"><span class="pdot"></span>Versturen…</span>';
+  var res=null;
+  try { res=await api(ENDPOINTS.feedbackV2, { task_id:taskId, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), deliverables:[{label:'Oplevering',choice:'feedback',opmerking:msg,kanaal:'portaal',kanaal_label:'via het portaal'}], algemene_opmerking:'' }); } catch(e){ res=null; }
+  var d=(res&&res.data)||{};
+  if(res&&res.ok&&d.ok!==false){ if(fb) fb.style.display='none'; if(act) act.innerHTML='<span class="pill pill-wait"><span class="pdot"></span>Feedback verstuurd, bedankt!</span>'; }
+  else if(act){ act.innerHTML=prevAct; act.insertAdjacentHTML('beforeend','<span style="font-size:12px;color:#B0432F;margin-left:8px">'+escapeHtml((d&&d.message)||'Versturen lukte net niet, probeer zo opnieuw.')+'</span>'); }
 }
 // facturatiegegevens opslaan, ALLE velden via facturatieSave (schrijft naar exact de
 // backend-velden die content-get terugleest → volledige round-trip-sync, geen lege overschrijf)
@@ -2294,31 +2335,69 @@ async function metricoolApprove(id, btn){
 async function metricoolFeedback(id, btn){
   const t=$id('mcfbtx-'+id); const tx=((t&&t.value)||'').trim();
   if(!tx){ if(t){ t.style.borderColor='var(--s27-orange)'; t.focus(); } return; }
-  const box=$id('mcfb-'+id);
-  if(box) box.innerHTML='<div class="fs" style="color:var(--s27-green-ink,#147A50);padding:4px 0">'+ic('check',14)+' Je feedback is verstuurd naar je Studio 27-contact, dankjewel!</div>';
-  if(state.demoMode) return;
-  try{
-    await api(ENDPOINTS.directMessage, { bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), onderwerp:'Feedback social post (via portaal)', bericht:'Feedback op geplande post '+id+': '+tx });
-  }catch(e){}
+  const box=$id('mcfb-'+id); const prevBox=box?box.innerHTML:'';
+  // Golf 5: via het metricoolFeedback-endpoint (landt in D1 social_feedback
+  // voor de teamwerkruimte en de AI-leerlus, plus ticket) i.p.v. een los
+  // directMessage; succes pas na een geslaagde write.
+  if(state.demoMode){ if(box) box.innerHTML='<div class="fs" style="color:var(--s27-green-ink,#147A50);padding:4px 0">'+ic('check',14)+' Je feedback is verstuurd naar je Studio 27-contact, dankjewel!</div>'; return; }
+  if(btn){ btn.disabled=true; btn.textContent='Versturen…'; }
+  var res=null;
+  try{ res=await api(ENDPOINTS.metricoolFeedback, { post_id:id, feedback:tx, klant_naam:S27DATA.bedrijfsnaam() }); }catch(e){ res=null; }
+  var d=(res&&res.data)||{};
+  if(res&&res.ok&&d.ok){
+    if(box) box.innerHTML='<div class="fs" style="color:var(--s27-green-ink,#147A50);padding:4px 0">'+ic('check',14)+' Je feedback is verstuurd naar je Studio 27-contact, dankjewel!</div>';
+  } else {
+    if(box){ box.innerHTML=prevBox; var t2=$id('mcfbtx-'+id); if(t2){ t2.value=tx; t2.style.borderColor='var(--s27-orange)'; } box.insertAdjacentHTML('beforeend','<div class="fs" style="color:#B0432F;margin-top:5px">'+escapeHtml((d&&d.message)||'Versturen lukte net niet, probeer zo opnieuw.')+'</div>'); }
+  }
 }
 /* ---- Social-kalender: goedkeuren + aanpassing doorgeven (nieuwe detail-UI) ---- */
 async function socialApprove(id, btn){
-  state._mcApproved=state._mcApproved||{}; state._mcApproved[id]=true;
-  if(window.S27DATA&&S27DATA.markMetricoolApproved) S27DATA.markMetricoolApproved(id);
-  // Optimistisch: het actie-blok meteen herrenderen (knop -> 'Goedgekeurd') i.p.v. wachten op de worker.
-  // Vroeger bleef de knop op 'Bezig…' hangen bij een trage/falende call, dat is hiermee weg.
+  // Golf 5: niet langer fire-and-forget — de goedkeuring is pas "echt" als de
+  // worker ze in D1 heeft staan (social_feedback kind='approved'); bij een
+  // fout draaien we de lokale markering terug en tonen we wat er misliep.
+  if(state.demoMode){
+    state._mcApproved=state._mcApproved||{}; state._mcApproved[id]=true;
+    if(window.S27DATA&&S27DATA.markMetricoolApproved) S27DATA.markMetricoolApproved(id);
+    var boxD=document.getElementById('socEditActsForm'); if(boxD){ boxD.innerHTML=socialEditorActions(id); } return;
+  }
+  if(btn){ btn.disabled=true; btn.innerHTML='Bezig…'; }
+  var res=null;
+  try{ res=await api(ENDPOINTS.metricoolApprove, { post_id:id, klant_naam:(window.S27DATA&&S27DATA.bedrijfsnaam)?S27DATA.bedrijfsnaam():'' }); }catch(e){ res=null; }
+  var d=(res&&res.data)||{};
   var box=document.getElementById('socEditActsForm');
-  if(box){ box.innerHTML=socialEditorActions(id); }
-  else if(btn){ btn.disabled=true; btn.innerHTML=ic('check',15)+' Goedgekeurd'; }
-  if(!state.demoMode){ api(ENDPOINTS.metricoolApprove, { post_id:id }).catch(function(){}); }  // fire-and-forget
+  if(res&&res.ok&&d.ok){
+    state._mcApproved=state._mcApproved||{}; state._mcApproved[id]=true;
+    if(window.S27DATA&&S27DATA.markMetricoolApproved) S27DATA.markMetricoolApproved(id);
+    if(box){ box.innerHTML=socialEditorActions(id); }
+    else if(btn){ btn.disabled=true; btn.innerHTML=ic('check',15)+' Goedgekeurd'; }
+  } else {
+    if(btn){ btn.disabled=false; btn.innerHTML=ic('check',15)+' Goedkeuren'; }
+    var msg=(d&&d.message)?String(d.message):'Goedkeuren lukte net niet. Probeer zo opnieuw, of laat hieronder een berichtje na.';
+    if(box&&!box.querySelector('.soc-apprerr')) box.insertAdjacentHTML('afterbegin','<div class="soc-apprerr" style="font-size:12.5px;color:#B0432F;margin-bottom:8px">'+escapeHtml(msg)+'</div>');
+    else if(!box) alert(msg);
+  }
 }
 async function socialFeedback(id, btn){
   const t=$id('socFbTx'); const tx=((t&&t.value)||'').trim();
   if(!tx){ if(t){ t.style.borderColor='var(--s27-orange)'; t.focus(); } return; }
   if(btn){ btn.disabled=true; btn.textContent='Versturen…'; }
-  if(!state.demoMode){ try{ await api(ENDPOINTS.metricoolFeedback, { post_id:id, feedback:tx }); }catch(e){} }
+  // Golf 5: succes pas na een geslaagde server-write (landt nu ook in de
+  // D1-feedbacktabel van het team); bij een fout blijft de tekst staan.
+  var ok=true, msg='';
+  if(!state.demoMode){
+    var res=null;
+    try{ res=await api(ENDPOINTS.metricoolFeedback, { post_id:id, feedback:tx, klant_naam:(window.S27DATA&&S27DATA.bedrijfsnaam)?S27DATA.bedrijfsnaam():'' }); }catch(e){ res=null; }
+    var d=(res&&res.data)||{};
+    ok=!!(res&&res.ok&&d.ok);
+    msg=(d&&d.message)?String(d.message):'';
+  }
   const box=$id('socFbWrap');
-  if(box) box.innerHTML='<div class="soc-fbok">'+ic('check',16)+' Je opmerking is doorgestuurd naar je Studio 27-contact. We passen het aan en je ziet de update hier verschijnen.</div>';
+  if(ok){ if(box) box.innerHTML='<div class="soc-fbok">'+ic('check',16)+' Je opmerking is doorgestuurd naar je Studio 27-contact. We passen het aan en je ziet de update hier verschijnen.</div>'; }
+  else {
+    if(btn){ btn.disabled=false; btn.textContent='Opnieuw versturen'; }
+    if(t){ t.style.borderColor='var(--s27-orange)'; }
+    if(box&&!box.querySelector('.soc-fberr')) box.insertAdjacentHTML('beforeend','<div class="soc-fberr" style="font-size:12.5px;color:#B0432F;margin-top:6px">'+escapeHtml(msg||'Versturen lukte net niet, probeer zo opnieuw.')+'</div>');
+  }
 }
 /* --- In-portal post-editor: kanalen toggelen, hashtag toevoegen, en DIRECT opslaan in Metricool --- */
 function socialToggleChan(btn){ if(!btn) return; btn.classList.toggle('on'); var net=String(btn.getAttribute('data-net')||'').toLowerCase(); if(btn.classList.contains('on')) state._socPreviewNet=net; if(typeof socialSyncMock==='function') socialSyncMock(); }
