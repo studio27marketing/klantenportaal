@@ -1,5 +1,5 @@
 /* Studio 27 Teamportaal service worker — network-first (nooit stale code serveren). */
-var CACHE = 's27-team-v141';
+var CACHE = 's27-team-v142';
 var SHELL = ['/', '/index.html', '/wordmark.svg', '/icon.svg'];
 
 self.addEventListener('install', function (e) {

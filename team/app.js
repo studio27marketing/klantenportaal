@@ -1714,34 +1714,88 @@
     loadKdHistory(it);
   }
   function blobToB64(blob) { return new Promise(function (resolve) { var fr = new FileReader(); fr.onload = function () { var s = String(fr.result || ''); resolve(s.slice(s.indexOf(',') + 1)); }; fr.onerror = function () { resolve(''); }; fr.readAsDataURL(blob); }); }
-  // HR-6: gesprek opnemen in de browser, transcriberen via de worker (Whisper), bij de taak zetten
+  // HR-6: gesprek opnemen in de browser. Tijdens de opname toont Web Speech (waar beschikbaar)
+  // de transcriptie live; na het stoppen maakt Whisper via de worker de definitieve
+  // transcriptie + samenvatting en hangt die bij de kandidaat.
   function kdRecord(it) {
     if (!navigator.mediaDevices || !window.MediaRecorder) { toast('Opname wordt niet ondersteund in deze browser'); return; }
-    showAiPop('Gesprek opnemen', '<p class="micro" style="color:var(--ink-4);margin:0 0 12px">Neem het sollicitatiegesprek op. Na het stoppen transcribeert de AI het en zet samenvatting + transcriptie bij de kandidaat (voor de Analyse-fase).</p><button class="btn btn-primary btn-sm" id="recBtn">● Start opname</button><div id="recStat" style="margin-top:12px"></div>');
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    showAiPop('Gesprek opnemen', '<p class="micro" style="color:var(--ink-4);margin:0 0 12px">Neem het sollicitatiegesprek op. ' + (SR ? 'Tijdens de opname zie je de transcriptie live meelopen; na' : 'Na') + ' het stoppen maakt de AI de definitieve transcriptie + samenvatting en zet die bij de kandidaat (voor de Analyse-fase).</p><button class="btn btn-primary btn-sm" id="recBtn">● Start opname</button><div id="recStat" style="margin-top:12px"></div><div id="recLive" style="display:none;margin-top:10px;max-height:180px;overflow-y:auto;padding:10px 12px;border:1px solid var(--line, #e6e2d6);border-radius:10px;font-size:12.5px;line-height:1.55;white-space:pre-wrap"></div>');
     var chunks = [], rec = null, stream = null, t0 = 0, timer = null, recording = false;
+    var sr = null, liveFinal = '', liveInterim = '';
     var stat = function (html) { var e = document.getElementById('recStat'); if (e) e.innerHTML = html; };
+    var drawLive = function () {
+      var e = document.getElementById('recLive'); if (!e) return;
+      var txt = (liveFinal + liveInterim).trim();
+      if (!txt) { e.style.display = recording ? '' : 'none'; e.innerHTML = recording ? '<span style="color:var(--ink-4)">Luistert… spreek en de tekst verschijnt hier live.</span>' : ''; return; }
+      e.style.display = '';
+      e.innerHTML = esc(liveFinal) + (liveInterim ? '<span style="color:var(--ink-4)">' + esc(liveInterim) + '</span>' : '');
+      e.scrollTop = e.scrollHeight;
+    };
+    // Live meelopende transcriptie (Chrome/Edge/Safari). Fail-soft: zonder ondersteuning
+    // blijft enkel de Whisper-transcriptie na het stoppen over.
+    var startLive = function () {
+      if (!SR) return;
+      try {
+        sr = new SR();
+        sr.lang = 'nl-BE'; sr.continuous = true; sr.interimResults = true;
+        sr.onresult = function (ev) {
+          liveInterim = '';
+          for (var i = ev.resultIndex; i < ev.results.length; i++) {
+            var t = (ev.results[i][0] && ev.results[i][0].transcript) || '';
+            if (ev.results[i].isFinal) liveFinal += t + ' '; else liveInterim += t;
+          }
+          drawLive();
+        };
+        // de browser stopt herkenning na een stilte: zolang we opnemen gewoon herstarten
+        sr.onend = function () { if (recording && sr) { try { sr.start(); } catch (e) { } } };
+        sr.onerror = function () { };
+        sr.start();
+      } catch (e) { sr = null; }
+    };
+    var stopLive = function () { if (!sr) return; var s = sr; sr = null; try { s.onend = null; s.stop(); } catch (e) { } };
     var btn = document.getElementById('recBtn');
     btn.onclick = async function () {
       if (!recording) {
         try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) { toast('Geen microfoontoegang'); return; }
-        rec = new MediaRecorder(stream); chunks = [];
+        // Safari/iPhone kan geen webm opnemen (wel mp4): kies een ondersteund formaat en
+        // geef het échte mimetype door, anders weigert Whisper het bestand.
+        var mime = '';
+        if (window.MediaRecorder.isTypeSupported) ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].some(function (m) { if (MediaRecorder.isTypeSupported(m)) { mime = m; return true; } return false; });
+        try { rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream); } catch (e) { rec = new MediaRecorder(stream); }
+        var recMime = rec.mimeType || mime || 'audio/webm';
+        chunks = []; liveFinal = ''; liveInterim = '';
         rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
         rec.onstop = async function () {
           try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) { }
           if (timer) clearInterval(timer);
-          var blob = new Blob(chunks, { type: 'audio/webm' });
-          stat('<p class="micro">AI transcribeert de opname (' + Math.round(blob.size / 1024) + ' KB)…</p>');
+          stopLive();
+          var blob = new Blob(chunks, { type: recMime });
+          stat('<p class="micro">AI maakt de definitieve transcriptie (' + Math.round(blob.size / 1024) + ' KB)…</p>');
           var b64 = await blobToB64(blob);
-          var r; try { r = await api('teamKandidaatTranscribe', { task_id: it.id, audio_b64: b64, mime: 'audio/webm' }, { timeout: 180000 }); } catch (e) { r = null; }
-          if (r && r.ok) { stat('<div class="kd-sub"><h4>Samenvatting</h4><p>' + esc(r.samenvatting || '(geen)') + '</p></div><details style="margin-top:8px"><summary class="micro" style="cursor:pointer">Volledige transcriptie</summary><p class="micro" style="white-space:pre-wrap;margin-top:6px">' + esc(r.transcript || '') + '</p></details><p class="micro" style="color:var(--ink-4);margin-top:8px">Opgeslagen bij de kandidaat ✓</p>'); loadKdHistory(it); }
-          else { stat('<p class="micro" style="color:#c0392b">' + (r && r.error === 'no_transcribe_key' ? 'Transcriptie-sleutel (OPENAI_API_KEY) ontbreekt nog in de worker.' : (r && r.error === 'te_groot' ? 'De opname is te lang (max ~24 MB).' : 'Transcriberen mislukt.')) + '</p>'); var rb = document.getElementById('recBtn'); if (rb) { rb.disabled = false; rb.textContent = '● Opnieuw opnemen'; } }
+          var r; try { r = await api('teamKandidaatTranscribe', { task_id: it.id, audio_b64: b64, mime: recMime }, { timeout: 180000 }); } catch (e) { r = null; }
+          if (r && r.ok) {
+            var lv = document.getElementById('recLive'); if (lv) lv.style.display = 'none';
+            stat('<div class="kd-sub"><h4>Samenvatting</h4><p>' + esc(r.samenvatting || '(geen)') + '</p></div><details style="margin-top:8px"><summary class="micro" style="cursor:pointer">Volledige transcriptie</summary><p class="micro" style="white-space:pre-wrap;margin-top:6px">' + esc(r.transcript || '') + '</p></details><p class="micro" style="color:var(--ink-4);margin-top:8px">Opgeslagen bij de kandidaat ✓</p>');
+            loadKdHistory(it);
+          } else {
+            var msg = r && r.error === 'no_transcribe_key' ? 'Transcriptie-sleutel (OPENAI_API_KEY) ontbreekt nog in de worker.'
+              : r && r.error === 'te_groot' ? 'De opname is te lang (max ~24 MB).'
+              : 'Transcriberen mislukt.' + (r && r.detail ? ' (' + r.detail + ')' : '');
+            // de live meegeschreven tekst niet weggooien: die blijft staan als reserve
+            stat('<p class="micro" style="color:#c0392b">' + esc(msg) + '</p>' + (liveFinal.trim() ? '<p class="micro" style="color:var(--ink-4)">De live meegeschreven tekst hieronder blijft beschikbaar — kopieer die eventueel handmatig.</p>' : ''));
+            var rb = document.getElementById('recBtn'); if (rb) { rb.disabled = false; rb.textContent = '● Opnieuw opnemen'; }
+          }
         };
-        rec.start(); recording = true; t0 = Date.now();
+        // timeslice: elke seconde een chunk, zodat een lange opname niet pas (of nooit) bij het stoppen data oplevert
+        rec.start(1000); recording = true; t0 = Date.now();
+        startLive(); drawLive();
         btn.textContent = '■ Stop opname'; btn.classList.add('rec-on');
         timer = setInterval(function () { var s = Math.floor((Date.now() - t0) / 1000); stat('<span class="rec-dot"></span> Opname loopt · ' + Math.floor(s / 60) + ':' + (s % 60 < 10 ? '0' : '') + (s % 60)); }, 500);
       } else {
+        recording = false;
         if (rec && rec.state !== 'inactive') rec.stop();
-        recording = false; btn.disabled = true; btn.textContent = 'Verwerken…'; btn.classList.remove('rec-on');
+        btn.disabled = true; btn.textContent = 'Verwerken…'; btn.classList.remove('rec-on');
       }
     };
   }

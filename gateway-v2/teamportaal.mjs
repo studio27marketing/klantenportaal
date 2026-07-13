@@ -2935,8 +2935,12 @@ export async function teamKandidaatTranscribe(_b, body, env) {
   const b64 = str(body.audio_b64); if (!b64) return { status: 400, body: { ok: false, error: 'no_audio' } };
   let bytes; try { bytes = b64ToBytes(b64); } catch (e) { return { status: 400, body: { ok: false, error: 'bad_audio' } }; }
   if (bytes.length > 24 * 1024 * 1024) return { status: 200, body: { ok: false, error: 'te_groot', message: 'De opname is te groot (max 24 MB).' } };
+  // Safari/iPhone neemt mp4 op i.p.v. webm; Whisper leidt het formaat af uit de
+  // bestandsnaam, dus de extensie moet bij het echte mimetype passen.
+  const mime = str(body.mime) || 'audio/webm';
+  const ext = /mp4|m4a|aac/i.test(mime) ? 'mp4' : /mpeg|mp3/i.test(mime) ? 'mp3' : /wav/i.test(mime) ? 'wav' : (/ogg|opus/i.test(mime) && !/webm/i.test(mime)) ? 'ogg' : 'webm';
   const fd = new FormData();
-  fd.append('file', new Blob([bytes], { type: str(body.mime) || 'audio/webm' }), 'gesprek.webm');
+  fd.append('file', new Blob([bytes], { type: mime }), 'gesprek.' + ext);
   fd.append('model', 'whisper-1');
   fd.append('language', 'nl');
   fd.append('response_format', 'verbose_json');   // identieke .text + extra .duration (sec) voor de kostenmonitor
