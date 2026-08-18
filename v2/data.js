@@ -521,6 +521,11 @@
           providers:(p.providers||[]), hashtags:(p.hashtags||[]),
           draft:(p.draft===true||String(p.draft).toLowerCase()==='true'),
           approved:(p.approved===true||String(p.approved).toLowerCase()==='true'),
+          // Afkeuring door de klant (18-08). De worker garandeert dat approved en afgekeurd
+          // nooit allebei waar zijn: de laatste beslissing wint.
+          afgekeurd:(p.afgekeurd===true||String(p.afgekeurd).toLowerCase()==='true'),
+          afkeur_reden:String(p.afkeur_reden||''),
+          afkeur_op:Number(p.afkeur_op||0),
           type:String(p.type||'').toUpperCase(), // restpuntenronde 11-07: POST/STORY/REEL uit de worker (stories/reels herkenbaar in kalender en mockup)
           netwerken: _mcNetwerken(p) };
       });

@@ -514,10 +514,18 @@ function socialStatus(p){
   var ss=(p.netwerken||[]).map(function(n){return String(n.status||'').toUpperCase();});
   if(ss.length && ss.some(function(s){return s.indexOf('PUBLISH')>=0;})) return 'gepubliceerd';
   if(p.draft) return 'concept';   // Metricool-draft: nog in voorbereiding, read-only (bug 86ca83gp0)
-  if(p.approved || (state._mcApproved && state._mcApproved[p.id])) return 'goedgekeurd';
+  // De laatste beslissing van de klant wint. De server bepaalt dat al (approved en afgekeurd zijn
+  // nooit allebei waar), de lokale overrides hieronder houden de UI snel tussen twee ophaalrondes.
+  if(state._mcAfgekeurd && state._mcAfgekeurd[p.id]) return 'afgekeurd';
+  if(state._mcApproved && state._mcApproved[p.id]) return 'goedgekeurd';
+  if(p.afgekeurd) return 'afgekeurd';
+  if(p.approved) return 'goedgekeurd';
   return 'feedback';
 }
-var SOC_STATUS={concept:['In voorbereiding','#92740B','rgba(248,192,40,.18)','yellow'],feedback:['Wacht op je feedback','#C44514','rgba(246,97,49,.13)','orange'],goedgekeurd:['Goedgekeurd','#147A50','rgba(18,172,78,.13)','green'],gepubliceerd:['Gepubliceerd','#1F5FA8','rgba(48,131,220,.13)','blue']};
+// Reden-categorieen bij een afkeuring. Kort houden: de klant kiest er een en licht toe.
+var SOC_AFKEUR_REDENEN=['De tekst','Het beeld','Het moment','Het kanaal','Iets anders'];
+function socialAfkeurReden(){ return state._socAfkeurReden||''; }
+var SOC_STATUS={concept:['In voorbereiding','#92740B','rgba(248,192,40,.18)','yellow'],feedback:['Wacht op je feedback','#C44514','rgba(246,97,49,.13)','orange'],goedgekeurd:['Goedgekeurd','#147A50','rgba(18,172,78,.13)','green'],afgekeurd:['Afgekeurd','#B0432F','rgba(176,67,47,.13)','red'],gepubliceerd:['Gepubliceerd','#1F5FA8','rgba(48,131,220,.13)','blue']};
 function socialStatusMeta(st){ return SOC_STATUS[st]||SOC_STATUS.feedback; }
 function socialPostsAll(){ if(state.demoMode) return socialDemoPosts(); var mc=(window.S27DATA&&S27DATA.metricool())||null; return (mc&&mc.posts)||[]; }
 function socialMonth(){ if(!state._socialMonth){ var n=new Date(); state._socialMonth={y:n.getFullYear(),m:n.getMonth()}; } return state._socialMonth; }
@@ -953,8 +961,9 @@ function socialMatrixbar(posts){
 }
 function socialFilters(){
   var posts=socialPostsAll();
-  var c={concept:0,feedback:0,goedgekeurd:0,gepubliceerd:0}; posts.forEach(function(p){ var s=socialStatus(p); if(c[s]!=null) c[s]++; });
+  var c={concept:0,feedback:0,goedgekeurd:0,afgekeurd:0,gepubliceerd:0}; posts.forEach(function(p){ var s=socialStatus(p); if(c[s]!=null) c[s]++; });
   var fs=[['alles','Alle',posts.length],['feedback','Wacht op je feedback',c.feedback],['goedgekeurd','Goedgekeurd',c.goedgekeurd],['gepubliceerd','Gepubliceerd',c.gepubliceerd]];
+  if(c.afgekeurd) fs.splice(3,0,['afgekeurd','Afgekeurd',c.afgekeurd]);   // enkel tonen als er echt iets is afgekeurd
   if(c.concept) fs.splice(1,0,['concept','In voorbereiding',c.concept]);   // enkel tonen als er concepten zijn
   return '<div class="soc-fbar">'+fs.map(function(f){ return '<button class="soc-fchip'+(socialFilter()===f[0]?' active':'')+'" onclick="socialSetFilter(\''+f[0]+'\')"><b style="opacity:.8">'+f[2]+'</b> '+esc(f[1])+'</button>'; }).join('')+'</div>';
 }
@@ -970,18 +979,19 @@ function socialCalendar(posts){
     var dps=(byDay[day]||[]).sort(function(a,b){return a.dt-b.dt;});
     var today=isCur&&now.getDate()===day;
     cells+='<div class="soc-cell'+(today?' soc-today':'')+'"><div class="soc-daynum">'+day+'</div>'+dps.map(function(p){
-      var m=socialStatusMeta(socialStatus(p)); var nc=mcNet(((p.netwerken||[])[0]||{}).netwerk);
+      var st=socialStatus(p); var m=socialStatusMeta(st); var nc=mcNet(((p.netwerken||[])[0]||{}).netwerk);
       var tm=p.dt.toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'});
-      return '<button class="soc-chip" style="--cc:'+nc[1]+'" onclick="socialOpenDetail(\''+esc(p.id)+'\')" title="'+esc((p.tekst||'').replace(/\s+/g,' ').slice(0,90))+'"><span class="soc-cdot" style="background:'+m[1]+'"></span>'+tm+'</button>';
+      var snip=esc((p.tekst||'(nog geen tekst)').replace(/\s+/g,' ').slice(0,42));
+      return '<button class="soc-chip" data-st="'+st+'" style="--cc:'+nc[1]+'" onclick="socialOpenDetail(\''+esc(p.id)+'\')" title="'+esc((p.tekst||'').replace(/\s+/g,' ').slice(0,140))+'"><span class="soc-cdot" style="background:'+m[1]+'"></span><span class="soc-ctime">'+tm+'</span><span class="soc-ctxt">'+snip+'</span></button>';
     }).join('')+'</div>';
   }
   // posts zonder datum (bv. concepten die het team nog moet inplannen) passen niet in het
   // dag-raster maar moeten WEL zichtbaar zijn, anders kloppen de filtertellers niet (review v82)
   var zonder=posts.filter(function(p){return !p.dt;});
   var zonderHtml=zonder.length?('<div class="soc-nodate"><span class="soc-nodate-lab">Nog in te plannen</span>'+zonder.map(function(p){
-    var m=socialStatusMeta(socialStatus(p)); var nc=mcNet(((p.netwerken||[])[0]||{}).netwerk);
+    var st=socialStatus(p); var m=socialStatusMeta(st); var nc=mcNet(((p.netwerken||[])[0]||{}).netwerk);
     var snip=esc((p.tekst||'(nog geen tekst)').replace(/\s+/g,' ').slice(0,46));
-    return '<button class="soc-chip" style="--cc:'+nc[1]+'" onclick="socialOpenDetail(\''+esc(p.id)+'\')"><span class="soc-cdot" style="background:'+m[1]+'"></span>'+snip+'</button>';
+    return '<button class="soc-chip" data-st="'+st+'" style="--cc:'+nc[1]+'" onclick="socialOpenDetail(\''+esc(p.id)+'\')"><span class="soc-cdot" style="background:'+m[1]+'"></span>'+snip+'</button>';
   }).join('')+'</div>'):'';
   var legend='<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--ink-4)">'+(posts.some(function(p){return socialStatus(p)==='concept';})?['concept','feedback','goedgekeurd','gepubliceerd']:['feedback','goedgekeurd','gepubliceerd']).map(function(s){var m=socialStatusMeta(s);return '<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:99px;background:'+m[1]+'"></span>'+esc(m[0])+'</span>';}).join('')+'</div>';
   // Mobiele agenda: hetzelfde maandoverzicht maar als chronologische lijst (alleen dagen mét posts).
@@ -992,10 +1002,10 @@ function socialCalendar(posts){
       var dd=new Date(mo.y,mo.m,day), wd=dd.toLocaleDateString('nl-BE',{weekday:'long'});
       var today=isCur&&now.getDate()===day;
       return '<div class="soc-agday'+(today?' soc-agtoday':'')+'"><div class="soc-agdate"><span class="soc-agnum">'+day+'</span><span class="soc-agwd">'+esc(wd)+'</span></div><div class="soc-aglist">'+dps.map(function(p){
-        var m=socialStatusMeta(socialStatus(p)), nc=mcNet(((p.netwerken||[])[0]||{}).netwerk);
+        var st=socialStatus(p); var m=socialStatusMeta(st), nc=mcNet(((p.netwerken||[])[0]||{}).netwerk);
         var tm=p.dt.toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'});
         var snip=esc((p.tekst||'(geen tekst)').replace(/\s+/g,' ').slice(0,64));
-        return '<button class="soc-agitem" style="--cc:'+nc[1]+'" onclick="socialOpenDetail(\''+esc(p.id)+'\')"><span class="soc-cdot" style="background:'+m[1]+'"></span><span class="soc-agtime">'+tm+'</span><span class="soc-agtxt">'+snip+'</span></button>';
+        return '<button class="soc-agitem" data-st="'+st+'" style="--cc:'+nc[1]+'" onclick="socialOpenDetail(\''+esc(p.id)+'\')"><span class="soc-cdot" style="background:'+m[1]+'"></span><span class="soc-agtime">'+tm+'</span><span class="soc-agtxt">'+snip+'</span></button>';
       }).join('')+'</div></div>';
     }).join('') : '<div class="empty" style="padding:26px;text-align:center;color:var(--ink-4)">Geen posts gepland in '+esc(label)+'.</div>')+'</div>';
   return '<div class="section-head" style="margin-top:6px"><h2 style="text-transform:capitalize">'+esc(label)+'</h2><div class="soc-nav"><button aria-label="Vorige maand" onclick="socialMonthNav(-1)">'+ic('arrow',16)+'</button><button aria-label="Volgende maand" onclick="socialMonthNav(1)">'+ic('arrow',16)+'</button></div></div>'
@@ -1188,12 +1198,33 @@ function socialDetailPage(id){
           +'<div id="socUpMsg" class="fs" style="margin-top:7px"></div>'
           +'<p class="fs" style="color:var(--ink-4);margin:6px 0 0">Laat leeg om de huidige visual te behouden. Een geüploade foto/video gebruiken we automatisch.</p>'
         : '')
-      +'<div id="socFbWrap" class="soc-fbwrap" style="display:none;margin-top:14px"><label class="soc-elab">Wat wil je aangepast zien?</label><textarea id="socFbTx" class="soc-cap" rows="3" placeholder="Beschrijf kort je feedback voor dit bericht…"></textarea><button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="socialFeedback(\''+esc(p.id)+'\',this)">'+ic('check',15)+' Verstuur feedback</button></div>'
+      +socialAfkeurBlok(p.id)
       +'<div id="socSaveMsg" style="margin-top:12px"></div>'
       +'<div class="soc-eactions" id="socEditActsForm">'+socialEditorActions(p.id)+'</div>'
     +'</div></div></div>';
 }
 // Actieknoppen van de post-editor (renderen nu RECHTSONDER in het formulier, niet meer op de sub-nav-balk). Hergebruikt de bestaande save/approve/feedback-flows.
+// Afkeurblok: de klant kiest een reden en licht toe. Bewust GEEN vrije statuswissel en geen
+// AI-hulp; het enige wat de klant met een post kan doen is goedkeuren of afkeuren met reden.
+function socialAfkeurBlok(id){
+  var chips=SOC_AFKEUR_REDENEN.map(function(r){
+    return '<button type="button" class="soc-fchip soc-rchip'+(socialAfkeurReden()===r?' active':'')+'" onclick="socialPickReden(this,\''+esc(r)+'\')">'+esc(r)+'</button>';
+  }).join('');
+  return '<div id="socFbWrap" class="soc-fbwrap" style="display:none;margin-top:14px">'
+    +'<label class="soc-elab">Wat klopt er niet?</label>'
+    +'<div class="soc-rbar" id="socRedenBar">'+chips+'</div>'
+    +'<textarea id="socFbTx" class="soc-cap" rows="3" placeholder="Licht kort toe wat er anders mag. Hoe concreter, hoe sneller we het aanpassen."></textarea>'
+    +'<div class="soc-fbacts">'
+      +'<button class="btn btn-branch br-red btn-sm" onclick="socialFeedback(\''+esc(id)+'\',this)">'+ic('close',15)+' Afkeuren en doorsturen</button>'
+      +'<button class="btn btn-ghost btn-sm" onclick="socialToggleFeedback()">Annuleer</button>'
+    +'</div></div>';
+}
+function socialPickReden(btn,reden){
+  state._socAfkeurReden=reden;
+  var bar=document.getElementById('socRedenBar'); if(!bar) return;
+  bar.querySelectorAll('.soc-rchip').forEach(function(b){ b.classList.toggle('active', b===btn); });
+  var err=document.getElementById('socRedenErr'); if(err) err.remove();
+}
 function socialEditorActions(id){
   var p=socialPostsAll().filter(function(x){return String(x.id)===String(id);})[0];
   if(!p) return '';
@@ -1201,11 +1232,15 @@ function socialEditorActions(id){
   var statusbadge='<span class="soc-badge" style="color:'+m[1]+';background:'+m[2]+'">'+esc(m[0])+'</span>';
   if(st==='gepubliceerd') return statusbadge;
   if(st==='concept') return statusbadge;   // drafts: enkel het label, geen acties (bug 86ca83gp0)
-  var approved=(p.approved||(state._mcApproved&&state._mcApproved[p.id]));
-  var waitBtn='<button class="btn btn-outline btn-sm" onclick="socialToggleFeedback()">Wacht op feedback</button>';
+  var approved=(st==='goedgekeurd');
+  var afgekeurd=(st==='afgekeurd');
+  // Afkeuren blijft altijd mogelijk, ook na een goedkeuring: de klant mag van gedachten veranderen.
+  var afkeurBtn='<button class="btn btn-outline btn-sm soc-btn-afkeur" onclick="socialToggleFeedback()">'+ic('close',15)+' '+(afgekeurd?'Reden aanpassen':'Afkeuren')+'</button>';
+  // Bewerken zit achter het recht dat wij per klant in de hub zetten.
   var saveBtn=socialsEditable()?'<button class="btn btn-primary btn-sm" onclick="socialSavePost(\''+esc(p.id)+'\',this)">'+ic('check',16)+' Opslaan</button>':'';
   var apprBtn=approved?'<span class="soc-fbok" style="margin:0;padding:8px 13px">'+ic('check',15)+' Goedgekeurd</span>':'<button class="btn btn-branch br-green btn-sm" onclick="socialApprove(\''+esc(p.id)+'\',this)">'+ic('check',16)+' Goedkeuren</button>';
-  return (approved?'':statusbadge)+waitBtn+saveBtn+apprBtn;
+  var redenNoot=(afgekeurd&&p.afkeur_reden)?'<div class="soc-afkeurnoot">'+ic('close',14)+' Afgekeurd: '+esc(p.afkeur_reden)+'</div>':'';
+  return redenNoot+(approved?'':statusbadge)+afkeurBtn+saveBtn+apprBtn;
 }
 function socialToggleFeedback(){ var w=document.getElementById('socFbWrap'); if(!w) return; var hidden=(w.style.display==='none'||!w.style.display); w.style.display=hidden?'block':'none'; if(hidden){ var t=document.getElementById('socFbTx'); if(t) t.focus(); } }
 function panelSocials(){

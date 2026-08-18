@@ -2146,7 +2146,7 @@ function mpDone(start,meetLink,viaRequest){
 /* ---- Metricool: post goedkeuren + feedback geven vanuit het portaal ----
    Goedkeuren: api(ENDPOINTS.metricoolApprove, { post_id }). Lukt de backend het (nog) niet,
    dan tonen we een nette "binnenkort"-staat. Feedback gaat via directMessage (chatkanaal). */
-function _mcMarkApprovedLocal(id){ state._mcApproved=state._mcApproved||{}; state._mcApproved[id]=true; if(window.S27DATA&&S27DATA.markMetricoolApproved) S27DATA.markMetricoolApproved(id); }
+function _mcMarkApprovedLocal(id){ state._mcApproved=state._mcApproved||{}; state._mcApproved[id]=true; if(state._mcAfgekeurd) delete state._mcAfgekeurd[id]; if(window.S27DATA&&S27DATA.markMetricoolApproved) S27DATA.markMetricoolApproved(id); }
 function _mcReplaceActions(id, html){ var box=$id('mca-'+id); if(box) box.outerHTML=html; }
 async function metricoolApprove(id, btn){
   if(btn){ btn.disabled=true; btn.innerHTML='Bezig…'; }
@@ -2189,7 +2189,7 @@ async function socialApprove(id, btn){
   // worker ze in D1 heeft staan (social_feedback kind='approved'); bij een
   // fout draaien we de lokale markering terug en tonen we wat er misliep.
   if(state.demoMode){
-    state._mcApproved=state._mcApproved||{}; state._mcApproved[id]=true;
+    state._mcApproved=state._mcApproved||{}; state._mcApproved[id]=true; if(state._mcAfgekeurd) delete state._mcAfgekeurd[id];
     if(window.S27DATA&&S27DATA.markMetricoolApproved) S27DATA.markMetricoolApproved(id);
     var boxD=document.getElementById('socEditActsForm'); if(boxD){ boxD.innerHTML=socialEditorActions(id); } return;
   }
@@ -2199,7 +2199,7 @@ async function socialApprove(id, btn){
   var d=(res&&res.data)||{};
   var box=document.getElementById('socEditActsForm');
   if(res&&res.ok&&d.ok){
-    state._mcApproved=state._mcApproved||{}; state._mcApproved[id]=true;
+    state._mcApproved=state._mcApproved||{}; state._mcApproved[id]=true; if(state._mcAfgekeurd) delete state._mcAfgekeurd[id];
     if(window.S27DATA&&S27DATA.markMetricoolApproved) S27DATA.markMetricoolApproved(id);
     if(box){ box.innerHTML=socialEditorActions(id); }
     else if(btn){ btn.disabled=true; btn.innerHTML=ic('check',15)+' Goedgekeurd'; }
@@ -2211,25 +2211,44 @@ async function socialApprove(id, btn){
   }
 }
 async function socialFeedback(id, btn){
+  // Afkeuren met reden. De reden is verplicht, de toelichting niet: zonder reden weten wij
+  // niet wat we moeten aanpassen en dan is de afkeuring waardeloos voor het team.
+  const reden=(state._socAfkeurReden||'').trim();
+  const bar=$id('socRedenBar');
+  if(!reden){
+    if(bar && !$id('socRedenErr')) bar.insertAdjacentHTML('afterend','<div id="socRedenErr" style="font-size:12.5px;color:#B0432F;margin:6px 0 0">Kies eerst waar het aan ligt.</div>');
+    if(bar) bar.scrollIntoView({block:'nearest',behavior:'smooth'});
+    return;
+  }
   const t=$id('socFbTx'); const tx=((t&&t.value)||'').trim();
-  if(!tx){ if(t){ t.style.borderColor='var(--s27-orange)'; t.focus(); } return; }
   if(btn){ btn.disabled=true; btn.textContent='Versturen…'; }
-  // Golf 5: succes pas na een geslaagde server-write (landt nu ook in de
-  // D1-feedbacktabel van het team); bij een fout blijft de tekst staan.
   var ok=true, msg='';
   if(!state.demoMode){
     var res=null;
-    try{ res=await api(ENDPOINTS.metricoolFeedback, { post_id:id, feedback:tx, klant_naam:(window.S27DATA&&S27DATA.bedrijfsnaam)?S27DATA.bedrijfsnaam():'' }); }catch(e){ res=null; }
+    try{
+      res=await api(ENDPOINTS.metricoolFeedback, {
+        post_id:id,
+        besluit:'afgekeurd',
+        reden:reden.slice(0,120),
+        feedback:tx,
+        klant_naam:(window.S27DATA&&S27DATA.bedrijfsnaam)?S27DATA.bedrijfsnaam():''
+      });
+    }catch(e){ res=null; }
     var d=(res&&res.data)||{};
     ok=!!(res&&res.ok&&d.ok);
     msg=(d&&d.message)?String(d.message):'';
   }
   const box=$id('socFbWrap');
-  if(ok){ if(box) box.innerHTML='<div class="soc-fbok">'+ic('check',16)+' Je opmerking is doorgestuurd naar je Studio 27-contact. We passen het aan en je ziet de update hier verschijnen.</div>'; }
-  else {
+  if(ok){
+    // lokale overrides: de kalender kleurt meteen mee, ook voor de volgende ophaalronde binnen is
+    state._mcAfgekeurd=state._mcAfgekeurd||{}; state._mcAfgekeurd[id]=true;
+    if(state._mcApproved) delete state._mcApproved[id];
+    state._socAfkeurReden='';
+    if(box) box.innerHTML='<div class="soc-fbok">'+ic('check',16)+' Bedankt, we hebben je afkeuring met de reden doorgestuurd naar je Studio 27-contact. Je ziet de aangepaste versie hier verschijnen.</div>';
+    var acts=$id('socEditActsForm'); if(acts) acts.innerHTML=socialEditorActions(id);
+  } else {
     if(btn){ btn.disabled=false; btn.textContent='Opnieuw versturen'; }
-    if(t){ t.style.borderColor='var(--s27-orange)'; }
-    if(box&&!box.querySelector('.soc-fberr')) box.insertAdjacentHTML('beforeend','<div class="soc-fberr" style="font-size:12.5px;color:#B0432F;margin-top:6px">'+escapeHtml(msg||'Versturen lukte net niet, probeer zo opnieuw.')+'</div>');
+    if(box&&!box.querySelector('.soc-fberr')) box.insertAdjacentHTML('beforeend','<div class="soc-fberr" style="font-size:12.5px;color:#B0432F;margin-top:6px">'+escapeHtml(msg||'Versturen lukte net niet. Probeer zo opnieuw.')+'</div>');
   }
 }
 /* --- In-portal post-editor: kanalen toggelen, hashtag toevoegen, en DIRECT opslaan in Metricool --- */

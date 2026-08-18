@@ -872,20 +872,6 @@ body.admin-picking{overflow:hidden;}
 .ar-pdfbtn svg{flex:none;}
 
 /* ===== Klant/Team-weergave-toggle (topbar, enkel staff) =================== */
-#adminViewToggle{display:none;}
-body.admin-mode #adminViewToggle{display:inline-flex;align-items:center;gap:9px;font-family:var(--font-display);font-weight:800;font-size:12px;letter-spacing:.01em;color:var(--ink,#230F23);background:rgba(255,255,255,.62);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid var(--glass-border,#E7DFD3);border-radius:999px;padding:5px 13px 5px 6px;cursor:pointer;transition:filter .15s,box-shadow .15s;white-space:nowrap;box-shadow:var(--glass-sh,0 8px 24px rgba(60,40,80,.09));}
-body.admin-mode #adminViewToggle:hover{filter:brightness(1.03);box-shadow:var(--glass-sh-lg,0 14px 34px rgba(60,40,80,.16));}
-.vmode-track{position:relative;width:38px;height:22px;border-radius:999px;background:linear-gradient(180deg,#3A6FD8,#2B53AE);box-shadow:inset 0 1px 3px rgba(0,0,0,.28);transition:background .22s var(--ease-out,ease);flex:none;}
-.vmode-knob{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.32);transition:left .22s var(--ease-out,ease);}
-.vmode-lab{min-width:60px;text-align:left;}
-body.client-preview #adminViewToggle .vmode-track{background:linear-gradient(180deg,#E89A33,#DC7A14);}
-body.client-preview #adminViewToggle .vmode-knob{left:18px;}
-/* Team-only topbar-chrome verdwijnt in ClientView zodat je exact ziet wat de klant ziet (geen 🐞-feedbackknop). */
-body.client-preview #bugBtn{display:none !important;}
-/* persistente banner zodat een teamlid weet dat het in klantweergave kijkt */
-body.client-preview #page::before{content:'ClientView, je bekijkt dit portaal zoals de klant het ziet. Klik rechtsboven op de schakelaar om terug naar TeamView te gaan.';display:block;background:#FEF3E2;color:#B4540B;font-family:var(--font-display);font-weight:700;font-size:12px;line-height:1.4;text-align:center;padding:8px 14px;border-radius:10px;margin:0 0 14px;border:1px solid #F6D9A8;}
-@media(max-width:600px){ body.admin-mode #adminViewToggle .vmode-lab{display:none;} body.client-preview #page::before{font-size:11px;} }
-
 /* ===== Ads — uitgebreide gegevens: filterregels + visual-knop + subtiele PDF ===== */
 .ads-filters{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 12px;padding:11px 14px;background:var(--paper-2);border:1px solid var(--line);border-radius:var(--r-md,14px);}
 .ads-frules{display:flex;flex-wrap:wrap;gap:8px;flex:1;min-width:200px;}
@@ -1519,8 +1505,7 @@ button.ond-head{cursor:pointer;}
   .soc-subnav-row .soc-subtab{flex:0 0 auto;}
   .soc-subnav-act{margin-left:0; width:100%; gap:8px;}
   /* Compacte TeamView-schakelaar in de topbar: label weg, enkel de switch (minder gedrang) */
-  .vmode-lab{display:none;}
-}
+  }
 
 /* ============================================================
    VERLAAT-WAARSCHUWING (feature #3) — gemerkte bevestiging bovenop de
@@ -1573,3 +1558,72 @@ body.admin-mode .sb-admin{display:flex;}
 .ws-agenda-ta{width:100%;box-sizing:border-box;min-height:96px;resize:vertical;font-family:var(--font-body);font-size:13.5px;line-height:1.5;color:var(--ink);background:#fff;border:1px solid var(--line,#E7DFD3);border-radius:10px;padding:10px 12px;outline:none;margin-top:8px;}
 .ws-agenda-ta:focus{border-color:var(--s27-orange,#F66131);}
 .ws-agenda-stat{font-family:var(--font-display);font-weight:700;font-size:11px;color:var(--ink-4);margin-top:5px;min-height:14px;}
+
+/* =============================================================================
+   AFKEUREN MET REDEN (18-08-2026)
+   De klant kan een geplande post enkel goedkeuren of afkeuren. Bij een afkeuring
+   is de reden verplicht, want zonder reden weet het team niet wat het moet aanpassen.
+   ============================================================================= */
+.br-red{--c:#B0432F;--c-ink:#8E3524;--c-soft:rgba(176,67,47,.12);}
+
+/* redenkeuze: dezelfde chips als de statusfilters, maar als keuze in plaats van filter */
+.soc-rbar{display:flex;flex-wrap:wrap;gap:7px;margin:8px 0 10px;}
+.soc-rchip{cursor:pointer;}
+.soc-rchip.active{background:rgba(176,67,47,.12);color:#8E3524;box-shadow:inset 0 0 0 1.5px #B0432F;}
+
+.soc-fbacts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+.soc-btn-afkeur{color:#8E3524;box-shadow:inset 0 0 0 1.5px rgba(176,67,47,.45);}
+.soc-btn-afkeur:hover{box-shadow:inset 0 0 0 1.5px #B0432F;background:rgba(176,67,47,.06);}
+
+/* nette melding bovenaan de actiebalk wanneer een post is afgekeurd */
+.soc-afkeurnoot{flex:1 1 100%;display:flex;align-items:center;gap:7px;font-size:12.8px;font-weight:700;
+  color:#8E3524;background:rgba(176,67,47,.1);border-radius:9px;padding:8px 11px;margin-bottom:2px;}
+
+/* De statusbolletjes in de kalender kennen nu ook rood (afgekeurd). */
+.soc-chip[data-st="afgekeurd"]{box-shadow:inset 2px 0 0 #B0432F;}
+.soc-agitem[data-st="afgekeurd"]{box-shadow:inset 2px 0 0 #B0432F;}
+
+@media (max-width:680px){
+  .soc-rbar{gap:6px;}
+  .soc-fbacts .btn{flex:1 1 auto;justify-content:center;}
+}
+
+/* -----------------------------------------------------------------------------
+   Kalenderchip toont sinds 18-08 ook de posttekst, net als onze eigen kalender in
+   de hub. Tijd blijft vooraan als anker, de tekst knipt netjes af.
+   ----------------------------------------------------------------------------- */
+.soc-chip .soc-ctime{flex:0 0 auto;font-variant-numeric:tabular-nums;opacity:.72;}
+.soc-chip .soc-ctxt{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;}
+.soc-cal .soc-grid .soc-cell{min-height:126px;}
+
+/* Tablet: het raster blijft, maar de tekst maakt plaats zodat de kolommen niet knellen. */
+@media (max-width:1100px) and (min-width:681px){
+  .soc-chip .soc-ctxt{display:none;}
+  .soc-cal .soc-grid .soc-cell{min-height:104px;}
+}
+
+/* -----------------------------------------------------------------------------
+   Rasterval: repeat(7,1fr) krimpt NIET onder de breedte van de inhoud, dus zodra de
+   kalenderchip tekst kreeg duwde het raster de hele pagina horizontaal open (gemeten:
+   1811px raster in een container van 1249px). minmax(0,1fr) plus min-width:0 op de
+   cel en de tekstspan laat de chip netjes afknippen in plaats van te duwen.
+   ----------------------------------------------------------------------------- */
+.soc-cal .soc-grid{grid-template-columns:repeat(7,minmax(0,1fr));}
+.soc-cal .soc-dow{grid-template-columns:repeat(7,minmax(0,1fr));}
+.soc-cal .soc-cell{min-width:0;}
+.soc-cal .soc-chip{min-width:0;max-width:100%;}
+
+/* -----------------------------------------------------------------------------
+   Statusfilters op mobiel: de rij schoof horizontaal weg en knipte "Wacht op je
+   feedback" halverwege af, waardoor de klant niet zag dat er nog filters volgden.
+   Op smal scherm wikkelen ze nu netjes over twee regels.
+   ----------------------------------------------------------------------------- */
+@media (max-width:680px){
+  /* De rij blijft bewust horizontaal scrollen (regel 1490 hierboven koos dat expliciet met een
+     dubbele klasse). Alleen het AFKNIPPEN was lelijk: een chip viel halverwege weg zonder dat je
+     zag dat er nog filters volgden. Een vervaagrand rechts maakt duidelijk dat er meer staat. */
+  .soc-fbar.soc-fbar{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 26px),transparent);
+                     mask-image:linear-gradient(90deg,#000 calc(100% - 26px),transparent);
+                     scroll-snap-type:x proximity;padding-right:22px;}
+  .soc-fbar .soc-fchip{scroll-snap-align:start;font-size:12px;padding:7px 12px;}
+}
