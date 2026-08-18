@@ -4693,16 +4693,6 @@ function webEditorCard(){
    gescoped op het acting-as-bedrijf. Puur observatie/analyse, geen reactie van hieruit.
    ============================================================================ */
 var _AIV_INTENT_LABELS={taken:'Taken',meeting:'Meetings',feedback:'Feedback',facturatie:'Facturatie',socials:'Socials',adverteren:'Adverteren',website:'Website',status:'Status',contact:'Contact',groet:'Begroeting',dank:'Bedankt',overig:'Overig / off-topic'};
-async function aiVragenMount(){
-  var box=document.getElementById('aivBody'); if(!box) return;
-  if(state.demoMode){ box.innerHTML=_aivRender(_aivDemoVragen(), {meeting:1,feedback:1,website:1,overig:1,taken:1}, 5); return; }
-  try{
-    var res=await api(ENDPOINTS.botLogList, { bedrijf_id: state.activeBedrijf || ((state.session&&state.session.bedrijf_id)||'') });
-    var d=(res&&res.data)||res||{};
-    if(!d || d.ok!==true){ box.innerHTML='<div class="empty" style="padding:50px"><p>Deze monitoring is enkel voor het team beschikbaar.</p></div>'; return; }
-    box.innerHTML=_aivRender(d.vragen||[], d.intents||{}, d.totaal||0);
-  }catch(e){ box.innerHTML='<div class="empty" style="padding:50px"><p>De vragen konden even niet opgehaald worden. Probeer het zo opnieuw.</p></div>'; }
-}
 function _aivRender(vragen, intents, totaal){
   if(!vragen || !vragen.length) return '<div class="empty" style="padding:54px 16px;text-align:center"><div class="em-ic">'+ic('msg',40)+'</div><b style="font-family:var(--font-display);font-size:15px;color:var(--ink-2)">Nog geen vragen</b><p style="color:var(--ink-3);margin-top:5px">Zodra deze klant iets aan de assistent vraagt, verschijnt het hier.</p></div>';
   var order=Object.keys(intents||{}).sort(function(a,b){return intents[b]-intents[a];});

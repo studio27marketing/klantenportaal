@@ -51,32 +51,16 @@ const ENDPOINTS = {
   directMessage:     GATEWAY_BASE + '/directMessage',
   chatAttachment:    GATEWAY_BASE + '/chatAttachment',
   meetingAvailability: GATEWAY_BASE + '/meetingAvailability',
-  // Huisstijl-bibliotheek (Google Drive, directe API via de gateway)
-  huisstijlList:     GATEWAY_BASE + '/huisstijlList',
-  huisstijlUpload:   GATEWAY_BASE + '/huisstijlUpload',
-  // Regressie-audit 11-07: ontbrak, terwijl portal.js de verwijderknop erop wees
-  // (golf 8 registreerde de handler wel opnieuw in de worker, maar deze map niet).
-  huisstijlDelete:   GATEWAY_BASE + '/huisstijlDelete',
-  driveEnsure:       GATEWAY_BASE + '/driveEnsure',
-  // Facturatie
-  facturatieSave:    GATEWAY_BASE + '/facturatieSave',
   // Bedrijf-beheer (get_team | get_offertes | update_bedrijf | save_contact | update_contact)
   bedrijfBeheer:     GATEWAY_BASE + '/bedrijfBeheer',
   // Agenda (beschikbaarheid + inplannen), scope-guard server-side actief
   beschikbaarheid:   GATEWAY_BASE + '/beschikbaarheid',
   inplannen:         GATEWAY_BASE + '/inplannen',
-  // Offerte-samensteller: klant stelt zelf een offerte samen (catalogus -> eigen offertesysteem, D1).
-  // BE-contract: { items:[{sku,naam,prijs,aantal}], opmerking, actie } -> { ok, offerte_task_id,
-  // offerte_task_url, offerte_link (hub.studio27.be/offerte/<token> bij 'verzenden'), message }.
-  offerteGenereren:  GATEWAY_BASE + '/offerteGenereren',
-  // Klantvriendelijke offerte-AANVRAAG (clientview): vrije tekst + diensten i.p.v. budgetten.
-  // BE-contract: { korte, bericht, diensten:[key,...] } -> { ok, offerte_task_id, message }.
-  offerteAanvraag:   GATEWAY_BASE + '/offerteAanvraag',
-  // Vraag stellen bij een offerte: { offerte_id, vraag, klant_naam } -> { ok, message }.
-  // Landt als comment op de gekoppelde taak of als D1-ticket + salesmelding.
-  offerteVraag:      GATEWAY_BASE + '/offerteVraag',
   // Metricool (geplande social posts) via de gateway i.p.v. de directe Make-hook.
   // BE-contract: { ok, linked, posts:[{id,datum,tekst,media,netwerken:[{netwerk,status}]}] }.
+  // Teamlid dat een klantportaal opent om iets na te kijken: deze actie LEEFT nog server-side
+  // (geverifieerd tegen de live worker op 18-08) en is de enige ingang naar de bedrijvenkiezer.
+  adminCompanies:    GATEWAY_BASE + '/adminCompanies',
   metricool:         GATEWAY_BASE + '/metricool',
   // Metricool post goedkeuren vanuit het portaal: { post_id } -> { ok, approved }.
   metricoolApprove:  GATEWAY_BASE + '/metricoolApprove',
@@ -89,9 +73,6 @@ const ENDPOINTS = {
   // Metricool analytics (KPI-dashboard + trend): { days? } -> { ok, linked, totals, networks:[], trend:[] }.
   metricoolStats:    GATEWAY_BASE + '/metricoolStats',
   metricoolPostStats:GATEWAY_BASE + '/metricoolPostStats',
-  // ADMIN-only (staff): uitgebreide social-rapportage (team-weergave) in één call, account-KPI's +
-  // per-netwerk breakdown met dag-series + vergelijking + post-insights. Acting-as scope.
-  metricoolStatsRich:GATEWAY_BASE + '/metricoolStatsRich',
   // Meta Ads real-time (direct via Graph API, geen Make): { period? } -> { ok, linked, account,
   // currency, period, kpis, campaigns:[], ads:[] }. bedrijf_id + account server-side bepaald.
   metaAds:           GATEWAY_BASE + '/metaAds',
@@ -100,27 +81,6 @@ const ENDPOINTS = {
   // Google Ads real-time (direct via Google Ads API, geen Make): { from,to,compare } -> zelfde vorm als
   // metaAds { ok, linked, account, currency, kpis, prevKpis, compareLabel, campaigns:[], trend:[] }.
   googleAds:         GATEWAY_BASE + '/googleAds',
-  // ADMIN-only (staff): Google-maandoverzicht (12 maanden) voor de dynamische maandgrafiek. {} ->
-  // { ok, linked, currency, campaigns:[{id,name}], months:[{month:'YYYY-MM',spend,clicks,conversions,
-  // convValue,campaigns:[{id,name,spend,clicks,conversions,convValue}]}] }. Acting-as scope.
-  googleMonthly:     GATEWAY_BASE + '/googleMonthly',
-  // ADMIN-only (staff): Evolutie-tab Google Ads — 24 maanden spend + leads per conversietype per
-  // maand. { campaign_id? } -> { ok, linked, currency, months:[{ym,spend,conversions,cpl,
-  // types:[{name,count,cpl}]}], campaigns:[{id,name}] }. Acting-as scope.
-  googleAdsEvolutie: GATEWAY_BASE + '/googleAdsEvolutie',
-  // ADMIN-only (staff): per-bedrijf KV-meeting-werkblad (notities + recs + uploads).
-  adsWorkspace:      GATEWAY_BASE + '/adsWorkspace',
-  adsWorkspaceSave:  GATEWAY_BASE + '/adsWorkspaceSave',
-  adsUploadAdd:      GATEWAY_BASE + '/adsUploadAdd',
-  // ADMIN-only (staff): uitgebreide Google-rapportage (team-weergave). { from,to,compare } ->
-  // { ok, linked, kpis(10), prevKpis, campaigns:[{...,daily,adGroups,imprShare}], keywords:[] }. Acting-as scope.
-  googleAdsRich:     GATEWAY_BASE + '/googleAdsRich',
-  // ADMIN-only (staff): uitgebreide Meta-rapportage voor de team-weergave. { from,to,compare } ->
-  // { ok, linked, kpis(8+leads/cpl), prevKpis, campaigns:[{...,daily,adsets,ads}] }. Acting-as scope.
-  metaAdsRich:       GATEWAY_BASE + '/metaAdsRich',
-  // ADMIN-only (staff @studio27.be): lijst ALLE bedrijven voor de admin-bedrijvenkiezer/zoek.
-  // {} -> { ok, companies:[{id,naam}], count }. Worker gate't strikt op het geverifieerde domein.
-  adminCompanies:    GATEWAY_BASE + '/adminCompanies',
   // Shoot-inplannen (port van studio27.be/shoot-inplannen, VOLLEDIG via de gateway, geen Make).
   // shootContext: { task_id } -> { status:'ok'|'wrong_type'|'incomplete_metadata'|'already_scheduled'|'not_found'|'forbidden', timeHours, aantalCreators, availability:{shoots,shoots_27m,vakantie,hosts} }.
   shootContext:      GATEWAY_BASE + '/shootContext',
@@ -140,9 +100,6 @@ const ENDPOINTS = {
   meetingBook:       GATEWAY_BASE + '/meetingBook',
   // Klant markeert de projectchat als gelezen → read-receipt voor het team. { task_id } -> { ok, read_at }.
   chatMarkRead:        GATEWAY_BASE + '/chatMarkRead',
-  // AI-assistent: klantvraag loggen (fire-and-forget) + (staff) de gelogde vragen ophalen voor monitoring.
-  botLog:              GATEWAY_BASE + '/botLog',
-  botLogList:          GATEWAY_BASE + '/botLogList',
   // Altijd-open klantchat op de vaste communicatietaak (server-side taak-resolutie; client stuurt GEEN task_id).
   commsChatList:       GATEWAY_BASE + '/commsChatList',
   commsChatPost:       GATEWAY_BASE + '/commsChatPost',

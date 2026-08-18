@@ -265,13 +265,6 @@
     if(res && res.ok && res.data && res.data.ok !== false){ state.data.team = res.data; return true; }
     return false;
   };
-  DATA.loadHuisstijl = async function(){
-    if(!live()) return false;
-    try { await api(ENDPOINTS.driveEnsure, base()); } catch(e){}
-    var res = await api(ENDPOINTS.huisstijlList, base());
-    if(res && res.ok && res.data && res.data.files){ state.data.huisstijl = res.data.files; return true; }
-    return false;
-  };
   /* =========================================================================
      GETTERS, live-gemapte data of null (→ panels.js valt terug op mock)
      ========================================================================= */
@@ -456,30 +449,6 @@
       facturatie_opmerkingen: (b.facturatie_opmerkingen!=null ? b.facturatie_opmerkingen : (o.facturatie_opmerkingen||''))
     };
   };
-  DATA.loadOffertes = async function(){
-    if(!live()) return false;
-    var res = await api(ENDPOINTS.bedrijfBeheer, base({ action:'get_offertes' }));
-    if(res && res.ok && res.data){
-      // facturatiegegevens kunnen meekomen met get_offertes (voor de Offertes-pagina)
-      var _f = res.data.facturatie || res.data;   // backend levert facturatie genest (res.data.facturatie); plat als fallback
-      state.data.offertesMeta = {
-        ondernemingsnummer: _f.ondernemingsnummer||'',
-        facturatie_email: _f.facturatie_email||'',
-        facturatie_opmerkingen: _f.facturatie_opmerkingen||''
-      };
-    }
-    if(res && res.ok && res.data && res.data.ok && res.data.offertes){
-      state.data.offertes = (res.data.offertes||[]).map(function(o){
-        var nm = o.naam || '';
-        try{ nm = decodeURIComponent(nm); }catch(e){}   // naam komt encodeURL'd uit Make (JSON-veilig)
-        var st = o.status || '';
-        try{ st = decodeURIComponent(st); }catch(e){}
-        return { id:o.id, naam:nm, link:o.link||'', budget:o.budget||'', vervaldatum:o.vervaldatum||'', status:st };
-      });
-      return true;
-    }
-    state.data.offertes = []; return false;   // geen offertes voor dit bedrijf
-  };
   DATA.offertes = function(){ return state.data.offertes; };
 
   /* ---- Metricool (geplande social posts), via de gateway-endpoint (api()), bedrijf_id server-side ----
@@ -553,21 +522,6 @@
     }catch(e){ state.data.metricoolStats={linked:false}; return false; }
   };
   DATA.metricoolStats = function(){ return state.data.metricoolStats; };
-  // ADMIN (staff): uitgebreide social-rapportage (team-weergave). Acting-as-scoping via de gateway.
-  DATA.loadMetricoolStatsRich = async function(opts){
-    var o = opts || {};
-    if(!live()){ state.data.metricoolStatsRich={linked:false}; return false; }
-    var bid = state.activeBedrijf || '';
-    if(!bid){ state.data.metricoolStatsRich={linked:false}; return false; }
-    try{
-      var payload = (o.from && o.to) ? base({ from:o.from, to:o.to, compare:o.compare||'none' }) : base({ days:(o.days||90) });
-      var res = await api(ENDPOINTS.metricoolStatsRich, payload);
-      var j = (res && res.ok && res.data) ? res.data : null;
-      if(!j || !j.ok || !j.linked){ state.data.metricoolStatsRich={linked:false}; return true; }
-      state.data.metricoolStatsRich = j;
-      return true;
-    }catch(e){ state.data.metricoolStatsRich={linked:false}; return false; }
-  };
   DATA.metricoolStatsRich = function(){ return state.data.metricoolStatsRich; };
   /* ---- Metricool post-performance (fase 2), gateway-endpoint metricoolPostStats ----
      Contract: { ok, linked, brandId, period:{from,to,days},
@@ -682,10 +636,7 @@
   };
   DATA.googleMonthly = function(){ return state.data.googleMonthly; };
 
-  // Meeting-werkblad (staff): notities + recs + uploads per bedrijf (KV via gateway).
-  DATA.loadAdsWorkspace = async function(){ if(!live()) return null; var bid=state.activeBedrijf||''; if(!bid) return null; try{ var res=await api(ENDPOINTS.adsWorkspace, base({})); var j=(res&&res.ok&&res.data)?res.data:null; if(j&&j.ok){ state.data.adsWorkspace=j; return j; } }catch(e){} return null; };
   DATA.adsWorkspace = function(){ return state.data.adsWorkspace; };
-  DATA.saveAdsWorkspace = async function(patch){ if(!live()) return false; try{ var res=await api(ENDPOINTS.adsWorkspaceSave, base(patch||{})); var j=(res&&res.ok&&res.data)?res.data:null; if(j&&j.ok){ if(state.data.adsWorkspace){ Object.assign(state.data.adsWorkspace, patch||{}); } return true; } }catch(e){} return false; };
   DATA.adsUploadAdd = async function(item){ if(!live()) return null; try{ var res=await api(ENDPOINTS.adsUploadAdd, base({item:item||{},ts:Date.now()})); var j=(res&&res.ok&&res.data)?res.data:null; if(j&&j.ok){ if(state.data.adsWorkspace) state.data.adsWorkspace.uploads=j.uploads||[]; return j.uploads||[]; } }catch(e){} return null; };
 
   // ADMIN (staff): uitgebreide Google-rapportage (team-weergave). Acting-as-scoping via de gateway.

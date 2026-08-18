@@ -1444,29 +1444,6 @@ async function procesFeedback(taskId){
   if(res&&res.ok&&d.ok!==false){ if(fb) fb.style.display='none'; if(act) act.innerHTML='<span class="pill pill-wait"><span class="pdot"></span>Feedback verstuurd, bedankt!</span>'; }
   else if(act){ act.innerHTML=prevAct; act.insertAdjacentHTML('beforeend','<span style="font-size:12px;color:#B0432F;margin-left:8px">'+escapeHtml((d&&d.message)||'Versturen lukte net niet, probeer zo opnieuw.')+'</span>'); }
 }
-// facturatiegegevens opslaan, ALLE velden via facturatieSave (schrijft naar exact de
-// backend-velden die content-get terugleest → volledige round-trip-sync, geen lege overschrijf)
-async function saveBedrijfGegevens(btn){
-  if(state.demoMode){ if(btn) btn.innerHTML='Opgeslagen ✓'; return; }
-  if(btn){ btn.disabled=true; btn.textContent='Opslaan…'; }
-  try {
-    await api(ENDPOINTS.facturatieSave, {
-      bedrijf_id:state.session.bedrijf_id,
-      session_token:state.session.session_token,
-      klant_naam:S27DATA.bedrijfsnaam(),
-      ondernemingsnummer:(($id('facBtw')||{}).value||''),
-      facturatie_email:(($id('facEmail')||{}).value||''),
-      facturatie_opmerkingen:(($id('facOpm')||{}).value||'')
-    });
-    // lokale state bijwerken zodat een re-render dezelfde waarden toont (sync ook client-side)
-    if(state.data && state.data.bedrijf){
-      state.data.bedrijf.btw=(($id('facBtw')||{}).value||'');
-      state.data.bedrijf.facturatie_email=(($id('facEmail')||{}).value||'');
-      state.data.bedrijf.facturatie_opmerkingen=(($id('facOpm')||{}).value||'');
-    }
-    if(btn){ btn.disabled=false; btn.innerHTML='Opgeslagen ✓'; }
-  } catch(e){ if(btn){ btn.disabled=false; btn.textContent='Opnieuw proberen'; } }
-}
 // Eigen profiel + notificatievoorkeur realtime opslaan -> update_contact -> contactfiche bij Studio 27.
 // Schrijft UITSLUITEND naar de eigen (ingelogde) contactfiche, npProfileId is per definitie
 // de "me"-contactpersoon (zie panelInstellingen). De e-mail van het eigen account sturen we
@@ -1520,11 +1497,6 @@ async function retryMeetings(btn){
   renderPanel('meetings');
 }
 /* Restpuntenronde 11-07: zelfde eerlijke retry voor de huisstijl-bestanden. */
-async function retryHuisstijl(btn){
-  if(btn){ btn.disabled=true; btn.textContent='Bezig…'; }
-  try{ state.data.huisstijl=null; await S27DATA.loadHuisstijl(); }catch(e){}
-  renderPanel('huisstijl');
-}
 /* ---- Contactpersonen-beheer (iedere contactpersoon mag toevoegen/wijzigen/verwijderen) ---- */
 function _contactById(id){ const t=window.S27DATA&&S27DATA.team(); const a=(t&&t.contactpersonen)||[]; for(var i=0;i<a.length;i++){ if(String(a[i].id)===String(id)) return a[i]; } return null; }
 function addContact(){ const host=$id('contactFormHost'); if(!host)return; host.innerHTML=contactFormHTML(null); const f=host.querySelector('input'); if(f)f.focus(); host.scrollIntoView&&host.scrollIntoView({behavior:'smooth',block:'nearest'}); }
@@ -2305,51 +2277,8 @@ function hsMsgShow(tekst, isErr){
   m.style.color=isErr?'var(--s27-orange)':'var(--s27-green-ink,#147A50)';
   m.innerHTML=tekst;
 }
-async function uploadHuisstijl(input){
-  const f=input.files&&input.files[0]; if(!f) return;
-  if(state.demoMode){ return; }
-  hsMsgShow('Bezig met uploaden van '+escapeHtml(f.name)+'…', false);
-  const rd=new FileReader();
-  rd.onload=async function(){ const b64=String(rd.result).split(',')[1]||'';
-    try{
-      const res=await api(ENDPOINTS.huisstijlUpload, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, filename:f.name, file_data:b64 });
-      const d=res&&res.data;
-      if(res&&res.ok&&d&&d.ok){
-        state.data.huisstijl=null;
-        try{ await S27DATA.loadHuisstijl(); }catch(e){}
-        if(currentTab==='huisstijl') renderPanel('huisstijl');
-        hsMsgShow('✓ '+escapeHtml(f.name)+' staat in je Huisstijl-map.', false);
-      } else {
-        hsMsgShow('Uploaden lukte niet'+((d&&d.error)?(' ('+escapeHtml(String(d.error))+')'):'')+'. Probeer het opnieuw of stuur ons een berichtje.', true);
-      }
-    }catch(e){ hsMsgShow('Uploaden lukte niet. Probeer het opnieuw of stuur ons een berichtje.', true); }
-  };
-  rd.readAsDataURL(f);
-}
 /* GOLF 6: verwijderknop op de huisstijl-bestandskaarten (huisstijlDelete bestond al
    server-side). Geen native confirm() (bevriest de Chrome-connector): twee-staps-knop. */
-async function deleteHuisstijl(fileId, btn){
-  if(state.demoMode||!fileId) return;
-  if(btn && !btn._arm){
-    btn._arm=1; btn.title='Klik nogmaals om definitief te verwijderen'; btn.style.color='var(--s27-orange)';
-    setTimeout(function(){ if(btn){ btn._arm=0; btn.title='Verwijderen'; btn.style.color=''; } }, 4000);
-    return;
-  }
-  if(btn){ btn.disabled=true; }
-  try{
-    const res=await api(ENDPOINTS.huisstijlDelete, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, file_id:fileId });
-    const d=res&&res.data;
-    if(res&&res.ok&&d&&d.ok){
-      state.data.huisstijl=null;
-      try{ await S27DATA.loadHuisstijl(); }catch(e){}
-      if(currentTab==='huisstijl') renderPanel('huisstijl');
-      hsMsgShow('✓ Bestand verwijderd.', false);
-    } else {
-      if(btn){ btn.disabled=false; btn._arm=0; btn.style.color=''; }
-      hsMsgShow('Verwijderen lukte niet. Probeer het opnieuw of stuur ons een berichtje.', true);
-    }
-  }catch(e){ if(btn){ btn.disabled=false; btn._arm=0; btn.style.color=''; } hsMsgShow('Verwijderen lukte niet. Probeer het opnieuw of stuur ons een berichtje.', true); }
-}
 /* ===== Agenda-slotpicker, echte beschikbaarheid + inplannen (scope-guarded) ===== */
 const PLAN_DUR_MS=90*60000, PLAN_DUR_MAX=6*3600000;
 function planDurMs(e){ e=Number(e)||0; return (e>0&&e<=PLAN_DUR_MAX)?e:PLAN_DUR_MS; }
