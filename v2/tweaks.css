@@ -1545,10 +1545,14 @@ body.admin-mode .sb-admin{display:flex;}
 .soc-chip .soc-ctxt{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;}
 .soc-cal .soc-grid .soc-cell{min-height:126px;}
 
-/* Tablet: het raster blijft, maar de tekst maakt plaats zodat de kolommen niet knellen. */
+/* Tablet: de kolom is te smal voor uur EN tekst samen. Eerst liet ik de tekst vallen, maar
+   dan staat er enkel "00:00" en weet je niet waar de post over gaat. De TEKST is hier het
+   nuttige stuk, dus op tabletbreedte valt het uur weg en blijft de tekst. Het volledige
+   bericht plus het uur staan sowieso in de tooltip en in het postdetail. */
 @media (max-width:1100px) and (min-width:681px){
-  .soc-chip .soc-ctxt{display:none;}
-  .soc-cal .soc-grid .soc-cell{min-height:104px;}
+  .soc-chip .soc-ctime{display:none;}
+  .soc-chip .soc-ctxt{font-size:10px;}
+  .soc-cal .soc-grid .soc-cell{min-height:110px;}
 }
 
 /* -----------------------------------------------------------------------------
