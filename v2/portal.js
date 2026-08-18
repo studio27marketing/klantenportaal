@@ -9,7 +9,7 @@
 "use strict";
 
 let currentTab = 'start';
-const SECTION_LABEL = { start:'Jouw taken', berichten:'Berichten', strategie:'Strategie', branding:'Branding', video:'Video- en fotografie', socials:'Socials', advertenties:'Adverteren', webprestaties:'Website', 'alle-projecten':'Alle projecten', meetings:'Meetings', nieuwproject:'Nieuw project', offertes:'Offertes', facturatie:'Facturatie', instellingen:'Instellingen', huisstijl:'Huisstijl', aivragen:'AI-vragen' };
+const SECTION_LABEL = { start:'Jouw taken', socials:'Socials', advertenties:'Adverteren', webprestaties:'Website', 'alle-projecten':'Alle projecten', meetings:'Meetings', instellingen:'Instellingen' };
 
 function qsp(){ return new URLSearchParams(location.search); }
 function $id(x){ return document.getElementById(x); }
@@ -27,9 +27,8 @@ function $id(x){ return document.getElementById(x); }
      #/b/<bedrijf>/adverteren/<meta|google>/<overzicht|campagnes|zoektermen|aanbevelingen|meeting>?periode=30d
      #/b/<bedrijf>/adverteren/<meta|google>/campagne/<cid>?periode=30d
      #/b/<bedrijf>/website/<projecten|statistieken>?periode=30d
-     #/b/<bedrijf>/projecten | /meetings | /offertes | /facturatie | /instellingen | /huisstijl | /contact
+     #/b/<bedrijf>/projecten | /meetings | /instellingen | /contact
      #/b/<bedrijf>/project/<taakId>[/chat | /onderdeel/<subId> | /review/<key>?ronde=N | /galerij[/<idx>] | /inplannen/<subId>]
-     #/b/<bedrijf>/offerte-aanvraag/<tak> | /offertes/wizard/<tak>?stap=N
      #/b/<bedrijf>/meeting/plannen?mode=&project=
 
    Een route is één plat object {bedrijf, as, view, tab, project, sub, ...}. parseRoute()
@@ -112,8 +111,6 @@ function _parseHash(hash){
     return r; }
   if(head==='website'){ r.view='tab'; r.tab='webprestaties'; r.web={ tab:seg[1]||'', per:hq.get('periode')||'' }; return r; }
   if(head==='meeting' && seg[1]==='plannen'){ r.view='meetingplan'; r.meeting={ mode:hq.get('mode')||'algemeen', project:hq.get('project')||'' }; return r; }   // GOLF 8: dode host-param verwijderd (werd geparset maar nooit toegepast)
-  if(head==='offerte-aanvraag'){ r.view='offerte-aanvraag'; r.offerteTak=seg[1]||'website'; return r; }
-  if(head==='offertes' && seg[1]==='wizard'){ r.view='offerte-wizard'; r.offerteTak=seg[2]||'strategie'; r.offerteStap=hq.get('stap')||''; return r; }
   if(head==='contact'){ r.view='contact'; return r; }
   // gewone tab via slug (home/projecten/meetings/strategie/...)
   r.view='tab'; r.tab=slugToTab(head); if(r.tab==='projecten') r.tab='start';
@@ -123,7 +120,6 @@ function _parseHash(hash){
 // ---- live state -> route ------------------------------------------------------
 function currentRoute(){
   var r = { bedrijf: state.activeBedrijf || '' };
-  if(state.adminMode && state._adminClientView) r.as='klant';
   var vm = state.viewMode;
   if(vm==='project' && state.activeProject){
     r.view='project'; r.project=state.activeProject;
@@ -172,9 +168,7 @@ function buildHash(r){
     else if(r.sub==='inplannen'){ segs.push('inplannen'); if(r.shoot) segs.push(r.shoot); }
   } else if(r.view==='contact'){ segs.push('contact');
   } else if(r.view==='meetingplan'){ segs.push('meeting','plannen'); var m=r.meeting||{}; if(m.mode&&m.mode!=='algemeen') addq('mode',m.mode); addq('project',m.project);
-  } else if(r.view==='offerte-aanvraag'){ segs.push('offerte-aanvraag', r.offerteTak||'website');
-  } else if(r.view==='offerte-wizard'){ segs.push('offertes','wizard', r.offerteTak||'strategie'); addq('stap', r.offerteStap);
-  } else { // tab
+    } else { // tab
     var tab=r.tab||'start';
     if(tab==='socials'){ var s=r.soc||{};
       if(s.post){ segs.push('socials','post', s.post); }
@@ -231,7 +225,6 @@ async function applyRouteObj(r, opts){
   state._routingSilent = true;
   try{
     // staff-clientview meeschalen zodat de gedeelde weergave 1-op-1 klopt
-    if(r.as==='klant' && state.adminMode && !state._adminClientView){ state._adminClientView=true; try{ updateAdminViewToggle(); applyTakVisibility(); }catch(e){} }
     if(r.view==='project' && r.project){
       await openProject(r.project, 'auto', true);
       if(r.sub==='chat') switchModalTab('chat');
@@ -243,10 +236,6 @@ async function applyRouteObj(r, opts){
       try{ if(typeof goContact==='function') goContact(); else goTab('start'); }catch(e){ goTab('start'); }
     } else if(r.view==='meetingplan'){
       await goTab('meetings'); try{ openMeetingPlanner((r.meeting&&r.meeting.mode)||'algemeen'); if(r.meeting&&r.meeting.project&&typeof mpPickProject==='function') mpPickProject(r.meeting.project); }catch(e){}
-    } else if(r.view==='offerte-aanvraag'){
-      try{ openOfferteAanvraag(r.offerteTak||'website'); }catch(e){ goTab('start'); }
-    } else if(r.view==='offerte-wizard'){
-      try{ openOfferteWizard(r.offerteTak||'strategie'); }catch(e){ goTab('start'); }
     } else {
       var tab = r.tab || 'start'; if(tab==='projecten') tab='start';
       if(!PANELS[tab]) tab='start';
@@ -434,7 +423,7 @@ async function loadAndEnter(skipLink){
     return;
   }
   // CRUCIAAL bij bedrijf-switch: wis alle gecachete data van het vorige bedrijf, anders blijven team/meetings/huisstijl/offertes/metricool/ads/facturatie hangen
-  state.data = { dashboard:null, details:{}, chats:{}, meetings:null, bedrijf:null, team:null, huisstijl:null, offertes:null, metricool:null, metricoolStats:null, metricoolPostStats:null, ads:null };
+  state.data = { dashboard:null, details:{}, chats:{}, meetings:null, bedrijf:null, team:null, metricool:null, metricoolStats:null, metricoolPostStats:null, ads:null };
   state._webTakTab = null;   // Website-sub-tab niet laten overhangen naar een ander bedrijf (review v86)
   try {
     loaderStep(14,'Inloggen gecontroleerd…');
@@ -492,7 +481,6 @@ async function prefetchAdjacent(){
   if(!state.data.metricool) steps.push(['metricool', function(){ return S27DATA.loadMetricool(); }]);
   if(!state.data.meetings)  steps.push(['meetings',  function(){ return S27DATA.loadMeetings(); }]);
   if(!state.data.team)      steps.push(['team',      function(){ return S27DATA.loadTeam(); }]);
-  if(!state.data.offertes)  steps.push(['offertes',  function(){ return S27DATA.loadOffertes(); }]);
   for(var i=0;i<steps.length;i++){
     if(gen!==state._bootGen) return;
     try { await S27DATA.once(steps[i][0], steps[i][1]); } catch(e){}
@@ -513,37 +501,14 @@ function afterEnter(){
   if(state.adminMode){ document.body.classList.add('admin-mode'); updateAdminViewToggle(); }
   else if(!localStorage.getItem('s27_tour_completed')){ setTimeout(openTour,500); }
 }
-// Klant/Team-weergave-toggle (enkel staff): wissel tussen de uitgebreide teamweergave en de
-// simpele klantweergave om mee te kijken. Acting-as blijft actief; enkel de WEERGAVE verandert.
-function toggleClientView(){
-  if(!state.adminMode) return;
-  state._adminClientView=!state._adminClientView;
-  updateAdminViewToggle();
-  // ALTIJD verse data bij het wisselen team<->klant: de twee weergaven cachen los (metaAds vs
-  // metaAdsRich, metricoolStats vs metricoolStatsRich) en kunnen op een ander periode-venster staan.
-  // Wis de periode-afhankelijke ads/social-cache zodat de doelweergave opnieuw ophaalt bij de
-  // ACTUELE periode (anders zie je foutieve bestedingen/cijfers van een vorig venster).
-  if(state.data){ state.data.metaAds=null; state.data.metaAdsRich=null; state.data.googleAds=null; state.data.googleAdsRich=null; state.data.metricoolStats=null; state.data.metricoolStatsRich=null; state.data.metricoolPostStats=null; }
-  // team<->client wisselt het periodevenster (team = t/m vandaag, client = t/m gisteren) -> herbereken
-  if(state._adsPeriod && typeof adsPeriodWindow==='function'){ var _w=adsPeriodWindow(state._adsPeriod.preset); if(_w){ state._adsPeriod.from=_w.from; state._adsPeriod.to=_w.to; } }
-  // ZIJBALK-/CHROME-gating meteen aanpassen aan de nieuwe weergave (bv. Offertes-tab verdwijnt in ClientView).
-  // goTab() hertekent enkel het PANEEL; de sidebar-nav + topbar-chrome moeten apart herzet worden.
-  if(typeof applyTakVisibility==='function') applyTakVisibility();
-  // In ClientView nooit op een TEAM-ONLY tab blijven staan (bv. Offertes) -> val terug op Home zoals een klant ziet.
-  var _tab=currentTab;
-  if(state._adminClientView && ADMIN_ONLY_TABS.indexOf(_tab)>=0) _tab='start';
-  if(typeof _tab==='string' && _tab) goTab(_tab);   // (huidige of veilige) tab in de juiste weergave herladen
-}
-// tabs die ENKEL in de teamweergave bestaan (niet zichtbaar/relevant voor een klant)
-var ADMIN_ONLY_TABS=['offertes'];
-function updateAdminViewToggle(){
-  var b=$id('adminViewToggle'); if(!b) return;
-  var client=!!(state.adminMode && state._adminClientView);
-  document.body.classList.toggle('client-preview', client);
-  var lab=b.querySelector('.vmode-lab'); if(lab) lab.textContent=client?'ClientView':'TeamView';
-  b.setAttribute('aria-pressed', client?'true':'false');
-  b.setAttribute('title', client?'Je bekijkt het portaal als klant (ClientView), klik om terug naar TeamView':'Je bekijkt de teamweergave (TeamView), klik om als klant mee te kijken (ClientView)');
-}
+// Herwerking 18-08: de ClientView/TeamView-schakelaar is weg. portaal.studio27.be is uitsluitend
+// een KLANTportaal, dus er bestaat nog maar EEN weergave: die van de klant. Een teamlid dat hier
+// binnenkomt (acting-as, om iets na te kijken) ziet exact hetzelfde als de klant. De teamweergave
+// met de rijke rapportages leeft in hub.studio27.be, niet hier.
+// updateAdminViewToggle blijft als lege haak bestaan zodat oude aanroepen niet stukgaan.
+function updateAdminViewToggle(){ document.body.classList.add('client-preview'); }
+// Er zijn geen team-only tabs meer: Offertes is uit het klantenportaal verdwenen.
+var ADMIN_ONLY_TABS=[];
 
 /* =============================================================================
    ADMIN-MODUS (@studio27.be teamleden): bedrijvenkiezer met zoek over ÁLLE klanten.
@@ -659,7 +624,7 @@ async function adminEnterCompany(id){
   if(typeof S27.stopChatPoll==='function') S27.stopChatPoll();
   var c=(state.adminCompanies||[]).find(function(x){return x.id===id;});
   state.activeBedrijf=id;
-  state._adminClientView=false;   // elke klant opent standaard in de teamweergave
+  state._adminClientView=true;    // er bestaat nog maar EEN weergave: die van de klant
   state._adminActiveName=(c&&c.naam)||'';
   try{ localStorage.setItem('s27_admin_bedrijf', id); }catch(e){}
   state._provisionTried=true;        // admin: nooit de klant-provisionflow proberen
@@ -683,9 +648,9 @@ function onSessionExpired(msg){
   b.textContent=msg||'Je sessie is verlopen, log opnieuw in.'; document.body.appendChild(b);
   setTimeout(()=>{ try{b.remove();}catch(e){} state.session=null; state.viewMode='login'; showLogin(); initRealAuth(); }, 1700);
 }
-function logout(){ stopChatPoll(); try{ if(window.S27Auth) window.S27Auth.logout(); }catch(e){} state.session=null; state.data={dashboard:null,details:{},chats:{},meetings:null,bedrijf:null,team:null,huisstijl:null};
+function logout(){ stopChatPoll(); try{ if(window.S27Auth) window.S27Auth.logout(); }catch(e){} state.session=null; state.data={dashboard:null,details:{},chats:{},meetings:null,bedrijf:null,team:null};
   // ADMIN-staat volledig opruimen zodat een volgende (klant-)login niet in adminMode blijft hangen.
-  state.adminMode=false; state._adminClientView=false; state.activeBedrijf=''; state.adminCompanies=null; state._adminActiveName=''; state._commsMode=false; try{ if(typeof closeClientChat==='function') closeClientChat(); }catch(e){} hideAdminPicker(); document.body.classList.remove('admin-mode'); document.body.classList.remove('client-preview');
+  state.adminMode=false; state._adminClientView=true; state.activeBedrijf=''; state.adminCompanies=null; state._adminActiveName=''; state._commsMode=false; try{ if(typeof closeClientChat==='function') closeClientChat(); }catch(e){} hideAdminPicker(); document.body.classList.remove('admin-mode'); document.body.classList.remove('client-preview');
   showLogin(); if(!state.demoMode) initRealAuth(); else renderLogin('demo'); }
 
 /* =============================================================================
@@ -693,12 +658,11 @@ function logout(){ stopChatPoll(); try{ if(window.S27Auth) window.S27Auth.logout
    ============================================================================= */
 async function ensureTabData(name){
   if(state.demoMode) return;
-  if(['start','strategie','branding','video','berichten','socials','advertenties','webprestaties','alle-projecten'].indexOf(name)>=0){ if(!state.data.dashboard) await S27DATA.loadDashboard(); }
+  if(['start','socials','advertenties','webprestaties','alle-projecten'].indexOf(name)>=0){ if(!state.data.dashboard) await S27DATA.loadDashboard(); }
   // gedeelde keys via S27DATA.once -> een tab-klik tijdens de prefetch deelt dezelfde promise
   if(name==='meetings' && !state.data.meetings) await S27DATA.once('meetings', function(){ return S27DATA.loadMeetings(); });
-  if(name==='huisstijl' && !state.data.huisstijl) await S27DATA.loadHuisstijl();
-  // facturatie/instellingen: onafhankelijke loads parallel (was serieel: -300 à -800ms)
-  if(name==='facturatie'||name==='instellingen'){
+  // Instellingen: onafhankelijke loads parallel (was serieel: -300 à -800ms)
+  if(name==='instellingen'){
     var _fi=[];
     if(!state.data.bedrijf) _fi.push(S27DATA.loadBedrijf());
     if(!state.data.team) _fi.push(S27DATA.once('team', function(){ return S27DATA.loadTeam(); }));
@@ -708,7 +672,6 @@ async function ensureTabData(name){
     if(_fi.length){ try{ await Promise.all(_fi); }catch(e){} }
   }
   // (Resultaten-tab verwijderd, advertentiedata staat real-time op de Advertenties-tab)
-  if(name==='offertes'){ var _t=[]; if(!state.data.offertes) _t.push(S27DATA.once('offertes', function(){ return S27DATA.loadOffertes(); })); if(!state.data.bedrijf) _t.push(S27DATA.loadBedrijf()); if(_t.length){ try{ await Promise.all(_t); }catch(e){} } }
   if(name==='socials'){ var _s=[]; if(!state.data.metricool) _s.push(S27DATA.once('metricool', function(){ return S27DATA.loadMetricool(); }));
     if(isRichView()){ if(!state.data.metricoolStatsRich){ var _sp=(typeof socialPeriod==='function')?socialPeriod():null; _s.push(S27DATA.loadMetricoolStatsRich(_sp?{from:_sp.from,to:_sp.to,compare:_sp.compare}:undefined)); } }
     else { if(!state.data.metricoolStats){ var _spc=(typeof socialPeriod==='function')?socialPeriod():null; _s.push(S27DATA.loadMetricoolStats(_spc?{from:_spc.from,to:_spc.to,compare:_spc.compare}:undefined)); } if(!state.data.metricoolPostStats) _s.push(S27DATA.loadMetricoolPostStats()); }
@@ -769,21 +732,15 @@ function updateNavBadges(){
     // er geen badge '2' terwijl er bij doorklikken niets in te plannen valt. Geen data -> 0 (badge verbergt zich).
     try{ setB('meetings', ((typeof _meetingsTodo==='function'?_meetingsTodo():[])||[]).length); }catch(e){ setB('meetings',0); }
     // berichten + topbar-bel: geen betrouwbare ongelezen-telling -> mock-badge verbergen
-    var bb=document.querySelector('.sb-item[data-tab="berichten"] .sb-badge'); if(bb) bb.style.display='none';
-    var topBer=document.querySelector('.icon-btn[data-topnav="berichten"] .badge'); if(topBer) topBer.style.display='none';
   }catch(e){}
 }
 function needsLoad(name){
-  if(state.data.dashboard && ['start','strategie','branding','video','berichten'].indexOf(name)>=0) return false;
+  if(state.data.dashboard && name==='start') return false;
   if(name==='socials') return !state.data.metricool;   // wacht op Metricool-data
   if(name==='advertenties') return isRichView() ? !state.data.metaAdsRich : !state.data.metaAds;  // wacht op Meta-ads-data
   if(name==='webprestaties') return !state.data.webTraffic && !state.data.webSearch;  // wacht op GA4/GSC-data
   if(name==='meetings' && state.data.meetings) return false;
-  if(name==='huisstijl' && state.data.huisstijl) return false;
-  if(name==='facturatie' && state.data.bedrijf && state.data.team) return false;
   if(name==='instellingen' && state.data.bedrijf && state.data.team) return false;
-  if(name==='offertes' && state.data.offertes && state.data.bedrijf) return false;
-  if(name==='nieuwproject') return false;
   return true;
 }
 function setActiveNav(name){
@@ -796,17 +753,17 @@ function setActiveNav(name){
 }
 // MOBIELE ONDERSTE MENUBALK (golf 2): markeer de juiste tab op basis van de huidige view.
 // Projecten = de projectenlijst, alle disciplinetakken én een open projectdetail. De rest valt onder 'Meer'.
-const _BN_PROJ_TABS=['alle-projecten','strategie','branding','video','webprestaties','socials','advertenties'];
+const _BN_PROJ_TABS=['alle-projecten','webprestaties','advertenties'];
 function updateBottomNav(name){
   var nav=$id('bottomNav'); if(!nav) return;
   var t=String(name||(typeof currentTab!=='undefined'?currentTab:'')||'');
   var slot;
   if(state.viewMode==='project') slot='projecten';
   else if(t==='start') slot='start';
-  else if(t==='berichten') slot='berichten';
+  else if(t==='socials') slot='socials';
   else if(t==='meetings') slot='meetings';
   else if(_BN_PROJ_TABS.indexOf(t)>=0) slot='projecten';
-  else slot='meer';   // facturatie, instellingen, offertes, contact, e.d.
+  else slot='meer';   // instellingen, contact, e.d.
   nav.querySelectorAll('.bn-item').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-bn')===slot); });
 }
 // 'Meer'-tab: opent de bestaande zijbalk-lade (volledige dakstructuur-navigatie).
@@ -864,10 +821,6 @@ document.addEventListener('focusout', function(){ setTimeout(function(){ var a=d
 // (Socials + advertenties blijven altijd zichtbaar: hun koppeling staat los van projecten; de panels
 //  tonen zelf een "nog niet gekoppeld"-staat.)
 function applyTakVisibility(){
-  // Offertes-tab ENKEL in teamview, nooit voor klanten of in de ClientView-preview. Boven de vroege return zodat
-  // hij ook in demo/pre-load verborgen blijft (de querySelector werkt los van dashboard-data).
-  const off=document.querySelector('.sb-item[data-tab="offertes"]');
-  if(off) off.style.display = (typeof isRichView==='function' && isRichView()) ? '' : 'none';
   // GOLF 8: de performance-toggle is verwijderd — de tab bestaat sinds de
   // v2-rework niet meer in index.html (de querySelector was een no-op).
   // (Vincent 2026-06-13, herzien): Socials/Adverteren/Website-tabs blijven ALTIJD zichtbaar.
@@ -1166,141 +1119,8 @@ async function sendDringend(btn, id){
   try{ await api(ENDPOINTS.directMessage, { bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), onderwerp:'Dringende vraag, '+naam, bericht:'[DRINGEND · via projectpagina] '+tx, project:naam }); }catch(e){}
 }
 
-/* =============================================================================
-   STUDIO 27-ASSISTENT (klantenportaal) — DETERMINISTISCH + VEILIG.
-   Beantwoordt ENKEL praktische vragen over de eigen projecten, planning, feedback
-   en resultaten, uit de data die al in het portaal staat (afkomstig uit de gateway).
-   GEEN off-topic antwoorden, GEEN doorverwijzing/belofte richting een collega,
-   GEEN interne of gevoelige data, altijd professioneel en in de Studio 27-tone.
-   Geen externe AI-call meer: alles wordt lokaal en voorspelbaar bepaald.
-   ============================================================================= */
-function _botProjects(){ try{ return (window.S27DATA&&S27DATA.projects&&S27DATA.projects())||[]; }catch(e){ return []; } }
-function _botActief(){ return _botProjects().filter(function(p){ return String(p.status||'').toLowerCase().indexOf('done')<0 && String(p.status||'').toLowerCase().indexOf('afgerond')<0; }); }
-function _botMeetings(){ try{ var mt=(window.S27DATA&&S27DATA.meetings&&S27DATA.meetings())||null; return (((mt&&mt.list)||[]).filter(function(m){return m.dt&&m.dt.getTime()>=Date.now();}).sort(function(a,b){return a.dt-b.dt;})); }catch(e){ return []; } }
-function _botActiepunten(){ try{ return (typeof _notifItems==='function'?_notifItems():[])||[]; }catch(e){ return []; } }
-// huisstijl: geen em/en-dashes in tekst die we tonen, en veilig tegen HTML in taaknamen
-function _botSafe(s){ return escapeHtml(String(s||'').replace(/\s*[—–]\s*/g,', ').replace(/\s{2,}/g,' ').trim()); }
-function _botStatusLabel(p){
-  var s=String(p.status||'').toLowerCase();
-  if(/done|afgerond|klaar|opgeleverd|live/.test(s)) return 'afgerond';
-  if(/review|feedback|wacht|akkoord/.test(s)) return 'wacht op je feedback';
-  if(/progress|bezig|uitvoer|werk|montage|shoot/.test(s)) return 'volop in uitvoering';
-  return 'gepland';
-}
-// koppel een vraag aan een concreet project op basis van een betekenisvol woord uit de naam
-function _botMatchProject(ql){
-  var ps=_botProjects(), hit=null;
-  ps.forEach(function(p){
-    if(hit) return;
-    var words=String(p.name||'').toLowerCase().split(/[^a-z0-9]+/).filter(function(w){return w.length>=4;});
-    for(var i=0;i<words.length;i++){ if(ql.indexOf(words[i])>=0){ hit=p; break; } }
-  });
-  return hit;
-}
-// DE assistent: alleen scope-vragen, anders netjes terugverwijzen (geen off-topic, geen handoff-belofte)
-function botAnswer(q){
-  var raw=String(q||'').trim(), s=raw.toLowerCase();
-  if(!s) return 'Stel je vraag gerust. Ik help je met je projecten, planning, feedback en resultaten.';
-  if(/^(hoi|hallo|hey|h[eé]|dag|goeie?\b|goedemorgen|goedemiddag|goedenavond|hi|hello|yo)\b/.test(s))
-    return 'Hallo! Ik help je graag op weg met je projecten, je planning, feedback geven en je resultaten. Waarmee kan ik je verder helpen?';
-  if(/^(bedankt|dank(je|u)?|merci|thx|top|super|perfect|oke|ok[é!]?)\b/.test(s))
-    return 'Heel graag gedaan! Kan ik je nog ergens mee helpen?';
-  // wat staat er klaar / actiepunten
-  if(/wat.*(klaar|doen|wacht|openstaa)|actiepunt|to-?do|takenlijst|mijn taken|moet ik nog/.test(s)){
-    var ap=_botActiepunten();
-    if(!ap.length) return 'Er staat op dit moment niets op je te wachten. Zodra er iets klaarstaat (feedback geven, iets inplannen of een bericht) verschijnt het meteen op je <b>Home</b>.';
-    return 'Dit staat er voor je klaar:<br>'+ap.slice(0,5).map(function(a){ return '• '+_botSafe(a.title); }).join('<br>')+'<br><br>Alles vind je terug op je <b>Home</b>. Klik een kaart aan en je springt er meteen naartoe.';
-  }
-  // meetings
-  if(/meeting|afspraak|vergader|wanneer zien|samenzit|\bcall\b|videocall/.test(s)){
-    var ms=_botMeetings();
-    if(!ms.length) return 'Er staat momenteel geen meeting gepland. Een moment prikken? Dat doe je onder <b>Meetings</b>, daar kies je zelf een tijdstip dat past.';
-    var m0=ms[0], dd=m0.dt.toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'long'}), tt=m0.dt.toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'});
-    return 'Je volgende meeting is <b>'+_botSafe(m0.titel||m0.title||'een afspraak')+'</b> op '+dd+' om '+tt+'. Al je meetings staan onder <b>Meetings</b>.';
-  }
-  // feedback
-  if(/feedback|goedkeur|afkeur|aanpass|opmerking|revisie|herzien|ronde|wijzig/.test(s))
-    return 'Feedback geven is simpel: open je project en ga naar de bestanden. Per bestand kan je apart <b>goedkeuren</b> of een opmerking achterlaten. Bij beeld en video duid je zelfs op de juiste plek aan wat je bedoelt. Wij passen het dan voor je aan.';
-  // facturatie / offerte / prijs (praktisch verwijzen, nooit bedragen verzinnen) — vóór de
-  // discipline-intents zodat "wat kost een nieuwe website" naar de offerte-weg gaat
-  if(/factu|betaal|betaling|boekhoud|offerte|\bprijs|prijzen|\bkost|tarief|btw/.test(s))
-    return 'Je facturatiegegevens vind je onder <b>Facturatie</b>. Wil je een prijs of een nieuwe opdracht? Vraag het aan via de <b>Contact</b>-knop, dan stellen we een voorstel voor je op.';
-  // socials
-  if(/social|\bpost(s|en)?\b|instagram|facebook|linkedin|tiktok|reel|\bstory\b|content.*plan/.test(s))
-    return 'Je geplande en gepubliceerde posts vind je onder <b>Socials</b>. Daar zie je de volledige planning en keur je content goed of geef je feedback.';
-  // adverteren
-  if(/adverteer|advertentie|campagne|\bads\b|resultaten|rendement|\broas\b|vertoning|klik/.test(s))
-    return 'Je advertentieresultaten staan onder <b>Adverteren</b>: je uitgaven, vertoningen, klikken en de lopende campagnes, met de cijfers in real time.';
-  // website / seo
-  if(/website|\bseo\b|webdesign|webshop|zoekmachine|vindbaar|google.*vind/.test(s))
-    return 'De voortgang en cijfers van je website volg je onder <b>Website</b>. Zodra ze live staat, zie je daar ook je bezoekers en vindbaarheid.';
-  // status / voortgang (eventueel van een specifiek project)
-  if(/status|hoe ?ver|hoever|voortgang|update|stand van zaken|wanneer.*(klaar|af|opgeleverd|online)/.test(s)){
-    var mp=_botMatchProject(s);
-    if(mp) return '<b>'+_botSafe(mp.name)+'</b> is op dit moment <b>'+_botStatusLabel(mp)+'</b>'+(mp.pct?(' ('+parseInt(mp.pct,10)+'% klaar)'):'')+'. De details en de laatste bestanden vind je onder <b>Projecten</b>.';
-    var act=_botActief();
-    if(!act.length) return 'Al je projecten zijn afgerond, er loopt op dit moment niets. Iets nieuws starten? Gebruik gerust de <b>Contact</b>-knop bovenaan.';
-    return 'De stand van je lopende projecten:<br>'+act.slice(0,5).map(function(p){ return '• <b>'+_botSafe(p.name)+'</b>, '+_botStatusLabel(p)+(p.pct?(' ('+parseInt(p.pct,10)+'%)'):''); }).join('<br>')+'<br><br>Open een project onder <b>Projecten</b> voor de details.';
-  }
-  // contact / bereiken: waar de klant zelf terecht kan, GEEN belofte dat iemand terugbelt
-  if(/contact|bereiken|spreken|bellen|telefoon|mail|iemand van|met jullie|met het team/.test(s))
-    return 'Je kan je vraag altijd kwijt in de <b>chat</b> bij elk project, daar volgt je team je dossier mee op. Voor iets nieuws of algemeen gebruik je de <b>Contact</b>-knop bovenaan.';
-  // buiten scope: netjes terugverwijzen, NIET off-topic beantwoorden, GEEN handoff-belofte
-  return 'Ik help je hier met alles rond je projecten: de <b>status</b> en planning, <b>feedback</b> geven, je <b>meetings</b> en je <b>resultaten</b> bij Socials, Adverteren en Website. Stel je vraag gerust wat concreter, of laat ze achter in de projectchat, dan kijkt je team mee.';
-}
-function botAsk(btn){ pushBot(btn.textContent,'user'); var q=btn.textContent; var c=$id('botChips'); if(c)c.style.display='none'; botReply(q); }
-function botSend(){ var inp=$id('botInput'); var tx=(inp.value||'').trim(); if(!tx) return; pushBot(tx,'user'); inp.value=''; botReply(tx); }
-function pushBot(text,who){ var m=$id('botMsgs'); var d=document.createElement('div'); d.className='bmsg '+who; d.innerHTML = who==='user'?escapeHtml(text):text; m.appendChild(d); m.scrollTop=m.scrollHeight; }
-function botReply(q){
-  var m=$id('botMsgs'); var t=document.createElement('div'); t.className='typing'; t.innerHTML='<i></i><i></i><i></i><span class="typing-tx">Onze assistent kijkt het na…</span>'; m.appendChild(t); m.scrollTop=m.scrollHeight;
-  var ans=botAnswer(q);
-  logBotQuestion(q);   // monitoring: log de klantvraag (fire-and-forget, niet in demo)
-  setTimeout(function(){ t.remove(); pushBot(ans,'bot'); }, 600);
-}
-// Klantvraag loggen zodat het team kan observeren wat klanten vragen/missen (geen reactie, enkel analyse).
-// Fire-and-forget: faalt stil, vertraagt de bot niet, en NOOIT in demoMode.
-function logBotQuestion(q){
-  if(state.demoMode) return;
-  if(!state.session || !state.session.bedrijf_id) return;
-  try{ api(ENDPOINTS.botLog, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, vraag:String(q||'').slice(0,400), intent:_botIntent(q) }); }catch(e){}
-}
-function _botIntent(q){
-  var s=String(q||'').toLowerCase();
-  if(/^(hoi|hallo|hey|h[eé]|dag|goeie|hi|hello|yo)\b/.test(s)) return 'groet';
-  if(/^(bedankt|dank|merci|thx|top|super|perfect|oke|ok)\b/.test(s)) return 'dank';
-  if(/wat.*(klaar|doen|wacht|openstaa)|actiepunt|to-?do|takenlijst|mijn taken|moet ik nog/.test(s)) return 'taken';
-  if(/meeting|afspraak|vergader|wanneer zien|samenzit|call/.test(s)) return 'meeting';
-  if(/feedback|goedkeur|afkeur|aanpass|opmerking|revisie|herzien|ronde|wijzig/.test(s)) return 'feedback';
-  if(/factu|betaal|boekhoud|offerte|prijs|kost|tarief|btw/.test(s)) return 'facturatie';
-  if(/social|\bpost|instagram|facebook|linkedin|tiktok|reel|story/.test(s)) return 'socials';
-  if(/adverteer|advertentie|campagne|\bads\b|resultaten|rendement|roas|vertoning|klik/.test(s)) return 'adverteren';
-  if(/website|\bseo\b|webdesign|webshop|zoekmachine|vindbaar/.test(s)) return 'website';
-  if(/status|hoe ?ver|voortgang|update|stand van zaken|wanneer.*(klaar|af|opgeleverd|online)/.test(s)) return 'status';
-  if(/contact|bereiken|spreken|bellen|telefoon|mail|iemand van|met jullie|met het team/.test(s)) return 'contact';
-  return 'overig';
-}
-/* ---- Dynamische assistent-chips: voorgestelde praktische vragen op basis van context.
-   De chiptekst IS de vraag, dus em/en-dashes uit taaknamen worden weggehaald (huisstijl). ---- */
-function botDynChips(){
-  var chips=[];
-  try{
-    var actief=_botActief();
-    if(_botActiepunten().length) chips.push('Wat staat er voor mij klaar?');
-    if(actief.length){
-      var nm=String(actief[0].name||'').replace(/\s*[—–]\s*/g,', ').replace(/"/g,'').replace(/\s{2,}/g,' ').trim();
-      chips.push('Wat is de status van '+nm+'?');
-    }
-    chips.push('Wanneer is mijn volgende meeting?');
-    chips.push('Hoe geef ik feedback?');
-  }catch(e){}
-  if(!chips.length) chips=['Wat staat er voor mij klaar?','Wanneer is mijn volgende meeting?','Hoe geef ik feedback?'];
-  return chips.slice(0,4);
-}
-function renderBotChips(){
-  var c=$id('botChips'); if(!c) return;
-  c.style.display='';   // chips komen terug bij her-openen, ook na een eerder gesprek
-  c.innerHTML=botDynChips().map(function(q){ return '<button class="bot-chip" onclick="botAsk(this)">'+escapeHtml(q)+'</button>'; }).join('');
-}
+/* De STUDIO 27-ASSISTENT (chatbot) is op 18-08 uit het klantenportaal gehaald. De klant stelt
+   zijn vraag voortaan via de Contact-knop rechtsboven, die bij een mens terechtkomt. */
 
 /* ---- bedrijf-switcher in de topbar (>1 bedrijf) ---- */
 function renderCompanySwitcher(){
@@ -1443,7 +1263,8 @@ function markAllSeen(){
 document.addEventListener('click',e=>{ if(!e.target.closest('.client-switch-wrap')){ const m=$id('switchMenu'); if(m)m.style.display='none'; const sw=$id('clientSwitch'); if(sw)sw.classList.remove('open'); } if(!e.target.closest('#notifPanel')&&!e.target.closest('#bellBtn')){ const np=$id('notifPanel'); if(np)np.classList.remove('show'); } });
 // dienst-label -> tak-pagina (Dakstructuur Q)
 function goDienst(disc){
-  const M={'Strategie':'strategie','Branding':'branding','Video- en fotografie':'video','Webdesign':'webprestaties','Website en SEO':'webprestaties','SEO & GEO':'webprestaties','Social media':'socials','Online adverteren':'advertenties','Support':'webprestaties'};
+  // De disciplinetakken hebben geen eigen pagina meer; ze landen op de projectenlijst.
+  const M={'Strategie':'alle-projecten','Branding':'alle-projecten','Video- en fotografie':'alle-projecten','Webdesign':'webprestaties','Website en SEO':'webprestaties','SEO & GEO':'webprestaties','Social media':'socials','Online adverteren':'advertenties','Support':'webprestaties'};
   goTab(M[disc]||'start');
 }
 // Kennismaking / koffiegesprek -> meetingpagina, automatisch bij Arne (kies een vrij moment in zijn agenda)
@@ -1470,7 +1291,7 @@ function switchModalTab(name){
 // Berichten-inbox of elders: open een project rechtstreeks op de Chat-tab (schermvullend gesprek)
 function openProjectChat(id){
   state._openChatTab=true;
-  openProject(id, (currentTab==='berichten')?'berichten':'auto');
+  openProject(id, 'auto');
 }
 function toggleAcc(btn){ btn.classList.toggle('open'); btn.nextElementSibling.classList.toggle('open'); }
 /* ---- Per-bestand review (goedkeuren / feedback + via welke weg) ---- */
@@ -1793,7 +1614,7 @@ function wtRender(){
       +'<div class="mp-head"><span class="mp-back-sp"></span><div class="mp-head-c"><span class="mp-head-eyebrow">Website-support</span><b>Waarmee kunnen we je helpen?</b></div><button class="mp-close" onclick="closeWebTicket()" aria-label="Sluiten">'+ic('plus',22)+'</button></div>'
       +'<div class="mp-scroll"><div class="wt-keuze">'
         +'<button class="contact-card br-green" onclick="state._wtStep=\'form\';wtRender()"><span class="cc-ic">'+ic('st_feedback',24)+'</span><b>Er is iets stuk of werkt niet</b><span>Een fout, kapotte pagina of formulier dat niet doet wat het moet, wij fixen het.</span><span class="cc-go">Meld het probleem '+ic('arrow',14)+'</span></button>'
-        +'<button class="contact-card br-blue" onclick="closeWebTicket();setTimeout(function(){openOfferteWizard(\'website\');},150)"><span class="cc-ic">'+ic('plus',24)+'</span><b>Ik wil iets nieuws of een prijs</b><span>Een extra pagina, uitbreiding of vernieuwing? Dan stellen we graag een offerte op.</span><span class="cc-go">Naar de aanvraag '+ic('arrow',14)+'</span></button>'
+        +'<button class="contact-card br-blue" onclick="closeWebTicket();setTimeout(function(){goContact();},150)"><span class="cc-ic">'+ic('plus',24)+'</span><b>Ik wil iets nieuws of een prijs</b><span>Een extra pagina, uitbreiding of vernieuwing? Dan stellen we graag een offerte op.</span><span class="cc-go">Naar de aanvraag '+ic('arrow',14)+'</span></button>'
       +'</div></div></div>';
     return;
   }
@@ -1948,30 +1769,6 @@ function openMeetingPlannerForTak(takKey){
 function openMeetingPlannerForProject(id){ openMeetingPlanner('project'); try{ if(typeof mpPickProject==='function') mpPickProject(id); }catch(e){} }
 /* ---- Offerte: vraag stellen -> gateway /offerteVraag (comment op de gekoppelde
    taak of D1-ticket + salesmelding). Succes wordt pas getoond NA ok:true. ---- */
-function offerteVraag(id, btn){
-  const row=btn&&btn.closest('.filecard'); if(!row||row.querySelector('.off-q'))return;
-  const q=document.createElement('div'); q.className='off-q'; q.style.cssText='flex-basis:100%;width:100%;margin-top:10px;display:flex;flex-direction:column;gap:8px';
-  q.innerHTML='<textarea class="off-qtx" rows="3" placeholder="Je vraag over deze offerte…" style="width:100%;box-sizing:border-box;font-family:var(--font-body);font-size:13.5px;padding:10px;border:1px solid var(--line);border-radius:8px;outline:none;resize:vertical"></textarea><div style="display:flex;gap:8px"><button class="btn btn-primary btn-sm" onclick="sendOfferteVraag(this,\''+escapeHtml(id)+'\')">Versturen '+ic('send',14)+'</button><button class="btn btn-ghost btn-sm" onclick="this.closest(\'.off-q\').remove()">Annuleer</button></div>';
-  row.appendChild(q); var t=q.querySelector('textarea'); if(t)t.focus();
-}
-async function sendOfferteVraag(btn, id){
-  const q=btn&&btn.closest('.off-q'); if(!q)return; const tx=((q.querySelector('.off-qtx')||{}).value||'').trim();
-  if(!tx){ var e=q.querySelector('textarea'); if(e){ e.style.borderColor='var(--s27-orange)'; e.focus(); } return; }
-  const okHtml='<div class="fs" style="color:var(--s27-green-ink,#147A50);padding:4px 0">✓ Je vraag is verstuurd naar je Studio 27-contact, je hoort snel iets.</div>';
-  if(state.demoMode){ q.innerHTML=okHtml; return; }
-  // succes pas NA een ok:true-respons van de gateway; anders een echte foutmelding
-  btn.disabled=true; btn.innerHTML='Versturen…';
-  let ok=false;
-  try{
-    const res=await api(ENDPOINTS.offerteVraag, { offerte_id:id, bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), vraag:tx });
-    ok=!!(res&&res.ok&&res.data&&res.data.ok);
-  }catch(e){ ok=false; }
-  if(ok){ q.innerHTML=okHtml; return; }
-  btn.disabled=false; btn.innerHTML='Versturen '+ic('send',14);
-  let err=q.querySelector('.off-qerr');
-  if(!err){ err=document.createElement('div'); err.className='off-qerr fs'; err.style.cssText='color:var(--s27-orange);padding:2px 0'; q.appendChild(err); }
-  err.textContent='Je vraag kon niet verstuurd worden. Probeer het zo opnieuw, of stuur ons een bericht via de chat.';
-}
 /* Golf 1 (11-07): de oude smalle meeting-slotpicker (pickMtype/loadMeetSlots/
    confirmMeeting met hardcoded MEET_HOSTS) is verwijderd; de schermvullende
    meeting-planner (openMeetingPlanner + ENDPOINTS.meetingBook) verving hem. */
@@ -2346,50 +2143,6 @@ function mpDone(start,meetLink,viaRequest){
    Contract: api(ENDPOINTS.offerteGenereren, { items:[{sku,naam,prijs,aantal}], opmerking })
    -> { ok, offerte_task_id, offerte_task_url, offerte_link, message }; de gateway
    herrekent prijzen server-side tegen de D1-prijslijst (offer_catalog). */
-function offerteResultBox(){ return $id('offResult'); }
-function showOfferteResult(html, isErr){
-  const box=offerteResultBox(); if(!box) return;
-  box.className='off-result'+(isErr?' err':''); box.style.display='block'; box.innerHTML=html;
-  if(box.scrollIntoView) try{ box.scrollIntoView({behavior:'smooth',block:'nearest'}); }catch(e){}
-}
-async function offerteSubmit(btn){
-  const cart=(state._offerteCart)||{};
-  const skus=Object.keys(cart).filter(s=>cart[s]>0);
-  if(!skus.length){ showOfferteResult('Je winkelmand is nog leeg. Voeg eerst een product toe.', true); return; }
-  // items in het FE->BE-contract: [{sku, naam, prijs, aantal}]
-  const items=skus.map(function(sku){ const p=offBySku(sku)||{}; return { sku:sku, naam:p.name||'', groep:p.group||'', prijs:Number(p.price)||0, aantal:cart[sku] }; });
-  const opm=(($id('offOpm')||{}).value||'').trim();
-  state._offerteOpm=opm;   // bewaren zodat een rerender de tekst behoudt
-  if(state.demoMode){
-    showOfferteResult('<b>Bedankt!</b> In je echte portaal sturen we deze selectie ('+items.length+' '+(items.length===1?'product':'producten')+') meteen door en krijg je hier de link naar je offerte. Dit is de voorbeeldweergave.', false);
-    if(btn){ btn.disabled=false; btn.innerHTML=ic('send',16)+' Offerte aanvragen'; }
-    return;
-  }
-  if(btn){ btn.disabled=true; btn.innerHTML='Offerte aanmaken…'; }
-  showOfferteResult('<span class="brand-spinner" style="width:18px;height:18px;display:inline-block;vertical-align:-3px;margin-right:8px"></span>We stellen je offerte samen, even geduld…', false);
-  try{
-    const res=await api(ENDPOINTS.offerteGenereren, { items:items, opmerking:opm });
-    const d=(res&&res.data)||{};
-    if(res&&res.ok&&d&&d.ok!==false&&(d.offerte_task_url||d.offerte_task_id||d.pandadoc_id)){
-      const url=d.offerte_task_url||'';
-      const ext=/^https?:/i.test(url);   // portaal-links (#/...) openen in het portaal zelf, geen nieuw tabblad
-      const link=url?(' <a href="'+escapeHtml(url)+'"'+(ext?' target="_blank" rel="noopener"':'')+'>Bekijk je offerte in het portaal '+ic('arrow',13)+'</a>'):'';
-      const msg=d.message?escapeHtml(d.message):'Je offerte is aangemaakt en staat klaar.';
-      const okHtml=ic('check',16)+' <b>Gelukt!</b> '+msg+link+'<div style="margin-top:6px;font-size:12px;color:var(--ink-4)">We kijken alles nog persoonlijk na voor je definitieve offerte.</div>';
-      // winkelmand legen na succes; offertes-cache stale maken zodat de lijst hierboven later bijwerkt
-      state._offerteCart={}; state._offerteOpm=''; state.data.offertes=null;
-      renderOfferteBuilder();        // herrender met lege mand (#offResult wordt opnieuw opgebouwd)
-      showOfferteResult(okHtml, false);   // resultaat terugzetten na de rerender
-    } else {
-      const m=(d&&d.message)?escapeHtml(d.message):'Er liep iets mis bij het aanmaken van je offerte. Probeer het zo opnieuw, of stuur ons gerust een berichtje.';
-      showOfferteResult(m, true);
-      if(btn){ btn.disabled=false; btn.innerHTML=ic('send',16)+' Offerte aanvragen'; }
-    }
-  }catch(e){
-    showOfferteResult('Er liep iets mis bij het aanmaken van je offerte. Probeer het zo opnieuw, of stuur ons gerust een berichtje.', true);
-    if(btn){ btn.disabled=false; btn.innerHTML=ic('send',16)+' Offerte aanvragen'; }
-  }
-}
 /* ---- Metricool: post goedkeuren + feedback geven vanuit het portaal ----
    Goedkeuren: api(ENDPOINTS.metricoolApprove, { post_id }). Lukt de backend het (nog) niet,
    dan tonen we een nette "binnenkort"-staat. Feedback gaat via directMessage (chatkanaal). */
@@ -2958,7 +2711,7 @@ function goContact(){
     +'<h1>Waarmee kunnen we je helpen?</h1>'
     +'<p class="sdesc" style="margin:4px 0 22px">Kies hieronder, dan komt je vraag meteen bij de juiste persoon terecht.</p>'
     +'<div class="contact-grid">'
-      +'<button class="contact-card br-blue" onclick="openOfferteWizard()"><span class="cc-ic">'+ic('plus',24)+'</span><b>Nieuw project</b><span>Stel zelf je project samen, wij werken de offerte persoonlijk uit.</span><span class="cc-go">Start een aanvraag '+ic('arrow',14)+'</span></button>'
+      +'<button class="contact-card br-blue" onclick="goContact()"><span class="cc-ic">'+ic('plus',24)+'</span><b>Nieuw project</b><span>Vertel ons kort wat je in gedachten hebt, wij werken de offerte persoonlijk uit.</span><span class="cc-go">Stel je vraag '+ic('arrow',14)+'</span></button>'
       +'<button class="contact-card br-purple" onclick="openClientChat()"><span class="cc-ic">'+ic('msg',24)+'</span><b>Chat met je team</b><span>Stel je vraag rechtstreeks in de chat, het hele team leest mee en antwoordt snel.</span><span class="cc-go">Open de chat '+ic('arrow',14)+'</span></button>'
       +'<button class="contact-card br-pink" onclick="contactVraagForm()"><span class="cc-ic">'+ic('msg',24)+'</span><b>Algemene vraag</b><span>Vragen over je samenwerking, facturatie of iets anders? Ilke helpt je verder.</span><span class="cc-go">Stel je vraag '+ic('arrow',14)+'</span></button>'
       +'<button class="contact-card br-green" onclick="openWebTicket()"><span class="cc-ic">'+ic('doc',24)+'</span><b>Website support</b><span>Een bug, aanpassing of vraag over je site? Maak een ticket met bijlagen.</span><span class="cc-go">Ticket aanmaken '+ic('arrow',14)+'</span></button>'
@@ -3318,7 +3071,6 @@ async function shootInitAutocomplete(tid){
   }catch(e){ /* autocomplete optioneel */ }
 }
 
-function toggleBot(){ const p=$id('botPanel'),f=$id('botFab'); const open=p.classList.toggle('show'); f.style.display=open?'none':'flex'; if(open){ const g=$id('botGreet'); if(g){ var nm=(typeof _greetNaam==='function'?_greetNaam():'')||''; g.innerHTML='Hallo '+escapeHtml(nm||'daar')+'! Ik help je graag op weg. Waarmee kan ik je verder helpen?'; } if(typeof renderBotChips==='function') renderBotChips(); const inp=p.querySelector('.bot-input input'); if(inp)setTimeout(()=>inp.focus(),50); } }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($id('tourScrim')&&$id('tourScrim').classList.contains('show'))endTour(false); else if(state.viewMode==='project'){ if(typeof _isContentTak==='function'&&_isContentTak(state._backTab||'')) markSkipAutoLand(state._backTab); goTab(state._backTab||'start'); } } });
 
 /* ---------- Onboarding-rondleiding (auto 1x + altijd via het ?-icoon) ----------
