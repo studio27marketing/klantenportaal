@@ -4,7 +4,7 @@
    - Login: Firebase (Google + magic-link + TOTP-2FA) via window.S27Auth,
      gespiegeld op de werkende dashboard.js-flow. ?demo=1 = mock-preview.
    - Routing: lazy-load per tab + DEEP-LINK router (?p=&tab= | ?c= | ?n= | ?go=).
-   - Handlers: chat→chatPost, slot→inplannen, feedback→feedbackV2, bot→aiStatusBot.
+   - Handlers: slot→inplannen, feedback→feedbackV2.
    ============================================================================= */
 "use strict";
 
@@ -28,7 +28,7 @@ function $id(x){ return document.getElementById(x); }
      #/b/<bedrijf>/adverteren/<meta|google>/campagne/<cid>?periode=30d
      #/b/<bedrijf>/website/<projecten|statistieken>?periode=30d
      #/b/<bedrijf>/projecten | /meetings | /instellingen | /contact
-     #/b/<bedrijf>/project/<taakId>[/chat | /onderdeel/<subId> | /review/<key>?ronde=N | /galerij[/<idx>] | /inplannen/<subId>]
+     #/b/<bedrijf>/project/<taakId>[/onderdeel/<subId> | /review/<key>?ronde=N | /galerij[/<idx>] | /inplannen/<subId>]
      #/b/<bedrijf>/meeting/plannen?mode=&project=
 
    Een route is één plat object {bedrijf, as, view, tab, project, sub, ...}. parseRoute()
@@ -70,8 +70,9 @@ function parseRoute(){
   const r = _parseHash(location.hash);
   if(r) return r;
   // 2) oude query-links (?p ?c ?n ?go ?tab ?klant), blijven werken
-  if(q.get('p')) return { view:'project', project:q.get('p'), sub:(q.get('tab')==='chat'?'chat':''), bedrijf:q.get('klant')||'' };
-  if(q.get('c')) return { view:'project', project:q.get('c'), sub:'chat', bedrijf:q.get('klant')||'' };
+  if(q.get('p')) return { view:'project', project:q.get('p'), sub:'', bedrijf:q.get('klant')||'' };
+  // ?c= en ?tab=chat waren chat-deeplinks; sinds de klantchat-sunset (27-07) landen ze op het overzicht.
+  if(q.get('c')) return { view:'project', project:q.get('c'), sub:'', bedrijf:q.get('klant')||'' };
   if(q.get('go')){ var t=q.get('go'); if(t==='projecten') t='start'; return { view:'tab', tab:t, bedrijf:q.get('klant')||'' }; }
   if(q.get('n')) return { view:'tab', tab:'start', notif:true, bedrijf:q.get('klant')||'' };
   if(q.get('klant')) return { view:'tab', tab:'start', bedrijf:q.get('klant') };
@@ -89,10 +90,12 @@ function _parseHash(hash){
   if(!seg.length){ r.view='tab'; r.tab='start'; return r; }
   var head = seg[0];
   // ---- LEGACY hash-vormen (#/project/<id>, #/chat/<id>, #/<tab>) ----
-  if(head==='chat' && seg[1] && !r.bedrijf){ r.view='project'; r.project=seg[1]; r.sub='chat'; return r; }
+  // #/chat/<id> stamt uit de klantchat; die is op 27-07 afgezet -> gewoon het projectoverzicht.
+  if(head==='chat' && seg[1] && !r.bedrijf){ r.view='project'; r.project=seg[1]; r.sub=''; return r; }
   // ---- nieuw schema ----
   if(head==='project' && seg[1]){
-    r.view='project'; r.project=seg[1]; r.sub=seg[2] || (hq.get('tab')==='chat'?'chat':'');   // legacy #/project/<id>?tab=chat
+    r.view='project'; r.project=seg[1]; r.sub=seg[2]||'';
+    if(r.sub==='chat') r.sub='';   // oude chat-deeplink (#/project/<id>/chat) landt op het overzicht
     if(r.sub==='onderdeel') r.onderdeel=seg[3]||'';
     else if(r.sub==='review'){ r.review=seg[3]||''; r.ronde=hq.get('ronde')||''; }
     else if(r.sub==='galerij'){ r.galIdx=seg[3]||''; }
@@ -123,7 +126,6 @@ function currentRoute(){
   var vm = state.viewMode;
   if(vm==='project' && state.activeProject){
     r.view='project'; r.project=state.activeProject;
-    if(state._mtab==='chat') r.sub='chat';
   } else if(vm==='galerij' && state._gal){
     r.view='project'; r.project=state._galFrom || state._gal.taskId || ''; r.sub='galerij'; if(state._gal.idx>0) r.galIdx=String(state._gal.idx);
   } else if(vm==='shootplan'){
@@ -161,8 +163,7 @@ function buildHash(r){
   if(r.as==='klant') addq('as','klant');
   if(r.view==='project' && r.project){
     segs.push('project', r.project);
-    if(r.sub==='chat') segs.push('chat');
-    else if(r.sub==='onderdeel'){ segs.push('onderdeel'); if(r.onderdeel) segs.push(r.onderdeel); }
+    if(r.sub==='onderdeel'){ segs.push('onderdeel'); if(r.onderdeel) segs.push(r.onderdeel); }
     else if(r.sub==='review'){ segs.push('review'); if(r.review) segs.push(r.review); addq('ronde', r.ronde); }
     else if(r.sub==='galerij'){ segs.push('galerij'); if(r.galIdx) segs.push(String(r.galIdx)); }
     else if(r.sub==='inplannen'){ segs.push('inplannen'); if(r.shoot) segs.push(r.shoot); }
@@ -227,8 +228,7 @@ async function applyRouteObj(r, opts){
     // staff-clientview meeschalen zodat de gedeelde weergave 1-op-1 klopt
     if(r.view==='project' && r.project){
       await openProject(r.project, 'auto', true);
-      if(r.sub==='chat') switchModalTab('chat');
-      else if(r.sub==='onderdeel' && r.onderdeel) _routeOpenOnderdeel(r.onderdeel);
+      if(r.sub==='onderdeel' && r.onderdeel) _routeOpenOnderdeel(r.onderdeel);
       else if(r.sub==='review' && r.review) _routeOpenReview(r.project, r.review, r.ronde);
       else if(r.sub==='galerij') _routeOpenGalerij(r.project, r.galIdx);
       else if(r.sub==='inplannen' && r.shoot){ try{ openShootOverlay(r.shoot); }catch(e){} }
@@ -292,7 +292,6 @@ function init(){
   S27.reloadDashboard = function(skipLink){ loadAndEnter(!!skipLink); };
   S27.onSwitchFailed = onSwitchFailed;
   S27.closeSwitchMenu = closeSwitchMenu;
-  S27.stopChatPoll = function(){ stopChatPoll(); };
   // Bedrijf-switch: meteen de '27'-loader tonen + sidebar-naam optimistisch updaten (geen blind moment).
   S27.showSwitching = function(id){
     try {
@@ -423,7 +422,7 @@ async function loadAndEnter(skipLink){
     return;
   }
   // CRUCIAAL bij bedrijf-switch: wis alle gecachete data van het vorige bedrijf, anders blijven team/meetings/huisstijl/offertes/metricool/ads/facturatie hangen
-  state.data = { dashboard:null, details:{}, chats:{}, meetings:null, bedrijf:null, team:null, metricool:null, metricoolStats:null, metricoolPostStats:null, ads:null };
+  state.data = { dashboard:null, details:{}, meetings:null, bedrijf:null, team:null, metricool:null, metricoolStats:null, metricoolPostStats:null, ads:null };
   state._webTakTab = null;   // Website-sub-tab niet laten overhangen naar een ander bedrijf (review v86)
   try {
     loaderStep(14,'Inloggen gecontroleerd…');
@@ -621,7 +620,6 @@ async function adminEnterCompany(id){
   id=String(id||''); if(!id) return;
   if(id===state.activeBedrijf){ hideAdminPicker(); return; }   // al actief bedrijf
   if(state.activeBedrijf && typeof S27.stashData==='function'){ try{ S27.stashData(state.activeBedrijf); }catch(e){} }
-  if(typeof S27.stopChatPoll==='function') S27.stopChatPoll();
   var c=(state.adminCompanies||[]).find(function(x){return x.id===id;});
   state.activeBedrijf=id;
   state._adminClientView=true;    // er bestaat nog maar EEN weergave: die van de klant
@@ -642,15 +640,14 @@ function playLoader(){ state._loaderAt=Date.now(); try{ if(window.__vidLoader) w
 function loaderStep(pct,label){ try{ if(window.__vidLoader) window.__vidLoader.step(pct); }catch(e){} }   // pct (0-100) => videopositie; label genegeerd (geen tekst meer)
 function hideLoader(){ try{ if(window.__vidLoader) window.__vidLoader.finish(); }catch(e){} }
 function onSessionExpired(msg){
-  stopChatPoll();
   const b=document.createElement('div');
   b.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#fef2f2;color:#991b1b;border:1px solid #fecaca;padding:14px 22px;border-radius:12px;font:700 14px/1.4 var(--font-display);z-index:99999;box-shadow:var(--sh-md)';
   b.textContent=msg||'Je sessie is verlopen, log opnieuw in.'; document.body.appendChild(b);
   setTimeout(()=>{ try{b.remove();}catch(e){} state.session=null; state.viewMode='login'; showLogin(); initRealAuth(); }, 1700);
 }
-function logout(){ stopChatPoll(); try{ if(window.S27Auth) window.S27Auth.logout(); }catch(e){} state.session=null; state.data={dashboard:null,details:{},chats:{},meetings:null,bedrijf:null,team:null};
+function logout(){ try{ if(window.S27Auth) window.S27Auth.logout(); }catch(e){} state.session=null; state.data={dashboard:null,details:{},meetings:null,bedrijf:null,team:null};
   // ADMIN-staat volledig opruimen zodat een volgende (klant-)login niet in adminMode blijft hangen.
-  state.adminMode=false; state._adminClientView=true; state.activeBedrijf=''; state.adminCompanies=null; state._adminActiveName=''; state._commsMode=false; try{ if(typeof closeClientChat==='function') closeClientChat(); }catch(e){} hideAdminPicker(); document.body.classList.remove('admin-mode'); document.body.classList.remove('client-preview');
+  state.adminMode=false; state._adminClientView=true; state.activeBedrijf=''; state.adminCompanies=null; state._adminActiveName=''; hideAdminPicker(); document.body.classList.remove('admin-mode'); document.body.classList.remove('client-preview');
   showLogin(); if(!state.demoMode) initRealAuth(); else renderLogin('demo'); }
 
 /* =============================================================================
@@ -693,16 +690,13 @@ function renderLoading(name){
 }
 async function goTab(name){
   if(!PANELS[name]) return;
-  stopChatPoll();   // tab-wissel/modal-sluiten -> chat-poller stoppen (berichten herstart 'm hieronder)
-  currentTab=name; state.viewMode='tab'; state.activeProject=null; state._metaCampaign=null; state._chatStaged=[];
+  currentTab=name; state.viewMode='tab'; state.activeProject=null; state._metaCampaign=null;
   setActiveNav(name);
   if(!state.demoMode && needsLoad(name)) renderLoading(name);
   await ensureTabData(name);
   // ITEM 17: GEEN auto-landing meer op één project, de klant komt ALTIJD eerst op de
   // projectenlijst en klikt zelf door naar de detail (uniform over alle takken).
   renderPanel(name);
-  if(name==='advertenties' && typeof adsChatMount==='function') adsChatMount();   // ads-chat koppelen aan de huidige-maand-advertentietaak
-  if(name==='socials' && typeof socialChatMount==='function') socialChatMount();   // social-chat koppelen aan de sociale-media-taak
   if(name==='advertenties' && isRichView() && typeof adsRichMountTabCharts==='function') adsRichMountTabCharts();   // team-weergave: tab-grafieken mounten
   if(name==='webprestaties' && typeof webMountCharts==='function') webMountCharts();   // Webprestaties-grafieken mounten
   if(name==='socials' && isRichView() && socialTab && socialTab()==='rapport' && typeof socialRichMountCharts==='function') socialRichMountCharts();   // team-weergave: social-rapport-grafieken mounten
@@ -827,17 +821,13 @@ function applyTakVisibility(){
 }
 
 /* =============================================================================
-   PROJECTDETAIL, lazy detail + chat, dan buildModal
+   PROJECTDETAIL, lazy detail, dan buildModal
    ============================================================================= */
 async function openProject(id, from, noPush){
   // 'auto' (of onbekend) -> terug-tak afleiden uit de tak van het project (Dakstructuur Q)
   let f=(from && from!=='auto' && typeof PANELS!=='undefined' && PANELS[from])?from:'';
-  stopChatPoll();
-  state.viewMode='project'; state.activeProject=id; state._mtab=(state._openChatTab?'chat':'overzicht'); state._openChatTab=false; state._chatStaged=[];
-  if(!state.demoMode){ renderLoading(f||'start'); await Promise.all([ S27DATA.loadDetail(id), S27DATA.loadChat(id) ]);
-    // Klant opent het project rechtstreeks op de chat-tab -> markeer als gelezen (read-receipt voor het team).
-    if(state._mtab==='chat' && !state.adminMode && S27DATA && S27DATA.markChatRead) S27DATA.markChatRead(id);
-  }
+  state.viewMode='project'; state.activeProject=id;
+  if(!state.demoMode){ renderLoading(f||'start'); await S27DATA.loadDetail(id); }
   const p=(S27DATA.projects()||(typeof PROJECTS!=='undefined'?PROJECTS:[])).find(x=>x.id===id);
   if(!f) f=(typeof takOfProject==='function')?takOfProject(p):'start';
   state._backTab=f;
@@ -849,7 +839,6 @@ async function openProject(id, from, noPush){
   window.scrollTo({top:0,behavior:'auto'});
   const tt=$id('topbarTitle'); if(tt&&p) tt.textContent=p.name;
   closeSidebar(); syncUrl(!noPush);   // push een history-entry zodat browser-terug binnen de SPA terugkeert
-  if($id('chatList')) startChatPoll(id);   // projectchat staat in de DOM (tenzij afgerond) -> auto-refresh
 }
 // per-tak 'sla auto-landing over'-vlag (terug uit een content-detail = de lijst tonen, niet opnieuw inzoomen)
 function markSkipAutoLand(tak){ if(!tak) return; state._skipAutoLand=state._skipAutoLand||{}; state._skipAutoLand[tak]=true; }
@@ -912,211 +901,14 @@ window.S27Leave = (function(){
 })();
 
 /* =============================================================================
-   ECHTE HANDLERS
+   GEDEELDE HELPERS
+   -----------------------------------------------------------------------------
+   De KLANTCHAT is op 27-07 afgezet (commit f527f518): klantcommunicatie loopt
+   uitsluitend via e-mail. De gateway-acties chatList/chatPost/chatAttachment/
+   chatMarkRead en hun comms-varianten bestaan niet meer, dus zijn ook de
+   verzendhandlers, de poller en de chatvensters hier verdwenen.
    ============================================================================= */
-async function sendChat(input){
-  if(!input) input=document.querySelector('.chat-input .chat-textin');
-  const tx=((input&&input.value)||'').trim();
-  const staged=(state._chatStaged||[]).slice();   // tekst + alle gestagede bestanden samen versturen (Cluster M)
-  if(!tx && !staged.length) return;
-  const list=_chatListEl(); if(!list) return;
-  // optimistische bubble: tekst + thumbnails/documenten samen in één bericht
-  const me=document.createElement('div'); me.className='msg me';
-  let inner='<div class="bubble"><div class="who">Jij</div>';
-  if(tx) inner+='<div class="tx">'+escapeHtml(tx)+'</div>';
-  if(staged.length) inner+='<div class="bub-atts">'+staged.map(function(f){ return /^image\//.test(f.type)?'<img class="bub-att" src="'+f.dataUrl+'" alt="">':'<span class="bub-doc">'+ic('doc',13)+' '+escapeHtml(f.name)+'</span>'; }).join('')+'</div>';
-  inner+='<div class="tm">nu</div></div>';
-  me.innerHTML=inner; list.appendChild(me);
-  // composer leegmaken (tekst + staging-tray + melding)
-  if(input) input.value=''; state._chatStaged=[]; if(typeof _renderChatTray==='function') _renderChatTray();
-  var _sm=document.getElementById('chatStageMsg'); if(_sm) _sm.textContent='';
-  list.scrollTop=list.scrollHeight;
-  if(state.demoMode || !state.activeProject){
-    setTimeout(()=>{ const r=document.createElement('div'); r.className='msg flash'; r.innerHTML='<span class="av" style="background:var(--s27-blue)">IM</span><div class="bubble"><div class="who">Ilke Meeusen</div><div class="tx">Top, ik neem het mee!</div><div class="tm">nu</div></div>'; const l2=_chatListEl(); if(l2){ l2.appendChild(r); l2.scrollTop=l2.scrollHeight; setTimeout(()=>r.classList.remove('flash'),700); } },1100);
-    return;
-  }
-  const tid=state.activeProject;
-  const S=state.session||{};
-  // Restpuntenronde 11-07: verstuur- en uploadfouten worden niet langer stil
-  // ingeslikt. api() gooit nooit maar geeft {ok:false} terug; bij een fout
-  // markeert de optimistische bubble zich als niet-verzonden met de tekst
-  // terug in de composer, i.p.v. geruisloos te verdwijnen bij de refresh.
-  let verzendFout='';
-  try {
-    // 1) tekst eerst (zodat het bericht leesbaar boven de bijlagen staat)
-    if(tx){
-      let r;
-      if(state._commsMode){ r=await api(ENDPOINTS.commsChatPost, { bedrijf_id:S.bedrijf_id, session_token:S.session_token, klant_naam:S27DATA.bedrijfsnaam(), comment_text:tx }); }
-      else { r=await api(ENDPOINTS.chatPost, { task_id:tid, bedrijf_id:S.bedrijf_id, session_token:S.session_token, klant_naam:S27DATA.bedrijfsnaam(), comment_text:tx }); }
-      if(!(r&&r.ok&&r.data&&r.data.ok!==false)) verzendFout=(r&&r.data&&r.data.message)||'Bericht kon niet verzonden worden.';
-    }
-    // 2) daarna elk gestaged bestand
-    for(let i=0;i<staged.length && !verzendFout;i++){
-      const f=staged[i]; const b64=String(f.dataUrl||'').split(',')[1]||''; if(!b64) continue;
-      let r;
-      if(state._commsMode){ r=await api(ENDPOINTS.commsChatAttachment, { bedrijf_id:S.bedrijf_id, session_token:S.session_token, klant_naam:S27DATA.bedrijfsnaam(), filename:f.name, file_data:b64 }); }
-      else { r=await api(ENDPOINTS.chatAttachment, { task_id:tid, bedrijf_id:S.bedrijf_id, session_token:S.session_token, klant_naam:S27DATA.bedrijfsnaam(), filename:f.name, file_data:b64 }); }
-      if(!(r&&r.ok&&r.data&&r.data.ok!==false)) verzendFout=(r&&r.data&&r.data.message)||('Bijlage "'+f.name+'" kon niet verzonden worden.');
-    }
-  }
-  catch(e){ verzendFout=verzendFout||'Verzenden lukte niet. Controleer je verbinding en probeer opnieuw.'; }
-  if(verzendFout){
-    if(me){ var _tx=me.querySelector('.tx'); if(_tx) _tx.innerHTML+=' <span style="color:var(--s27-orange-ink);font-weight:700">- niet verzonden</span>'; me.style.opacity='.6'; }
-    if(input && tx && !input.value) input.value=tx;   // tekst terug in de composer voor een nieuwe poging
-    if(typeof toast==='function') toast(verzendFout+' Probeer het opnieuw.', 4200);
-    return;
-  }
-  // cache verversen + chat herrenderen zodat de ECHTE berichten uit de backend in de cache zitten
-  // (geen duplicaat met de optimistische bubble bij terug-schakelen tussen chats)
-  await refreshChatCache(tid);
-}
-/* ---- Chat-cache verversen voor één taak + de open chat herrenderen ---- */
-async function refreshChatCache(taskId){
-  if(state.demoMode || !taskId) return;
-  try { state.data.chats[taskId]=null; await S27DATA.loadChat(taskId); } catch(e){}
-  if(state.activeProject===taskId) rerenderActiveChat(true);
-}
-/* ---- De op-dit-moment-zichtbare chat opnieuw renderen (Berichten-host of projectdetail).
-       stickBottom=true -> altijd naar onder scrollen (na eigen bericht); anders scrollpositie
-       behouden tenzij de gebruiker al (bijna) onderaan stond. ---- */
-function rerenderActiveChat(stickBottom){
-  const id=state.activeProject; if(!id) return;
-  const oldList=_chatListEl();
-  const atBottom = oldList ? (oldList.scrollHeight-oldList.scrollTop-oldList.clientHeight < 60) : true;
-  const prevTop = oldList ? oldList.scrollTop : 0;
-  // een lopend concept in het tekstvak niet wegklikken bij een poll-herrender
-  const oldInp=document.querySelector('.chat-input .chat-textin'); const draft=oldInp?oldInp.value:'';
-  const p=(window.S27DATA&&(S27DATA.projects()||[]).find(function(x){return x.id===id;}))||null;
-  const dcBody=$id('dcBody');
-  const adsBody=$id('adsChatBody');
-  const socBody=$id('socChatBody');
-  if(state._commsMode){
-    // comms-drawer EERST (anders zou de achtergrond-chat-host gekaapt worden door een dubbele #chatList)
-    const ccBody=$id('clientChatBody');
-    if(ccBody) ccBody.innerHTML='<div class="cc-with">'+saeChatWho(S27DATA.commsTeam())+'</div>'+chatHTML(id);
-    else return;
-  } else if(dcBody){
-    // projectdetail-chat: enkel de chat-body verversen (laat de tabs/overzicht ongemoeid)
-    const closed=!!(window.S27DATA && S27DATA.isChatClosed && p && p._raw && S27DATA.isChatClosed(p._raw.status));
-    dcBody.innerHTML=chatHTML(id, closed);   // afgerond -> read-only historie (blijft zichtbaar + ververst mee)
-  } else if(adsBody){
-    adsBody.innerHTML=chatHTML(id);          // ads-chat: enkel de chat-body verversen bij een poll-update
-  } else if(socBody){
-    socBody.innerHTML=chatHTML(id);          // social-chat: idem, enkel de chat-body verversen
-  } else { return; }
-  if(draft){ const newInp=document.querySelector('.chat-input .chat-textin'); if(newInp) newInp.value=draft; }
-  const newList=_chatListEl(); if(!newList) return;
-  if(stickBottom || atBottom) newList.scrollTop=newList.scrollHeight;
-  else newList.scrollTop=prevTop;
-}
-
-/* =============================================================================
-   CHAT AUTO-REFRESH, poll de open chat (~9s) en herrender enkel bij nieuwe comments.
-   Stopt bij tab-wissel, chat-wissel, modal-sluiten en logout.
-   ============================================================================= */
-const CHAT_POLL_MS = 9000;
-// handtekening van de gecachete chat: aantal + laatste comment (tijd + begin-tekst) -> flicker-vrij vergelijken
-function chatSig(taskId){
-  const arr=(state.data.chats||{})[taskId]; if(!Array.isArray(arr)) return '';
-  const last=arr[arr.length-1]||{};
-  return arr.length+'|'+(last.tm||'')+'|'+String(last.tx||'').slice(0,40);
-}
-function startChatPoll(taskId){
-  stopChatPoll();
-  if(state.demoMode || !taskId) return;
-  state._chatPoll={ id:taskId, sig:chatSig(taskId), busy:false };
-  state._chatPollTimer=setInterval(function(){ pollChatOnce(taskId); }, CHAT_POLL_MS);
-}
-function stopChatPoll(){
-  if(state._chatPollTimer){ clearInterval(state._chatPollTimer); state._chatPollTimer=null; }
-  state._chatPoll=null;
-}
-async function pollChatOnce(taskId){
-  const pc=state._chatPoll;
-  if(!pc || pc.id!==taskId || pc.busy) return;
-  // chat niet meer open (andere tab/project) -> poller opruimen
-  if(state.activeProject!==taskId || (!_chatListEl())){ stopChatPoll(); return; }
-  pc.busy=true;
-  try { await S27DATA.loadChat(taskId); } catch(e){ pc.busy=false; return; }
-  pc.busy=false;
-  if(!state._chatPoll || state._chatPoll.id!==taskId) return;   // tussentijds gestopt/gewisseld
-  const sig=chatSig(taskId);
-  if(sig!==pc.sig){ pc.sig=sig; if(state.activeProject===taskId) rerenderActiveChat(false); }
-}
-/* ---- Bestandsupload in de chat (overal waar chatHTML staat) ---- */
-async function chatUpload(input, taskId){
-  const f=input.files&&input.files[0]; if(!f) return; input.value='';
-  const tid=taskId||state.activeProject; const list=_chatListEl(); let bubble=null;
-  if(list){ bubble=document.createElement('div'); bubble.className='msg me'; bubble.innerHTML='<div class="bubble"><div class="who">Jij</div><div class="tx">'+ic('doc',14)+' '+escapeHtml(f.name)+' <span style="opacity:.6">- uploaden…</span></div><div class="tm">nu</div></div>'; list.appendChild(bubble); list.scrollTop=list.scrollHeight; }
-  const done=(txt)=>{ if(bubble){ var t=bubble.querySelector('.tx'); if(t)t.innerHTML=ic('doc',14)+' '+escapeHtml(f.name)+txt; } };
-  if(state.demoMode){ done(' ✓'); return; }
-  const rd=new FileReader();
-  rd.onload=async function(){ const b64=String(rd.result).split(',')[1]||'';
-    try{ let r; if(state._commsMode){ r=await api(ENDPOINTS.commsChatAttachment, { bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), filename:f.name, file_data:b64 }); } else { r=await api(ENDPOINTS.chatAttachment, { task_id:tid, bedrijf_id:state.session.bedrijf_id, session_token:state.session.session_token, klant_naam:S27DATA.bedrijfsnaam(), filename:f.name, file_data:b64 }); }
-      // Restpuntenronde 11-07: api() gooit nooit; check de respons echt.
-      if(!(r&&r.ok&&r.data&&r.data.ok!==false)){ done(' <span style="color:var(--s27-orange-ink)">- mislukt, probeer opnieuw</span>'); return; }
-      done(' ✓');
-      await refreshChatCache(tid);   // echte attachment-comment uit de backend in de cache (geen duplicaat met de optimistische bubble)
-    }
-    catch(e){ done(' <span style="color:var(--s27-orange-ink)">- mislukt</span>'); }
-  };
-  rd.readAsDataURL(f);
-}
 function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-/* ---- Altijd-open klantchat (topbar-drawer; server resolvet de communicatietaak, geen task_id van de client) ---- */
-// Chat-lijst-lookup gescoped op de drawer wanneer de comms-chat open is (vermijdt de dubbele #chatList-collisie met een achtergrond-chat).
-function _chatListEl(){ return state._commsMode ? document.querySelector('#clientChatBody #chatList') : document.getElementById('chatList'); }
-function clientChatEl(){
-  var el=$id('clientChat');
-  if(!el){ el=document.createElement('div'); el.id='clientChat'; el.className='cc-overlay';
-    el.addEventListener('mousedown',function(e){ el._downScrim=(e.target===el); });
-    el.addEventListener('click',function(e){ if(e.target===el && el._downScrim) closeClientChat(); });
-    document.body.appendChild(el); }
-  return el;
-}
-function ccEsc(e){ if(e.key==='Escape') closeClientChat(); }
-async function openClientChat(){
-  stopChatPoll();
-  state._prevActiveProject = state.activeProject;   // bewaren -> bij sluiten herstellen (comms kaapt activeProject niet permanent)
-  var el=clientChatEl(); el.classList.add('show'); document.body.classList.add('mp-lock');
-  document.addEventListener('keydown',ccEsc);
-  var closeX='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
-  el.innerHTML='<div class="cc-modal" onclick="event.stopPropagation()"><div class="cc-head"><div class="cc-htitle">Chat met je team</div><button class="cc-close" onclick="closeClientChat()" aria-label="Sluiten">'+closeX+'</button></div><div class="cc-body" id="clientChatBody"><div class="empty" style="padding:50px"><div class="brand-spinner" style="margin:0 auto"></div></div></div></div>';
-  state._commsMode=true;
-  var d=null; try{ d=await S27DATA.loadCommsChat(); }catch(e){}
-  var tid=(d&&d.task_id)||S27DATA.commsTaskId();
-  var body=$id('clientChatBody'); if(!body) return;
-  if(!tid){ body.innerHTML='<div class="empty" style="padding:40px 16px"><p>Chat is even niet beschikbaar. Probeer het zo opnieuw.</p></div>'; return; }
-  state.activeProject=tid;
-  body.innerHTML='<div class="cc-with">'+saeChatWho(S27DATA.commsTeam())+'</div>'+chatHTML(tid);
-  var l=_chatListEl(); if(l) l.scrollTop=l.scrollHeight;
-  startChatPoll(tid);
-}
-function closeClientChat(){
-  stopChatPoll();
-  var el=$id('clientChat'); if(el){ el.classList.remove('show'); el.innerHTML=''; }
-  document.removeEventListener('keydown',ccEsc);
-  document.body.classList.remove('mp-lock');
-  state._commsMode=false;
-  state.activeProject = state._prevActiveProject || null;   // achtergrond-chat-context herstellen (geen verdwaalde berichten)
-  state._prevActiveProject = null;
-  if(state.activeProject && document.getElementById('chatList')) startChatPoll(state.activeProject);  // achtergrond-chat terug laten pollen indien nog zichtbaar
-}
-/* ---- Dringende vraag aan Ilke (accountmanagement), werkt ook als de projectchat gesloten is ---- */
-function _projNaam(id){ var p=(window.S27DATA&&(S27DATA.projects()||[]).find(function(x){return x.id===id;}))||null; return p?p.name:'dit project'; }
-function dringendeVraag(id){
-  const host=document.getElementById('dcBody'); if(!host) return;
-  const naam=_projNaam(id);
-  host.innerHTML='<div style="padding:16px"><b style="font-family:var(--font-display);font-size:15px">Dringende vraag aan Ilke</b><p class="fs" style="color:var(--ink-3);margin:6px 0 12px">Over <b>'+escapeHtml(naam)+'</b>, Ilke pikt dit persoonlijk op (accountmanagement).</p><textarea id="dvTx" rows="4" style="width:100%;box-sizing:border-box;font-family:var(--font-body);font-size:13.5px;padding:10px;border:1px solid var(--line);border-radius:8px;outline:none;resize:vertical" placeholder="Wat is er aan de hand?"></textarea><div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-primary btn-sm" onclick="sendDringend(this,\''+escapeHtml(id)+'\')">Versturen '+ic('send',15)+'</button><button class="btn btn-ghost btn-sm" onclick="openProject(\''+escapeHtml(id)+'\')">Annuleer</button></div></div>';
-  var t=$id('dvTx'); if(t)t.focus();
-}
-async function sendDringend(btn, id){
-  const tx=(($id('dvTx')||{}).value||'').trim(); if(!tx){ var e=$id('dvTx'); if(e){ e.style.borderColor='var(--s27-orange)'; e.focus(); } return; }
-  const naam=_projNaam(id); const host=document.getElementById('dcBody');
-  if(host) host.innerHTML='<div class="empty" style="padding:26px 16px;text-align:center"><div class="em-ic">'+ic('st_approved',44)+'</div><b style="font-family:var(--font-display);font-size:15px;color:var(--ink-2)">Verzonden naar Ilke ✓</b><p style="margin:6px 0 0;font-size:13px;color:var(--ink-3)">Ze neemt zo snel mogelijk contact met je op.</p></div>';
-  if(state.demoMode) return;
-  try{ await api(ENDPOINTS.directMessage, { bedrijf_id:(state.session||{}).bedrijf_id, session_token:(state.session||{}).session_token, klant_naam:S27DATA.bedrijfsnaam(), onderwerp:'Dringende vraag, '+naam, bericht:'[DRINGEND · via projectpagina] '+tx, project:naam }); }catch(e){}
-}
 
 /* De STUDIO 27-ASSISTENT (chatbot) is op 18-08 uit het klantenportaal gehaald. De klant stelt
    zijn vraag voortaan via de Contact-knop rechtsboven, die bij een mens terechtkomt. */
@@ -1187,7 +979,7 @@ function _seenKey(){ return 's27_notif_seen_'+_bedrijfScope(); }
 function notifId(a){
   // expliciete nid (bv. plan-items: meerdere kaarten op hetzelfde project) wint van de action-afleiding
   if(a && a.nid) return String(a.nid).replace(/[^A-Za-z0-9:_-]+/g,'_');
-  var m=String(a&&a.action||'').match(/openProject(?:Chat)?\('([^']+)'/);   // ook openProjectChat('id') (chat-deeplink) → per-taak-identiteit
+  var m=String(a&&a.action||'').match(/openProject\('([^']+)'/);
   var tid=m?m[1]:String(a&&a.title||'');
   var raw=tid+'::'+String(a&&a.cat||'')+'::'+String(a&&a.title||'');
   // sanitize -> identieke key in HTML-attr (escapeHtml), JS-string (onclick) én localStorage;
@@ -1269,28 +1061,14 @@ function goDienst(disc){
 // Kennismaking / koffiegesprek -> meetingpagina, automatisch bij Arne (kies een vrij moment in zijn agenda)
 function koffieMetArne(){ if(typeof openMeetingPlanner==='function'){ openMeetingPlanner('nieuw'); } else { goTab('meetings'); } }
 function switchModalTab(name){
-  // projectdetail-subnav (dakstructuur slice 2): 'overzicht' (incl. bestanden-accordions als
-  // sub-blok) of 'chat' (schermvullend). Knoppen dragen data-mt, panes data-mpane.
-  state._mtab=(name==='chat')?'chat':'overzicht'; name=state._mtab;
+  // Projectdetail-subnav: sinds de klantchat-sunset (27-07) is 'overzicht' de enige weergave.
+  // De bestanden-accordions blijven een sub-blok binnen datzelfde overzicht.
   const c=document.querySelector('.detail'); if(!c)return;
-  c.querySelectorAll('.detail-subnav button').forEach(b=>b.classList.toggle('active', b.getAttribute('data-mt')===name));
+  c.querySelectorAll('.detail-subnav button').forEach(b=>b.classList.toggle('active', b.getAttribute('data-mt')==='overzicht'));
   c.querySelectorAll('.detail-body .mpane').forEach(p=>p.classList.remove('active'));
-  if(name==='overzicht'){
-    const ov=c.querySelector('.mpane[data-mpane="overzicht"]'); if(ov)ov.classList.add('active');
-    const sub=c.querySelector('.mpane.mpane-sub'); if(sub)sub.classList.add('active');
-  } else {
-    const ch=c.querySelector('.mpane[data-mpane="chat"]'); if(ch)ch.classList.add('active');
-    const list=c.querySelector('#dcBody .chat-list'); if(list) list.scrollTop=list.scrollHeight;
-    const inp=c.querySelector('#dcBody .chat-textin'); if(inp) inp.focus();
-    // Klant bekijkt de chat-tab -> markeer als gelezen (read-receipt voor het team).
-    if(!state.adminMode && state.activeProject && S27DATA && S27DATA.markChatRead) S27DATA.markChatRead(state.activeProject);
-  }
+  const ov=c.querySelector('.mpane[data-mpane="overzicht"]'); if(ov)ov.classList.add('active');
+  const sub=c.querySelector('.mpane.mpane-sub'); if(sub)sub.classList.add('active');
   syncUrl();
-}
-// Berichten-inbox of elders: open een project rechtstreeks op de Chat-tab (schermvullend gesprek)
-function openProjectChat(id){
-  state._openChatTab=true;
-  openProject(id, 'auto');
 }
 function toggleAcc(btn){ btn.classList.toggle('open'); btn.nextElementSibling.classList.toggle('open'); }
 /* ---- Per-bestand review (goedkeuren / feedback + via welke weg) ---- */
@@ -1375,7 +1153,7 @@ function approveAll(btn){
   submitFeedbackReal('goedgekeurd').then(function(ok){
     if(!banner) return;
     if(ok){ banner.innerHTML='<div class="fb-ic" style="background:var(--s27-green)">'+ic('check',20)+'</div><div class="fb-tx"><b>Bedankt, goedgekeurd!</b><p>We zetten meteen de volgende stap.</p></div>'; banner.style.background='var(--s27-green-soft)'; }
-    else { banner.innerHTML='<div class="fb-ic" style="background:var(--s27-orange)">'+ic('msg',20)+'</div><div class="fb-tx"><b>Goedkeuren lukte net niet</b><p>Probeer zo opnieuw, of laat het ons weten via de chat.</p></div>'; }
+    else { banner.innerHTML='<div class="fb-ic" style="background:var(--s27-orange)">'+ic('msg',20)+'</div><div class="fb-tx"><b>Goedkeuren lukte net niet</b><p>Probeer zo opnieuw, of laat het ons weten via de Contact-knop.</p></div>'; }
   });
 }
 // Golf 5: geeft true/false terug zodat de aanroeper echte fouten kan tonen
@@ -1613,7 +1391,7 @@ async function submitWebTicket(btn){
   for(var w=0; w<80 && _wtPending>0; w++){ if(m&&w===4) m.innerHTML='<span style="color:var(--ink-3)">Bestanden voorbereiden…</span>'; await new Promise(function(r){ setTimeout(r,100); }); }
   var files=(state._wtFiles||[]).slice();
   if(state.demoMode || !state.session){ if(btn) btn.innerHTML=ic('check',15)+' Verstuurd (demo)'; if(m) m.innerHTML='<span style="color:var(--s27-green-ink,#147A50)">Je ticket staat genoteerd'+(files.length?' met '+files.length+' bijlage(n)':'')+' (voorbeeldweergave).</span>'; setTimeout(closeWebTicket,1600); return; }
-  var fail=function(){ if(btn){ btn.disabled=false; btn.innerHTML=ic('send',16)+' Ticket versturen'; } if(m) m.innerHTML='<span style="color:var(--s27-orange-ink,#C44514)">Versturen lukte niet. Probeer opnieuw of stuur ons een bericht via de chat.</span>'; };
+  var fail=function(){ if(btn){ btn.disabled=false; btn.innerHTML=ic('send',16)+' Ticket versturen'; } if(m) m.innerHTML='<span style="color:var(--s27-orange-ink,#C44514)">Versturen lukte niet. Probeer opnieuw of laat het ons weten via de Contact-knop.</span>'; };
   try{
     // 1) ticket aanmaken (tekst); bedrijfsnaam + contactpersoon resolvet de worker server-side
     var r=await api(ENDPOINTS.ticketCreate, { onderwerp:subj, omschrijving:bodyTx });
@@ -1632,7 +1410,7 @@ async function submitWebTicket(btn){
     }
     state._wtFiles=[];
     if(m) m.innerHTML='<span style="color:var(--s27-green-ink,#147A50)">'+ic('check',14)+' Je ticket staat genoteerd'+(files.length?(' ('+(files.length-mislukt)+'/'+files.length+' bijlagen meegestuurd)'):'')+'. Je volgt het onder Projecten en krijgt een melding bij elke update.</span>'
-      +(mislukt?'<br><span style="color:var(--s27-orange-ink,#C44514)">'+mislukt+' bijlage(n) konden niet mee, stuur ze gerust na via de chat van het ticket.</span>':'');
+      +(mislukt?'<br><span style="color:var(--s27-orange-ink,#C44514)">'+mislukt+' bijlage(n) konden niet mee, bezorg ze gerust na via de Contact-knop.</span>':'');
     if(btn) btn.innerHTML=ic('check',15)+' Verstuurd ✓';
     setTimeout(closeWebTicket, mislukt?3500:2000);
   }catch(e){ fail(); }
@@ -2116,7 +1894,7 @@ function mpDone(start,meetLink,viaRequest){
    herrekent prijzen server-side tegen de D1-prijslijst (offer_catalog). */
 /* ---- Metricool: post goedkeuren + feedback geven vanuit het portaal ----
    Goedkeuren: api(ENDPOINTS.metricoolApprove, { post_id }). Lukt de backend het (nog) niet,
-   dan tonen we een nette "binnenkort"-staat. Feedback gaat via directMessage (chatkanaal). */
+   dan tonen we een nette "binnenkort"-staat. Feedback gaat via directMessage. */
 function _mcMarkApprovedLocal(id){ state._mcApproved=state._mcApproved||{}; state._mcApproved[id]=true; if(state._mcAfgekeurd) delete state._mcAfgekeurd[id]; if(window.S27DATA&&S27DATA.markMetricoolApproved) S27DATA.markMetricoolApproved(id); }
 function _mcReplaceActions(id, html){ var box=$id('mca-'+id); if(box) box.outerHTML=html; }
 async function metricoolApprove(id, btn){
@@ -2263,7 +2041,7 @@ async function socialSavePost(id, btn){
       state._socialDetail=null; setTimeout(function(){ renderPanel('socials'); }, 700);
     } else {
       var det=(d&&d.detail)?(': '+escapeHtml(String(d.detail))):'';
-      if(msg) msg.innerHTML='<div class="soc-saveerr">Opslaan lukte niet'+det+'. Probeer opnieuw of laat het ons weten via de chat.</div>';
+      if(msg) msg.innerHTML='<div class="soc-saveerr">Opslaan lukte niet'+det+'. Probeer opnieuw of laat het ons weten via de Contact-knop.</div>';
       resetBtn();
     }
   }catch(e){ if(msg) msg.innerHTML='<div class="soc-saveerr">Opslaan lukte niet. Probeer het later opnieuw.</div>'; resetBtn(); }
@@ -2620,7 +2398,7 @@ async function factNoteSave(btn){
   setTimeout(function(){ var i=document.querySelector('.fact-ok'); if(i)i.remove(); },2600);
 }
 
-/* ---- Support-opvolglijst (WS-1): status + chat per vraag, op één plek ---- */
+/* ---- Support-opvolglijst (WS-1): status per vraag, op één plek ---- */
 var SUPPORT_LABELS={todo:['Ontvangen','pill-todo'],prog:['In behandeling','pill-prog'],wait:['Wacht op jou','pill-wait'],sent:['Wacht op jou','pill-wait'],done:['Opgelost','pill-done']};
 function goSupport(){
   state.viewMode='support';
@@ -2631,16 +2409,13 @@ function goSupport(){
   var open=alle.filter(function(p){return p.status!=='done';}), dicht=alle.filter(function(p){return p.status==='done';});
   var rij=function(p){
     var sl=SUPPORT_LABELS[p.status]||SUPPORT_LABELS.prog;
-    var lc=p.lastChat&&p.lastChat.tekst?('<span class="sup-snippet">'+esc(p.lastChat.tekst)+'</span>'):'';
-    var cid=String(p.id||'').replace(/[^A-Za-z0-9_-]/g,'');
     return '<div class="card sup-row br-indigo"><span class="sup-dot '+sl[1]+'"></span>'
-      +'<span class="sup-main"><b>'+esc(p.name)+'</b><span class="pill '+sl[1]+'" style="position:static">'+sl[0]+'</span>'+lc+'</span>'
-      +'<button class="btn btn-branch br-indigo btn-sm" onclick="openProjectChat(\''+cid+'\')">'+ic('msg',14)+' Open chat</button></div>';
+      +'<span class="sup-main"><b>'+esc(p.name)+'</b><span class="pill '+sl[1]+'" style="position:static">'+sl[0]+'</span></span></div>';
   };
   page.innerHTML='<div class="panel active br-indigo" data-screen-label="support"><div class="contactpage">'
     +'<div class="gal-toprow"><button class="gal-close" onclick="goContact()" aria-label="Terug naar Contact">'+ic('plus',22)+'</button></div>'
     +'<h1>Je supportvragen</h1>'
-    +'<p class="sdesc" style="margin:4px 0 18px">Volg hier de status van je vragen en chat rechtstreeks met het team.</p>'
+    +'<p class="sdesc" style="margin:4px 0 18px">Volg hier de status van je vragen. Iets toe te voegen? Laat het ons weten via de Contact-knop.</p>'
     +(open.length?('<div class="section-head"><h2>Lopend</h2><span class="count">'+open.length+'</span></div><div class="sup-lijst">'+open.map(rij).join('')+'</div>'):'')
     +(dicht.length?('<div class="section-head" style="margin-top:24px"><h2>Opgelost</h2><span class="count">'+dicht.length+'</span></div><div class="sup-lijst">'+dicht.map(rij).join('')+'</div>'):'')
     +((!open.length&&!dicht.length)?'<div class="empty" style="padding:40px"><div class="em-ic">'+ic('st_approved',52)+'</div><b style="font-family:var(--font-display);font-size:16px;color:var(--ink-2)">Geen openstaande vragen</b><p style="margin:6px 0 16px">Loop je ergens tegenaan? Maak gerust een ticket aan.</p><button class="btn btn-branch br-green" onclick="openWebTicket()">'+ic('doc',15)+' Nieuw ticket</button></div>':'')
@@ -2659,7 +2434,6 @@ function goContact(){
     +'<p class="sdesc" style="margin:4px 0 22px">Kies hieronder, dan komt je vraag meteen bij de juiste persoon terecht.</p>'
     +'<div class="contact-grid">'
       +'<button class="contact-card br-blue" onclick="goContact()"><span class="cc-ic">'+ic('plus',24)+'</span><b>Nieuw project</b><span>Vertel ons kort wat je in gedachten hebt, wij werken de offerte persoonlijk uit.</span><span class="cc-go">Stel je vraag '+ic('arrow',14)+'</span></button>'
-      +'<button class="contact-card br-purple" onclick="openClientChat()"><span class="cc-ic">'+ic('msg',24)+'</span><b>Chat met je team</b><span>Stel je vraag rechtstreeks in de chat, het hele team leest mee en antwoordt snel.</span><span class="cc-go">Open de chat '+ic('arrow',14)+'</span></button>'
       +'<button class="contact-card br-pink" onclick="contactVraagForm()"><span class="cc-ic">'+ic('msg',24)+'</span><b>Algemene vraag</b><span>Vragen over je samenwerking, facturatie of iets anders? Ilke helpt je verder.</span><span class="cc-go">Stel je vraag '+ic('arrow',14)+'</span></button>'
       +'<button class="contact-card br-green" onclick="openWebTicket()"><span class="cc-ic">'+ic('doc',24)+'</span><b>Website support</b><span>Een bug, aanpassing of vraag over je site? Maak een ticket met bijlagen.</span><span class="cc-go">Ticket aanmaken '+ic('arrow',14)+'</span></button>'
     +'</div>'
@@ -3028,10 +2802,9 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($id('tourScrim
    body.tour-on) zodat de labels leesbaar zijn. */
 const TOUR_ALL=[
   {ic:'spark',       t:'Welkom in je portaal',          b:'We tonen je in een halve minuut waar je alles vindt. Je kan deze uitleg later altijd opnieuw bekijken via het vraagteken bovenaan.', targets:null},
-  {ic:'home',        t:'Jouw taken',                    b:'Dit is je vertrekpunt. Alles wat op jou wacht staat hier klaar: reviews, feedback, geplande shoots en meetings, en nieuwe berichten van je team.', targets:['.sb-item[data-tab="start"]']},
+  {ic:'home',        t:'Jouw taken',                    b:'Dit is je vertrekpunt. Alles wat op jou wacht staat hier klaar: reviews, feedback en geplande shoots en meetings.', targets:['.sb-item[data-tab="start"]']},
   {ic:'doc',         t:'Je projecten per discipline',   b:'Elke dienst heeft een eigen plek in de menubalk. Klik op een tak zoals Video & fotografie, Branding of Strategie om je projecten, bestanden en feedbackrondes te bekijken en goed te keuren.', targets:['.sb-item[data-tab="video"]','.sb-item[data-tab="branding"]','.sb-item[data-tab="strategie"]']},
   {ic:'st_progress', t:'Volg je resultaten',            b:'Bij Socials, Adverteren en Website volg je je cijfers in real time. Je kiest zelf de periode, en van elke pagina kan je de link doorsturen naar een collega.', targets:['.sb-item[data-tab="socials"]','.sb-item[data-tab="advertenties"]','.sb-item[data-tab="webprestaties"]']},
-  {ic:'msg',         t:'Chatten met je team',           b:'Bij Berichten staan al je gesprekken met het Studio 27-team, gebundeld per project. Je kan ook gewoon antwoorden vanuit het project zelf.', targets:['.sb-item[data-tab="berichten"]']},
   {ic:'cal',         t:'Een meeting inplannen',         b:'Wil je samen iets bespreken? Bij Meetings kies je zelf een vrij moment dat jou past. Helemaal vrijblijvend.', targets:['.sb-item[data-tab="meetings"]']},
   {ic:'gear',        t:'Je instellingen',               b:'Bij Instellingen beheer je je gegevens en je meldingen. Je kiest zelf of je updates via e-mail, WhatsApp of een pushbericht wil ontvangen.', targets:['.sb-item[data-tab="instellingen"]']},
   {ic:'bell',        t:'Je meldingen',                  b:'Het belletje verzamelt updates over je projecten, reviews en berichten. Een gekleurd bolletje betekent dat er iets nieuws is.', targets:['#bellBtn']},

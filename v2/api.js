@@ -17,13 +17,13 @@ var state = window.S27State = {
   activeBedrijf: '',
   _provisionTried: false,
   _sessionExpiredHandled: false,
-  data: { dashboard:null, details:{}, chats:{}, meetings:null, bedrijf:null, team:null, huisstijl:null, offertes:null, metricool:null, ads:null, commsTaskId:null, commsTeam:null },  // gecachte API-data
+  data: { dashboard:null, details:{}, meetings:null, bedrijf:null, team:null, huisstijl:null, offertes:null, metricool:null, ads:null },  // gecachte API-data
 
   route: null                 // deep-link pending route (zie portal.js router)
 };
 
 /* ---- UI-hooks (portal.js vult deze in) ---- */
-var S27 = window.S27 = { onSessionExpired: null, reloadDashboard: null, onSwitchFailed: null, closeSwitchMenu: null, stopChatPoll: null, showSwitching: null, stashData: null };
+var S27 = window.S27 = { onSessionExpired: null, reloadDashboard: null, onSwitchFailed: null, closeSwitchMenu: null, showSwitching: null, stashData: null };
 
 /* Cloudflare-gateway-basis (de v2-handlers achter Firebase-auth). Vooraan gedeclareerd
    zodat ENDPOINTS hieronder de gateway-gerouteerde endpoints kan opbouwen. */
@@ -45,11 +45,8 @@ const ENDPOINTS = {
   bedrijfContent:    GATEWAY_BASE + '/bedrijfContent',
   meetingsList:      GATEWAY_BASE + '/meetingsList',
   projectDetailV2:   GATEWAY_BASE + '/projectDetailV2',
-  chatPost:          GATEWAY_BASE + '/chatPost',
-  chatList:          GATEWAY_BASE + '/chatList',
   feedbackV2:        GATEWAY_BASE + '/feedbackV2',
   directMessage:     GATEWAY_BASE + '/directMessage',
-  chatAttachment:    GATEWAY_BASE + '/chatAttachment',
   meetingAvailability: GATEWAY_BASE + '/meetingAvailability',
   // Bedrijf-beheer (get_team | get_offertes | update_bedrijf | save_contact | update_contact)
   bedrijfBeheer:     GATEWAY_BASE + '/bedrijfBeheer',
@@ -98,12 +95,6 @@ const ENDPOINTS = {
   // { host_email, host_naam, start, eind, start_ms, online, titel, beschrijving, locatie, client_email, client_naam, project_task_id?, project_naam?, intake?, when_label? }
   //   -> { ok, event_id, meet_link, html_link }. Muteert GEEN project-due_date; host moet @studio27.be zijn.
   meetingBook:       GATEWAY_BASE + '/meetingBook',
-  // Klant markeert de projectchat als gelezen → read-receipt voor het team. { task_id } -> { ok, read_at }.
-  chatMarkRead:        GATEWAY_BASE + '/chatMarkRead',
-  // Altijd-open klantchat op de vaste communicatietaak (server-side taak-resolutie; client stuurt GEEN task_id).
-  commsChatList:       GATEWAY_BASE + '/commsChatList',
-  commsChatPost:       GATEWAY_BASE + '/commsChatPost',
-  commsChatAttachment: GATEWAY_BASE + '/commsChatAttachment',
   // Webprestaties (GA4 + Search Console, direct via de Google-API's, geen Make). Team-only (staff, acting-as).
   // webTraffic: { period | from,to,compare } -> { ok, linked, totals, channels, split, trend, landingPages }.
   webTraffic:        GATEWAY_BASE + '/webTraffic',
@@ -271,9 +262,8 @@ async function loadCompaniesAndLink(selectedBidOverride){
 // geweigerd bedrijf niet als "laatst gekozen" hangen. Bij falen: nette melding, geen reload.
 async function switchCompany(id){
   if(!id || id === state.activeBedrijf) return;
-  // menu sluiten + chat-poll stoppen aan het begin (los van slagen/falen)
+  // menu sluiten aan het begin (los van slagen/falen)
   if(typeof S27.closeSwitchMenu === 'function') S27.closeSwitchMenu();
-  if(typeof S27.stopChatPoll === 'function') S27.stopChatPoll();
   // snapshot van de huidige (nog het OUDE bedrijf) data bewaren voor instant terugschakelen
   if(typeof S27.stashData === 'function') S27.stashData(state.activeBedrijf);
   // ONMIDDELLIJK de loader tonen: provision + forced token-refresh hieronder kunnen seconden kosten

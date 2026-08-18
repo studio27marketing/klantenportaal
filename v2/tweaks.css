@@ -60,21 +60,6 @@
 .approved-files{margin:2px 0 8px;}
 .approved-files .subtask-files{padding:6px 0 0;}
 
-/* chat-header: met wie chat de klant */
-.dc-head .dc-who{margin-left:auto;display:inline-flex;align-items:center;gap:7px;}
-.dc-head .dc-who .dc-av{width:24px;height:24px;border-radius:50%;background:var(--s27-blue,#3083DC);color:#fff;font-family:var(--font-display);font-weight:800;font-size:10px;display:flex;align-items:center;justify-content:center;flex:none;}
-.dc-head .dc-who .dc-sub{margin-left:0;}
-
-/* PROJECTCHAT, ruimer venster (was te klein): de aside vult de hoogte, berichten scrollen, invoer plakt onderaan */
-.detail-chat{min-height:560px;}
-.detail-chat .dc-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
-.detail-chat .dc-body .chat-list{flex:1 1 auto;min-height:180px;overflow-y:auto;margin-bottom:12px;padding-right:2px;}
-.detail-chat .dc-body .chat-input{flex:none;}
-@media(max-width:980px){.detail-chat{min-height:0;}.detail-chat .dc-body{height:auto;overflow:visible;}.detail-chat .dc-body .chat-list{min-height:52vh;}}
-/* Read-only chat bij een afgerond project: historie blijft zichtbaar, geen invoer */
-.chat-readonly{display:flex;align-items:center;gap:7px;flex:none;font-family:var(--font-body);font-weight:700;font-size:12px;color:var(--ink-4,#9E919E);background:var(--paper-2,#FAF7F2);border:1px solid var(--line);border-radius:12px;padding:9px 12px;margin-top:4px;}
-.chat-readonly svg{flex:none;color:var(--s27-green,#12AC4E);}
-
 /* ACTIEVE PROJECTEN, kolommen per tak */
 .dienst-cols{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px;align-items:start;}
 .dienst-col{background:var(--glass-fill,rgba(255,255,255,.6));border:1px solid var(--glass-border,rgba(255,255,255,.85));border-top:4px solid var(--c,var(--s27-blue));border-radius:18px;padding:14px 14px 16px;box-shadow:0 6px 22px rgba(60,40,80,.07);}
@@ -525,20 +510,6 @@
 .soc-ph-dot.on{background:#fff;}
 .soc-ph-count{font-family:var(--font-body);font-size:11px;font-weight:700;color:var(--ink-3,#6B5B6B);margin-left:6px;}
 @media(max-width:760px){.soc-subnav-act{margin-left:0;width:100%;}}
-/* Altijd-open klantchat (topbar-drawer rechts) */
-.cc-overlay{position:fixed;inset:0;z-index:80;display:none;background:rgba(35,15,35,.32);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);}
-.cc-overlay.show{display:block;}
-.cc-modal{position:absolute;top:0;right:0;bottom:0;width:min(420px,100%);background:var(--paper,#fff);box-shadow:-18px 0 50px rgba(35,15,35,.22);display:flex;flex-direction:column;animation:ccIn .22s ease;}
-@keyframes ccIn{from{transform:translateX(26px);opacity:.5}to{transform:translateX(0);opacity:1}}
-.cc-head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line,#E7DFD3);flex:none;}
-.cc-htitle{font-family:var(--font-display);font-weight:800;font-size:16px;color:var(--ink,#230F23);flex:1;}
-.cc-close{border:none;background:none;cursor:pointer;color:var(--ink-3,#6B5B6B);display:flex;padding:5px;border-radius:8px;}
-.cc-close:hover{background:var(--paper-2,#FAF7F2);}
-.cc-with{padding:9px 16px 2px;flex:none;}
-.cc-with .dc-who{display:inline-flex;align-items:center;gap:7px;}
-.cc-body{flex:1;display:flex;flex-direction:column;min-height:0;}
-.cc-body .chat-list{flex:1;}
-@media(max-width:560px){.cc-modal{width:100%;}}
 @media(max-width:760px){.soc-egrid{grid-template-columns:1fr;gap:18px;}.soc-ecol-pv{position:static;max-width:330px;margin:0 auto;}.soc-etopbar{top:0;}}
 /* kalender (planner): schermvullender */
 .soc-cal .soc-grid .soc-cell{min-height:118px;}
@@ -596,8 +567,6 @@
 .panel[data-screen-label="advertenties"] .soc-period{top:60px;z-index:8;}
 @media(max-width:760px){ .panel[data-screen-label="advertenties"] .ads-stickytop{position:static;margin-top:0;} }
 .soc-percompare select, .soc-percustom input[type=date]{background:linear-gradient(180deg,rgba(255,255,255,.74),rgba(255,255,255,.40));-webkit-backdrop-filter:blur(10px) saturate(1.3);backdrop-filter:blur(10px) saturate(1.3);border:1px solid var(--glass-border,rgba(255,255,255,.6));box-shadow:0 4px 14px rgba(60,40,80,.08),inset 0 1px 0 rgba(255,255,255,.7);}
-/* Berichten-chat schermvullender + scrollbaar */
-#berichtChat .chat-list{height:calc(100vh - 340px);min-height:280px;max-height:none;overflow-y:auto;}
 .soc-percustom{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-body);font-size:12.5px;color:var(--ink-4,#9E919E);}
 .soc-percustom input[type=date]{font-family:var(--font-body);font-size:13px;padding:7px 10px;border:1px solid var(--line,#E7DFD3);border-radius:9px;color:var(--ink-2,#3A2A3A);background:#fff;}
 .soc-percompare{display:inline-flex;align-items:center;gap:7px;margin-left:auto;color:var(--ink-4,#9E919E);}
@@ -743,11 +712,6 @@
   .ads-adrow{position:relative;}
   .ads-adexp-in{grid-template-columns:1fr;}
 }
-/* ads-chat (hergebruikt de projectchat-markup) */
-.ads-chatcard{padding:0;overflow:hidden;}
-.ads-chatcard .chat-list{max-height:440px;min-height:180px;overflow-y:auto;padding:16px 16px 6px;}
-.ads-chatcard .chat-input{border-top:1px solid var(--line,#E7DFD3);}
-
 /* ===== ADMIN-bedrijvenkiezer (@studio27.be teamleden) ===================== */
 /* Login (Google SSO) -> deze overlay laat de admin ÉÉN klantportaal kiezen via zoek over
    ALLE bedrijven. Volledig in Studio 27-huisstijl (zelfde tokens als de rest van het portaal). */
@@ -1056,8 +1020,9 @@ body.mp-lock{overflow:hidden;}
 .mp-done .btn{margin-top:2px;}
 .mp-done .btn+.btn{margin-top:10px;}
 
-/* === Cluster M: chat-composer (multi-file staging + tekst, samen versturen) === */
-.chat-compose{display:flex;flex-direction:column;}
+/* === Cluster M: chips-tray voor bijlagen (multi-file staging).
+   De chat-composer is met de klantchat-sunset (27-07) verdwenen; deze klassen blijven
+   omdat het supportticket-formulier (portal.js, #wtTray) er zijn bijlage-chips mee tekent. === */
 .chat-tray{display:flex;flex-wrap:wrap;gap:7px;}
 .chat-tray:not(:empty){padding:9px 4px 3px;}
 .chat-chip{display:inline-flex;align-items:center;gap:6px;max-width:190px;background:var(--paper-2,#F4EFE7);border:1px solid var(--line,#E7DFD3);border-radius:11px;padding:4px 7px 4px 4px;font-size:12px;}
@@ -1066,11 +1031,6 @@ body.mp-lock{overflow:hidden;}
 .chat-chip-nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-2);font-weight:600;}
 .chat-chip-x{border:none;background:none;cursor:pointer;color:var(--ink-4);display:inline-flex;align-items:center;padding:0;flex:none;}
 .chat-chip-x:hover{color:var(--s27-orange,#F66131);}
-.chat-stagemsg:not(:empty){font-size:12px;color:var(--s27-orange-ink,#C2410C);padding:4px 4px 0;}
-.bub-atts{display:flex;flex-wrap:wrap;gap:7px;margin-top:7px;}
-.bub-att{width:130px;max-width:48vw;border-radius:10px;display:block;}
-.bub-doc{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;background:rgba(255,255,255,.55);border-radius:9px;padding:5px 9px;}
-.msg.me .bub-doc{background:rgba(255,255,255,.22);color:#fff;}
 
 /* === Cluster I: notificatie-kanalen pill-picker (multi-select) === */
 .kanaal-pick{display:flex;gap:8px;flex-wrap:wrap;}
@@ -1142,19 +1102,13 @@ html, body{ touch-action:pan-x pan-y; }
 .takarch-files{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px;}
 .takarch-file{font-size:12.5px;}
 
-/* === Q slice 2: projectdetail-subnav (Overzicht | Chat) + schermvullende chat === */
+/* === Q slice 2: projectdetail-subnav. Sinds de klantchat-sunset (27-07) is Overzicht
+   de enige weergave; de Chat-tab en de schermvullende chatpane zijn verdwenen. === */
+/* De rustige verwijzing die de weggevallen chatblokken vervangt (socials, advertenties, projectdetail). */
+.contact-hint{margin:26px 0 4px;font-size:13px;color:var(--ink-4,#9E919E);}
 .detail--wide .detail-grid{display:block;}
 .detail-subnav{margin:14px 0 18px;}
 .detail-subnav .soc-subtab{display:inline-flex;align-items:center;gap:7px;position:relative;}
-.snav-dot{width:9px;height:9px;border-radius:50%;background:var(--s27-orange,#ED7D31);display:inline-block;margin-left:2px;}
-.detail-chatpane{display:none;}
-.detail-chatpane.active{display:flex;flex-direction:column;min-height:calc(100vh - 320px);
-  background:var(--paper,#fff);border:1px solid var(--line,#E7DFD3);border-radius:var(--r-lg,24px);
-  box-shadow:var(--sh-sm,0 2px 10px rgba(35,15,35,.05));padding:18px 20px;}
-.detail-chatpane .dc-head{display:flex;align-items:center;gap:8px;font-family:var(--font-display);font-weight:800;font-size:14px;margin-bottom:10px;}
-.detail-chatpane .dc-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;}
-.detail-chatpane .dc-body .chat-list{flex:1 1 auto;min-height:260px;max-height:calc(100vh - 470px);overflow-y:auto;margin-bottom:12px;}
-@media(max-width:760px){.detail-chatpane.active{min-height:calc(100vh - 250px);}.detail-chatpane .dc-body .chat-list{max-height:none;}}
 /* accordions als sub-blok onder het overzicht */
 .mpane.mpane-sub{display:none;}
 .mpane.mpane-sub.active{display:block;}
@@ -1315,7 +1269,7 @@ button.ond-head{cursor:pointer;}
 .detail-close:hover{background:var(--paper-2,#FAF7F2);color:var(--ink,#230F23);}
 .detail-closerow{display:flex;justify-content:flex-end;margin:0 0 10px;}
 .detail-close--inline{position:static;}
-/* kruisje ALS laatste item IN de Overzicht|Chat-balk (Vincent 2026-06-14) */
+/* kruisje ALS laatste item IN de subnav-balk (Vincent 2026-06-14) */
 .detail-subnav{align-items:center;}
 .detail-subnav-sep{width:1px; align-self:stretch; margin:4px 2px; background:var(--line,#E7DFD3); flex:none;}
 .detail-close--innav{position:static; width:34px; height:34px; align-self:center; flex:none;}
@@ -1338,7 +1292,6 @@ button.ond-head{cursor:pointer;}
 .sup-dot.pill-done{background:var(--s27-green,#12AC4E);}
 .sup-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;align-items:flex-start;}
 .sup-main b{font-family:var(--font-display);font-weight:800;font-size:14px;}
-.sup-snippet{font-size:12.5px;color:var(--ink-3,#6B5B6B);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;}
 .sup-link{display:inline-flex;align-items:center;gap:6px;background:none;border:none;font:700 13px var(--font-display);color:var(--ink-3,#6B5B6B);cursor:pointer;padding:4px 0;margin:14px 0 6px;}
 .sup-link:hover{color:var(--ink,#230F23);}
 @media(max-width:560px){.sup-row{flex-wrap:wrap;}.sup-row .btn{width:100%;justify-content:center;}}
@@ -1347,13 +1300,9 @@ button.ond-head{cursor:pointer;}
    MOBIEL-FUNDAMENT (golf 1) — veilige zones, dynamische viewport, tikdoelen.
    Bron: mobiel UX-onderzoek (NN/g, Apple HIG, Material 3, web.dev).
    ============================================================ */
-/* dvh: schermvullende chat/overlays krimpen mee met toetsenbord + URL-balk.
+/* dvh: schermvullende overlays krimpen mee met toetsenbord + URL-balk.
    Staat NA de bestaande 100vh-regels; browsers zonder dvh negeren dit en houden de vh-fallback. */
-#berichtChat .chat-list{height:calc(100dvh - 340px);}
-.detail-chatpane.active{min-height:calc(100dvh - 320px);}
-.detail-chatpane .dc-body .chat-list{max-height:calc(100dvh - 470px);}
 .bot-panel{height:min(560px,80dvh);}
-@media(max-width:760px){ .detail-chatpane.active{min-height:calc(100dvh - 250px);} }
 
 @media(max-width:980px){
   /* Veilige zones (notch + iOS home-indicator). viewport-fit=cover staat in de meta. */
@@ -1463,7 +1412,7 @@ button.ond-head{cursor:pointer;}
    binnen-scrollers en de pagina, en een subtiele installeer-hint (mobiel, eenmalig).
    ============================================================ */
 *{-webkit-tap-highlight-color:transparent;}
-.mp-scroll,.notif-list,#chatList,.chat-list,.bot-body,.bot-panel,.detail-chatpane,.sb-scroll{overscroll-behavior:contain;}
+.mp-scroll,.notif-list,.bot-body,.bot-panel,.sb-scroll{overscroll-behavior:contain;}
 /* installeer-hint: zweeft boven de onderbalk, schuift eenmalig in, makkelijk weg te tikken */
 .s27-install{position:fixed; left:12px; right:12px; bottom:calc(148px + env(safe-area-inset-bottom)); z-index:75;
   display:flex; align-items:center; gap:12px; background:rgba(255,255,255,.93);

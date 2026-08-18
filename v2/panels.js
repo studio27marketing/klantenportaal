@@ -197,6 +197,12 @@ function _isSocialProject(p){ if(!p) return false; if(p.discId==='social') retur
 function _socProject(){ return _projects().filter(_isSocialProject)[0] || null; }   // sociale-media-taak (zelfde maand-logica als de ads-taak)
 function _greetNaam(){ var n=(window.S27DATA && S27DATA.klantNaam && S27DATA.klantNaam())||''; if(n && n!=='daar') return n; return _live()?'daar':'Sarah'; }
 function _bedrijf(){ return (window.S27DATA && S27DATA.bedrijfsnaam && S27DATA.bedrijfsnaam()) || 'TEST CLIENT BV'; }
+/* De contextuele chatblokken zijn verdwenen met de klantchat-sunset (27-07): klantcommunicatie
+   loopt uitsluitend via e-mail. Eén rustige verwijzing naar de Contact-knop houdt de onderkant
+   van de panelen af van een abrupt einde. */
+function contactHint(wat){
+  return '<p class="sdesc contact-hint">Een vraag over '+esc(wat)+'? Laat het ons weten via de Contact-knop rechtsboven.</p>';
+}
 /* SA&E-namen kort tonen (geen foto-iconen). Geeft "" terug als er geen toegewezen teamleden zijn. */
 function voornaam(n){ return String(n||'').trim().split(/\s+/)[0]||''; }
 function saeNames(sae){
@@ -205,16 +211,6 @@ function saeNames(sae){
   if(!names.length) return '';
   return `${ic('person',12)}<span>${names.join(', ')}</span>`;
 }
-// chat-header: toon met wie de klant chat (naam + initialen-avatar van de SA&E van de taak)
-function saeChatWho(sae, closed){
-  if(closed) return '<span class="dc-sub">afgerond</span>';
-  if(sae && sae.length){
-    const s=sae[0]; const extra=sae.length>1?(' +'+(sae.length-1)):'';
-    return `<span class="dc-who"><span class="dc-av">${esc(s.initialen||'S2')}</span><span class="dc-sub">met ${esc(voornaam(s.naam))}${extra}</span></span>`;
-  }
-  return '<span class="dc-sub">met je team</span>';
-}
-
 /* =========================================================
    PANEL BUILDERS
    ========================================================= */
@@ -246,14 +242,12 @@ function svcCard(s){
 }
 function buildSvcCards(){ return SERVICES.map(svcCard).join(''); }
 const _COCKPIT_MOCK = [
-  { br:'indigo', cat:'Support', nid:'sup-open', title:'1 open supportvraag', ctx:'Volg de status of chat rechtstreeks met het team.', cta:'Bekijk je vragen', action:"goSupport()", urgent:false, icon:'msg' },
+  { br:'indigo', cat:'Support', nid:'sup-open', title:'1 open supportvraag', ctx:'Volg hier de status van je openstaande vragen.', cta:'Bekijk je vragen', action:"goSupport()", urgent:false, icon:'msg' },
   {br:'purple',cat:'Video- en fotografie',title:'Review nodig',ctx:'De eerste montage van je bedrijfsfilm <b>"Onder één dak"</b> staat klaar. Geef je akkoord of je feedback.',cta:'Bekijk montage',action:"openProject('p1')",tag:'vandaag',urgent:true,icon:'st_feedback'},
   {br:'blue',cat:'Strategie',title:'Feedback gevraagd',ctx:'We willen je input op de <b>positionering</b> voor 2026 voor we verder bouwen.',cta:'Geef feedback',action:"openProject('p4')",tag:'deze week',urgent:false,icon:'st_feedback'},
   {br:'orange',cat:'Online adverteren',title:'Rapport inplannen',ctx:'Tijd om de <b>resultaten van je campagnes</b> samen te bekijken. Prik een moment dat jou past.',cta:'Plan in',action:"goTab('meetings')",tag:'mei',urgent:false,icon:'st_plan'},
   {br:'yellow',cat:'Social media',title:'Feedback gevraagd',ctx:'Je <b>contentkalender</b> staat klaar ter goedkeuring. Bekijk de geplande posts en geef je akkoord.',cta:'Bekijk posts',action:"goTab('socials')",tag:'deze week',urgent:false,icon:'st_feedback'},
-  {br:'purple',cat:'Video- en fotografie',title:'Klaar om in te plannen',ctx:'Je <b>productshoot</b> is klaar om ingepland te worden. Prik een datum die jou past.',cta:'Plan shoot',action:"openProject('p3')",tag:'binnenkort',urgent:true,icon:'st_plan'},
-  {br:'green',cat:'Webdesign',title:'Bericht wacht op jou',ctx:'We hebben een vraag in de chat van je <b>nieuwe website</b>. Laat iets weten zodat we verder kunnen.',cta:'Open chat',action:"openProjectChat('p2')",urgent:false,icon:'msg'},
-  {br:'pink',cat:'Branding',title:'Nieuw bericht van je team',ctx:'Je team schreef iets in de chat van <b>Branding-traject</b>: “We hebben het moodboard net bijgewerkt, geef gerust je eerste indruk.”',cta:'Lees bericht',action:"openProjectChat('p4')",urgent:false,icon:'msg'}
+  {br:'purple',cat:'Video- en fotografie',title:'Klaar om in te plannen',ctx:'Je <b>productshoot</b> is klaar om ingepland te worden. Prik een datum die jou past.',cta:'Plan shoot',action:"openProject('p3')",tag:'binnenkort',urgent:true,icon:'st_plan'}
 ];
 function _cockpitCard(a){
   return `<div class="action-card ${a.urgent?'urgent':''} br-${a.br}">
@@ -297,25 +291,6 @@ function panelStart(){
 // Strategie én Ads gaan bewust naar 'Adverteren' (daar bemachtigen we de aanvraag).
 // dienst-tegels openen de offerte-wizard met de juiste tak voorgeselecteerd (stap 2)
 const SVC_TO_TAK = { strategie:'strategie', ads:'ads', video:'video', website:'website', seo:'website', branding:'branding', social:'social', opleiding:'strategie' };
-// Berichten = iOS-stijl inbox: één rij per projectchat (avatar, naam, laatste bericht, tijd,
-// ongelezen-dot) -> klik opent de schermvullende chat van dat project (detail-Chat-tab).
-const BERICHT_MOCK_LAST={
-  p1:{tekst:'De eerste montage staat klaar, kijk je even mee?', uren:2,  wacht:true},
-  p2:{tekst:'De nieuwe homepage staat op staging, link volgt straks.', uren:7, wacht:true},
-  p3:{tekst:'Top, dan plannen we de nabewerking deze week in.', uren:30, wacht:false},
-  p4:{tekst:'Bedankt voor jullie input tijdens de sessie!', uren:78, wacht:false},
-  p6:{tekst:'De contentkalender voor mei is goedgekeurd ✔', uren:120, wacht:false},
-  p9:{tekst:'We kijken vandaag nog naar het formulier.', uren:4, wacht:true},
-  p10:{tekst:'Eerste schetsen van de huisstijl-refresh komen eraan.', uren:26, wacht:false}
-};
-function _inboxWhen(ts){
-  if(!ts) return '';
-  var d=new Date(Number(ts)); if(isNaN(d.getTime())) return '';
-  var nu=new Date(); var diff=nu-d;
-  if(d.toDateString()===nu.toDateString()) return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
-  if(diff<6*86400000) return ['zo','ma','di','wo','do','vr','za'][d.getDay()];
-  return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2);
-}
 // Discipline-chips: kleine label(s) die aangeven waar een hoofdtaak over gaat. Eén hoofdtaak
 // kan meerdere disciplines bevatten (bv. branding + webdesign) -> meerdere chips naast elkaar.
 function discChips(labels){
@@ -364,12 +339,11 @@ function videoProjRij(p, takKey){
     +'<span class="vrij-sub">'+(wie?ic('user',12)+' '+esc(wie)+' · ':'')+esc(st[0])+'</span></span>'
     +'<span class="btn btn-branch br-'+p.br+' btn-sm vrij-open">Open project '+ic('arrow',14)+'</span></button>';
 }
-// actieteller per project: feedback die wacht + in te plannen shoots/meetings + chat-wacht.
+// actieteller per project: feedback die wacht + in te plannen shoots/meetings.
 function projActieTeller(p){
   var n=0;
   if(p.status==='wait'||p.status==='sent') n++;                       // klaar voor jouw feedback
   n+=((p.planItems&&p.planItems.length)||0);                          // shoots/meetings in te plannen
-  if(p.lastChat&&p.lastChat.wacht) n++;                               // bericht wacht op antwoord
   return n;
 }
 // platte hoofdtaak-kaart: naam + discipline-chip(s), status, deliverable-badge, SA&E-namen.
@@ -801,7 +775,7 @@ function socialHashtagsHTML(){
 function socialMonthNav(d){ var mo=socialMonth(); var dt=new Date(mo.y,mo.m+d,1); state._socialMonth={y:dt.getFullYear(),m:dt.getMonth()}; var box=document.getElementById('socialCalContainer'); if(box){ box.innerHTML=socialCalendar(socialShownPosts()); } else { renderPanel('socials'); } if(typeof syncUrl==='function') syncUrl(); }
 function socialSetFilter(f){ state._socialFilter=f; var box=document.getElementById('socialBody'); if(box){ box.innerHTML=socialBodyHTML(); } else { renderPanel('socials'); } if(typeof syncUrl==='function') syncUrl(); }
 function socialOpenDetail(id){ state._socTab='planner'; state._socialDetail=String(id); renderPanel('socials'); if(window.scrollTo)window.scrollTo({top:0,behavior:'smooth'}); if(typeof syncUrl==='function') syncUrl(true); }
-function socialCloseDetail(){ state._socialDetail=null; state._socTab='planner'; renderPanel('socials'); if(typeof socialChatMount==='function') socialChatMount(); }
+function socialCloseDetail(){ state._socialDetail=null; state._socTab='planner'; renderPanel('socials'); }
 /* ---- KPI-dashboard + trend (fase 1 metriek-look-and-feel), data via metricoolStats ---- */
 function socialFmt(n){ return (Number(n)||0).toLocaleString('nl-BE'); }
 function socialStatsHTML(){
@@ -1161,7 +1135,7 @@ function socialDetailPage(id){
         +'<div class="soc-emeta">'+datebadge+'</div>'
         +'<label class="soc-elab">Kanalen</label><div class="soc-chics soc-chics-ro">'+(nets||'<span class="fs" style="color:var(--ink-4)">-</span>')+'</div>'
         +'<label class="soc-elab">Tekst &amp; hashtags</label><div class="soc-dtxt-box">'+esc(p.tekst||'(geen tekst)')+'</div>'
-        +'<div class="soc-roinfo">'+ic('check',15)+' Deze post is gepubliceerd, dus niet meer aanpasbaar. Een vraag erover? Laat het ons weten via de projectchat.</div>'
+        +'<div class="soc-roinfo">'+ic('check',15)+' Deze post is gepubliceerd, dus niet meer aanpasbaar. Een vraag erover? Laat het ons weten via de Contact-knop.</div>'
       +'</div></div></div>';
   }
   // CONCEPT (Metricool-draft, bug 86ca83gp0): altijd read-only, ook voor klanten mét
@@ -1175,7 +1149,7 @@ function socialDetailPage(id){
         +'<div class="soc-emeta">'+datebadge+'<span class="soc-badge" style="color:'+dm[1]+';background:'+dm[2]+'">'+esc(dm[0])+'</span></div>'
         +'<label class="soc-elab">Kanalen</label><div class="soc-chics soc-chics-ro">'+dnets+'</div>'
         +'<label class="soc-elab">Tekst &amp; hashtags</label><div class="soc-dtxt-box">'+esc(p.tekst||'(nog geen tekst)')+'</div>'
-        +'<div class="soc-roinfo">'+ic('st_progress',15)+' Deze post is nog in voorbereiding bij ons team. Soms wachten we hiervoor nog op beeldmateriaal of input van jou. Je kan alvast meekijken; aanpassen of goedkeuren kan zodra de post klaarstaat. Iets aanleveren of een vraag? Stuur het via de chat onderaan de plannerpagina.</div>'
+        +'<div class="soc-roinfo">'+ic('st_progress',15)+' Deze post is nog in voorbereiding bij ons team. Soms wachten we hiervoor nog op beeldmateriaal of input van jou. Je kan alvast meekijken; aanpassen of goedkeuren kan zodra de post klaarstaat. Iets aanleveren of een vraag? Laat het ons weten via de Contact-knop.</div>'
       +'</div></div></div>';
   }
   // EDITOR (geplande post): kanalen aan/uit (icoontjes wisselen de preview), caption groot, visual.
@@ -1249,27 +1223,8 @@ function panelSocials(){
   var mc = state.demoMode ? {linked:true,posts:socialDemoPosts()} : ((window.S27DATA&&S27DATA.metricool())||null);
   if(!mc) return head+'<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je socials worden geladen…</p></div>';
   if(!mc.linked) return head+statNotLinked('socials');
-  // Sub-nav (Analyse/Planner/Inzichten) + het actieve tabblad (of de post-editor) in #socialBody,
-  // met onderaan de contextuele social-chat (buiten #socialBody zodat sub-tab-wissels 'm niet herrenderen).
-  return mcStyleOnce()+head+socialSubnav()+'<div id="socialBody">'+socialBodyHTML()+'</div>'+socialChatSection();
-}
-/* Social-chat: contextuele chat over de sociale-media-taak, spiegelt de ads-chat ("Chat over je advertenties").
-   Niet zichtbaar in de post-editor (net zoals de ads-campagnedetail geen chat toont). */
-function socialChatSection(){
-  if(state._socialDetail) return '';
-  var so=_socProject(); if(!so) return '';
-  return '<div class="ads-chat"><div class="section-head" style="margin-top:24px"><h2 style="display:flex;align-items:center;gap:8px">'+ic('msg',18)+' Chat over je socials</h2></div>'
-    +'<p class="sdesc" style="margin:-2px 0 12px;max-width:64ch">Stel je vraag over <b>'+esc(so.name||'je socialmediaproject')+'</b> of stuur ons foto’s, video’s of ideeën voor je posts. Je bericht komt rechtstreeks bij je Studio 27-team terecht.</p>'
-    +'<div class="card ads-chatcard"><div id="socChatBody">'+chatHTML(so.id)+'</div></div></div>';
-}
-function socialChatMount(){
-  var so=_socProject();
-  if(!so || state._socialDetail || !document.getElementById('chatList')) return;   // geen social-taak of geen chat in beeld (bv. post-editor)
-  state.activeProject=so.id;
-  if(window.S27DATA && S27DATA.loadChat && !((state.data.chats||{})[so.id])){
-    S27DATA.loadChat(so.id).then(function(){ var h=document.getElementById('socChatBody'); if(h && state.activeProject===so.id) h.innerHTML=chatHTML(so.id); }).catch(function(){});
-  }
-  if(typeof startChatPoll==='function') startChatPoll(so.id);
+  // Sub-nav (Analyse/Planner/Inzichten) + het actieve tabblad (of de post-editor) in #socialBody.
+  return mcStyleOnce()+head+socialSubnav()+'<div id="socialBody">'+socialBodyHTML()+'</div>'+contactHint('je socials');
 }
 // Voorbeeldposts (alleen demo): in de huidige maand verspreid, met verschillende statussen.
 function socialDemoPosts(){
@@ -1329,7 +1284,7 @@ function panelAdvertenties(){
     <div class="proj-list">
       ${[['Google Search · Leadgen Q2','blue','€ 1.450 besteed · 12.300 vertoningen · 890 klikken'],['Meta · Retargeting','blue','€ 820 besteed · 64.000 vertoningen · 410 klikken'],['TikTok · Lentepromo','purple','€ 570 besteed · 120.000 vertoningen · 1.300 klikken']].map(c=>`
         <div class="proj-row br-${c[1]}" style="cursor:default"><span class="pr-main"><span class="pr-name" style="font-size:15px">${c[0]}</span><span style="font-size:13px;color:var(--ink-3)">${c[2]}</span></span><span class="pill pill-prog"><span class="pdot"></span>Live</span></div>`).join('')}
-    </div>`+adsChatSection();   // demo: ook de contextuele ads-chat tonen (consistent met de social-chat)
+    </div>`+contactHint('je advertenties');
   }
   return head+metaAdsBody();
 }
@@ -1593,47 +1548,25 @@ function adsTrendBlock(){
   var svg=(tr.length<2)?'<div class="ads-tempty">Nog te weinig data voor een trend in deze periode.</div>':adsTrendSVG(tr,on);
   return '<div class="card ads-trend" id="adsTrendBox" style="padding:15px 18px 12px"><div class="ads-thead"><h3>Evolutie per dag</h3><div class="ads-tchips">'+chips+'</div></div>'+svg+'</div>';
 }
-// Client-view ads-chrome: ÉÉN doorlopende menubalk (zoals team), links de Meta/Google-switcher, rechts periode + chat.
+// Client-view ads-chrome: ÉÉN doorlopende menubalk (zoals team), links de Meta/Google-switcher, rechts de periode.
 // Vervangt de oude losse 'Live overzicht'-kop + zwevende switcher + aparte periodebalk (die over elkaar vielen).
 function adsClientChrome(){
   return '<div class="ads-stickytop"><div class="soc-subnav-row">'+adsPlatformPicker()
-    +'<div class="soc-subnav-act">'+adsPeriodBar()+adsClientChatBtn()+'</div></div></div>';
+    +'<div class="soc-subnav-act">'+adsPeriodBar()+'</div></div></div>';
 }
-function adsClientChatBtn(){
-  var ad=_adProject(); if(!ad) return '';   // enkel een chat-knop als er een advertentietaak van deze maand is
-  return '<button class="soc-subnav-act-btn" onclick="adsClientChatOpen()" title="Chat over je advertenties. Je bericht komt als opmerking op je advertentietaak.">'+ic('msg',16)+'<span>Chat</span></button>';
-}
-function adsClientChatOpen(){ var el=document.querySelector('.ads-chat'); if(el){ el.scrollIntoView({behavior:'smooth',block:'start'}); setTimeout(function(){ var ta=el.querySelector('textarea,[contenteditable],.chat-input'); try{ ta&&ta.focus(); }catch(e){} },380); } }
 function metaAdsBody(){
   if(isRichView()) return metaAdsBodyRich();   // team-weergave: uitgebreide Meta-rapportage
   metaEnsureStyles();
   var chrome=adsClientChrome();
   // Google-tak: eigen beknopte real-time weergave (zelfde menubalk, geen creatives). Meta-flow blijft ongewijzigd.
-  if(adsActivePlatform()==='google'){ return chrome+googleAdsBody()+adsChatSection(); }
+  if(adsActivePlatform()==='google'){ return chrome+googleAdsBody()+contactHint('je advertenties'); }
   var m=(window.S27DATA&&S27DATA.metaAds&&S27DATA.metaAds())||null;
   if(m===null){ return chrome+'<div class="empty" style="padding:60px"><div class="brand-spinner" style="margin:0 auto 12px"></div><p>Je advertenties worden real-time opgehaald…</p></div>'; }
   if(!m.linked){ return chrome+statNotLinked('ads'); }
   state._metaCampaign=null;   // item 9: campagnes openen nu INLINE (toggleMetaCampaign), geen paginavervanging meer
-  return chrome+'<div id="adsBody">'+adsOverviewInner()+'</div>'+adsChatSection();
+  return chrome+'<div id="adsBody">'+adsOverviewInner()+'</div>'+contactHint('je advertenties');
 }
-// Ads-chat: enkel zichtbaar als er een advertentietaak van de HUIDIGE MAAND bestaat (worker filtert
-// ad-taken al op due-date deze maand). Berichten/uploads gaan als comments naar die taak.
-function adsChatSection(){
-  var ad=_adProject(); if(!ad) return '';
-  return '<div class="ads-chat"><div class="section-head" style="margin-top:24px"><h2 style="display:flex;align-items:center;gap:8px">'+ic('msg',18)+' Chat over je advertenties</h2></div>'
-    +'<p class="sdesc" style="margin:-2px 0 12px;max-width:64ch">Stel je vraag over <b>'+esc(ad.name||'je advertentieproject')+'</b> of upload foto’s/video’s die we kunnen gebruiken voor je advertenties. Je bericht komt rechtstreeks bij je Studio 27-team terecht.</p>'
-    +'<div class="card ads-chatcard"><div id="adsChatBody">'+chatHTML(ad.id)+'</div></div></div>';
-}
-function adsChatMount(){
-  var ad=_adProject();
-  if(!ad || !document.getElementById('chatList')) return;   // geen ads-taak of geen chat in beeld (bv. campagne-detail)
-  state.activeProject=ad.id;
-  if(window.S27DATA && S27DATA.loadChat && !((state.data.chats||{})[ad.id])){
-    S27DATA.loadChat(ad.id).then(function(){ var h=document.getElementById('adsChatBody'); if(h && state.activeProject===ad.id) h.innerHTML=chatHTML(ad.id); }).catch(function(){});
-  }
-  if(typeof startChatPoll==='function') startChatPoll(ad.id);
-}
-function renderAds(){ renderPanel('advertenties'); if(typeof adsChatMount==='function') adsChatMount(); if(isRichView()) adsRichMountTabCharts(); else adsClientMountChart(); }
+function renderAds(){ renderPanel('advertenties'); if(isRichView()) adsRichMountTabCharts(); else adsClientMountChart(); }
 // Deferred mount: de inner-HTML wordt synchroon via renderPanel() in de DOM gezet; de canvas bestaat dus
 // pas na deze tick. Eén keer per render plannen (idempotent, adsBuildSelChart vernietigt de oude chart).
 function _adsDeferClientMount(){ if(isRichView()) return; var fn=function(){ adsClientMountChart(); }; if(window.requestAnimationFrame) requestAnimationFrame(fn); else setTimeout(fn,0); }
@@ -3774,78 +3707,6 @@ function panelInstellingen(){
   </div>`;
 }
 
-/* ---- shared chat markup ---- */
-/* GOLF 8: gedeelde bestanden in de chat als klikbare chip (magic link) i.p.v.
-   een onklikbare tekst-URL. Alleen /f/-links die de gateway als attachments
-   meegeeft (d1ClientCommentShape); esc() op naam en URL. */
-function _chatAttChips(atts){
-  if(!atts || !atts.length) return '';
-  return atts.map(a=>a&&a.url?`<a class="btn btn-outline btn-sm" style="display:inline-flex;align-items:center;gap:6px;margin-top:6px;max-width:100%" href="${esc(a.url)}" target="_blank" rel="noopener">${ic('doc',14)} <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.naam||'Bijlage')}</span></a>`:'').join('');
-}
-function chatHTML(taskId, readOnly){
-  const live = (taskId && window.S27DATA) ? S27DATA.chat(taskId) : null;
-  const msgs = (live && live.length!==undefined) ? live.map(m=>[m.av,m.who,m.color||'blue',m.tx,m.tm,m.me,m.attachments||[]]) : [
-    ['IM','Ilke Meeusen','blue','Hey Sarah! De eerste montage van de bedrijfsfilm staat klaar. Benieuwd wat je ervan vindt.','09:12',false],
-    ['','Jij','blue','Wauw, ziet er strak uit! Kan de intro net iets korter?','09:41',true],
-    ['IM','Ilke Meeusen','blue','Zeker, dat passen we gratis aan. Tegen morgen heb je een nieuwe versie.','09:43',false],
-  ];
-  // Read-receipt: enkel in de teamweergave (staff). Toont onder het nieuwste TEAM-bericht of de klant
-  // de chat al las (m.me=true = klantbericht; nieuwste !me = teambericht, dan is de receipt relevant).
-  let receiptHTML='';
-  try{
-    if(typeof isRichView==='function' && isRichView() && live && live.length){
-      const last=live[live.length-1];
-      if(last && !last.me){
-        const rc=(window.S27DATA && S27DATA.chatReceipt) ? S27DATA.chatReceipt(taskId) : null;
-        const read=rc?!!rc.read_by_client:false;
-        const when=(rc&&rc.client_read_at)?(' · '+_inboxWhen(rc.client_read_at)):'';
-        receiptHTML = read
-          ? '<div class="chat-receipt" style="font-size:11.5px;color:var(--s27-green-ink,#147A50);padding:3px 8px 2px 0;display:flex;align-items:center;gap:4px;justify-content:flex-end">'+ic('check',13)+' Gelezen door klant'+esc(when)+'</div>'
-          : '<div class="chat-receipt" style="font-size:11.5px;color:var(--ink-4);padding:3px 8px 2px 0;text-align:right">Nog niet gelezen door klant</div>';
-      }
-    }
-  }catch(e){}
-  const listHTML = `<div class="chat-list" id="chatList">
-    ${msgs.length?msgs.map(m=>`<div class="msg ${m[5]?'me':''}">
-      ${m[5]?'':`<span class="av" style="background:var(--s27-${m[2]})">${m[0]}</span>`}
-      <div class="bubble"><div class="who">${m[1]==='Jij'?'Jij':esc(voornaam(m[1]))}</div><div class="tx">${m[3]}</div>${_chatAttChips(m[6])}<div class="tm">${m[4]}</div></div>
-    </div>`).join(''):`<div class="empty" style="padding:30px 10px"><p>${readOnly?'Geen chatgeschiedenis voor dit project.':'Nog geen berichten, stuur ons gerust iets!'}</p></div>`}
-    ${receiptHTML}
-  </div>`;
-  if(readOnly) return listHTML+`<div class="chat-readonly">${ic('check',14)} Dit project is afgerond. De chatgeschiedenis blijft hier zichtbaar.</div>`;
-  return listHTML+`<div class="chat-compose">`
-    +`<div class="chat-tray" id="chatTray">${_chatChipsHTML()}</div>`
-    +`<div class="chat-stagemsg" id="chatStageMsg"></div>`
-    +`<div class="chat-input"><button type="button" class="chat-attach" title="Bestand(en) toevoegen" onclick="document.getElementById('chatFile').click()" style="border:none;background:none;cursor:pointer;color:var(--ink-4);padding:0 4px 0 8px;display:flex;align-items:center;flex:none">${ic('upload',18)}</button><input type="file" id="chatFile" multiple accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" style="display:none" onchange="chatStage(this)"><input class="chat-textin" placeholder="Schrijf een bericht…" onkeydown="if(event.key==='Enter')sendChat(this)"><button class="chat-send" onclick="sendChat(this.closest('.chat-input').querySelector('.chat-textin'))">${ic('send',18)}</button></div>`
-    +`</div>`;
-}
-/* Chat-composer (portaal-breed): meerdere bestanden stagen + tekst typen, en pas bij 'Versturen' gaat
-   het geheel samen weg. Staging leeft in state._chatStaged en overleeft poll-herrenders (chatHTML rendert
-   de tray opnieuw). sendChat (portal.js) verzendt tekst + alle staged bestanden in één klik. */
-var _chatStageSeq=0;
-function _chatChipsHTML(){
-  var st=(state._chatStaged||[]); if(!st.length) return '';
-  return st.map(function(f){
-    var th = /^image\//.test(f.type) ? '<img src="'+f.dataUrl+'" alt="">' : ic('doc',15);
-    return '<span class="chat-chip" data-fid="'+f.id+'"><span class="chat-chip-th">'+th+'</span><span class="chat-chip-nm">'+esc(f.name)+'</span><button type="button" class="chat-chip-x" title="Verwijderen" onclick="chatUnstage(\''+f.id+'\')">'+ic('close',12)+'</button></span>';
-  }).join('');
-}
-function _renderChatTray(){ var t=document.getElementById('chatTray'); if(t) t.innerHTML=_chatChipsHTML(); }
-function chatStage(input){
-  var files=(input&&input.files)?[].slice.call(input.files):[]; if(input) input.value='';
-  if(!files.length) return;
-  state._chatStaged=state._chatStaged||[];
-  var msg=document.getElementById('chatStageMsg'); var over=0;
-  files.forEach(function(f){
-    if(f.size>22*1024*1024){ over++; return; }
-    var rd=new FileReader();
-    rd.onload=function(){ state._chatStaged.push({ id:'st'+(++_chatStageSeq), name:f.name, type:f.type||'', size:f.size, dataUrl:String(rd.result||'') }); _renderChatTray(); };
-    rd.readAsDataURL(f);
-  });
-  if(msg) msg.textContent = over ? (over+' bestand(en) overgeslagen: te groot (max 22 MB). Plak liever een link in je bericht.') : '';
-}
-function chatUnstage(id){ state._chatStaged=(state._chatStaged||[]).filter(function(f){return f.id!==id;}); _renderChatTray(); var m=document.getElementById('chatStageMsg'); if(m) m.textContent=''; }
-
 /* =========================================================
    PROJECT DETAIL MODAL
    ========================================================= */
@@ -4025,7 +3886,7 @@ function _ondShootRij(s, br){
       +'<div class="ond-info"><div class="ond-kv"><b>Startdatum</b><span>'+esc(_ondDatum(startMs))+'</span></div>'
       +'<div class="ond-kv"><b>Startuur</b><span>'+esc(_ondUur(startMs))+' (aankomst op locatie)</span></div>'
       +(s.locatie?'<div class="ond-kv"><b>Startlocatie</b><span>'+esc(s.locatie)+'</span></div>':'')
-      +'<p class="ond-locknote">'+ic('info',13)+' Deze shoot staat vast ingepland. Wijzigen kan enkel via het team, stuur ons gerust een berichtje in de chat.</p></div></div>';
+      +'<p class="ond-locknote">'+ic('info',13)+' Deze shoot staat vast ingepland. Wijzigen kan enkel via het team, laat het ons weten via de Contact-knop.</p></div></div>';
   }
   return '<div class="ond-row ond-shoot card br-'+br+'"><div class="ond-head">'+ic('cal',16)
     +'<span class="ond-naam">'+esc(s.naam)+'</span>'
@@ -4265,7 +4126,6 @@ function buildModal(id, from){
   const det=(window.S27DATA && S27DATA.detail(id))||null;
   const isVideo=(p.disc||'').indexOf('Video')===0;
   const needsFeedback=p.status==='wait';
-  const chatClosed = (p.status==='done') || !!(window.S27DATA && S27DATA.isChatClosed && p._raw && S27DATA.isChatClosed(p._raw.status));
   const backTo=(typeof PANELS!=='undefined'&&PANELS[from])?from:((typeof takOfProject==='function')?takOfProject(p):'start');
   const backLabel=(backTo==='alle-projecten')?'je projecten'
     :(typeof TAK_TABS!=='undefined'&&TAK_TABS[backTo])?TAK_TABS[backTo].label
@@ -4368,36 +4228,28 @@ function buildModal(id, from){
       </div>`).join('')}
   </div>`;
 
-  // De algemene 'Feedback'-tab is verwijderd: feedback gebeurt per subtaak. De chat is een
-  // eigen schermvullende sub-tab (zoals de socials-subnav) i.p.v. een smalle zijkolom.
+  // De algemene 'Feedback'-tab is verwijderd: feedback gebeurt per subtaak. De projectchat is
+  // met de klantchat-sunset (27-07) verdwenen, dus Overzicht is de enige weergave.
   const d=DISC[p.disc]||{icon:'doc'};
   const fromCap=backLabel.charAt(0).toUpperCase()+backLabel.slice(1);
   // Bestanden-accordions enkel tonen als ze iets unieks toevoegen (subtaken-pad);
   // bij directe deliverables dekt het overzicht-blok alles al.
   const toonAccordions = !OND && !(delivList && delivList.length) && SUBTASKS.length;
-  const startTab=(state._mtab==='chat')?'chat':'overzicht';
-  const overviewPane=overview.replace('class="mpane active"', startTab==='overzicht'?'class="mpane active"':'class="mpane"');
-  const chatWacht=!chatClosed && p.lastChat && p.lastChat.wacht;
-  const chatPane=`<div class="mpane detail-chatpane${startTab==='chat'?' active':''}" data-mpane="chat">
-      <div class="dc-head">${ic('msg',16)} Projectchat ${saeChatWho(det?det.sae:p.sae, chatClosed)}</div>
-      <div class="dc-body" id="dcBody">${chatClosed?chatHTML(id,true):chatHTML(id)}</div>
-      <div style="padding:8px 0 0"><button class="btn btn-ghost btn-sm" style="color:var(--s27-orange-ink)" onclick="dringendeVraag('${esc(p.id)}')">${ic('spark',14)} ${chatClosed?'Nog een vraag over dit project?':'Dringende vraag aan Ilke'}</button></div>
-    </div>`;
+  const overviewPane=overview;
   // Geen aparte detail-head meer: de projecttitel staat al in de topbar en content-details tonen
   // sowieso geen icoon/dubbele titel/status-kop. Zo ligt élk projectdetail 1:1 in lijn (Vincent 2026-06-14).
   return `<div class="detail detail--wide br-${p.br}">
     <div class="soc-subnav detail-subnav">
-      <button class="soc-subtab${startTab==='overzicht'?' active':''}" data-mt="overzicht" onclick="switchModalTab('overzicht')">${ic('doc',15)} Overzicht</button>
-      <button class="soc-subtab${startTab==='chat'?' active':''}" data-mt="chat" onclick="switchModalTab('chat')">${ic('msg',15)} Chat${chatWacht?'<span class="snav-dot"></span>':''}</button>
+      <button class="soc-subtab active" data-mt="overzicht" onclick="switchModalTab('overzicht')">${ic('doc',15)} Overzicht</button>
       <span class="detail-subnav-sep"></span>
       <button class="detail-close detail-close--innav" title="Terug naar ${backLabel}" aria-label="Terug naar ${backLabel}" onclick="${(typeof _isContentTak==='function'&&(_isContentTak(backTo)||backTo==='webprestaties'))?`markSkipAutoLand('${backTo}');`:''}goTab('${backTo}')">${ic('plus',22)}</button>
     </div>
-    <div class="detail-body">${overviewPane}${toonAccordions?deliverables.replace('class="mpane"','class="mpane mpane-sub'+(startTab==='overzicht'?' active':'')+'"'):''}${chatPane}</div>
+    <div class="detail-body">${overviewPane}${toonAccordions?deliverables.replace('class="mpane"','class="mpane mpane-sub active"'):''}${contactHint('dit project')}</div>
   </div>`;
 }
 
 /* =========================================================
-   OVERLAYS (notif, chatbot, tour)
+   OVERLAYS (notif, tour)
    ========================================================= */
 function buildOverlays(){
   return `

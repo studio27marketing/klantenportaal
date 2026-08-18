@@ -11,7 +11,7 @@
   // HTML-escape (data.js is self-contained; panels.js gebruikt escapeHtml uit portal.js)
   var esc = window.esc = window.esc || function(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
   var DATA = window.S27DATA = {};
-  state.data = state.data || { dashboard:null, details:{}, chats:{}, meetings:null, bedrijf:null, team:null, huisstijl:null };
+  state.data = state.data || { dashboard:null, details:{}, meetings:null, bedrijf:null, team:null, huisstijl:null };
 
   /* ---- discipline-brug: discipline-id → {br-kleur, label, stamp, categorie} (de bijbel) ---- */
   var DISC_BRIDGE = {
@@ -53,9 +53,6 @@
   };
   DATA.status = function(raw){ return STATUS_MAP[norm(raw)] || {key:'prog', label:raw||'Loopt'}; };
   var AFGEROND = ['goedgekeurd','done','klaar_voor_facturatie','gefactureerd','afgehandeld']; // restpuntenronde 11-07: zelfde terminale set als d1IsAfgerond server-side
-  // projectchat sluit zodra het team de taak niet meer opvolgt: klaar-voor-review (feedback klant /
-  // doorgestuurd) of een afgeronde status. (feedback_klant = nieuwe naam voor doorgestuurd)
-  DATA.isChatClosed = function(raw){ var n=norm(raw); return n==='feedback_klant' || n==='doorgestuurd' || AFGEROND.indexOf(n)>=0; };
   function isAfgerond(raw){ return AFGEROND.indexOf(norm(raw)) >= 0; }
 
   /* ---- payload-helpers (gateway injecteert bedrijf_id server-side) ---- */
@@ -193,56 +190,6 @@
     if(d && d.ok !== false){ state.data.details[taskId] = d; }
     return state.data.details[taskId] || null;
   };
-  // ruwe chat-comment {auteur,tekst,datum,is_klant,attachments} -> display-shape voor chatHTML
-  function mapChatComment(c){
-    var t = String(c.tekst||c.text||c.comment_text||'');
-    t = t.replace(/^\s*💬?\s*\[[^\]]*\]\s*/,'');   // "💬 [Klant: ...]"-prefix weg
-    t = t.replace(/\\n/g,'\n').replace(/^\n+/,'').replace(/\s+$/,'');   // letterlijke \n -> newline
-    var me = (c.is_klant===true || c.is_klant==='true');
-    var naam = c.auteur||c.author||(me?'Jij':'Studio 27');
-    var ms = parseInt(c.datum||c.date||0,10); var tm='';
-    if(ms){ var d=new Date(ms); if(!isNaN(d.getTime())) tm=('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
-    var ini=(String(naam).split(/\s+/).map(function(x){return x?x[0]:'';}).join('').slice(0,2)||'S2').toUpperCase();
-    var vn = me ? 'Jij' : (String(naam||'').trim().split(/\s+/)[0] || naam);
-    // GOLF 8: bestandcomments krijgen van de gateway een echt attachments-array
-    // ({naam,url}); de rauwe magic-link-tekst halen we uit de bubble zodat er
-    // een klikbare chip staat i.p.v. een onklikbare tekst-URL.
-    var atts = c.attachments||[];
-    if(atts.length){ atts.forEach(function(a2){ if(a2&&a2.url) t=t.split(a2.url).join('').replace(/\s+$/,''); }); }
-    return { av:ini, who:vn, color:'blue', tx:esc(t).replace(/\n/g,'<br>'), tm:tm, me:me, attachments:atts };
-  }
-  DATA.loadChat = async function(taskId){
-    if(!live()) return [];
-    var res = await api(ENDPOINTS.chatList, base({ task_id:taskId }));
-    var raw = (res && res.ok && res.data && res.data.ok && res.data.comments) ? res.data.comments : [];
-    raw.sort(function(a,b){ return (parseInt(a.datum||a.date||0,10))-(parseInt(b.datum||b.date||0,10)); });  // oudste boven, nieuwste onderaan
-    state.data.chats[taskId] = raw.map(mapChatComment);
-    state.data.chatReceipts = state.data.chatReceipts || {};
-    state.data.chatReceipts[taskId] = (res && res.data && res.data.read_receipt) || null;   // team-read-receipt
-    return state.data.chats[taskId];
-  };
-  // Klant markeert de projectchat als gelezen (read-receipt voor het team). Stil + fail-soft; nooit voor staff/demo.
-  DATA.chatReceipt = function(taskId){ return (state.data.chatReceipts||{})[taskId] || null; };
-  DATA.markChatRead = async function(taskId){
-    if(!live() || state.adminMode || !taskId) return;
-    try{ await api(ENDPOINTS.chatMarkRead, base({ task_id:taskId })); }catch(e){}
-  };
-  // Altijd-open klantchat: de server bepaalt de communicatietaak (geen task_id van de client).
-  DATA.loadCommsChat = async function(){
-    if(!live()){
-      state.data.commsTaskId='demo-comms'; state.data.commsTeam=[{naam:'Ilke',initialen:'IM'}];
-      if(!state.data.chats['demo-comms']) state.data.chats['demo-comms']=[{av:'IM',who:'Ilke',color:'blue',tx:'Hoi! Stel hier gerust je vraag, we antwoorden snel. 👋',tm:'09:00',me:false,attachments:[]}];
-      return { task_id:'demo-comms', team:state.data.commsTeam };
-    }
-    var res = await api(ENDPOINTS.commsChatList, base({}));
-    var d = (res && res.ok && res.data) ? res.data : {};
-    state.data.commsTaskId = d.task_id || null;
-    state.data.commsTeam = d.team || [];
-    if(d.task_id){ var cc=(d.comments||[]).slice().sort(function(a,b){ return (parseInt(a.datum||a.date||0,10))-(parseInt(b.datum||b.date||0,10)); }); state.data.chats[d.task_id] = cc.map(mapChatComment); }
-    return d;
-  };
-  DATA.commsTaskId = function(){ return state.data.commsTaskId || null; };
-  DATA.commsTeam   = function(){ return state.data.commsTeam || []; };
   DATA.loadMeetings = async function(opts){
     if(!live()) return false;
     var res = await api(ENDPOINTS.meetingsList, base({ bedrijfsnaam:DATA.bedrijfsnaam() }), (opts&&opts.retry)?{noCache:true}:undefined);
@@ -286,8 +233,7 @@
       var br = DATA.disc(p.discipline);
       var st = DATA.status(p.status);
       var deliv = st.key==='wait' || !!p.feedback_link;
-      var lc = p.last_chat ? { tekst:String(p.last_chat.tekst||''), ts:Number(p.last_chat.ts)||0, wacht:!!p.chat_wacht_op_klant, van_klant:!!p.last_chat.van_klant, read_by_client:!!p.last_chat.read_by_client, client_read_at:Number(p.last_chat.client_read_at)||0 } : (p.chat_wacht_op_klant ? { tekst:'', ts:0, wacht:true } : null);
-      return { id:p.task_id, name:cleanTaakNaam(p.naam), br:br.br, disc:br.label, discId:p.discipline, labels:mapLabels(p), status:st.key, deliv:deliv, sae:mapSae(p.sae), lastChat:lc, planItems:(p.plan_items||[]), actiesTodo:Number(p.acties_todo)||0, dateCreated:Number(p.date_created)||0, _raw:p };
+      return { id:p.task_id, name:cleanTaakNaam(p.naam), br:br.br, disc:br.label, discId:p.discipline, labels:mapLabels(p), status:st.key, deliv:deliv, sae:mapSae(p.sae), planItems:(p.plan_items||[]), actiesTodo:Number(p.acties_todo)||0, dateCreated:Number(p.date_created)||0, _raw:p };
     });
   };
 
@@ -300,7 +246,7 @@
     if(supOpen){
       out.push({ br:'indigo', cat:'Support', nid:'sup-open',
         title: supOpen===1?'1 open supportvraag':(supOpen+' open supportvragen'),
-        ctx:'Volg de status of chat rechtstreeks met het team.',
+        ctx:'Volg hier de status van je openstaande vragen.',
         cta:'Bekijk je vragen', action:"goSupport()", urgent:false, icon:'msg' });
     }
     raw.forEach(function(p){
@@ -322,23 +268,6 @@
           cta:(isShoot?'Plan shoot':'Plan moment'), action:(isShoot?("openProject('"+esc(p.task_id)+"','auto')"):("openMeetingPlannerForProject('"+esc(p.task_id)+"')")), urgent:true, icon:'st_plan',
           nid:'plan::'+p.task_id+'::'+(it.task_id||it.label||it.type||'') });   // uniek per plan-item (anders wist 1 klik álle plan-kaarten van dit project)
       });
-      // Project-chat wacht op de klant: worker-veld chat_wacht_op_klant (Cluster F). Inert zolang de worker
-      // dit veld nog niet levert (undefined -> geen kaart), dus veilig vóór de worker-deploy.
-      if(p.chat_wacht_op_klant===true || p.chat_wacht_op_klant==='true'){
-        out.push({ br:br.br, cat:br.label, title:'Bericht wacht op jou',
-          ctx:'Je team stelde je een vraag in de chat van <b>'+esc(p.naam)+'</b>. Laat iets weten zodat we verder kunnen.',
-          cta:'Open chat', action:"openProjectChat('"+esc(p.task_id)+"')", urgent:false, icon:'msg' });
-      }
-      // Nieuw bericht VAN het team dat de klant nog niet opende (read-receipt) en dat niet al als
-      // 'wacht op jou' staat: ontvangen teamberichten horen ook in 'Jouw taken' thuis. Strikte
-      // van_klant===false-gate = geen kaart bij oude payload zonder dit veld (veilig, geen spam).
-      var lc2=p.last_chat;
-      if(lc2 && lc2.van_klant===false && !lc2.read_by_client && p.chat_wacht_op_klant!==true && p.chat_wacht_op_klant!=='true' && String(lc2.tekst||'').trim()){
-        out.push({ br:br.br, cat:br.label, title:'Nieuw bericht van je team',
-          ctx:'Je team schreef iets in de chat van <b>'+esc(p.naam)+'</b>: “'+esc(String(lc2.tekst).replace(/\s+/g,' ').slice(0,80))+'”',
-          cta:'Lees bericht', action:"openProjectChat('"+esc(p.task_id)+"')", urgent:false, icon:'msg',
-          nid:'chatmsg::'+p.task_id });
-      }
     });
     return out;
   };
@@ -407,16 +336,6 @@
       feedbackStatus:d.feedback_status||'', hasContact:d.has_contact==='yes', hasBedrijf:d.has_bedrijf==='yes',
       timeEstimate:d.time_estimate||'', typeJob:d.type_job||'', typeJobKey:d.type_job_key||'', _raw:d
     };
-  };
-
-  // Chat → bubble-vorm voor chatHTML.
-  // loadChat() slaat al display-klare objecten op via mapChatComment ({av,who,color,tx,tm,me,attachments}).
-  // DATA.chat() is daarom een PASSTHROUGH: niet opnieuw mappen (de rauwe backend-velden bestaan hier
-  // niet meer). [INTERN]-comments worden server-side al weggefilterd (handlers.mjs chatList); als zacht
-  // vangnet houden we hier nog een filter op de display-tekst.
-  DATA.chat = function(taskId){
-    var arr = state.data.chats[taskId]; if(!arr) return null;
-    return arr.filter(function(c){ return String(c.tx||'').indexOf('[INTERN]') !== 0; });
   };
 
   DATA.meetings = function(){
