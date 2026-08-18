@@ -164,12 +164,13 @@ function takOfProject(p){
   var ls=(p.labels&&p.labels.length)?p.labels:[{discId:p.discId}];
   for(var key in TAK_TABS){ if(ls.some(function(l){ return TAK_TABS[key].discIds.indexOf(l.discId)>=0; })) return key; }
   if(ls.some(function(l){ return TAK_WEBSITE.discIds.indexOf(l.discId)>=0; })) return 'webprestaties';
-  // defensieve fallback: leid de tak rechtstreeks af uit discId (labels leeg/mismatch mag NOOIT
-  // naar 'berichten' vallen, anders springt de terugknop naar het verkeerde scherm, review v85)
+  // defensieve fallback: leid de tak rechtstreeks af uit discId. Dit mag NOOIT naar een tab
+  // vallen die niet bestaat, anders springt de terugknop naar het verkeerde scherm (review v85).
+  // Sinds 18-08 is de projectenlijst het eindstation, want Berichten bestaat niet meer.
   for(var k2 in TAK_TABS){ if(TAK_TABS[k2].discIds.indexOf(p.discId)>=0) return k2; }
   if(TAK_TABS[p.discId]) return p.discId;
   if(TAK_WEBSITE.discIds.indexOf(p.discId)>=0) return 'webprestaties';
-  return 'berichten';
+  return 'alle-projecten';
 }
 // label van een tak-key (voor de review-overlay-kop, item 11)
 function takLabelOf(key){
@@ -4266,7 +4267,7 @@ function buildModal(id, from){
   const needsFeedback=p.status==='wait';
   const chatClosed = (p.status==='done') || !!(window.S27DATA && S27DATA.isChatClosed && p._raw && S27DATA.isChatClosed(p._raw.status));
   const backTo=(typeof PANELS!=='undefined'&&PANELS[from])?from:((typeof takOfProject==='function')?takOfProject(p):'start');
-  const backLabel=(backTo==='berichten')?'berichten'
+  const backLabel=(backTo==='alle-projecten')?'je projecten'
     :(typeof TAK_TABS!=='undefined'&&TAK_TABS[backTo])?TAK_TABS[backTo].label
     :(backTo==='webprestaties')?'Website':'overzicht';
   // KRITIEK (Vincent/PFL): in LIVE NOOIT verzonnen onderdelen/taken. Deze mock-arrays zijn

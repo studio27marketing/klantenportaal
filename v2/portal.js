@@ -705,7 +705,6 @@ async function goTab(name){
   if(name==='socials' && typeof socialChatMount==='function') socialChatMount();   // social-chat koppelen aan de sociale-media-taak
   if(name==='advertenties' && isRichView() && typeof adsRichMountTabCharts==='function') adsRichMountTabCharts();   // team-weergave: tab-grafieken mounten
   if(name==='webprestaties' && typeof webMountCharts==='function') webMountCharts();   // Webprestaties-grafieken mounten
-  if(name==='aivragen' && typeof aiVragenMount==='function') aiVragenMount();   // team: gelogde AI-vragen ophalen
   if(name==='socials' && isRichView() && socialTab && socialTab()==='rapport' && typeof socialRichMountCharts==='function') socialRichMountCharts();   // team-weergave: social-rapport-grafieken mounten
   updateNavBadges();
 
@@ -2729,7 +2728,7 @@ async function openFotoGalerij(taskId, url){
 }
 function closeFotoGalerij(){
   var pid=state._galFrom||state.activeProject;
-  if(pid) openProject(pid,'auto'); else goTab('video');
+  if(pid) openProject(pid,'auto'); else goTab('alle-projecten');
 }
 function galerijHTML(){
   var g=state._gal; if(!g) return '';
@@ -2808,7 +2807,7 @@ async function closeShootOverlay(){
   // terug naar het projectdetail met vers shoot-overzicht (zonet geboekt = meteen 'ingepland')
   var pid=state._shootFrom||state.activeProject;
   if(pid){ try{ delete (state.data.details||{})[pid]; }catch(e){} state._bustDetail=pid; openProject(pid,'auto'); }
-  else goTab('video');
+  else goTab('alle-projecten');
 }
 async function openShootWizard(tid){
   const box=$id('s27-plan-'+tid); if(!box)return;
