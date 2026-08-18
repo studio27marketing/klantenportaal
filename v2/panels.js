@@ -3639,30 +3639,6 @@ function meetRoute(){ window.open('https://www.google.com/maps/search/?api=1&que
 // vervangen door de volledige Offertes-pagina (panelOffertes). Zijbalk en topbar
 // wijzen naar 'offertes'.
 
-function huisstijlSecties(){
-  /* GOLF 6: de hardcoded Studio 27-kleuren en -fonts zijn verwijderd. Er bestaat
-     (nog) geen D1/bedrijfContent-bron voor merkkleuren of fonts per klant, dus we
-     tonen ALLEEN echte data: de bestanden uit de gedeelde Huisstijl-map op Drive.
-     Komt er ooit brandingdata in D1, dan kan hier een echte merksectie bij. */
-  const files=(window.S27DATA && S27DATA.huisstijl());
-  const fmtBytes=(n)=>{ n=parseInt(n,10)||0; if(!n)return ''; if(n<1024)return n+' B'; if(n<1048576)return Math.round(n/1024)+' KB'; return (n/1048576).toFixed(1)+' MB'; };
-  const mimeIc=(m)=>{ m=String(m||''); if(m.indexOf('image')===0)return 'img'; if(m.indexOf('video')===0)return 'video'; return 'doc'; };
-  const fileMeta=(f)=>{ const p=[]; const b=fmtBytes(f.size); if(b)p.push(b); if(f.modified){ const d=new Date(f.modified); if(!isNaN(d.getTime()))p.push(d.toLocaleDateString('nl-BE',{day:'numeric',month:'short',year:'numeric'})); } return p.join(' · '); };
-  /* Restpuntenronde 11-07: de mock-bestandskaarten zijn ALLEEN nog voor de
-     demo-omgeving; live toont een mislukte load een eerlijke foutstaat met
-     retry (zelfde patroon als dashboard/meetings) i.p.v. verzonnen bestanden. */
-  const mockCards = `<div class="filecard" style="min-width:240px"><div class="ft">${ic('img',20)}</div><div style="flex:1"><div class="fn">logo-tc-fullcolor.svg</div><div class="fs">Vector · 24 KB</div></div><button class="icon-btn" style="width:34px;height:34px">${ic('download',16)}</button></div><div class="filecard" style="min-width:240px"><div class="ft">${ic('img',20)}</div><div style="flex:1"><div class="fn">logo-tc-wit.png</div><div class="fs">PNG · 180 KB</div></div><button class="icon-btn" style="width:34px;height:34px">${ic('download',16)}</button></div>`;
-  const fileCards = files ? (files.length ? files.map(f=>`<div class="filecard" style="min-width:240px"><div class="ft">${ic(mimeIc(f.mime),20)}</div><div style="flex:1;min-width:0"><div class="fn" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</div><div class="fs">${esc(fileMeta(f))}</div></div><a class="icon-btn" style="width:34px;height:34px" href="${esc(f.url||'#')}" target="_blank" rel="noopener" title="Downloaden">${ic('download',16)}</a><button class="icon-btn" style="width:34px;height:34px" title="Verwijderen" aria-label="Verwijderen" onclick="deleteHuisstijl('${esc(f.id||'')}',this)">${ic('trash',15)}</button></div>`).join('') : '<div class="fs" style="color:var(--ink-4)">Nog geen bestanden in je Huisstijl-map. Sleep hieronder een bestand om te beginnen.</div>')
-    : (state.demoMode ? mockCards
-      : `<div class="fs" style="color:var(--ink-4)">Je huisstijl-bestanden konden even niet geladen worden.&nbsp;<button class="btn btn-outline btn-sm" onclick="retryHuisstijl(this)">Opnieuw proberen</button></div>`);
-  return `<div class="setsec">
-    <h3>Huisstijl-bestanden</h3><p class="sdesc">Alle bestanden uit je gedeelde Huisstijl-map op Google Drive, logo's, fonts, templates. Altijd up-to-date.</p>
-    <div style="display:flex;gap:14px;flex-wrap:wrap">${fileCards}</div>
-    <div class="dropzone" style="margin-top:14px" onclick="document.getElementById('hsFile').click()">${ic('upload',30)}<b>Sleep je bestand hierheen</b><div style="font-size:12.5px;margin-top:4px">of klik om te bladeren · SVG, PNG, AI, PDF</div></div>
-    <div id="hsMsg" class="fs" style="margin-top:10px;min-height:18px"></div>
-    <input type="file" id="hsFile" style="display:none" onchange="uploadHuisstijl(this)">
-  </div>`;
-}
 /* ===== OFFERTES ===== */
 const OFFERTE_MOCK=[
   {id:'om1',naam:'Bedrijfsfilm "Onder één dak"',status:'Verstuurd',link:'#',budget:'2950',vervaldatum:''},
@@ -3790,10 +3766,6 @@ function panelInstellingen(){
       <div class="contact-list contact-list-sm" id="bedrijfContactList">${contactsHTML}</div>
       <button class="btn btn-outline btn-sm" style="margin-top:12px" onclick="addContact()">${ic('upload',15)} Persoon toevoegen</button>
       <div id="contactFormHost"></div>
-    </div>
-    <div class="setsec" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
-      <div><b style="font-family:var(--font-display);font-size:15px">Huisstijl-bestanden</b><div style="font-size:13px;color:var(--ink-3)">Logo's, fonts en templates uit je gedeelde Huisstijl-map, bekijken, uploaden en verwijderen.</div></div>
-      <button class="btn btn-outline" onclick="goTab('huisstijl')">${ic('img',16)} Open Huisstijl</button>
     </div>
   <div class="setsec" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:18px">
     <div><b style="font-family:var(--font-display);font-size:15px">Uitloggen</b><div style="font-size:13px;color:var(--ink-3)">Log veilig uit op dit toestel.</div></div>
