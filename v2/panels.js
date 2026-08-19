@@ -513,8 +513,14 @@ function socialStatus(p){
   if(state._mcApproved && state._mcApproved[p.id]) return 'ingepland';
   if(p.afgekeurd) return 'feedback';
   if(p.approved) return 'ingepland';
-  // Metricool vraagt expliciet om goedkeuring van de klant.
-  if(String(p.approval||'').toLowerCase()==='pending') return 'review';
+  /* Metricool heeft OOK een eigen goedkeuringsstroom, los van de onze. Keurt de klant
+     daar af, dan draagt de post approval 'rejected' (of 'changes' of 'denied'). Dat is
+     evengoed feedback en de hub telt het ook zo (SOC_AFKEUR_RE in teamportaal.mjs).
+     Gemeten op Bolckmans: 3 van de 64 posts stonden zo, en die vielen hier eerst stil
+     terug op ingepland terwijl de hub ze in de werkvoorraad had staan. */
+  var appr=String(p.approval||'').toLowerCase();
+  if(/reject|change|denied/.test(appr)) return 'feedback';
+  if(appr==='pending') return 'review';   // Metricool vraagt expliciet om het akkoord van de klant
   return 'ingepland';
 }
 // Reden-categorieen bij een afkeuring. Kort houden: de klant kiest er een en licht toe.
