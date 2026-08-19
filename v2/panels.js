@@ -584,6 +584,15 @@ function socialChipHover(node, id){
   }catch(e){}
 }
 function socialChipHoverUit(){ var el=document.getElementById('socHover'); if(el) el.classList.remove('open'); }
+/* De kaart hangt aan een chip die bij elke herrender, maandwissel of filterklik uit de DOM
+   verdwijnt. Dan vuurt mouseleave NOOIT en blijft de kaart over het nieuwe scherm hangen.
+   Vandaar deze drie vangnetten: scrollen, een klik ergens anders, en de Escape-toets. */
+if(!window.__socHoverWacht){
+  window.__socHoverWacht = true;
+  window.addEventListener('scroll', socialChipHoverUit, { passive:true, capture:true });
+  document.addEventListener('click', function(e){ if(!(e.target && e.target.closest && e.target.closest('.soc-chip,.soc-agitem'))) socialChipHoverUit(); }, true);
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape') socialChipHoverUit(); });
+}
 function socialStatusMeta(st){ return SOC_STATUS[st]||SOC_STATUS.review; }
 /* CONCEPTEN BLIJVEN BINNEN. Een post in concept is werk in uitvoering bij ons: hij mist
    vaak nog beeld of tekst en zegt de klant dus niets. Hij hoort thuis in de hub en in
@@ -864,7 +873,7 @@ function socialHashtagsHTML(){
 }
 function socialMonthNav(d){ var mo=socialMonth(); var dt=new Date(mo.y,mo.m+d,1); state._socialMonth={y:dt.getFullYear(),m:dt.getMonth()}; var box=document.getElementById('socialCalContainer'); if(box){ box.innerHTML=socialCalendar(socialShownPosts()); } else { renderPanel('socials'); } if(typeof syncUrl==='function') syncUrl(); }
 function socialSetFilter(f){ state._socialFilter=f; var box=document.getElementById('socialBody'); if(box){ box.innerHTML=socialBodyHTML(); } else { renderPanel('socials'); } if(typeof syncUrl==='function') syncUrl(); }
-function socialOpenDetail(id){ state._socTab='planner'; state._socialDetail=String(id); renderPanel('socials'); if(window.scrollTo)window.scrollTo({top:0,behavior:'smooth'}); if(typeof syncUrl==='function') syncUrl(true); }
+function socialOpenDetail(id){ socialChipHoverUit(); state._socTab='planner'; state._socialDetail=String(id); renderPanel('socials'); if(window.scrollTo)window.scrollTo({top:0,behavior:'smooth'}); if(typeof syncUrl==='function') syncUrl(true); }
 function socialCloseDetail(){ state._socialDetail=null; state._socTab='planner'; renderPanel('socials'); }
 /* ---- KPI-dashboard + trend (fase 1 metriek-look-and-feel), data via metricoolStats ---- */
 function socialFmt(n){ return (Number(n)||0).toLocaleString('nl-BE'); }
