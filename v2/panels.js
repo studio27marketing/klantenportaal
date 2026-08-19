@@ -485,24 +485,114 @@ function socialPostRow(p){
 function toggleSocialPost(id){ var el=$id('mcp-'+id); if(el) el.classList.toggle('open'); }
 function toggleSocialFeedback(id){ var b=$id('mcfb-'+id); if(b){ var open=b.style.display!=='none'; b.style.display=open?'none':'block'; if(!open){ var t=$id('mcfbtx-'+id); if(t&&t.focus) t.focus(); } } }
 /* ---- Social-status voor de klant: gepubliceerd / goedgekeurd / wacht op je feedback ---- */
+/* ═══ HET STATUSMODEL, GELIJK AAN DAT VAN DE HUB ════════════════════════════
+ *
+ * Vier werkstatussen plus twee eindtoestanden, en ze betekenen aan beide kanten
+ * exact hetzelfde (klanthub2.mjs rond 3938 leidt ze op dezelfde manier af):
+ *
+ *   concept       de post is bij ons in de maak. Metricool draft-vlag.
+ *                 DE KLANT ZIET DEZE NIET, zie socialPostsAll hieronder.
+ *   review        de post wacht op de klant. Metricool approval 'pending'.
+ *   feedback      de klant heeft gereageerd: afgekeurd met reden, of opmerking.
+ *   ingepland     akkoord, staat klaar en zal publiceren.
+ *   gepubliceerd  staat online.
+ *   fout          publiceren is mislukt.
+ *
+ * De volgorde van de tests is dragend. Gepubliceerd en fout komen eerst, want
+ * die zijn onherroepelijk. Daarna de beslissing van de klant, want die is
+ * recenter dan de Metricool-vlag. Pas daarna de pending-vlag.
+ * ═══════════════════════════════════════════════════════════════════════════ */
 function socialStatus(p){
   var ss=(p.netwerken||[]).map(function(n){return String(n.status||'').toUpperCase();});
+  if(ss.length && ss.some(function(s){return s.indexOf('ERROR')>=0||s.indexOf('FAIL')>=0;})) return 'fout';
   if(ss.length && ss.some(function(s){return s.indexOf('PUBLISH')>=0;})) return 'gepubliceerd';
-  if(p.draft) return 'concept';   // Metricool-draft: nog in voorbereiding, read-only (bug 86ca83gp0)
+  if(p.draft) return 'concept';
   // De laatste beslissing van de klant wint. De server bepaalt dat al (approved en afgekeurd zijn
   // nooit allebei waar), de lokale overrides hieronder houden de UI snel tussen twee ophaalrondes.
-  if(state._mcAfgekeurd && state._mcAfgekeurd[p.id]) return 'afgekeurd';
-  if(state._mcApproved && state._mcApproved[p.id]) return 'goedgekeurd';
-  if(p.afgekeurd) return 'afgekeurd';
-  if(p.approved) return 'goedgekeurd';
-  return 'feedback';
+  if(state._mcAfgekeurd && state._mcAfgekeurd[p.id]) return 'feedback';
+  if(state._mcApproved && state._mcApproved[p.id]) return 'ingepland';
+  if(p.afgekeurd) return 'feedback';
+  if(p.approved) return 'ingepland';
+  // Metricool vraagt expliciet om goedkeuring van de klant.
+  if(String(p.approval||'').toLowerCase()==='pending') return 'review';
+  return 'ingepland';
 }
 // Reden-categorieen bij een afkeuring. Kort houden: de klant kiest er een en licht toe.
 var SOC_AFKEUR_REDENEN=['De tekst','Het beeld','Het moment','Het kanaal','Iets anders'];
 function socialAfkeurReden(){ return state._socAfkeurReden||''; }
-var SOC_STATUS={concept:['In voorbereiding','#92740B','rgba(248,192,40,.18)','yellow'],feedback:['Wacht op je feedback','#C44514','rgba(246,97,49,.13)','orange'],goedgekeurd:['Goedgekeurd','#147A50','rgba(18,172,78,.13)','green'],afgekeurd:['Afgekeurd','#B0432F','rgba(176,67,47,.13)','red'],gepubliceerd:['Gepubliceerd','#1F5FA8','rgba(48,131,220,.13)','blue']};
-function socialStatusMeta(st){ return SOC_STATUS[st]||SOC_STATUS.feedback; }
-function socialPostsAll(){ if(state.demoMode) return socialDemoPosts(); var mc=(window.S27DATA&&S27DATA.metricool())||null; return (mc&&mc.posts)||[]; }
+/* Labels, inkt, vlak en takkleur per status. De labels zijn KLANTtaal (de hub zegt
+   "Wacht op goedkeuring klant", hier staat de klant zelf te lezen), de kleuren komen
+   uit KH2_SOC_STATUS in de hub zodat een post er aan beide kanten hetzelfde uitziet. */
+var SOC_STATUS={
+  concept:      ['In voorbereiding','#6B675C','rgba(168,162,147,.18)','yellow'],
+  review:       ['Wacht op je akkoord','#1D4ED8','rgba(36,88,234,.12)','blue'],
+  feedback:     ['Jouw feedback staat genoteerd','#8A5E08','rgba(217,169,59,.16)','orange'],
+  ingepland:    ['Ingepland','#4A6B0E','rgba(126,154,85,.16)','green'],
+  gepubliceerd: ['Gepubliceerd','#0B6E6E','rgba(30,158,158,.14)','blue'],
+  fout:         ['Publiceren mislukt','#B0432F','rgba(176,67,47,.13)','red']
+};
+/* ═══ HOVERKAART OP DE KALENDER ═════════════════════════════════════════════
+ *
+ * De klant wil bij het aanwijzen van een post meteen zien WAT het is, net zoals
+ * wij dat in de hub hebben. Eén gedeelde kaart die op mouseenter gevuld wordt,
+ * niet één kaart per chip: bij 64 posts zou dat 64 beelden tegelijk laden.
+ *
+ * Video's tonen als still met een play-teken, zelfde extensieregel als de hub
+ * (kh2IsVideoUrl). Faalt het beeld, dan verdwijnt het vak en blijft de tekst
+ * staan; een gebroken beeldicoon is lelijker dan geen beeld.
+ *
+ * Aanraakschermen slaan dit over: daar bestaat hover niet en opent een tik
+ * gewoon het postdetail, dat dezelfde informatie voluit toont.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+function socIsVideoUrl(u){ return /\.(mp4|mov|webm|m4v)(\?|#|$)/i.test(String(u||'')); }
+function socHoverEl(){
+  var el=document.getElementById('socHover');
+  if(!el){ el=document.createElement('div'); el.id='socHover'; el.className='soc-hover'; el.setAttribute('aria-hidden','true'); document.body.appendChild(el); }
+  return el;
+}
+function socialChipHover(node, id){
+  try{
+    if(window.matchMedia && window.matchMedia('(hover: none)').matches) return;
+    var p=socialPostsAll().filter(function(x){return String(x.id)===String(id);})[0];
+    if(!p) return;
+    var m=socialStatusMeta(socialStatus(p));
+    var media=(p.media_all&&p.media_all.length)?p.media_all:(p.media?[p.media]:[]);
+    var vis=''; for(var i=0;i<media.length;i++){ var u=String(media[i]||'').trim(); if(/^https:\/\//i.test(u)){ vis=u; break; } }
+    var tijd=p.dt?p.dt.toLocaleString('nl-BE',{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'}):'Nog in te plannen';
+    var nets=(p.netwerken||[]).map(function(n){return String(n.netwerk||'');}).filter(Boolean);
+    var tekst=String(p.tekst||'').replace(/\s+/g,' ').trim();
+    var el=socHoverEl();
+    el.innerHTML =
+      (vis?('<div class="soc-hv-beeld'+(socIsVideoUrl(vis)?' is-video':'')+'">'
+            +(socIsVideoUrl(vis)
+               ? '<video src="'+esc(vis)+'#t=0.1" muted playsinline preload="metadata" onerror="this.parentNode.remove()"></video><span class="soc-hv-play"></span>'
+               : '<img src="'+esc(vis)+'" alt="" onerror="this.parentNode.remove()">')
+            +'</div>')
+          :'<div class="soc-hv-geenbeeld">Nog geen visual</div>')
+      +'<div class="soc-hv-body">'
+        +'<span class="soc-hv-badge" style="color:'+m[1]+';background:'+m[2]+'">'+esc(m[0])+'</span>'
+        +'<div class="soc-hv-tijd">'+esc(tijd)+(nets.length?(' · '+esc(nets.join(' · '))):'')+'</div>'
+        +(tekst?'<p class="soc-hv-tekst">'+esc(tekst.slice(0,220))+(tekst.length>220?'…':'')+'</p>':'')
+      +'</div>';
+    el.classList.add('open');
+    var r=node.getBoundingClientRect(), b=el.getBoundingClientRect();
+    var links=r.right+12, boven=r.top-8;
+    if(links+b.width>window.innerWidth-10) links=Math.max(10, r.left-b.width-12);
+    if(boven+b.height>window.innerHeight-10) boven=Math.max(10, window.innerHeight-b.height-10);
+    el.style.left=Math.round(links)+'px';
+    el.style.top=Math.round(boven)+'px';
+  }catch(e){}
+}
+function socialChipHoverUit(){ var el=document.getElementById('socHover'); if(el) el.classList.remove('open'); }
+function socialStatusMeta(st){ return SOC_STATUS[st]||SOC_STATUS.review; }
+/* CONCEPTEN BLIJVEN BINNEN. Een post in concept is werk in uitvoering bij ons: hij mist
+   vaak nog beeld of tekst en zegt de klant dus niets. Hij hoort thuis in de hub en in
+   Metricool, niet hier. Dit is de ENIGE poort waar de kalender, de filters, de tellers en
+   het postdetail hun lijst uit halen, dus wegfilteren op deze plek dekt ze alle vier.
+   socialPostsRuw() bestaat voor het zeldzame geval dat er toch een concept nodig is (een
+   deeplink die er nog een aanwijst); die valt dan netjes terug op een melding. */
+function socialPostsRuw(){ if(state.demoMode) return socialDemoPosts(); var mc=(window.S27DATA&&S27DATA.metricool())||null; return (mc&&mc.posts)||[]; }
+function socialPostsAll(){ return socialPostsRuw().filter(function(p){ return socialStatus(p)!=='concept'; }); }
 function socialMonth(){ if(!state._socialMonth){ var n=new Date(); state._socialMonth={y:n.getFullYear(),m:n.getMonth()}; } return state._socialMonth; }
 function socialFilter(){ return state._socialFilter||'alles'; }
 // Maand-/filter-navigatie verspringt NIET meer: enkel de deelcontainer wordt ververst (geen
@@ -927,19 +1017,13 @@ function socialInsightsDemo(){
     formats:[{format:'Reel / video',count:6,avgReach:5200,avgInteractions:360,avgEngagementRate:6.9},{format:'Carrousel',count:8,avgReach:3600,avgInteractions:210,avgEngagementRate:5.8},{format:'Foto',count:9,avgReach:2400,avgInteractions:96,avgEngagementRate:4.0}],
     hashtags:[{tag:'#studio27',count:12,avgReach:3800,avgEngagementRate:6.4},{tag:'#contentcreatie',count:6,avgReach:3200,avgEngagementRate:5.9},{tag:'#marketing',count:8,avgReach:2900,avgEngagementRate:5.1},{tag:'#webdesign',count:4,avgReach:2600,avgEngagementRate:4.7},{tag:'#branding',count:5,avgReach:2400,avgEngagementRate:4.3}] };
 }
-function socialMatrixbar(posts){
-  var c={concept:0,feedback:0,goedgekeurd:0,gepubliceerd:0}; posts.forEach(function(p){ c[socialStatus(p)]++; });
-  var cards=[['feedback','Wacht op je feedback',c.feedback,'orange'],['goedgekeurd','Goedgekeurd',c.goedgekeurd,'green'],['gepubliceerd','Gepubliceerd',c.gepubliceerd,'blue']];
-  return '<div class="soc-matrix">'+cards.map(function(k){ var active=socialFilter()===k[0];
-    return '<button class="soc-mcard br-'+k[3]+(active?' active':'')+'" onclick="socialSetFilter(\''+(active?'alles':k[0])+'\')"><div class="soc-mbar"></div><div class="soc-mnum">'+k[2]+'</div><div class="soc-mlab">'+esc(k[1])+'</div></button>';
-  }).join('')+'</div>';
-}
 function socialFilters(){
   var posts=socialPostsAll();
-  var c={concept:0,feedback:0,goedgekeurd:0,afgekeurd:0,gepubliceerd:0}; posts.forEach(function(p){ var s=socialStatus(p); if(c[s]!=null) c[s]++; });
-  var fs=[['alles','Alle',posts.length],['feedback','Wacht op je feedback',c.feedback],['goedgekeurd','Goedgekeurd',c.goedgekeurd],['gepubliceerd','Gepubliceerd',c.gepubliceerd]];
-  if(c.afgekeurd) fs.splice(3,0,['afgekeurd','Afgekeurd',c.afgekeurd]);   // enkel tonen als er echt iets is afgekeurd
-  if(c.concept) fs.splice(1,0,['concept','In voorbereiding',c.concept]);   // enkel tonen als er concepten zijn
+  // concept staat er bewust NIET tussen: die posts bereiken de klant niet (socialPostsAll).
+  var c={review:0,feedback:0,ingepland:0,gepubliceerd:0,fout:0}; posts.forEach(function(p){ var s=socialStatus(p); if(c[s]!=null) c[s]++; });
+  var fs=[['alles','Alle',posts.length],['review','Wacht op je akkoord',c.review],['ingepland','Ingepland',c.ingepland],['gepubliceerd','Gepubliceerd',c.gepubliceerd]];
+  if(c.feedback) fs.splice(2,0,['feedback','Feedback gegeven',c.feedback]);   // enkel wanneer de klant echt gereageerd heeft
+  if(c.fout) fs.push(['fout','Publiceren mislukt',c.fout]);
   return '<div class="soc-fbar">'+fs.map(function(f){ return '<button class="soc-fchip'+(socialFilter()===f[0]?' active':'')+'" onclick="socialSetFilter(\''+f[0]+'\')"><b style="opacity:.8">'+f[2]+'</b> '+esc(f[1])+'</button>'; }).join('')+'</div>';
 }
 function socialCalendar(posts){
@@ -957,7 +1041,7 @@ function socialCalendar(posts){
       var st=socialStatus(p); var m=socialStatusMeta(st); var nc=mcNet(((p.netwerken||[])[0]||{}).netwerk);
       var tm=p.dt.toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'});
       var snip=esc((p.tekst||'(nog geen tekst)').replace(/\s+/g,' ').slice(0,42));
-      return '<button class="soc-chip" data-st="'+st+'" style="--cc:'+nc[1]+'" onclick="socialOpenDetail(\''+esc(p.id)+'\')" title="'+esc((p.tekst||'').replace(/\s+/g,' ').slice(0,140))+'"><span class="soc-cdot" style="background:'+m[1]+'"></span><span class="soc-ctime">'+tm+'</span><span class="soc-ctxt">'+snip+'</span></button>';
+      return '<button class="soc-chip" data-st="'+st+'" style="--cc:'+nc[1]+'" onmouseenter="socialChipHover(this,\''+esc(p.id)+'\')" onmouseleave="socialChipHoverUit()" onclick="socialOpenDetail(\''+esc(p.id)+'\')" title="'+esc((p.tekst||'').replace(/\s+/g,' ').slice(0,140))+'"><span class="soc-cdot" style="background:'+m[1]+'"></span><span class="soc-ctime">'+tm+'</span><span class="soc-ctxt">'+snip+'</span></button>';
     }).join('')+'</div>';
   }
   // posts zonder datum (bv. concepten die het team nog moet inplannen) passen niet in het
@@ -966,9 +1050,10 @@ function socialCalendar(posts){
   var zonderHtml=zonder.length?('<div class="soc-nodate"><span class="soc-nodate-lab">Nog in te plannen</span>'+zonder.map(function(p){
     var st=socialStatus(p); var m=socialStatusMeta(st); var nc=mcNet(((p.netwerken||[])[0]||{}).netwerk);
     var snip=esc((p.tekst||'(nog geen tekst)').replace(/\s+/g,' ').slice(0,46));
-    return '<button class="soc-chip" data-st="'+st+'" style="--cc:'+nc[1]+'" onclick="socialOpenDetail(\''+esc(p.id)+'\')"><span class="soc-cdot" style="background:'+m[1]+'"></span>'+snip+'</button>';
+    return '<button class="soc-chip" data-st="'+st+'" style="--cc:'+nc[1]+'" onmouseenter="socialChipHover(this,\''+esc(p.id)+'\')" onmouseleave="socialChipHoverUit()" onclick="socialOpenDetail(\''+esc(p.id)+'\')"><span class="soc-cdot" style="background:'+m[1]+'"></span>'+snip+'</button>';
   }).join('')+'</div>'):'';
-  var legend='<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--ink-4)">'+(posts.some(function(p){return socialStatus(p)==='concept';})?['concept','feedback','goedgekeurd','gepubliceerd']:['feedback','goedgekeurd','gepubliceerd']).map(function(s){var m=socialStatusMeta(s);return '<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:99px;background:'+m[1]+'"></span>'+esc(m[0])+'</span>';}).join('')+'</div>';
+  var legend='<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--ink-4)">'+(function(){ var aanwezig={}; posts.forEach(function(p){ aanwezig[socialStatus(p)]=1; });
+       return ['review','feedback','ingepland','gepubliceerd','fout'].filter(function(k){ return aanwezig[k]; }); })().map(function(s){var m=socialStatusMeta(s);return '<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:99px;background:'+m[1]+'"></span>'+esc(m[0])+'</span>';}).join('')+'</div>';
   // Mobiele agenda: hetzelfde maandoverzicht maar als chronologische lijst (alleen dagen mét posts).
   // Het dichte 7-koloms-raster is onleesbaar op een telefoon; CSS wisselt grid<->agenda per schermbreedte.
   var daysWith=Object.keys(byDay).map(Number).sort(function(a,b){return a-b;});
@@ -980,7 +1065,7 @@ function socialCalendar(posts){
         var st=socialStatus(p); var m=socialStatusMeta(st), nc=mcNet(((p.netwerken||[])[0]||{}).netwerk);
         var tm=p.dt.toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'});
         var snip=esc((p.tekst||'(geen tekst)').replace(/\s+/g,' ').slice(0,64));
-        return '<button class="soc-agitem" data-st="'+st+'" style="--cc:'+nc[1]+'" onclick="socialOpenDetail(\''+esc(p.id)+'\')"><span class="soc-cdot" style="background:'+m[1]+'"></span><span class="soc-agtime">'+tm+'</span><span class="soc-agtxt">'+snip+'</span></button>';
+        return '<button class="soc-agitem" data-st="'+st+'" style="--cc:'+nc[1]+'" onmouseenter="socialChipHover(this,\''+esc(p.id)+'\')" onmouseleave="socialChipHoverUit()" onclick="socialOpenDetail(\''+esc(p.id)+'\')"><span class="soc-cdot" style="background:'+m[1]+'"></span><span class="soc-agtime">'+tm+'</span><span class="soc-agtxt">'+snip+'</span></button>';
       }).join('')+'</div></div>';
     }).join('') : '<div class="empty" style="padding:26px;text-align:center;color:var(--ink-4)">Geen posts gepland in '+esc(label)+'.</div>')+'</div>';
   return '<div class="section-head" style="margin-top:6px"><h2 style="text-transform:capitalize">'+esc(label)+'</h2><div class="soc-nav"><button aria-label="Vorige maand" onclick="socialMonthNav(-1)">'+ic('arrow',16)+'</button><button aria-label="Volgende maand" onclick="socialMonthNav(1)">'+ic('arrow',16)+'</button></div></div>'
@@ -1205,16 +1290,18 @@ function socialEditorActions(id){
   if(!p) return '';
   var st=socialStatus(p), m=socialStatusMeta(st);
   var statusbadge='<span class="soc-badge" style="color:'+m[1]+';background:'+m[2]+'">'+esc(m[0])+'</span>';
-  if(st==='gepubliceerd') return statusbadge;
-  if(st==='concept') return statusbadge;   // drafts: enkel het label, geen acties (bug 86ca83gp0)
-  var approved=(st==='goedgekeurd');
-  var afgekeurd=(st==='afgekeurd');
+  // Gepubliceerd en mislukt zijn eindtoestanden: enkel het label, er valt niets meer te beslissen.
+  // Concept bereikt de klant niet meer (socialPostsAll filtert die weg), maar de test blijft staan
+  // voor het geval een oude deeplink er nog een aanwijst.
+  if(st==='gepubliceerd'||st==='fout'||st==='concept') return statusbadge;
+  var approved=(st==='ingepland');
+  var afgekeurd=(st==='feedback');
   // Afkeuren blijft altijd mogelijk, ook na een goedkeuring: de klant mag van gedachten veranderen.
   var afkeurBtn='<button class="btn btn-outline btn-sm soc-btn-afkeur" onclick="socialToggleFeedback()">'+ic('close',15)+' '+(afgekeurd?'Reden aanpassen':'Afkeuren')+'</button>';
   // Bewerken zit achter het recht dat wij per klant in de hub zetten.
   var saveBtn=socialsEditable()?'<button class="btn btn-primary btn-sm" onclick="socialSavePost(\''+esc(p.id)+'\',this)">'+ic('check',16)+' Opslaan</button>':'';
-  var apprBtn=approved?'<span class="soc-fbok" style="margin:0;padding:8px 13px">'+ic('check',15)+' Goedgekeurd</span>':'<button class="btn btn-branch br-green btn-sm" onclick="socialApprove(\''+esc(p.id)+'\',this)">'+ic('check',16)+' Goedkeuren</button>';
-  var redenNoot=(afgekeurd&&p.afkeur_reden)?'<div class="soc-afkeurnoot">'+ic('close',14)+' Afgekeurd: '+esc(p.afkeur_reden)+'</div>':'';
+  var apprBtn=approved?'<span class="soc-fbok" style="margin:0;padding:8px 13px">'+ic('check',15)+' Ingepland</span>':'<button class="btn btn-branch br-green btn-sm" onclick="socialApprove(\''+esc(p.id)+'\',this)">'+ic('check',16)+' Goedkeuren</button>';
+  var redenNoot=(afgekeurd&&p.afkeur_reden)?'<div class="soc-afkeurnoot">'+ic('close',14)+' Jouw feedback: '+esc(p.afkeur_reden)+'</div>':'';
   return redenNoot+(approved?'':statusbadge)+afkeurBtn+saveBtn+apprBtn;
 }
 function socialToggleFeedback(){ var w=document.getElementById('socFbWrap'); if(!w) return; var hidden=(w.style.display==='none'||!w.style.display); w.style.display=hidden?'block':'none'; if(hidden){ var t=document.getElementById('socFbTx'); if(t) t.focus(); } }

@@ -409,6 +409,10 @@
           providers:(p.providers||[]), hashtags:(p.hashtags||[]),
           draft:(p.draft===true||String(p.draft).toLowerCase()==='true'),
           approved:(p.approved===true||String(p.approved).toLowerCase()==='true'),
+          // Metricools eigen goedkeuringsvlag: 'pending' betekent dat de post op de klant
+          // wacht. Dat is de status 'review'. Zonder dit veld valt elke wachtende post
+          // stil terug op 'ingepland' en ziet de klant nooit dat er iets van hem wordt gevraagd.
+          approval:String(p.approval||'').toLowerCase(),
           // Afkeuring door de klant (18-08). De worker garandeert dat approved en afgekeurd
           // nooit allebei waar zijn: de laatste beslissing wint.
           afgekeurd:(p.afgekeurd===true||String(p.afgekeurd).toLowerCase()==='true'),
