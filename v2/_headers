@@ -1,3 +1,38 @@
+# ── BEVEILIGINGSHEADERS ──────────────────────────────────────────────────────
+# Toegevoegd 29-08-2026. Dit portaal stuurde alleen Referrer-Policy en
+# X-Content-Type-Options mee; hub.studio27.be stuurt er negen. Geen HSTS, geen
+# CSP, geen noindex op een portaal waar klantgegevens, meetings, facturen en
+# videofeedback achter een login staan.
+#
+# De CSP is NIET van de hub overgenomen maar AFGELEID uit wat deze pagina echt
+# laadt: op 29-08 zijn alle 46 verzoeken van een koude load nagelopen. Wat er
+# uitkwam, en waarom het erin staat:
+#   script-src  www.gstatic.com      firebase-app.js en firebase-auth.js 10.12.2
+#               cdn.jsdelivr.net     qrcode.min.js (davidshimjs/qrcodejs)
+#               'unsafe-inline'      de schil draait inline scripts
+#               'unsafe-eval'        idem als de hub; niet strenger durven zijn
+#                                    dan het bewezen origineel
+#   style-src   fonts.googleapis.com Montserrat, Nunito, Inter, Inter Tight
+#   font-src    fonts.gstatic.com    de woff2's daarvan
+#   connect-src https: en wss:       de gateway op workers.dev, Firebase Auth op
+#                                    identitytoolkit.googleapis.com, en de push
+#   frame-src   https: en blob:      Cloudflare Stream in de videofeedback
+#   worker-src  self en blob:        sw.js, dit is een PWA met push
+#
+# frame-ancestors 'self' mag: nagekeken op 29-08, niets in de hub of elders zet
+# dit portaal in een iframe.
+#
+# X-Robots-Tag noindex is hier geen voorzorg maar een correctie: een
+# klantenportaal hoort niet in Google te staan.
+/*
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Frame-Options: SAMEORIGIN
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Robots-Tag: noindex, nofollow, noarchive, nosnippet, noimageindex
+  Cross-Origin-Opener-Policy: same-origin-allow-popups
+  Permissions-Policy: geolocation=(), camera=(self), microphone=(self), payment=(), usb=(), interest-cohort=()
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; connect-src 'self' https: wss:; frame-src 'self' https: blob:; worker-src 'self' blob:; manifest-src 'self'
 # Versie-kritische bestanden: nooit uit de HTTP-cache — de browser her-valideert altijd,
 # zodat een nieuwe deploy + versie-push gegarandeerd doorkomt (ook in geïnstalleerde PWA's).
 /
